@@ -1,0 +1,1423 @@
+basePath: /
+definitions:
+  auth.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+      user:
+        $ref: '#/definitions/auth.UserInfo'
+    type: object
+  auth.ForgotPasswordRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      new_password:
+        example: SecurePass123!
+        minLength: 8
+        type: string
+    required:
+    - email
+    - new_password
+    type: object
+  auth.LoginRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      password:
+        example: SecurePass123!
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  auth.LogoutRequest:
+    properties:
+      refresh_token:
+        example: abc123xyz789...
+        type: string
+    type: object
+  auth.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        example: abc123xyz789...
+        type: string
+    required:
+    - refresh_token
+    type: object
+  auth.RegisterRequest:
+    properties:
+      business_email:
+        description: Business fields (for business_admin - Formal Individual & Organization)
+        example: info@business.com
+        type: string
+      business_name:
+        example: Nuruvent Training Institute
+        type: string
+      business_phone:
+        example: "+254700000000"
+        type: string
+      business_type:
+        example: training_institute
+        type: string
+      business_type_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      email:
+        description: Removed omitempty, added required
+        example: john@example.com
+        type: string
+      name:
+        example: John Doe
+        type: string
+      password:
+        example: SecurePass123!
+        minLength: 8
+        type: string
+      phone:
+        description: Personal fields (for all users)
+        example: "+254712345678"
+        type: string
+      role:
+        enum:
+        - business_admin
+        - attendee
+        example: attendee
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  auth.ResendOTPRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+    required:
+    - email
+    type: object
+  auth.UserInfo:
+    properties:
+      avatar:
+        type: string
+      business_id:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      role:
+        type: string
+    type: object
+  auth.VerifyOTPRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      otp:
+        example: "123456"
+        type: string
+    required:
+    - email
+    - otp
+    type: object
+  auth.VerifyResetOTPRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      otp:
+        example: "123456"
+        type: string
+    required:
+    - email
+    - otp
+    type: object
+  auth.VerifyTwoFactorOTPRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      otp:
+        example: "123456"
+        type: string
+    required:
+    - email
+    - otp
+    type: object
+  bizhandler.AddMemberRequest:
+    properties:
+      role:
+        example: event_manager
+        type: string
+      user_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    required:
+    - role
+    - user_id
+    type: object
+  bizhandler.CreateBusinessRequest:
+    properties:
+      address:
+        example: Nairobi, Kenya
+        type: string
+      business_type_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      description:
+        example: Leading training provider in Kenya
+        type: string
+      email:
+        example: info@nuruvent.com
+        type: string
+      logo:
+        example: https://example.com/logo.png
+        type: string
+      name:
+        example: Nuruvent Training Institute
+        type: string
+      phone:
+        example: "+254700000000"
+        type: string
+      website:
+        example: https://nuruvent.com
+        type: string
+    required:
+    - business_type_id
+    - name
+    type: object
+  bizhandler.UpdateBusinessRequest:
+    properties:
+      address:
+        example: Nairobi, Kenya
+        type: string
+      business_type_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      description:
+        example: Leading training provider in Kenya
+        type: string
+      email:
+        example: info@nuruvent.com
+        type: string
+      logo:
+        example: https://example.com/logo.png
+        type: string
+      name:
+        example: Nuruvent Training Institute
+        type: string
+      phone:
+        example: "+254700000000"
+        type: string
+      website:
+        example: https://nuruvent.com
+        type: string
+    type: object
+  bizhandler.UpdateMemberRoleRequest:
+    properties:
+      role:
+        example: host
+        type: string
+    required:
+    - role
+    type: object
+  models.Attendee:
+    properties:
+      attended_at:
+        type: string
+      created_at:
+        type: string
+      duration:
+        description: in minutes
+        type: integer
+      email:
+        type: string
+      event:
+        allOf:
+        - $ref: '#/definitions/models.Event'
+        description: Relationships
+      event_id:
+        type: string
+      id:
+        type: string
+      joined_at:
+        type: string
+      left_at:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      status:
+        description: registered, joined, partial, full, confirmed, no-show
+        type: string
+      updated_at:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+      user_id:
+        type: string
+    type: object
+  models.Business:
+    properties:
+      address:
+        type: string
+      business_type:
+        allOf:
+        - $ref: '#/definitions/models.BusinessType'
+        description: Relationships
+      business_type_id:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      email:
+        type: string
+      email_verified_at:
+        type: string
+      events:
+        items:
+          $ref: '#/definitions/models.Event'
+        type: array
+      id:
+        type: string
+      is_active:
+        type: boolean
+      is_email_verified:
+        type: boolean
+      is_verified:
+        type: boolean
+      logo:
+        type: string
+      members:
+        items:
+          $ref: '#/definitions/models.BusinessMember'
+        type: array
+      name:
+        type: string
+      phone:
+        type: string
+      slug:
+        type: string
+      updated_at:
+        type: string
+      verification_method:
+        type: string
+      verified_at:
+        type: string
+      verified_by:
+        type: string
+      website:
+        type: string
+    type: object
+  models.BusinessMember:
+    properties:
+      business:
+        allOf:
+        - $ref: '#/definitions/models.Business'
+        description: Relationships
+      business_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      joined_at:
+        type: string
+      role:
+        description: host, event_manager, member
+        type: string
+      updated_at:
+        type: string
+      user:
+        $ref: '#/definitions/models.User'
+      user_id:
+        type: string
+    type: object
+  models.BusinessType:
+    properties:
+      category:
+        description: Business type category for grouping
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      display_name:
+        description: Training Institute
+        type: string
+      icon:
+        description: school, university, briefcase, user, etc.
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        description: training_institute, college, individual_formal, individual_informal,
+          etc.
+        type: string
+      requires_business_email:
+        type: boolean
+      requires_business_name:
+        description: 'For individual types: indicates if business registration is
+          required'
+        type: boolean
+      sort_order:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.Event:
+    properties:
+      attendees:
+        items:
+          $ref: '#/definitions/models.Attendee'
+        type: array
+      business:
+        allOf:
+        - $ref: '#/definitions/models.Business'
+        description: Relationships
+      business_id:
+        type: string
+      certificate_price:
+        type: number
+      created_at:
+        type: string
+      created_by:
+        type: string
+      current_attendees:
+        type: integer
+      date:
+        type: string
+      description:
+        type: string
+      duration:
+        description: in minutes
+        type: integer
+      id:
+        type: string
+      is_virtual:
+        type: boolean
+      location:
+        type: string
+      max_attendees:
+        type: integer
+      meet_link:
+        type: string
+      price:
+        type: number
+      slug:
+        type: string
+      status:
+        description: draft, published, cancelled, completed
+        type: string
+      time:
+        type: string
+      title:
+        type: string
+      type:
+        description: workshop, webinar, bootcamp, meetup
+        type: string
+      updated_at:
+        type: string
+      zoom_link:
+        type: string
+    type: object
+  models.User:
+    properties:
+      avatar:
+        type: string
+      business:
+        allOf:
+        - $ref: '#/definitions/models.Business'
+        description: Relationships
+      business_id:
+        type: string
+      created_at:
+        type: string
+      email:
+        type: string
+      email_verified_at:
+        type: string
+      id:
+        type: string
+      is_email_verified:
+        type: boolean
+      is_verified:
+        type: boolean
+      last_active_at:
+        type: string
+      last_login_at:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      role:
+        type: string
+      two_factor_enabled:
+        type: boolean
+      updated_at:
+        type: string
+      verified_at:
+        type: string
+    type: object
+  response.BaseResponse:
+    properties:
+      data: {}
+      errors: {}
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: hello@nuruvent.com
+    name: Nuruvent Support
+    url: https://nuruvent.com
+  description: |-
+    Light Your Training Events. Illuminate Your Growth.
+    The all-in-one platform for training events in Kenya.
+  license:
+    name: Proprietary
+    url: https://nuruvent.com/license
+  termsOfService: https://nuruvent.com/terms
+  title: Nuruvent API
+  version: 1.0.0
+paths:
+  /api/v1/auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Send OTP to reset password for a user
+      parameters:
+      - description: Password reset request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Initiate password reset
+      tags:
+      - Authentication
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate a user with email and password, initiates 2FA
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Login user
+      tags:
+      - Authentication
+  /api/v1/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Logout the current user and revoke the refresh token
+      parameters:
+      - description: Logout request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.LogoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Logout user
+      tags:
+      - Authentication
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh the access token using a valid refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Refresh access token
+      tags:
+      - Authentication
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user account with optional business creation for
+        business_admin role
+      parameters:
+      - description: Registration details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Register a new user
+      tags:
+      - Authentication
+  /api/v1/auth/resend-otp:
+    post:
+      consumes:
+      - application/json
+      description: Resend the verification OTP to the user's email
+      parameters:
+      - description: Email for OTP resend
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.ResendOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Resend OTP
+      tags:
+      - Authentication
+  /api/v1/auth/verify-2fa:
+    post:
+      consumes:
+      - application/json
+      description: Verify the two-factor authentication OTP and complete the login
+        process
+      parameters:
+      - description: 2FA OTP verification
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.VerifyTwoFactorOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/auth.AuthResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Verify 2FA OTP and complete login
+      tags:
+      - Authentication
+  /api/v1/auth/verify-otp:
+    post:
+      consumes:
+      - application/json
+      description: Verify the OTP sent to your email and complete account creation
+      parameters:
+      - description: OTP verification details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.VerifyOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Verify OTP and complete registration
+      tags:
+      - Authentication
+  /api/v1/auth/verify-reset-otp:
+    post:
+      consumes:
+      - application/json
+      description: Verify the OTP and complete password reset
+      parameters:
+      - description: OTP verification
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/auth.VerifyResetOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Verify reset OTP and reset password
+      tags:
+      - Authentication
+  /api/v1/businesses:
+    post:
+      consumes:
+      - application/json
+      description: Create a new business (requires authentication)
+      parameters:
+      - description: Business details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/bizhandler.CreateBusinessRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Business'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new business
+      tags:
+      - Businesses
+  /api/v1/businesses/{id}:
+    delete:
+      description: Delete a business (requires business_admin or admin role)
+      parameters:
+      - description: Business ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a business
+      tags:
+      - Businesses
+    get:
+      description: Get business details by ID (public)
+      parameters:
+      - description: Business ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Business'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Get business by ID
+      tags:
+      - Businesses
+    put:
+      consumes:
+      - application/json
+      description: Update business details (requires business_admin or admin role)
+      parameters:
+      - description: Business ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Business update details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/bizhandler.UpdateBusinessRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Business'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a business
+      tags:
+      - Businesses
+  /api/v1/businesses/{id}/members:
+    get:
+      description: Get all members of a business
+      parameters:
+      - description: Business ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.BusinessMember'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get business members
+      tags:
+      - Business Members
+    post:
+      consumes:
+      - application/json
+      description: Add a user as a member of a business (requires host or admin role)
+      parameters:
+      - description: Business ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Member details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/bizhandler.AddMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.BusinessMember'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Add a member to a business
+      tags:
+      - Business Members
+  /api/v1/businesses/{id}/members/{memberId}:
+    delete:
+      description: Remove a member from a business (requires host or admin role)
+      parameters:
+      - description: Business ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Member User ID
+        in: path
+        name: memberId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove a member from a business
+      tags:
+      - Business Members
+  /api/v1/businesses/{id}/members/{memberId}/role:
+    put:
+      consumes:
+      - application/json
+      description: Update a member's role in a business (requires host or admin role)
+      parameters:
+      - description: Business ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Member User ID
+        in: path
+        name: memberId
+        required: true
+        type: string
+      - description: New role
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/bizhandler.UpdateMemberRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a member's role
+      tags:
+      - Business Members
+  /api/v1/businesses/{id}/members/check:
+    get:
+      description: Check if the current user is a member of a business
+      parameters:
+      - description: Business ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Check membership
+      tags:
+      - Business Members
+  /api/v1/businesses/{id}/stats:
+    get:
+      description: Get statistics for a business (events, attendees, revenue, members)
+      parameters:
+      - description: Business ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get business statistics
+      tags:
+      - Businesses
+  /api/v1/businesses/me:
+    get:
+      description: Get the primary business of the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.Business'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get my primary business
+      tags:
+      - Businesses
+  /api/v1/businesses/my:
+    get:
+      description: Get all businesses the authenticated user belongs to
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.Business'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get all my businesses
+      tags:
+      - Businesses
+  /api/v1/businesses/search:
+    get:
+      description: Search businesses by name or description
+      parameters:
+      - description: Search query
+        in: query
+        name: q
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Search businesses
+      tags:
+      - Businesses
+  /api/v1/businesses/types:
+    get:
+      description: Get list of all business types
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.BusinessType'
+                  type: array
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Get all business types
+      tags:
+      - Businesses
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and the JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

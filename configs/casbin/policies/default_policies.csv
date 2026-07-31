@@ -1,0 +1,85 @@
+# configs/casbin/policies/default_policies.csv
+# Nuruvent Default Platform Policies
+# Format: p, subject, domain, object, action
+
+# ============================================================
+# PLATFORM POLICIES
+# ============================================================
+
+# Super Admin - Full platform access
+p, super_admin, platform, *, *
+
+# Admin - Platform management
+p, admin, platform, user, read
+p, admin, platform, user, update
+p, admin, platform, event, read
+p, admin, platform, event, update
+p, admin, platform, event, delete
+p, admin, platform, business, read
+p, admin, platform, analytics, read
+p, admin, platform, payment, read
+p, admin, platform, certificate, read
+
+# ============================================================
+# HOST POLICIES (Professional trainers/coaches)
+# ============================================================
+
+# Event management
+p, host, *, event, create
+p, host, *, event, read
+p, host, *, event, update
+p, host, *, event, delete
+p, host, *, event, manage
+
+# Certificate management
+p, host, *, certificate, create
+p, host, *, certificate, read
+p, host, *, certificate, update
+p, host, *, certificate, issue
+p, host, *, certificate, delete
+
+# Attendee management
+p, host, *, attendee, read
+p, host, *, attendee, update
+p, host, *, attendee, export
+
+# Payment management
+p, host, *, payment, read
+p, host, *, payment, create
+p, host, *, payment, refund
+
+# Payout management
+p, host, *, payout, read
+
+# Dashboard access
+p, host, *, dashboard, read
+
+# ============================================================
+# ATTENDEE POLICIES (Event participants)
+# ============================================================
+
+# Event browsing and registration
+p, attendee, *, event, read
+p, attendee, *, event, register
+
+# Certificate management
+p, attendee, *, certificate, read
+p, attendee, *, certificate, download
+
+# Payment management
+p, attendee, *, payment, create
+p, attendee, *, payment, read
+
+# User profile management
+p, attendee, *, user, read
+p, attendee, *, user, update
+
+# Dashboard access
+p, attendee, *, dashboard, read
+
+# ============================================================
+# GUEST POLICIES (Unauthenticated users)
+# ============================================================
+
+# Public event viewing only
+p, guest, *, event, read

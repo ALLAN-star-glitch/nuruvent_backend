@@ -1,0 +1,33 @@
+{{define "login-notification"}}
+<h1 class="title">New <span class="highlight">Login</span> Detected</h1>
+<p class="subtitle">Security notification</p>
+
+<p class="greeting">Hello <span class="name">{{.Name}}</span>,</p>
+<p class="body-text">
+    We detected a new login to your <span class="highlight">Nuruvent</span> account.
+</p>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">Time</span>
+        <span class="value">{{.Time}}</span>
+    </div>
+    <div class="row">
+        <span class="label">IP Address</span>
+        <span class="value">{{.IPAddress}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Device</span>
+        <span class="value">{{.UserAgent}}</span>
+    </div>
+</div>
+
+<div class="alert-info">
+    <p>If this was you, you can safely ignore this notification.</p>
+</div>
+<div class="alert-danger">
+    <p>If you did not log in, please reset your password immediately.</p>
+</div>
+
+<p class="body-text text-muted text-center">Light Your Events. Illuminate Your Growth.</p>
+{{end}}

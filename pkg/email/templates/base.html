@@ -1,0 +1,340 @@
+{{define "base"}}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} | Nuruvent</title>
+    <style>
+        /* Nuruvent Brand Colors */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #F8F9FA;
+            color: #3C4043;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 580px;
+            margin: 0 auto;
+            background: #FFFFFF;
+            border-radius: 16px;
+            padding: 40px 32px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+            border: 1px solid #E8EAED;
+        }
+
+        .header {
+            text-align: center;
+            padding-bottom: 24px;
+            border-bottom: 2px solid #F0F2F5;
+            margin-bottom: 28px;
+        }
+
+        .logo {
+            max-width: 160px;
+            height: auto;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        .brand-line {
+            font-size: 13px;
+            color: #5F6368;
+            letter-spacing: 1px;
+            margin-top: 4px;
+            font-weight: 400;
+        }
+
+        .title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #202124;
+            text-align: center;
+            margin-bottom: 4px;
+            font-family: 'Georgia', 'Times New Roman', serif;
+        }
+
+        .title .highlight { color: #1A73E8; }
+        .title .gold-highlight { color: #FBBC04; }
+
+        .subtitle {
+            font-size: 15px;
+            color: #5F6368;
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .greeting {
+            font-size: 16px;
+            color: #202124;
+            margin-bottom: 12px;
+            font-weight: 600;
+        }
+
+        .greeting .name { color: #1A73E8; }
+
+        .body-text {
+            font-size: 15px;
+            line-height: 1.7;
+            color: #3C4043;
+            margin-bottom: 14px;
+        }
+
+        .body-text .highlight { color: #1A73E8; font-weight: 600; }
+        .body-text .gold-highlight { color: #FBBC04; font-weight: 600; }
+
+        .text-muted { color: #5F6368; font-size: 14px; }
+        .text-center { text-align: center; }
+        .text-small { font-size: 13px; color: #5F6368; }
+
+        .otp-box {
+            background: linear-gradient(135deg, #F8F9FA 0%, #FFFFFF 100%);
+            border: 2px dashed #1A73E8;
+            border-radius: 12px;
+            padding: 28px 20px;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .otp-code {
+            font-family: 'Courier New', monospace;
+            font-size: 38px;
+            font-weight: 700;
+            letter-spacing: 8px;
+            color: #1A73E8;
+            padding: 8px 16px;
+            background: #FFFFFF;
+            border-radius: 8px;
+            display: inline-block;
+            border: 1px solid #E8EAED;
+            box-shadow: 0 2px 8px rgba(26, 115, 232, 0.1);
+        }
+
+        .otp-label {
+            font-size: 14px;
+            color: #5F6368;
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+
+        .otp-expiry {
+            font-size: 13px;
+            color: #5F6368;
+            margin-top: 12px;
+            background: #F8F9FA;
+            padding: 8px 16px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+
+        .otp-expiry .highlight { color: #EA4335; font-weight: 600; }
+
+        .alert-success {
+            background: #D1FAE5;
+            padding: 16px;
+            border-radius: 12px;
+            text-align: center;
+            border: 2px solid #34A853;
+            margin: 16px 0;
+        }
+
+        .alert-success .message {
+            color: #065F46;
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .alert-success .sub {
+            color: #065F46;
+            font-size: 13px;
+            opacity: 0.8;
+        }
+
+        .alert-warning {
+            background: #FEF3C7;
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin: 14px 0;
+            border-left: 4px solid #FBBC04;
+        }
+
+        .alert-warning p {
+            margin: 0;
+            color: #92400E;
+            font-size: 13px;
+        }
+
+        .alert-info {
+            background: #EEF2FF;
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin: 14px 0;
+            border-left: 4px solid #1A73E8;
+        }
+
+        .alert-info p {
+            margin: 0;
+            color: #1A3A6B;
+            font-size: 13px;
+        }
+
+        .alert-danger {
+            background: #FEE2E2;
+            padding: 14px 18px;
+            border-radius: 10px;
+            margin: 14px 0;
+            border-left: 4px solid #EA4335;
+        }
+
+        .alert-danger p {
+            margin: 0;
+            color: #991B1B;
+            font-size: 13px;
+        }
+
+        .feature-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #F0F2F5;
+            display: flex;
+            align-items: center;
+        }
+
+        .feature-item:last-child { border-bottom: none; }
+
+        .feature-icon {
+            color: #1A73E8;
+            font-weight: 700;
+            margin-right: 12px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .feature-text {
+            color: #202124;
+            font-size: 14px;
+        }
+
+        .details-box {
+            background: #F8F9FA;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin: 16px 0;
+            border: 1px solid #E8EAED;
+        }
+
+        .details-box .row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid #F0F2F5;
+        }
+
+        .details-box .row:last-child { border-bottom: none; }
+
+        .details-box .label {
+            color: #5F6368;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+
+        .details-box .value {
+            color: #202124;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .divider {
+            border: none;
+            border-top: 2px solid #F0F2F5;
+            margin: 28px 0 20px 0;
+        }
+
+        .footer {
+            color: #5F6368;
+            font-size: 13px;
+            text-align: center;
+            line-height: 1.8;
+        }
+
+        .footer .brand {
+            color: #1A73E8;
+            font-weight: 700;
+            font-family: 'Georgia', 'Times New Roman', serif;
+        }
+
+        .footer .tagline {
+            color: #9AA0A6;
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .footer .copyright {
+            font-size: 11px;
+            color: #9AA0A6;
+            margin-top: 4px;
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin: 12px 0;
+        }
+
+        .footer-links a {
+            color: #5F6368;
+            text-decoration: none;
+            font-size: 12px;
+            transition: color 0.3s ease;
+        }
+
+        .footer-links a:hover { color: #1A73E8; }
+
+        @media (max-width: 480px) {
+            .container { padding: 24px 16px; }
+            .logo { max-width: 120px; }
+            .otp-code { font-size: 30px; letter-spacing: 6px; padding: 6px 12px; }
+            .title { font-size: 20px; }
+            .details-box .row { flex-direction: column; padding: 8px 0; }
+            .feature-item { font-size: 13px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="https://www.nuruvent.com/_next/image?url=%2Flogo.png&w=384&q=75" alt="Nuruvent" class="logo">
+            <div class="brand-line">Light Your Events. Illuminate Your Growth.</div>
+        </div>
+
+        {{.Content}}
+
+        <hr class="divider">
+        <div class="footer">
+            <p>
+                <span class="brand">Nuruvent</span><br>
+                <span class="tagline">Light Your Events. Illuminate Your Growth.</span>
+            </p>
+            <div class="footer-links">
+                <a href="https://nuruvent.com">Website</a>
+                <a href="https://nuruvent.com/about">About</a>
+                <a href="mailto:hello@nuruvent.com">Contact</a>
+            </div>
+            <p class="copyright">&copy; {{.Year}} Nuruvent. All rights reserved. Made in Kenya.</p>
+        </div>
+    </div>
+</body>
+</html>
+{{end}}

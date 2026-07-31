@@ -1,0 +1,16 @@
+# configs/casbin/policies/role_hierarchy.csv
+# Nuruvent Platform Role Hierarchy
+# Format: g, user, role, domain
+
+# ============================================================
+# PLATFORM ROLE HIERARCHY
+# ============================================================
+
+# System user gets super_admin access
+g, system, super_admin, platform
+
+# Admin inherits super_admin
+g, admin, super_admin, platform
+
+# Default role for new users
+g, consumer_default, attendee, platform
