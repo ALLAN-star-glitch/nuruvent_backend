@@ -46,7 +46,7 @@ func (s *EventService) CreateEvent(ctx context.Context, userID, businessID uuid.
 	// Check if user has permission to create events for this business
 	canCreate, err := s.enforcer.Enforce(
 		userID.String(),
-		authorization.BusinessDomain(businessID.String()),
+		authorization.AccountDomain(businessID.String()),
 		authorization.ResourceEvent.String(),
 		authorization.ActionCreate.String(),
 	)
@@ -59,7 +59,7 @@ func (s *EventService) CreateEvent(ctx context.Context, userID, businessID uuid.
 
 	// Generate slug if not provided
 	if event.Slug == "" {
-		event.Slug = s.generateSlug(event.Title)
+		event.Slug = s.generateSlug(event.Name)
 	}
 
 	// Set default status to draft if not set
@@ -74,7 +74,6 @@ func (s *EventService) CreateEvent(ctx context.Context, userID, businessID uuid.
 		event.EventStatusID = draftStatus.ID
 	}
 
-	event.BusinessID = businessID
 	event.CreatedBy = userID
 	event.CurrentAttendees = 0
 	event.IsVirtual = true
@@ -146,7 +145,7 @@ func (s *EventService) UploadEventImage(
 	// Check authorization
 	canUpdate, err := s.enforcer.Enforce(
 		userID.String(),
-		authorization.BusinessDomain(event.BusinessID.String()),
+		authorization.AccountDomain(event.InstitutionID.String()),
 		authorization.ResourceEvent.String(),
 		authorization.ActionUpdate.String(),
 	)
@@ -198,7 +197,7 @@ func (s *EventService) UploadCertificateTemplate(
 	// Check authorization - only event managers and business admins can upload certificates
 	canUpdate, err := s.enforcer.Enforce(
 		userID.String(),
-		authorization.BusinessDomain(event.BusinessID.String()),
+		authorization.AccountDomain(event.InstitutionID.String()),
 		authorization.ResourceEvent.String(),
 		authorization.ActionUpdate.String(),
 	)
@@ -241,7 +240,7 @@ func (s *EventService) GetEventByID(ctx context.Context, userID, eventID uuid.UU
 
 	canRead, err := s.enforcer.Enforce(
 		userID.String(),
-		authorization.BusinessDomain(event.BusinessID.String()),
+		authorization.AccountDomain(event.InstitutionID.String()),
 		authorization.ResourceEvent.String(),
 		authorization.ActionRead.String(),
 	)
@@ -302,7 +301,7 @@ func (s *EventService) UpdateEvent(ctx context.Context, userID, eventID uuid.UUI
 
 	canUpdate, err := s.enforcer.Enforce(
 		userID.String(),
-		authorization.BusinessDomain(event.BusinessID.String()),
+	    authorization.AccountDomain(event.InstitutionID.String()),
 		authorization.ResourceEvent.String(),
 		authorization.ActionUpdate.String(),
 	)
@@ -313,15 +312,13 @@ func (s *EventService) UpdateEvent(ctx context.Context, userID, eventID uuid.UUI
 		return nil, fmt.Errorf("insufficient permissions to update this event")
 	}
 
-	if !event.CanEdit() {
-		return nil, fmt.Errorf("event cannot be edited in its current status")
-	}
+
 
 	// Apply updates (same as before)
-	if title, ok := updates["title"].(string); ok && title != "" {
-		event.Title = title
+	if name, ok := updates["name"].(string); ok && name != "" {
+		event.Name = name
 		if event.Slug == "" || updates["slug"] == nil {
-			event.Slug = s.generateSlug(title)
+			event.Slug = s.generateSlug(name)
 		}
 	}
 	if description, ok := updates["description"].(string); ok {
@@ -402,7 +399,7 @@ func (s *EventService) DeleteEvent(ctx context.Context, userID, eventID uuid.UUI
 
 	canDelete, err := s.enforcer.Enforce(
 		userID.String(),
-		authorization.BusinessDomain(event.BusinessID.String()),
+		authorization.AccountDomain(event.InstitutionID.String()),
 		authorization.ResourceEvent.String(),
 		authorization.ActionDelete.String(),
 	)
@@ -435,7 +432,7 @@ func (s *EventService) DeleteEvent(ctx context.Context, userID, eventID uuid.UUI
 func (s *EventService) GetBusinessEvents(ctx context.Context, userID, businessID uuid.UUID, eventTypeID *uuid.UUID, eventStatusID *uuid.UUID, page, pageSize int) ([]models.Event, int64, error) {
 	canRead, err := s.enforcer.Enforce(
 		userID.String(),
-		authorization.BusinessDomain(businessID.String()),
+		authorization.AccountDomain(businessID.String()),
 		authorization.ResourceEvent.String(),
 		authorization.ActionRead.String(),
 	)

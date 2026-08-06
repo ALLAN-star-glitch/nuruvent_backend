@@ -27,7 +27,7 @@ func NewEventHandler(service *eventservice.EventService) *EventHandler {
 // ================================================
 
 type CreateEventRequest struct {
-	Title            string    `json:"title" binding:"required" example:"Annual Tech Conference 2024"`
+	Name            string    `json:"name" binding:"required" example:"Annual Tech Conference 2024"`
 	Description      string    `json:"description" example:"A conference for tech enthusiasts"`
 	EventTypeID      string    `json:"event_type_id" binding:"required" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Date             time.Time `json:"date" binding:"required" example:"2024-12-01"`
@@ -43,7 +43,7 @@ type CreateEventRequest struct {
 }
 
 type CreateEventWithImageRequest struct {
-	Title            string    `form:"title" binding:"required" example:"Annual Tech Conference 2024"`
+	Name            string    `form:"name" binding:"required" example:"Annual Tech Conference 2024"`
 	Description      string    `form:"description" example:"A conference for tech enthusiasts"`
 	EventTypeID      string    `form:"event_type_id" binding:"required" example:"550e8400-e29b-41d4-a716-446655440000"`
 	Date             time.Time `form:"date" binding:"required" example:"2024-12-01"`
@@ -409,7 +409,7 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 	}
 
 	// Validate required fields
-	if req.Title == "" {
+	if req.Name == "" {
 		return response.BadRequest(c, "Event title is required", nil)
 	}
 	if req.EventTypeID == "" {
@@ -436,7 +436,7 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 	}
 
 	event := &models.Event{
-		Title:            req.Title,
+		Name:            req.Name,
 		Description:      req.Description,
 		EventTypeID:      eventTypeID,
 		Date:             req.Date,
@@ -523,7 +523,7 @@ func (h *EventHandler) CreateEventWithImage(c fiber.Ctx) error {
 	}
 
 	// Validate required fields
-	if req.Title == "" {
+	if req.Name == "" {
 		return response.BadRequest(c, "Event title is required", nil)
 	}
 	if req.EventTypeID == "" {
@@ -575,7 +575,7 @@ func (h *EventHandler) CreateEventWithImage(c fiber.Ctx) error {
 	}
 
 	event := &models.Event{
-		Title:            req.Title,
+		Name:            req.Name,
 		Description:      req.Description,
 		EventTypeID:      eventTypeID,
 		Date:             req.Date,

@@ -1,6 +1,6 @@
-// internal/modules/auth/token_service.go
+// internal/modules/auth/service/token_service.go
 
-package auth
+package service
 
 import (
 	"crypto/rand"
@@ -11,32 +11,40 @@ import (
 
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/models"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/account/accountrepo"
+	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth/domain"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-type TokenService struct {
-	authRepo     *Repository
-	accountRepo  *accountrepo.Repository
-	config       *config.Config
+// TokenService defines the token service interface
+type TokenService interface {
+	GenerateAccessToken(account *models.Account) (string, error)
+	GenerateRefreshToken(accountID string, userAgent, ipAddress string) (string, error)
+	ValidateRefreshToken(token string) (*models.RefreshToken, error)
+	RevokeRefreshToken(token string) error
+	RotateRefreshToken(oldToken string, userAgent, ipAddress string) (string, string, error)
 }
 
+// tokenService implements the TokenService interface
+type tokenService struct {
+	repo   domain.Repository // Changed from authRepo *Repository to domain.Repository
+	config *config.Config
+}
+
+// NewTokenService creates a new token service
 func NewTokenService(
-	authRepo *Repository,
-	accountRepo *accountrepo.Repository,
+	repo domain.Repository, // Changed from authRepo *Repository to domain.Repository
 	cfg *config.Config,
-) *TokenService {
-	return &TokenService{
-		authRepo:     authRepo,
-		accountRepo:  accountRepo,
-		config:       cfg,
+) TokenService {
+	return &tokenService{
+		repo:   repo,
+		config: cfg,
 	}
 }
 
 // GenerateAccessToken creates a new access token (JWT)
-func (s *TokenService) GenerateAccessToken(account *models.Account) (string, error) {
+func (s *tokenService) GenerateAccessToken(account *models.Account) (string, error) {
 	// Get account type name
 	accountTypeName := ""
 	if account.AccountType.ID != uuid.Nil {
@@ -58,7 +66,7 @@ func (s *TokenService) GenerateAccessToken(account *models.Account) (string, err
 }
 
 // GenerateRefreshToken creates a new refresh token
-func (s *TokenService) GenerateRefreshToken(accountID string, userAgent, ipAddress string) (string, error) {
+func (s *tokenService) GenerateRefreshToken(accountID string, userAgent, ipAddress string) (string, error) {
 	// Parse string to uuid.UUID
 	accountUUID, err := uuid.Parse(accountID)
 	if err != nil {
@@ -75,15 +83,15 @@ func (s *TokenService) GenerateRefreshToken(accountID string, userAgent, ipAddre
 
 	// Store in database
 	refreshToken := &models.RefreshToken{
-		AccountID: accountUUID,
-		Token:     token,
-		ExpiresAt: time.Now().Add(s.config.JWT.RefreshExpiration),
-		Revoked:   false,
-		UserAgent: userAgent,
-		IPAddress: ipAddress,
+		AccountID:  accountUUID,
+		Token:      token,
+		ExpiresAt:  time.Now().Add(s.config.JWT.RefreshExpiration),
+		Revoked:    false,
+		UserAgent:  userAgent,
+		IPAddress:  ipAddress,
 	}
 
-	if err := s.authRepo.CreateRefreshToken(refreshToken); err != nil {
+	if err := s.repo.CreateRefreshToken(refreshToken); err != nil {
 		return "", fmt.Errorf("failed to store refresh token: %w", err)
 	}
 
@@ -91,8 +99,8 @@ func (s *TokenService) GenerateRefreshToken(accountID string, userAgent, ipAddre
 }
 
 // ValidateRefreshToken validates a refresh token
-func (s *TokenService) ValidateRefreshToken(token string) (*models.RefreshToken, error) {
-	refreshToken, err := s.authRepo.GetRefreshTokenByToken(token)
+func (s *tokenService) ValidateRefreshToken(token string) (*models.RefreshToken, error) {
+	refreshToken, err := s.repo.GetRefreshTokenByToken(token)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("invalid refresh token")
@@ -115,12 +123,12 @@ func (s *TokenService) ValidateRefreshToken(token string) (*models.RefreshToken,
 }
 
 // RevokeRefreshToken revokes a single refresh token
-func (s *TokenService) RevokeRefreshToken(token string) error {
-	return s.authRepo.RevokeRefreshToken(token)
+func (s *tokenService) RevokeRefreshToken(token string) error {
+	return s.repo.RevokeRefreshToken(token)
 }
 
 // RotateRefreshToken invalidates the old token and generates a new one
-func (s *TokenService) RotateRefreshToken(oldToken string, userAgent, ipAddress string) (string, string, error) {
+func (s *tokenService) RotateRefreshToken(oldToken string, userAgent, ipAddress string) (string, string, error) {
 	// Validate the old token
 	refreshToken, err := s.ValidateRefreshToken(oldToken)
 	if err != nil {
@@ -128,7 +136,7 @@ func (s *TokenService) RotateRefreshToken(oldToken string, userAgent, ipAddress 
 	}
 
 	// Get the account using account ID
-	account, err := s.accountRepo.GetAccountByID(refreshToken.AccountID)
+	account, err := s.repo.GetAccountByID(refreshToken.AccountID)
 	if err != nil {
 		return "", "", errors.New("account not found")
 	}
@@ -137,7 +145,7 @@ func (s *TokenService) RotateRefreshToken(oldToken string, userAgent, ipAddress 
 	}
 
 	// Revoke the old token
-	if err := s.authRepo.RevokeRefreshToken(oldToken); err != nil {
+	if err := s.repo.RevokeRefreshToken(oldToken); err != nil {
 		return "", "", fmt.Errorf("failed to revoke old token: %w", err)
 	}
 

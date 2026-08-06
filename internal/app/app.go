@@ -5,208 +5,71 @@ package app
 import (
 	"context"
 	"log"
-	"time"
 
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/database"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/authorization"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/events"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/media"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/server"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/redis"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/storage"
-	
-	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/cors"
-	"github.com/gofiber/fiber/v3/middleware/logger"
-	"github.com/gofiber/fiber/v3/middleware/recover"
 )
 
-// App represents the application with all dependencies
 type App struct {
-	Config   *config.Config
-	App      *fiber.App
-
-	// Modules
-	AuthorizationModule *authorization.Module
-	AuthModule          *auth.Module
-	BusinessModule      *business.Module
-	MediaModule         *media.Module
-	EventsModule        *events.Module
-
-	// Services (convenience access)
-	AuthorizationService *authorization.Service
-	Enforcer            *authorization.Enforcer
-	AuthHandler         *auth.Handler
-	
-	// Storage
-	StorageClient       *storage.Client
+	*AppDependencies
 }
 
-// NewApp creates a new application instance with all dependencies initialized
 func NewApp() (*App, error) {
-	// 1. Load configuration
+	// Initialize Redis first
 	cfg := config.Load()
-	log.Printf("Starting Nuruvent API in %s mode", cfg.Environment)
-
-	// 2. Initialize Redis
 	if err := redis.Init(cfg.Redis.URL); err != nil {
 		return nil, err
 	}
 	log.Println("Redis initialized successfully")
 
-	// 3. Connect to database
-	db, err := database.Connect(cfg)
+	deps, err := InitializeApp()
 	if err != nil {
 		return nil, err
 	}
-	log.Println("Database connected successfully")
-
-	// 4. Initialize Supabase Storage Client
-	storageClient := storage.NewClient(
-		cfg.Supabase.URL,
-		cfg.Supabase.SecretKey,
-		storage.BucketConfig{
-			Events:       cfg.Supabase.BucketEvent,
-			Businesses:   cfg.Supabase.BucketBusiness,
-			Profiles:     cfg.Supabase.BucketProfile,
-			Certificates: cfg.Supabase.BucketCertificate,
-			Recordings:   cfg.Supabase.BucketRecording,
-		},
-	)
-	log.Println("Supabase storage client initialized successfully")
-
-	// 5. Initialize authorization Module
-	permModule, err := authorization.NewModule(db, cfg)
-	if err != nil {
-		return nil, err
-	}
-	enforcer := permModule.GetEnforcer()
-	permService := permModule.GetService()
-
-	// 6. Initialize Media Module (no enforcer needed)
-	mediaModule := media.NewModule(cfg, storageClient)
-
-
-
-	// 8. Initialize Auth Module with business service
-	authModule := auth.NewModule(cfg, permService, businessService)
-	authHandler := authModule.GetHandler()
-
-	// 9. Initialize Events Module with Media Service injected
-	eventsModule := events.NewModule(
-		cfg,
-		enforcer,
-		permService,
-		mediaModule.GetService(), // Inject media service
-	)
-
-	// 10. Create Fiber app
-	app := fiber.New(fiber.Config{
-		AppName:      "Nuruvent API",
-		ServerHeader: "Nuruvent",
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	})
-
-	// 11. Setup middleware
-	app.Use(logger.New())
-	app.Use(recover.New())
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:3000",
-			"http://localhost:3001",
-			"http://localhost:3002",
-			"http://localhost:8080",
-			"https://nuruvent.vercel.app",
-		},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
-		AllowCredentials: true,
-	}))
-
-	return &App{
-		Config:               cfg,
-		App:                  app,
-		AuthorizationModule:  permModule,
-		AuthModule:           authModule,
-		BusinessModule:       businessModule,
-		MediaModule:          mediaModule,
-		EventsModule:         eventsModule,
-		AuthorizationService: permService,
-		Enforcer:             enforcer,
-		AuthHandler:          authHandler,
-		StorageClient:        storageClient,
-	}, nil
+	return &App{AppDependencies: deps}, nil
 }
 
-// Init initializes all modules
 func (app *App) Init(ctx context.Context) error {
-	// Initialize authorization module
 	if err := app.AuthorizationModule.Init(ctx); err != nil {
 		return err
 	}
-
-	// Initialize auth module
 	if err := app.AuthModule.Init(ctx); err != nil {
 		return err
 	}
-
-	// Initialize business module
-	if err := app.BusinessModule.Init(ctx); err != nil {
-		return err
-	}
-
-	// Initialize media module
 	if err := app.MediaModule.Init(ctx); err != nil {
 		return err
 	}
-
-	// Initialize events module
 	if err := app.EventsModule.Init(ctx); err != nil {
 		return err
 	}
-
 	log.Println("All modules initialized successfully")
 	return nil
 }
 
-// SetupRoutes registers all routes
 func (app *App) SetupRoutes() {
-	// Setup API routes with all handlers (includes Swagger)
 	server.SetupRoutes(
 		app.App,
 		app.Config,
 		app.AuthHandler,
 		app.Enforcer,
-		app.BusinessModule,
 		app.EventsModule,
 	)
-
 	log.Println("Routes registered successfully")
 }
 
-// Run starts the server
 func (app *App) Run() error {
 	log.Printf("Server starting on port %s", app.Config.Server.Port)
-	log.Printf("Swagger docs available at http://localhost:%s/swagger/index.html", app.Config.Server.Port)
 	return app.App.Listen(":" + app.Config.Server.Port)
 }
 
-// Close cleans up all resources
 func (app *App) Close() {
-	log.Println("Closing application...")
-
-	// Close modules
 	if app.AuthorizationModule != nil {
 		app.AuthorizationModule.Close()
 	}
 	if app.AuthModule != nil {
 		app.AuthModule.Close()
-	}
-	if app.BusinessModule != nil {
-		app.BusinessModule.Close()
 	}
 	if app.MediaModule != nil {
 		app.MediaModule.Close()
@@ -214,14 +77,9 @@ func (app *App) Close() {
 	if app.EventsModule != nil {
 		app.EventsModule.Close()
 	}
-
-	// Close Redis
-	redis.Close()
-
-	// Close database connection
 	if err := database.Close(); err != nil {
 		log.Printf("Error closing database: %v", err)
 	}
-
+	redis.Close()
 	log.Println("Application closed successfully")
 }

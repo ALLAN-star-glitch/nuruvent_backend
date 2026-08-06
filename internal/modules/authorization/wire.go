@@ -8,12 +8,20 @@ import (
 	"gorm.io/gorm"
 )
 
-// ProviderSet defines all dependencies for the authorization module
 var ProviderSet = wire.NewSet(
 	ProvideAuthorizationModule,
+	ProvideAuthorizationService,
+	ProvideEnforcer,
 )
 
-// ProvideAuthorizationModule provides the authorization module
 func ProvideAuthorizationModule(db *gorm.DB, cfg *config.Config) (*Module, error) {
 	return NewModule(db, cfg)
+}
+
+func ProvideAuthorizationService(module *Module) *Service {
+	return module.GetService()
+}
+
+func ProvideEnforcer(module *Module) *Enforcer {
+	return module.GetEnforcer()
 }

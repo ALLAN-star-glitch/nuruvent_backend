@@ -9,7 +9,9 @@ import (
 
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth"
+	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth/handler"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/authorization"
+	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/events"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/response"
 )
 
@@ -17,7 +19,7 @@ import (
 func SetupRoutes(
 	app *fiber.App,
 	cfg *config.Config,
-	authHandler *auth.Handler,
+	authHandler *handler.Handler,
 	enforcer *authorization.Enforcer,
 	eventsModule *events.Module,
 ) {
@@ -39,6 +41,7 @@ func SetupRoutes(
 
 	// Auth routes (public)
 	auth.RegisterAuthRoutes(api, authHandler)
+
 	// Events module routes (includes public and protected)
 	eventsModule.SetupRoutes(api, enforcer)
 
