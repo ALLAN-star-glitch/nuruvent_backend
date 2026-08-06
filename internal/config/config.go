@@ -20,6 +20,7 @@ type Config struct {
 	Email       EmailConfig
 	Casbin      CasbinConfig
 	MPesa       MPesaConfig
+	Supabase	SupabaseConfig
 }
 
 type ServerConfig struct {
@@ -33,6 +34,17 @@ type DatabaseConfig struct {
 	Password string
 	Name     string
 	SSLMode  string
+}
+
+type SupabaseConfig struct {
+	URL              string
+	SecretKey        string
+	PublishableKey   string  // Add this
+	BucketEvent      string
+	BucketBusiness   string
+	BucketProfile    string
+	BucketCertificate string
+	BucketRecording  string
 }
 
 type RedisConfig struct {
@@ -106,6 +118,16 @@ func Load() *Config {
 			Passkey:        getEnv("MPESA_PASSKEY", ""),
 			Shortcode:      getEnv("MPESA_SHORTCODE", "174379"),
 			Environment:    getEnv("MPESA_ENVIRONMENT", "sandbox"),
+		},
+		Supabase: SupabaseConfig{
+			URL:              getEnv("SUPABASE_URL", ""),
+			SecretKey:        getEnv("SUPABASE_SECRET_KEY", ""),
+			PublishableKey:   getEnv("SUPABASE_PUBLISHABLE_KEY", ""), 
+			BucketEvent:      getEnv("SUPABASE_BUCKET_EVENTS", "events"),
+			BucketBusiness:   getEnv("SUPABASE_BUCKET_BUSINESSES", "businesses"),
+			BucketProfile:    getEnv("SUPABASE_BUCKET_PROFILES", "profiles"),
+			BucketCertificate: getEnv("SUPABASE_BUCKET_CERTIFICATES", "certificates"),
+			BucketRecording:  getEnv("SUPABASE_BUCKET_RECORDINGS", "recordings"),
 		},
 	}
 }

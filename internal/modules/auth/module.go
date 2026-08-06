@@ -7,7 +7,6 @@ import (
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/database"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/authorization"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/business/bizservice"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/email"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/queue"
 	"github.com/gofiber/fiber/v3"

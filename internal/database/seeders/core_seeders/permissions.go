@@ -66,7 +66,7 @@ func SeedPermissions(db *gorm.DB) error {
 	}
 
 	log.Println("✅ Platform permissions seeded successfully")
-	log.Println("ℹ️  Business policies will be added when businesses are created")
+	log.Println("ℹ️  Account policies will be added when accounts are created")
 	return nil
 }
 
@@ -117,7 +117,7 @@ func (s *permissionSeeder) seedPoliciesFromCSV() error {
 				obj := strings.TrimSpace(record[3])
 				act := strings.TrimSpace(record[4])
 
-				if strings.Contains(dom, "{{.BusinessID}}") {
+				if strings.Contains(dom, "{{.AccountID}}") {
 					skippedCount++
 					continue
 				}
@@ -136,7 +136,7 @@ func (s *permissionSeeder) seedPoliciesFromCSV() error {
 	}
 
 	if skippedCount > 0 {
-		log.Printf("ℹ️  Skipped %d business policies (handled in code)", skippedCount)
+		log.Printf("ℹ️  Skipped %d account policies (handled in code)", skippedCount)
 	}
 
 	return nil
@@ -178,7 +178,7 @@ func (s *permissionSeeder) seedRoleHierarchyFromCSV() error {
 				role := strings.TrimSpace(record[2])
 				domain := strings.TrimSpace(record[3])
 
-				if strings.Contains(domain, "{{.BusinessID}}") {
+				if strings.Contains(domain, "{{.AccountID}}") {
 					skippedCount++
 					continue
 				}
@@ -197,7 +197,7 @@ func (s *permissionSeeder) seedRoleHierarchyFromCSV() error {
 	}
 
 	if skippedCount > 0 {
-		log.Printf("ℹ️  Skipped %d business role hierarchies (handled in code)", skippedCount)
+		log.Printf("ℹ️  Skipped %d account role hierarchies (handled in code)", skippedCount)
 	}
 
 	return nil
@@ -225,10 +225,10 @@ func IsSeeded(db *gorm.DB) (bool, error) {
 	return len(policies) > 0, nil
 }
 
-// SeedBusinessPolicies adds business policies for an existing business
-// This is useful for backfilling businesses created before policies were added
-func SeedBusinessPolicies(db *gorm.DB, businessID string) error {
-	log.Printf("📦 Adding business policies for business: %s", businessID)
+// SeedAccountPolicies adds account policies for an existing account
+// This is useful for backfilling accounts created before policies were added
+func SeedAccountPolicies(db *gorm.DB, accountID string) error {
+	log.Printf("📦 Adding account policies for account: %s", accountID)
 
 	cfg := config.Load()
 
@@ -241,12 +241,12 @@ func SeedBusinessPolicies(db *gorm.DB, businessID string) error {
 	service := permModule.GetService()
 	ctx := context.Background()
 
-	return service.AddBusinessPolicies(ctx, businessID)
+	return service.AddAccountPolicies(ctx, accountID)
 }
 
-// SeedBusinessPoliciesForAllBusinesses adds business policies for all existing businesses
-func SeedBusinessPoliciesForAllBusinesses(db *gorm.DB) error {
-	log.Println("📦 Adding business policies for all existing businesses...")
+// SeedAccountPoliciesForAllAccounts adds account policies for all existing accounts
+func SeedAccountPoliciesForAllAccounts(db *gorm.DB) error {
+	log.Println("📦 Adding account policies for all existing accounts...")
 
 	cfg := config.Load()
 
@@ -259,26 +259,26 @@ func SeedBusinessPoliciesForAllBusinesses(db *gorm.DB) error {
 	service := permModule.GetService()
 	ctx := context.Background()
 
-	// Get all business IDs
-	var businessIDs []string
-	if err := db.Table("businesses").Pluck("id", &businessIDs).Error; err != nil {
-		return fmt.Errorf("failed to get business IDs: %w", err)
+	// Get all account IDs
+	var accountIDs []string
+	if err := db.Table("accounts").Pluck("id", &accountIDs).Error; err != nil {
+		return fmt.Errorf("failed to get account IDs: %w", err)
 	}
 
-	if len(businessIDs) == 0 {
-		log.Println("No businesses found to seed policies for")
+	if len(accountIDs) == 0 {
+		log.Println("No accounts found to seed policies for")
 		return nil
 	}
 
 	successCount := 0
-	for _, businessID := range businessIDs {
-		if err := service.AddBusinessPolicies(ctx, businessID); err != nil {
-			log.Printf("⚠️  Failed to seed policies for business %s: %v", businessID, err)
+	for _, accountID := range accountIDs {
+		if err := service.AddAccountPolicies(ctx, accountID); err != nil {
+			log.Printf("⚠️  Failed to seed policies for account %s: %v", accountID, err)
 			continue
 		}
 		successCount++
 	}
 
-	log.Printf("✅ Seeded business policies for %d out of %d businesses", successCount, len(businessIDs))
+	log.Printf("✅ Seeded account policies for %d out of %d accounts", successCount, len(accountIDs))
 	return nil
 }

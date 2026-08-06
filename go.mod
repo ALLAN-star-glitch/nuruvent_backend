@@ -18,8 +18,12 @@ require (
 )
 
 require (
+	github.com/google/subcommands v1.2.0 // indirect
+	github.com/google/wire v0.7.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
+	github.com/supabase-community/storage-go v0.8.1 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )

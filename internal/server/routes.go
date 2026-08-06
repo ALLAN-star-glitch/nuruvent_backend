@@ -1,3 +1,5 @@
+// internal/server/routes.go
+
 package server
 
 import (
@@ -8,7 +10,6 @@ import (
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/authorization"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/business"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/response"
 )
 
@@ -18,7 +19,7 @@ func SetupRoutes(
 	cfg *config.Config,
 	authHandler *auth.Handler,
 	enforcer *authorization.Enforcer,
-	businessModule *business.Module,
+	eventsModule *events.Module,
 ) {
 	// ================================================
 	// 1. SWAGGER - Must be FIRST to avoid 404
@@ -38,9 +39,11 @@ func SetupRoutes(
 
 	// Auth routes (public)
 	auth.RegisterAuthRoutes(api, authHandler)
+	// Events module routes (includes public and protected)
+	eventsModule.SetupRoutes(api, enforcer)
 
-	
-	businessModule.SetupRoutes(api, enforcer)
+	// Media module - NO routes needed (just internal service)
+	// Media service is injected into Events module for file operations
 
 	// ================================================
 	// 3. PROTECTED ROUTES (Authentication required)

@@ -1,3 +1,5 @@
+// internal/modules/authorization/constants.go
+
 package authorization
 
 // Role represents a user role in the system
@@ -5,13 +7,14 @@ type Role string
 
 // Context keys for storing values in Fiber context
 const (
-	ContextKeyUserID      = "user_id"
-	ContextKeyUserRole    = "user_role"
-	ContextKeyUserEmail   = "user_email"
-	ContextKeyUserName    = "user_name"
-	ContextKeyDomain      = "domain"
-	ContextKeyBusinessID  = "business_id"
-	ContextKeyUserRoles   = "user_roles"
+	ContextKeyUserID       = "user_id"
+	ContextKeyUserRole     = "user_role"
+	ContextKeyUserEmail    = "user_email"
+	ContextKeyUserName     = "user_name"
+	ContextKeyDomain       = "domain"
+	ContextKeyAccountID    = "account_id"
+	ContextKeyInstitutionID = "institution_id"
+	ContextKeyUserRoles    = "user_roles"
 )
 
 const (
@@ -19,14 +22,10 @@ const (
 	RoleSuperAdmin Role = "super_admin" // Full platform access
 	RoleAdmin      Role = "admin"       // Platform management
 
-	// Business roles (assigned within a business domain)
-	RoleBusinessAdmin   Role = "business_admin"   // Full business management (was "host")
-	RoleEventManager    Role = "event_manager"    // Manage events, attendees, certificates
-	RoleMember          Role = "member"           // View-only access to business data
-
-	// Consumer roles (platform level)
-	RoleAttendee        Role = "attendee"         // Event participant
-	RolePremiumAttendee Role = "premium_attendee" // Premium event participant
+	// Account team roles (assigned within an account domain)
+	RoleAccountAdmin   Role = "account_admin"   // Full account management
+	RoleEventManager   Role = "event_manager"   // Manage events, attendees, certificates
+	RoleTeamMember     Role = "team_member"     // View-only access
 
 	// System
 	RoleGuest Role = "guest" // Unregistered user
@@ -41,13 +40,15 @@ const (
 	ResourceAttendee     Resource = "attendee"
 	ResourcePayment      Resource = "payment"
 	ResourcePayout       Resource = "payout"
-	ResourceBusiness     Resource = "business"
+	ResourceInstitution  Resource = "institution"
 	ResourceMember       Resource = "member"
-	ResourceUser         Resource = "user"
+	ResourceAccount      Resource = "account"
+	ResourceProfile      Resource = "profile"
 	ResourceDashboard    Resource = "dashboard"
 	ResourceAnalytics    Resource = "analytics"
 	ResourceNotification Resource = "notification"
 	ResourcePlatform     Resource = "platform"
+	ResourceMedia        Resource = "media"
 )
 
 // Action represents an operation that can be performed
@@ -64,6 +65,7 @@ const (
 	ActionExport   Action = "export"   // Export data (CSV, Excel)
 	ActionRefund   Action = "refund"   // Refund payments
 	ActionDownload Action = "download" // Download certificates/replays
+	ActionInvite   Action = "invite"   // Invite team members
 )
 
 // Domain constants
@@ -97,26 +99,24 @@ func (a Action) String() string {
 // IsValidRole checks if a role is valid
 func IsValidRole(role string) bool {
 	validRoles := map[string]bool{
-		RoleSuperAdmin.String():     true,
-		RoleAdmin.String():          true,
-		RoleBusinessAdmin.String():  true,
-		RoleEventManager.String():   true,
-		RoleMember.String():         true,
-		RoleAttendee.String():       true,
-		RolePremiumAttendee.String(): true,
-		RoleGuest.String():          true,
+		RoleSuperAdmin.String():  true,
+		RoleAdmin.String():       true,
+		RoleAccountAdmin.String(): true,
+		RoleEventManager.String(): true,
+		RoleTeamMember.String():  true,
+		RoleGuest.String():       true,
 	}
 	return validRoles[role]
 }
 
-// IsBusinessRole checks if a role is a business-level role
-func IsBusinessRole(role string) bool {
-	businessRoles := map[string]bool{
-		RoleBusinessAdmin.String():  true,
-		RoleEventManager.String():   true,
-		RoleMember.String():         true,
+// IsTeamRole checks if a role is a team-level role (within an account domain)
+func IsTeamRole(role string) bool {
+	teamRoles := map[string]bool{
+		RoleAccountAdmin.String():  true,
+		RoleEventManager.String(): true,
+		RoleTeamMember.String():   true,
 	}
-	return businessRoles[role]
+	return teamRoles[role]
 }
 
 // IsPlatformRole checks if a role is a platform-level role
@@ -124,8 +124,6 @@ func IsPlatformRole(role string) bool {
 	platformRoles := map[string]bool{
 		RoleSuperAdmin.String(): true,
 		RoleAdmin.String():      true,
-		RoleAttendee.String():   true,
-		RolePremiumAttendee.String(): true,
 		RoleGuest.String():      true,
 	}
 	return platformRoles[role]
@@ -135,30 +133,17 @@ func IsPlatformRole(role string) bool {
 // DOMAIN HELPERS
 // ============================================================
 
-// BusinessDomain returns the business domain string
-func BusinessDomain(businessID string) string {
-	if businessID == "" {
+// AccountDomain returns the account domain string
+func AccountDomain(accountID string) string {
+	if accountID == "" {
 		return ""
 	}
-	return "business:" + businessID
+	return "account:" + accountID
 }
 
-// UserDomain returns the user domain string
-func UserDomain(userID string) string {
-	if userID == "" {
-		return ""
-	}
-	return "user:" + userID
-}
-
-// IsBusinessDomain checks if a domain is a business domain
-func IsBusinessDomain(domain string) bool {
-	return len(domain) > 9 && domain[:9] == "business:"
-}
-
-// IsUserDomain checks if a domain is a user domain
-func IsUserDomain(domain string) bool {
-	return len(domain) > 5 && domain[:5] == "user:"
+// IsAccountDomain checks if a domain is an account domain
+func IsAccountDomain(domain string) bool {
+	return len(domain) > 8 && domain[:8] == "account:"
 }
 
 // IsPlatformDomain checks if a domain is the platform domain
@@ -166,18 +151,10 @@ func IsPlatformDomain(domain string) bool {
 	return domain == DomainPlatform
 }
 
-// ExtractBusinessID extracts business ID from domain
-func ExtractBusinessID(domain string) string {
-	if IsBusinessDomain(domain) {
-		return domain[9:]
-	}
-	return ""
-}
-
-// ExtractUserID extracts user ID from domain
-func ExtractUserID(domain string) string {
-	if IsUserDomain(domain) {
-		return domain[5:]
+// ExtractAccountID extracts account ID from domain
+func ExtractAccountID(domain string) string {
+	if IsAccountDomain(domain) {
+		return domain[8:]
 	}
 	return ""
 }
@@ -191,21 +168,19 @@ func GetAllRoles() []Role {
 	return []Role{
 		RoleSuperAdmin,
 		RoleAdmin,
-		RoleBusinessAdmin,
+		RoleAccountAdmin,
 		RoleEventManager,
-		RoleMember,
-		RoleAttendee,
-		RolePremiumAttendee,
+		RoleTeamMember,
 		RoleGuest,
 	}
 }
 
-// GetAllBusinessRoles returns all business-level roles
-func GetAllBusinessRoles() []Role {
+// GetAllTeamRoles returns all team-level roles
+func GetAllTeamRoles() []Role {
 	return []Role{
-		RoleBusinessAdmin,
+		RoleAccountAdmin,
 		RoleEventManager,
-		RoleMember,
+		RoleTeamMember,
 	}
 }
 
@@ -214,8 +189,6 @@ func GetAllPlatformRoles() []Role {
 	return []Role{
 		RoleSuperAdmin,
 		RoleAdmin,
-		RoleAttendee,
-		RolePremiumAttendee,
 		RoleGuest,
 	}
 }
@@ -228,13 +201,15 @@ func GetAllResources() []Resource {
 		ResourceAttendee,
 		ResourcePayment,
 		ResourcePayout,
-		ResourceBusiness,
+		ResourceInstitution,
 		ResourceMember,
-		ResourceUser,
+		ResourceAccount,
+		ResourceProfile,
 		ResourceDashboard,
 		ResourceAnalytics,
 		ResourceNotification,
 		ResourcePlatform,
+		ResourceMedia,
 	}
 }
 
@@ -251,5 +226,6 @@ func GetAllActions() []Action {
 		ActionExport,
 		ActionRefund,
 		ActionDownload,
+		ActionInvite,
 	}
 }

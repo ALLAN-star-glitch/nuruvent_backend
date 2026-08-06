@@ -78,6 +78,7 @@ help:
 	@echo "  make dev"
 	@echo "  make worker"
 	@echo "  make seed-only NAME=permissions"
+	@echo "  make c 						-Clear terminal
 
 # ================================================
 # MIGRATIONS
@@ -329,3 +330,24 @@ swagger-install:
 
 swagger-clean:
 	rm -rf docs/
+
+# ================================================
+# WIRE - Dependency Injection
+# ================================================
+
+wire:
+	@echo "Generating wire_gen.go..."
+	wire gen ./internal/app
+
+wire-install:
+	go install github.com/google/wire/cmd/wire@latest
+
+wire-verify:
+	wire check ./...
+
+wire-clean:
+	rm -f internal/app/wire_gen.go
+
+c:
+	@echo "Clear Terminal"
+	clear

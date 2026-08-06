@@ -16,6 +16,9 @@ import (
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/database"
 	bizseeder "github.com/ALLAN_star_glitch/nuruvent-backend/internal/database/seeders/business_seeders"
 	coreseeder "github.com/ALLAN_star_glitch/nuruvent-backend/internal/database/seeders/core_seeders"
+	eventseeder "github.com/ALLAN_star_glitch/nuruvent-backend/internal/database/seeders/event_seeders"
+	institutionseeder "github.com/ALLAN_star_glitch/nuruvent-backend/internal/database/seeders/institution_seeders"
+	mediaseeder "github.com/ALLAN_star_glitch/nuruvent-backend/internal/database/seeders/media_seeders"
 	"gorm.io/gorm"
 )
 
@@ -80,9 +83,52 @@ func main() {
 		},
 
 		{
+		Name:        "account_types",
+		Fn:          coreseeder.SeedAccountTypes,
+		Description: "Seed account types (personal, institution)",
+		Deps:        []string{},
+		},
+		{
+			Name:        "professional_types",
+			Fn:          coreseeder.SeedProfessionalTypes,
+			Description: "Seed professional types (trainer, professional, student, other)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "institution_types",
+			Fn:          institutionseeder.SeedInstitutionTypes,
+			Description: "Seed institution types (training_institute, college, professional_body, ngo, corporate, government)",
+			Deps:        []string{},
+		},
+
+		{
 			Name:        "business_types",
 			Fn:          bizseeder.SeedBusinessTypes,
 			Description: "Seed business types (training_institute, college, etc.)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "event_types",
+			Fn:          eventseeder.SeedEventTypes,
+			Description: "Seed event types ",
+			Deps:        []string{},
+		},
+		{
+			Name:        "event_statuses",
+			Fn:          eventseeder.SeedEventStatuses,
+			Description: "Seed event statuses",
+			Deps:        []string{},
+		},
+		{
+			Name:        "media_types",
+			Fn:          mediaseeder.SeedMediaTypes,
+			Description: "Seed media types (event, business, profile, certificate, recording)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "attendance_statuses",
+			Fn:          eventseeder.SeedAttendanceStatuses,
+			Description: "Seed attendance statuses (registered, joined, partial, full, confirmed, no_show)",
 			Deps:        []string{},
 		},
 		// Add more seeders here as they are created

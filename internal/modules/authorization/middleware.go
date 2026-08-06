@@ -1,3 +1,5 @@
+// internal/modules/authorization/middleware.go
+
 package authorization
 
 import (
@@ -12,7 +14,7 @@ import (
 func AuthorizationMiddleware(enforcer *Enforcer) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		// Get user ID from context (set by auth middleware)
-		userID := c.Locals("user_id")
+		userID := c.Locals(ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -39,10 +41,10 @@ func AuthorizationMiddleware(enforcer *Enforcer) fiber.Handler {
 		roles := enforcer.GetRolesForUserInDomain(userIDStr, domain)
 		c.Locals(ContextKeyUserRoles, roles)
 
-		// If domain is a business domain, store business ID
-		if IsBusinessDomain(domain) {
-			businessID := ExtractBusinessID(domain)
-			c.Locals(ContextKeyBusinessID, businessID)
+		// If domain is an account domain, store account ID
+		if IsAccountDomain(domain) {
+			accountID := ExtractAccountID(domain)
+			c.Locals(ContextKeyAccountID, accountID)
 		}
 
 		// Enforce permission
@@ -77,7 +79,7 @@ func AuthorizationMiddleware(enforcer *Enforcer) fiber.Handler {
 // RequireRoles creates middleware that requires specific roles
 func RequireRoles(enforcer *Enforcer, roles ...Role) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		userID := c.Locals("user_id")
+		userID := c.Locals(ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -134,10 +136,10 @@ func RequireRoles(enforcer *Enforcer, roles ...Role) fiber.Handler {
 	}
 }
 
-// RequireBusinessAdmin creates middleware to check if user is a business admin
-func RequireBusinessAdmin(enforcer *Enforcer) fiber.Handler {
+// RequireAccountAdmin creates middleware to check if user is an account admin
+func RequireAccountAdmin(enforcer *Enforcer) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		userID := c.Locals("user_id")
+		userID := c.Locals(ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -151,40 +153,40 @@ func RequireBusinessAdmin(enforcer *Enforcer) fiber.Handler {
 			})
 		}
 
-		// Get business ID from path
-		businessID := c.Params("businessId")
-		if businessID == "" {
-			businessID = c.Params("id")
+		// Get account ID from path
+		accountID := c.Params("accountId")
+		if accountID == "" {
+			accountID = c.Params("id")
 		}
 
-		if businessID == "" {
-			businessID = c.Query("businessId")
+		if accountID == "" {
+			accountID = c.Query("accountId")
 		}
 
-		if businessID == "" {
-			return response.BadRequest(c, "Business ID required", fiber.Map{
-				"reason": "businessId not found in path or query",
+		if accountID == "" {
+			return response.BadRequest(c, "Account ID required", fiber.Map{
+				"reason": "accountId not found in path or query",
 			})
 		}
 
-		// Check if user has business_admin role
-		if !enforcer.IsBusinessAdmin(userIDStr, businessID) {
-			return response.Forbidden(c, "Not a business admin", fiber.Map{
+		// Check if user has account_admin role
+		if !enforcer.IsAccountAdmin(accountID, userIDStr) {
+			return response.Forbidden(c, "Not an account admin", fiber.Map{
 				"user":          userIDStr,
-				"business_id":   businessID,
-				"required_role": RoleBusinessAdmin.String(),
+				"account_id":    accountID,
+				"required_role": RoleAccountAdmin.String(),
 			})
 		}
 
-		c.Locals(ContextKeyBusinessID, businessID)
+		c.Locals(ContextKeyAccountID, accountID)
 		return c.Next()
 	}
 }
 
-// RequireBusinessRole creates middleware to check if user has ANY business role
-func RequireBusinessRole(enforcer *Enforcer) fiber.Handler {
+// RequireAccountRole creates middleware that checks if user has ANY account role
+func RequireAccountRole(enforcer *Enforcer) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		userID := c.Locals("user_id")
+		userID := c.Locals(ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -198,46 +200,46 @@ func RequireBusinessRole(enforcer *Enforcer) fiber.Handler {
 			})
 		}
 
-		// Get business ID from path
-		businessID := c.Params("businessId")
-		if businessID == "" {
-			businessID = c.Params("id")
+		// Get account ID from path
+		accountID := c.Params("accountId")
+		if accountID == "" {
+			accountID = c.Params("id")
 		}
 
-		if businessID == "" {
-			businessID = c.Query("businessId")
+		if accountID == "" {
+			accountID = c.Query("accountId")
 		}
 
-		if businessID == "" {
-			return response.BadRequest(c, "Business ID required", fiber.Map{
-				"reason": "businessId not found in path or query",
+		if accountID == "" {
+			return response.BadRequest(c, "Account ID required", fiber.Map{
+				"reason": "accountId not found in path or query",
 			})
 		}
 
-		domain := BusinessDomain(businessID)
+		domain := AccountDomain(accountID)
 		roles := enforcer.GetRolesForUserInDomain(userIDStr, domain)
 
-		// Check if user has any business role
+		// Check if user has any account role
 		hasAccess := false
 		for _, role := range roles {
 			switch role {
-			case RoleBusinessAdmin.String(),
+			case RoleAccountAdmin.String(),
 				RoleEventManager.String(),
-				RoleMember.String():
+				RoleTeamMember.String():
 				hasAccess = true
 				break
 			}
 		}
 
 		if !hasAccess {
-			return response.Forbidden(c, "No business access", fiber.Map{
+			return response.Forbidden(c, "No account access", fiber.Map{
 				"user":        userIDStr,
-				"business_id": businessID,
+				"account_id":  accountID,
 				"user_roles":  roles,
 			})
 		}
 
-		c.Locals(ContextKeyBusinessID, businessID)
+		c.Locals(ContextKeyAccountID, accountID)
 		c.Locals(ContextKeyDomain, domain)
 		return c.Next()
 	}
@@ -246,7 +248,7 @@ func RequireBusinessRole(enforcer *Enforcer) fiber.Handler {
 // RequirePlatformRole creates middleware that requires a platform-level role
 func RequirePlatformRole(enforcer *Enforcer, roles ...Role) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		userID := c.Locals("user_id")
+		userID := c.Locals(ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -288,11 +290,11 @@ func RequirePlatformRole(enforcer *Enforcer, roles ...Role) fiber.Handler {
 	}
 }
 
-// RequireBusinessAccess creates middleware that checks if user has ANY business role
-// Use this for /businesses/me and /businesses/my endpoints
-func RequireBusinessAccess(enforcer *Enforcer) fiber.Handler {
+// RequireAccountAccess creates middleware that checks if user has ANY account role
+// Use this for /accounts/me and /accounts/my endpoints
+func RequireAccountAccess(enforcer *Enforcer) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		userID := c.Locals("user_id")
+		userID := c.Locals(ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -306,25 +308,25 @@ func RequireBusinessAccess(enforcer *Enforcer) fiber.Handler {
 			})
 		}
 
-		// Check if user has ANY business role
-		hasBusinessAccess := enforcer.HasAnyBusinessRole(userIDStr)
+		// Check if user has ANY account role
+		hasAccountAccess := enforcer.HasAnyAccountRole(userIDStr)
 
-		if !hasBusinessAccess {
-			businesses := enforcer.GetUserBusinesses(userIDStr)
+		if !hasAccountAccess {
+			accounts := enforcer.GetUserAccountIDs(userIDStr)
 			platformRoles := enforcer.GetUserPlatformRoles(userIDStr)
 
-			return response.Forbidden(c, "User does not belong to any business", fiber.Map{
+			return response.Forbidden(c, "User does not belong to any account", fiber.Map{
 				"user":           userIDStr,
-				"businesses":     businesses,
+				"accounts":       accounts,
 				"platform_roles": platformRoles,
-				"message":        "User must be a member of at least one business to access this endpoint",
+				"message":        "User must be a member of at least one account to access this endpoint",
 			})
 		}
 
-		// Get user's businesses and store the first one as default if needed
-		businesses := enforcer.GetUserBusinesses(userIDStr)
-		if len(businesses) > 0 {
-			c.Locals(ContextKeyBusinessID, businesses[0])
+		// Get user's accounts and store the first one as default if needed
+		accounts := enforcer.GetUserAccountIDs(userIDStr)
+		if len(accounts) > 0 {
+			c.Locals(ContextKeyAccountID, accounts[0])
 		}
 
 		return c.Next()
@@ -346,49 +348,49 @@ func getDomainFromRequest(c fiber.Ctx) string {
 
 	path := c.Path()
 
-	// Check business routes FIRST (before user routes)
-	if strings.Contains(path, "/businesses/me") ||
-		strings.Contains(path, "/business/me") ||
-		strings.Contains(path, "/businesses/my") ||
-		strings.Contains(path, "/business/my") {
+	// Check account routes FIRST
+	if strings.Contains(path, "/accounts/me") ||
+		strings.Contains(path, "/account/me") ||
+		strings.Contains(path, "/accounts/my") ||
+		strings.Contains(path, "/account/my") {
 		return DomainPlatform
 	}
 
-	// Check for business ID in path - check BOTH "id" and "businessId"
-	businessID := c.Params("businessId")
-	if businessID == "" {
-		businessID = c.Params("id")
+	// Check for account ID in path
+	accountID := c.Params("accountId")
+	if accountID == "" {
+		accountID = c.Params("id")
 	}
-	if businessID != "" {
-		return BusinessDomain(businessID)
-	}
-
-	// Check if business ID is in query
-	businessID = c.Query("businessId")
-	if businessID != "" {
-		return BusinessDomain(businessID)
+	if accountID != "" {
+		return AccountDomain(accountID)
 	}
 
-	// Check if it's a user-specific request
+	// Check if account ID is in query
+	accountID = c.Query("accountId")
+	if accountID != "" {
+		return AccountDomain(accountID)
+	}
+
+	// Check if it's a user-specific request (backward compatibility)
 	userID := c.Params("userId")
 	if userID != "" {
-		return UserDomain(userID)
+		return AccountDomain(userID)
 	}
 
 	// Check if it's the current user profile
-	if strings.Contains(path, "/profile") && !strings.Contains(path, "/businesses/") {
-		if userID := c.Locals("user_id"); userID != nil {
+	if strings.Contains(path, "/profile") && !strings.Contains(path, "/accounts/") {
+		if userID := c.Locals(ContextKeyUserID); userID != nil {
 			if userIDStr, ok := userID.(string); ok {
-				return UserDomain(userIDStr)
+				return AccountDomain(userIDStr)
 			}
 		}
 	}
 
-	// Check if it's a me endpoint (but NOT business me - already handled above)
-	if strings.Contains(path, "/me") && !strings.Contains(path, "/businesses/") {
-		if userID := c.Locals("user_id"); userID != nil {
+	// Check if it's a me endpoint (but NOT account me - already handled above)
+	if strings.Contains(path, "/me") && !strings.Contains(path, "/accounts/") {
+		if userID := c.Locals(ContextKeyUserID); userID != nil {
 			if userIDStr, ok := userID.(string); ok {
-				return UserDomain(userIDStr)
+				return AccountDomain(userIDStr)
 			}
 		}
 	}
@@ -403,17 +405,17 @@ func getResourceFromRequest(c fiber.Ctx) string {
 
 	// Remove API prefix
 	path = strings.TrimPrefix(path, "/api/v1/")
-	path = strings.TrimPrefix(path, "/api/v1/business/")
+	path = strings.TrimPrefix(path, "/api/v1/account/")
 
 	// Get the first segment
 	segments := strings.Split(path, "/")
 	if len(segments) > 0 && segments[0] != "" {
 		resource := segments[0]
 
-		// Handle business "me" endpoints
-		if resource == "businesses" || resource == "business" {
+		// Handle account "me" endpoints
+		if resource == "accounts" || resource == "account" {
 			if len(segments) > 1 && (segments[1] == "me" || segments[1] == "my") {
-				return ResourceBusiness.String()
+				return ResourceAccount.String()
 			}
 			for _, segment := range segments {
 				if segment == "members" {
@@ -425,9 +427,11 @@ func getResourceFromRequest(c fiber.Ctx) string {
 		// Map common URL patterns to resources
 		switch resource {
 		case "profile", "me":
-			return ResourceUser.String()
-		case "businesses", "business":
-			return ResourceBusiness.String()
+			return ResourceProfile.String()
+		case "accounts", "account":
+			return ResourceAccount.String()
+		case "institutions":
+			return ResourceInstitution.String()
 		case "events":
 			return ResourceEvent.String()
 		case "certificates":
@@ -444,6 +448,8 @@ func getResourceFromRequest(c fiber.Ctx) string {
 			return ResourceAnalytics.String()
 		case "notifications":
 			return ResourceNotification.String()
+		case "media":
+			return ResourceMedia.String()
 		default:
 			return resource
 		}

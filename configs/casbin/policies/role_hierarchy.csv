@@ -1,16 +1,15 @@
-# configs/casbin/policies/role_hierarchy.csv
 # Nuruvent Platform Role Hierarchy
 # Format: g, user, role, domain
 
 # ============================================================
-# PLATFORM ROLE HIERARCHY
+# ROLE HIERARCHY (Static)
 # ============================================================
 
-# System user gets super_admin access
-g, system, super_admin, platform
-
-# Admin inherits super_admin
+# Admin inherits from Super Admin
 g, admin, super_admin, platform
 
-# Default role for new users
-g, consumer_default, attendee, platform
+# Account Admin inherits from Admin (for platform access)
+g, account_admin, admin, platform
+
+# Event Manager inherits from Team Member
+g, event_manager, team_member, *

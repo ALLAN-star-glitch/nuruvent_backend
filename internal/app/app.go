@@ -1,3 +1,5 @@
+// internal/app/app.go
+
 package app
 
 import (
@@ -9,9 +11,11 @@ import (
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/database"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/authorization"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/business"
+	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/events"
+	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/media"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/server"
 	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/redis"
+	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/storage"
 	
 	"github.com/gofiber/fiber/v3"
 	"github.com/gofiber/fiber/v3/middleware/cors"
@@ -28,11 +32,16 @@ type App struct {
 	AuthorizationModule *authorization.Module
 	AuthModule          *auth.Module
 	BusinessModule      *business.Module
+	MediaModule         *media.Module
+	EventsModule        *events.Module
 
 	// Services (convenience access)
 	AuthorizationService *authorization.Service
 	Enforcer            *authorization.Enforcer
 	AuthHandler         *auth.Handler
+	
+	// Storage
+	StorageClient       *storage.Client
 }
 
 // NewApp creates a new application instance with all dependencies initialized
@@ -54,7 +63,21 @@ func NewApp() (*App, error) {
 	}
 	log.Println("Database connected successfully")
 
-	// 4. Initialize authorization Module
+	// 4. Initialize Supabase Storage Client
+	storageClient := storage.NewClient(
+		cfg.Supabase.URL,
+		cfg.Supabase.SecretKey,
+		storage.BucketConfig{
+			Events:       cfg.Supabase.BucketEvent,
+			Businesses:   cfg.Supabase.BucketBusiness,
+			Profiles:     cfg.Supabase.BucketProfile,
+			Certificates: cfg.Supabase.BucketCertificate,
+			Recordings:   cfg.Supabase.BucketRecording,
+		},
+	)
+	log.Println("Supabase storage client initialized successfully")
+
+	// 5. Initialize authorization Module
 	permModule, err := authorization.NewModule(db, cfg)
 	if err != nil {
 		return nil, err
@@ -62,15 +85,24 @@ func NewApp() (*App, error) {
 	enforcer := permModule.GetEnforcer()
 	permService := permModule.GetService()
 
-	// 5. Initialize Business Module (needed for auth)
-	businessModule := business.NewModule(cfg, permService, enforcer)
-	businessService := businessModule.GetBusinessService()
+	// 6. Initialize Media Module (no enforcer needed)
+	mediaModule := media.NewModule(cfg, storageClient)
 
-	// 6. Initialize Auth Module with business service
+
+
+	// 8. Initialize Auth Module with business service
 	authModule := auth.NewModule(cfg, permService, businessService)
 	authHandler := authModule.GetHandler()
 
-	// 7. Create Fiber app
+	// 9. Initialize Events Module with Media Service injected
+	eventsModule := events.NewModule(
+		cfg,
+		enforcer,
+		permService,
+		mediaModule.GetService(), // Inject media service
+	)
+
+	// 10. Create Fiber app
 	app := fiber.New(fiber.Config{
 		AppName:      "Nuruvent API",
 		ServerHeader: "Nuruvent",
@@ -78,7 +110,7 @@ func NewApp() (*App, error) {
 		WriteTimeout: 10 * time.Second,
 	})
 
-	// 8. Setup middleware
+	// 11. Setup middleware
 	app.Use(logger.New())
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
@@ -100,9 +132,12 @@ func NewApp() (*App, error) {
 		AuthorizationModule:  permModule,
 		AuthModule:           authModule,
 		BusinessModule:       businessModule,
+		MediaModule:          mediaModule,
+		EventsModule:         eventsModule,
 		AuthorizationService: permService,
 		Enforcer:             enforcer,
 		AuthHandler:          authHandler,
+		StorageClient:        storageClient,
 	}, nil
 }
 
@@ -123,6 +158,16 @@ func (app *App) Init(ctx context.Context) error {
 		return err
 	}
 
+	// Initialize media module
+	if err := app.MediaModule.Init(ctx); err != nil {
+		return err
+	}
+
+	// Initialize events module
+	if err := app.EventsModule.Init(ctx); err != nil {
+		return err
+	}
+
 	log.Println("All modules initialized successfully")
 	return nil
 }
@@ -136,6 +181,7 @@ func (app *App) SetupRoutes() {
 		app.AuthHandler,
 		app.Enforcer,
 		app.BusinessModule,
+		app.EventsModule,
 	)
 
 	log.Println("Routes registered successfully")
@@ -161,6 +207,12 @@ func (app *App) Close() {
 	}
 	if app.BusinessModule != nil {
 		app.BusinessModule.Close()
+	}
+	if app.MediaModule != nil {
+		app.MediaModule.Close()
+	}
+	if app.EventsModule != nil {
+		app.EventsModule.Close()
 	}
 
 	// Close Redis

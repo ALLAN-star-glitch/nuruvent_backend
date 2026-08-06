@@ -12,7 +12,7 @@ import (
 type Attendee struct {
 	ID         uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
 	EventID    uuid.UUID      `gorm:"type:uuid;index;not null" json:"event_id"`
-	UserID     *uuid.UUID     `gorm:"type:uuid;index" json:"user_id,omitempty"`
+	AccountID  *uuid.UUID     `gorm:"type:uuid;index" json:"account_id,omitempty"` // Changed from UserID to AccountID
 	Email      string         `gorm:"not null" json:"email"`
 	Name       string         `gorm:"not null" json:"name"`
 	Phone      string         `gorm:"type:varchar(20)" json:"phone"`
@@ -26,8 +26,8 @@ type Attendee struct {
 	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// Relationships
-	Event Event `gorm:"foreignKey:EventID" json:"event,omitempty"`
-	User  User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	Event   Event   `gorm:"foreignKey:EventID" json:"event,omitempty"`
+	Account Account `gorm:"foreignKey:AccountID" json:"account,omitempty"` // Changed from User to Account
 }
 
 func (Attendee) TableName() string {

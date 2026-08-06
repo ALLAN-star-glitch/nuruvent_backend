@@ -1,3 +1,5 @@
+// internal/modules/authorization/service.go
+
 package authorization
 
 import (
@@ -22,33 +24,33 @@ func NewService(enforcer *Enforcer) *Service {
 // ROLE ASSIGNMENT METHODS
 // ============================================================
 
-// AssignBusinessAdminRole assigns the business_admin role to a user
-func (s *Service) AssignBusinessAdminRole(ctx context.Context, userID string, businessID string) error {
-	domain := BusinessDomain(businessID)
-	log.Printf("Assigning business_admin role to user: %s for business: %s", userID, businessID)
+// AssignAccountAdminRole assigns the account_admin role to a user
+func (s *Service) AssignAccountAdminRole(ctx context.Context, accountID, userID string) error {
+	domain := AccountDomain(accountID)
+	log.Printf("Assigning account_admin role to user: %s for account: %s", userID, accountID)
 
-	// 1. Add business policies
-	err := s.AddBusinessPolicies(ctx, businessID)
+	// 1. Add account policies
+	err := s.AddAccountPolicies(ctx, accountID)
 	if err != nil {
-		return fmt.Errorf("failed to add business policies: %w", err)
+		return fmt.Errorf("failed to add account policies: %w", err)
 	}
 
-	// 2. Assign the business_admin role
-	_, err = s.enforcer.AddRoleForUserInDomain(userID, RoleBusinessAdmin.String(), domain)
+	// 2. Assign the account_admin role
+	_, err = s.enforcer.AddRoleForUserInDomain(userID, RoleAccountAdmin.String(), domain)
 	if err != nil {
-		return fmt.Errorf("failed to assign business_admin role: %w", err)
+		return fmt.Errorf("failed to assign account_admin role: %w", err)
 	}
 
 	return nil
 }
 
 // AssignEventManagerRole assigns the event manager role to a user
-func (s *Service) AssignEventManagerRole(ctx context.Context, userID string, businessID string) error {
-	domain := BusinessDomain(businessID)
-	log.Printf("Assigning event_manager role to user: %s for business: %s", userID, businessID)
+func (s *Service) AssignEventManagerRole(ctx context.Context, accountID, userID string) error {
+	domain := AccountDomain(accountID)
+	log.Printf("Assigning event_manager role to user: %s for account: %s", userID, accountID)
 
-	if err := s.ensureBusinessPoliciesExist(ctx, businessID); err != nil {
-		return fmt.Errorf("failed to ensure business policies: %w", err)
+	if err := s.ensureAccountPoliciesExist(ctx, accountID); err != nil {
+		return fmt.Errorf("failed to ensure account policies: %w", err)
 	}
 
 	_, err := s.enforcer.AddRoleForUserInDomain(userID, RoleEventManager.String(), domain)
@@ -59,40 +61,20 @@ func (s *Service) AssignEventManagerRole(ctx context.Context, userID string, bus
 	return nil
 }
 
-// AssignMemberRole assigns the member role to a user
-func (s *Service) AssignMemberRole(ctx context.Context, userID string, businessID string) error {
-	domain := BusinessDomain(businessID)
-	log.Printf("Assigning member role to user: %s for business: %s", userID, businessID)
+// AssignTeamMemberRole assigns the team_member role to a user
+func (s *Service) AssignTeamMemberRole(ctx context.Context, accountID, userID string) error {
+	domain := AccountDomain(accountID)
+	log.Printf("Assigning team_member role to user: %s for account: %s", userID, accountID)
 
-	if err := s.ensureBusinessPoliciesExist(ctx, businessID); err != nil {
-		return fmt.Errorf("failed to ensure business policies: %w", err)
+	if err := s.ensureAccountPoliciesExist(ctx, accountID); err != nil {
+		return fmt.Errorf("failed to ensure account policies: %w", err)
 	}
 
-	_, err := s.enforcer.AddRoleForUserInDomain(userID, RoleMember.String(), domain)
+	_, err := s.enforcer.AddRoleForUserInDomain(userID, RoleTeamMember.String(), domain)
 	if err != nil {
-		return fmt.Errorf("failed to assign member role: %w", err)
+		return fmt.Errorf("failed to assign team_member role: %w", err)
 	}
 
-	return nil
-}
-
-// AssignAttendeeRole assigns the attendee role to a user (platform level)
-func (s *Service) AssignAttendeeRole(ctx context.Context, userID string) error {
-	log.Printf("Assigning attendee role to user: %s", userID)
-	_, err := s.enforcer.AddPlatformRole(userID, RoleAttendee)
-	if err != nil {
-		return fmt.Errorf("failed to assign attendee role: %w", err)
-	}
-	return nil
-}
-
-// AssignPremiumAttendeeRole assigns the premium_attendee role to a user (platform level)
-func (s *Service) AssignPremiumAttendeeRole(ctx context.Context, userID string) error {
-	log.Printf("Assigning premium_attendee role to user: %s", userID)
-	_, err := s.enforcer.AddPlatformRole(userID, RolePremiumAttendee)
-	if err != nil {
-		return fmt.Errorf("failed to assign premium_attendee role: %w", err)
-	}
 	return nil
 }
 
@@ -120,10 +102,10 @@ func (s *Service) AssignSuperAdminRole(ctx context.Context, userID string) error
 // ROLE REMOVAL METHODS
 // ============================================================
 
-// RemoveRole removes a role from a user in a business
-func (s *Service) RemoveRole(ctx context.Context, userID string, businessID string, role Role) error {
-	domain := BusinessDomain(businessID)
-	log.Printf("Removing role %s from user: %s for business: %s", role, userID, businessID)
+// RemoveRole removes a role from a user in an account
+func (s *Service) RemoveRole(ctx context.Context, accountID, userID string, role Role) error {
+	domain := AccountDomain(accountID)
+	log.Printf("Removing role %s from user: %s for account: %s", role, userID, accountID)
 
 	_, err := s.enforcer.RemoveRoleForUserInDomain(userID, role.String(), domain)
 	if err != nil {
@@ -133,18 +115,14 @@ func (s *Service) RemoveRole(ctx context.Context, userID string, businessID stri
 	return nil
 }
 
-// RemoveAllBusinessRoles removes all business roles from a user
-func (s *Service) RemoveAllBusinessRoles(ctx context.Context, userID string, businessID string) error {
-	domain := BusinessDomain(businessID)
-	log.Printf("Removing all roles for user: %s from business: %s", userID, businessID)
 
-	roles := s.enforcer.GetRolesForUserInDomain(userID, domain)
+// RemoveAllAccountRoles removes all account roles from a user
+func (s *Service) RemoveAllAccountRoles(ctx context.Context, accountID, userID string) error {
+	log.Printf("Removing all roles for user: %s from account: %s", userID, accountID)
 
-	for _, role := range roles {
-		_, err := s.enforcer.RemoveRoleForUserInDomain(userID, role, domain)
-		if err != nil {
-			return fmt.Errorf("failed to remove role %s: %w", role, err)
-		}
+	_, err := s.enforcer.RemoveAllAccountRoles(accountID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to remove all account roles: %w", err)
 	}
 
 	return nil
@@ -161,40 +139,40 @@ func (s *Service) RemovePlatformRole(ctx context.Context, userID string, role Ro
 }
 
 // ============================================================
-// BUSINESS POLICY MANAGEMENT
+// ACCOUNT POLICY MANAGEMENT
 // ============================================================
 
-// AddBusinessPolicies adds default policies for a new business
-func (s *Service) AddBusinessPolicies(ctx context.Context, businessID string) error {
-	domain := BusinessDomain(businessID)
-	log.Printf("Adding business policies for business: %s", businessID)
+// AddAccountPolicies adds default policies for a new account
+func (s *Service) AddAccountPolicies(ctx context.Context, accountID string) error {
+	domain := AccountDomain(accountID)
+	log.Printf("Adding account policies for account: %s", accountID)
 
-	// 1. Get all business policies
-	allPolicies := GetAllBusinessPolicies(domain)
+	// 1. Get all account policies
+	allPolicies := GetAccountPolicies(domain)
 
 	// 2. Add all policies
 	_, err := s.enforcer.AddPolicies(allPolicies)
 	if err != nil {
-		return fmt.Errorf("failed to add business policies: %w", err)
+		return fmt.Errorf("failed to add account policies: %w", err)
 	}
 
 	// 3. Add role hierarchy
-	hierarchyPolicies := GetBusinessRoleHierarchy(domain)
+	hierarchyPolicies := GetAccountRoleHierarchy(domain)
 	_, err = s.enforcer.AddGroupingPolicies(hierarchyPolicies)
 	if err != nil {
 		return fmt.Errorf("failed to add role hierarchy: %w", err)
 	}
 
-	log.Printf("Added %d policies and %d hierarchy rules for business: %s",
-		len(allPolicies), len(hierarchyPolicies), businessID)
+	log.Printf("Added %d policies and %d hierarchy rules for account: %s",
+		len(allPolicies), len(hierarchyPolicies), accountID)
 	return nil
 }
 
-// ensureBusinessPoliciesExist checks if business policies exist and adds them if not
-func (s *Service) ensureBusinessPoliciesExist(ctx context.Context, businessID string) error {
-	domain := BusinessDomain(businessID)
+// ensureAccountPoliciesExist checks if account policies exist and adds them if not
+func (s *Service) ensureAccountPoliciesExist(ctx context.Context, accountID string) error {
+	domain := AccountDomain(accountID)
 
-	// Check if business policies already exist
+	// Check if account policies already exist
 	policies, err := s.enforcer.GetFilteredPolicy(1, domain)
 	if err != nil {
 		return fmt.Errorf("failed to check existing policies: %w", err)
@@ -202,17 +180,17 @@ func (s *Service) ensureBusinessPoliciesExist(ctx context.Context, businessID st
 
 	// If no policies exist, add them
 	if len(policies) == 0 {
-		log.Printf("No policies found for business %s, adding default policies", businessID)
-		return s.AddBusinessPolicies(ctx, businessID)
+		log.Printf("No policies found for account %s, adding default policies", accountID)
+		return s.AddAccountPolicies(ctx, accountID)
 	}
 
 	return nil
 }
 
-// RemoveBusinessPolicies removes all policies for a business
-func (s *Service) RemoveBusinessPolicies(ctx context.Context, businessID string) error {
-	domain := BusinessDomain(businessID)
-	log.Printf("Removing policies for business: %s", businessID)
+// RemoveAccountPolicies removes all policies for an account
+func (s *Service) RemoveAccountPolicies(ctx context.Context, accountID string) error {
+	domain := AccountDomain(accountID)
+	log.Printf("Removing policies for account: %s", accountID)
 
 	// 1. Get all policies for this domain
 	policies, err := s.enforcer.GetFilteredPolicy(1, domain)
@@ -242,8 +220,8 @@ func (s *Service) RemoveBusinessPolicies(ctx context.Context, businessID string)
 		}
 	}
 
-	log.Printf("Removed %d policies and %d grouping policies for business: %s",
-		len(policies), len(groupingPolicies), businessID)
+	log.Printf("Removed %d policies and %d grouping policies for account: %s",
+		len(policies), len(groupingPolicies), accountID)
 	return nil
 }
 
@@ -286,44 +264,44 @@ func (s *Service) HasPermission(ctx context.Context, userID, domain string, reso
 	return allowed
 }
 
-// CanManageEvent checks if user can manage events in a business
-func (s *Service) CanManageEvent(ctx context.Context, userID, businessID string) bool {
-	domain := BusinessDomain(businessID)
+// CanManageEvent checks if user can manage events in an account
+func (s *Service) CanManageEvent(ctx context.Context, accountID, userID string) bool {
+	domain := AccountDomain(accountID)
 	return s.HasPermission(ctx, userID, domain, ResourceEvent, ActionManage)
 }
 
-// CanIssueCertificate checks if user can issue certificates in a business
-func (s *Service) CanIssueCertificate(ctx context.Context, userID, businessID string) bool {
-	domain := BusinessDomain(businessID)
+// CanIssueCertificate checks if user can issue certificates in an account
+func (s *Service) CanIssueCertificate(ctx context.Context, accountID, userID string) bool {
+	domain := AccountDomain(accountID)
 	return s.HasPermission(ctx, userID, domain, ResourceCertificate, ActionIssue)
 }
 
-// CanManageBusiness checks if user can manage a business
-func (s *Service) CanManageBusiness(ctx context.Context, userID, businessID string) bool {
-	domain := BusinessDomain(businessID)
-	return s.HasPermission(ctx, userID, domain, ResourceBusiness, ActionManage)
+// CanManageAccount checks if user can manage an account
+func (s *Service) CanManageAccount(ctx context.Context, accountID, userID string) bool {
+	domain := AccountDomain(accountID)
+	return s.HasPermission(ctx, userID, domain, ResourceAccount, ActionManage)
 }
 
 // ============================================================
-// BUSINESS ROLE CHECK METHODS
+// ACCOUNT ROLE CHECK METHODS
 // ============================================================
 
-// IsBusinessAdmin checks if user is a business admin
-func (s *Service) IsBusinessAdmin(ctx context.Context, userID, businessID string) bool {
-	domain := BusinessDomain(businessID)
-	return s.enforcer.HasRoleForUserInDomain(userID, RoleBusinessAdmin.String(), domain)
+// IsAccountAdmin checks if user is an account admin
+func (s *Service) IsAccountAdmin(ctx context.Context, accountID, userID string) bool {
+	domain := AccountDomain(accountID)
+	return s.enforcer.HasRoleForUserInDomain(userID, RoleAccountAdmin.String(), domain)
 }
 
 // IsEventManager checks if user is an event manager
-func (s *Service) IsEventManager(ctx context.Context, userID, businessID string) bool {
-	domain := BusinessDomain(businessID)
+func (s *Service) IsEventManager(ctx context.Context, accountID, userID string) bool {
+	domain := AccountDomain(accountID)
 	return s.enforcer.HasRoleForUserInDomain(userID, RoleEventManager.String(), domain)
 }
 
-// IsMember checks if user is a member
-func (s *Service) IsMember(ctx context.Context, userID, businessID string) bool {
-	domain := BusinessDomain(businessID)
-	return s.enforcer.HasRoleForUserInDomain(userID, RoleMember.String(), domain)
+// IsTeamMember checks if user is a team member
+func (s *Service) IsTeamMember(ctx context.Context, accountID, userID string) bool {
+	domain := AccountDomain(accountID)
+	return s.enforcer.HasRoleForUserInDomain(userID, RoleTeamMember.String(), domain)
 }
 
 // ============================================================
@@ -335,28 +313,12 @@ func (s *Service) GetUserRoles(ctx context.Context, userID string, domain string
 	return s.enforcer.GetRolesForUserInDomain(userID, domain)
 }
 
-// GetUserBusinesses returns all businesses a user is a member of
-func (s *Service) GetUserBusinesses(ctx context.Context, userID string) []string {
-	return s.enforcer.GetDomainsForUser(userID)
+// GetUserAccounts returns all accounts a user is a member of
+func (s *Service) GetUserAccounts(ctx context.Context, userID string) []string {
+	return s.enforcer.GetUserAccountIDs(userID)
 }
 
-// HasBusinessAccess checks if user has any business role
-func (s *Service) HasBusinessAccess(ctx context.Context, userID string) bool {
-	return s.enforcer.HasAnyBusinessRole(userID)
-}
-
-// ============================================================
-// DEPRECATED METHODS (for backward compatibility - will be removed)
-// ============================================================
-
-// AssignHostRole is deprecated. Use AssignBusinessAdminRole instead.
-// Deprecated: Use AssignBusinessAdminRole
-func (s *Service) AssignHostRole(ctx context.Context, userID string, businessID string) error {
-	return s.AssignBusinessAdminRole(ctx, userID, businessID)
-}
-
-// IsHost is deprecated. Use IsBusinessAdmin instead.
-// Deprecated: Use IsBusinessAdmin
-func (s *Service) IsHost(ctx context.Context, userID, businessID string) bool {
-	return s.IsBusinessAdmin(ctx, userID, businessID)
+// HasAccountAccess checks if user has any account role
+func (s *Service) HasAccountAccess(ctx context.Context, userID string) bool {
+	return s.enforcer.HasAnyAccountRole(userID)
 }

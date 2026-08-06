@@ -1,18 +1,23 @@
+// internal/modules/authorization/policies.go
+
 package authorization
 
-// GetBusinessAdminPolicies returns policies for business_admin (full business management)
-func GetBusinessAdminPolicies(domain string) [][]string {
+// GetAccountAdminPolicies returns policies for account_admin (full account management)
+func GetAccountAdminPolicies(domain string) [][]string {
 	resources := []Resource{
 		ResourceEvent,
 		ResourceCertificate,
 		ResourceAttendee,
 		ResourcePayment,
 		ResourcePayout,
-		ResourceBusiness,
+		ResourceInstitution,
 		ResourceMember,
+		ResourceAccount,
+		ResourceProfile,
 		ResourceDashboard,
 		ResourceAnalytics,
 		ResourceNotification,
+		ResourceMedia,
 	}
 
 	actions := []Action{
@@ -26,7 +31,7 @@ func GetBusinessAdminPolicies(domain string) [][]string {
 	for _, resource := range resources {
 		for _, action := range actions {
 			policies = append(policies, []string{
-				RoleBusinessAdmin.String(),
+				RoleAccountAdmin.String(),
 				domain,
 				resource.String(),
 				action.String(),
@@ -36,13 +41,16 @@ func GetBusinessAdminPolicies(domain string) [][]string {
 
 	// Add special actions
 	specialPolicies := [][]string{
-		{RoleBusinessAdmin.String(), domain, ResourceCertificate.String(), ActionIssue.String()},
-		{RoleBusinessAdmin.String(), domain, ResourcePayment.String(), ActionRefund.String()},
-		{RoleBusinessAdmin.String(), domain, ResourceAttendee.String(), ActionExport.String()},
-		{RoleBusinessAdmin.String(), domain, ResourceEvent.String(), ActionManage.String()},
-		{RoleBusinessAdmin.String(), domain, ResourceBusiness.String(), ActionManage.String()},
-		{RoleBusinessAdmin.String(), domain, ResourceMember.String(), ActionManage.String()},
-		{RoleBusinessAdmin.String(), domain, ResourcePayout.String(), ActionManage.String()},
+		{RoleAccountAdmin.String(), domain, ResourceCertificate.String(), ActionIssue.String()},
+		{RoleAccountAdmin.String(), domain, ResourcePayment.String(), ActionRefund.String()},
+		{RoleAccountAdmin.String(), domain, ResourceAttendee.String(), ActionExport.String()},
+		{RoleAccountAdmin.String(), domain, ResourceEvent.String(), ActionManage.String()},
+		{RoleAccountAdmin.String(), domain, ResourceInstitution.String(), ActionManage.String()},
+		{RoleAccountAdmin.String(), domain, ResourceMember.String(), ActionManage.String()},
+		{RoleAccountAdmin.String(), domain, ResourceMember.String(), ActionInvite.String()},
+		{RoleAccountAdmin.String(), domain, ResourcePayout.String(), ActionManage.String()},
+		{RoleAccountAdmin.String(), domain, ResourceAccount.String(), ActionManage.String()},
+		{RoleAccountAdmin.String(), domain, ResourceProfile.String(), ActionManage.String()},
 	}
 
 	policies = append(policies, specialPolicies...)
@@ -75,73 +83,54 @@ func GetEventManagerPolicies(domain string) [][]string {
 		// Dashboard
 		{RoleEventManager.String(), domain, ResourceDashboard.String(), ActionRead.String()},
 		{RoleEventManager.String(), domain, ResourceAnalytics.String(), ActionRead.String()},
+
+		// Media
+		{RoleEventManager.String(), domain, ResourceMedia.String(), ActionCreate.String()},
+		{RoleEventManager.String(), domain, ResourceMedia.String(), ActionRead.String()},
+		{RoleEventManager.String(), domain, ResourceMedia.String(), ActionUpdate.String()},
+		{RoleEventManager.String(), domain, ResourceMedia.String(), ActionDelete.String()},
 	}
 }
 
-// GetMemberPolicies returns policies for member (read-only)
-func GetMemberPolicies(domain string) [][]string {
+// GetTeamMemberPolicies returns policies for team_member (view-only)
+func GetTeamMemberPolicies(domain string) [][]string {
 	return [][]string{
-		{RoleMember.String(), domain, ResourceEvent.String(), ActionRead.String()},
-		{RoleMember.String(), domain, ResourceCertificate.String(), ActionRead.String()},
-		{RoleMember.String(), domain, ResourceDashboard.String(), ActionRead.String()},
-		{RoleMember.String(), domain, ResourceAnalytics.String(), ActionRead.String()},
-		{RoleMember.String(), domain, ResourceAttendee.String(), ActionRead.String()},
+		{RoleTeamMember.String(), domain, ResourceEvent.String(), ActionRead.String()},
+		{RoleTeamMember.String(), domain, ResourceCertificate.String(), ActionRead.String()},
+		{RoleTeamMember.String(), domain, ResourceDashboard.String(), ActionRead.String()},
+		{RoleTeamMember.String(), domain, ResourceAnalytics.String(), ActionRead.String()},
+		{RoleTeamMember.String(), domain, ResourceAttendee.String(), ActionRead.String()},
+		{RoleTeamMember.String(), domain, ResourceMedia.String(), ActionRead.String()},
 	}
 }
 
-// GetAttendeePolicies returns policies for attendee (platform level)
-func GetAttendeePolicies() [][]string {
-	return [][]string{
-		{RoleAttendee.String(), DomainPlatform, ResourceEvent.String(), ActionRead.String()},
-		{RoleAttendee.String(), DomainPlatform, ResourceEvent.String(), ActionRegister.String()},
-		{RoleAttendee.String(), DomainPlatform, ResourceCertificate.String(), ActionRead.String()},
-		{RoleAttendee.String(), DomainPlatform, ResourceCertificate.String(), ActionDownload.String()},
-		{RoleAttendee.String(), DomainPlatform, ResourcePayment.String(), ActionRead.String()},
-		{RoleAttendee.String(), DomainPlatform, ResourceNotification.String(), ActionRead.String()},
-	}
+// GetPersonalAccountPolicies returns policies for personal account type
+// Personal accounts can do everything an individual can (attend AND host)
+func GetPersonalAccountPolicies(domain string) [][]string {
+	// Personal accounts get account_admin capabilities for their own account
+	return GetAccountAdminPolicies(domain)
 }
 
-// GetPremiumAttendeePolicies returns policies for premium_attendee (platform level)
-func GetPremiumAttendeePolicies() [][]string {
-	// Premium attendee inherits all attendee policies plus extra
-	policies := GetAttendeePolicies()
-	
-	// Add premium-specific policies
-	extraPolicies := [][]string{
-		{RolePremiumAttendee.String(), DomainPlatform, ResourceEvent.String(), ActionCreate.String()}, // Can create events? Or other premium features
-		{RolePremiumAttendee.String(), DomainPlatform, ResourceDashboard.String(), ActionRead.String()},
-		{RolePremiumAttendee.String(), DomainPlatform, ResourceAnalytics.String(), ActionRead.String()},
-	}
-	
-	policies = append(policies, extraPolicies...)
-	return policies
-}
-
-// GetAllBusinessPolicies returns all business policies for a domain
-func GetAllBusinessPolicies(domain string) [][]string {
+// GetAccountPolicies returns all account policies for a domain
+func GetAccountPolicies(domain string) [][]string {
 	var allPolicies [][]string
 
-	allPolicies = append(allPolicies, GetBusinessAdminPolicies(domain)...)
+	allPolicies = append(allPolicies, GetAccountAdminPolicies(domain)...)
 	allPolicies = append(allPolicies, GetEventManagerPolicies(domain)...)
-	allPolicies = append(allPolicies, GetMemberPolicies(domain)...)
+	allPolicies = append(allPolicies, GetTeamMemberPolicies(domain)...)
 
 	return allPolicies
 }
 
-// GetBusinessRoleHierarchy returns role inheritance rules for a business domain
-func GetBusinessRoleHierarchy(domain string) [][]string {
+// GetAccountRoleHierarchy returns role inheritance rules for an account domain
+func GetAccountRoleHierarchy(domain string) [][]string {
 	return [][]string{
-		// Business Admin inherits all business roles
-		{RoleBusinessAdmin.String(), RoleEventManager.String(), domain},
-		{RoleBusinessAdmin.String(), RoleMember.String(), domain},
+		// Account Admin inherits all account roles
+		{RoleAccountAdmin.String(), RoleEventManager.String(), domain},
+		{RoleAccountAdmin.String(), RoleTeamMember.String(), domain},
 
-		// Event Manager inherits member
-		{RoleEventManager.String(), RoleMember.String(), domain},
-
-		// All business roles inherit attendee (platform read-only access)
-		{RoleBusinessAdmin.String(), RoleAttendee.String(), DomainPlatform},
-		{RoleEventManager.String(), RoleAttendee.String(), DomainPlatform},
-		{RoleMember.String(), RoleAttendee.String(), DomainPlatform},
+		// Event Manager inherits team member
+		{RoleEventManager.String(), RoleTeamMember.String(), domain},
 	}
 }
 
@@ -149,33 +138,49 @@ func GetBusinessRoleHierarchy(domain string) [][]string {
 func GetPlatformPolicies() [][]string {
 	var allPolicies [][]string
 
-	// Add attendee policies
-	allPolicies = append(allPolicies, GetAttendeePolicies()...)
-	
-	// Add premium attendee policies
-	allPolicies = append(allPolicies, GetPremiumAttendeePolicies()...)
-
 	// Admin policies
 	adminPolicies := [][]string{
-		{RoleAdmin.String(), DomainPlatform, ResourceBusiness.String(), ActionRead.String()},
-		{RoleAdmin.String(), DomainPlatform, ResourceBusiness.String(), ActionUpdate.String()},
-		{RoleAdmin.String(), DomainPlatform, ResourceUser.String(), ActionRead.String()},
-		{RoleAdmin.String(), DomainPlatform, ResourceUser.String(), ActionUpdate.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourceAccount.String(), ActionRead.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourceAccount.String(), ActionUpdate.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourceInstitution.String(), ActionRead.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourceEvent.String(), ActionRead.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourceEvent.String(), ActionUpdate.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourceEvent.String(), ActionDelete.String()},
 		{RoleAdmin.String(), DomainPlatform, ResourcePlatform.String(), ActionManage.String()},
 		{RoleAdmin.String(), DomainPlatform, ResourceAnalytics.String(), ActionRead.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourcePayment.String(), ActionRead.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourceCertificate.String(), ActionRead.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourceMember.String(), ActionRead.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourceMember.String(), ActionDelete.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourceMedia.String(), ActionRead.String()},
+		{RoleAdmin.String(), DomainPlatform, ResourceMedia.String(), ActionDelete.String()},
 	}
 	allPolicies = append(allPolicies, adminPolicies...)
 
 	// Super admin policies (full access to everything)
 	superAdminPolicies := [][]string{
 		{RoleSuperAdmin.String(), DomainPlatform, ResourcePlatform.String(), ActionManage.String()},
-		{RoleSuperAdmin.String(), DomainPlatform, ResourceBusiness.String(), ActionManage.String()},
-		{RoleSuperAdmin.String(), DomainPlatform, ResourceUser.String(), ActionManage.String()},
+		{RoleSuperAdmin.String(), DomainPlatform, ResourceAccount.String(), ActionManage.String()},
+		{RoleSuperAdmin.String(), DomainPlatform, ResourceInstitution.String(), ActionManage.String()},
+		{RoleSuperAdmin.String(), DomainPlatform, ResourceEvent.String(), ActionManage.String()},
+		{RoleSuperAdmin.String(), DomainPlatform, ResourceCertificate.String(), ActionManage.String()},
+		{RoleSuperAdmin.String(), DomainPlatform, ResourceAttendee.String(), ActionManage.String()},
 		{RoleSuperAdmin.String(), DomainPlatform, ResourcePayment.String(), ActionManage.String()},
 		{RoleSuperAdmin.String(), DomainPlatform, ResourcePayout.String(), ActionManage.String()},
+		{RoleSuperAdmin.String(), DomainPlatform, ResourceMember.String(), ActionManage.String()},
+		{RoleSuperAdmin.String(), DomainPlatform, ResourceProfile.String(), ActionManage.String()},
+		{RoleSuperAdmin.String(), DomainPlatform, ResourceDashboard.String(), ActionManage.String()},
 		{RoleSuperAdmin.String(), DomainPlatform, ResourceAnalytics.String(), ActionManage.String()},
+		{RoleSuperAdmin.String(), DomainPlatform, ResourceNotification.String(), ActionManage.String()},
+		{RoleSuperAdmin.String(), DomainPlatform, ResourceMedia.String(), ActionManage.String()},
 	}
 	allPolicies = append(allPolicies, superAdminPolicies...)
+
+	// Guest policies (public access)
+	guestPolicies := [][]string{
+		{RoleGuest.String(), DomainPlatform, ResourceEvent.String(), ActionRead.String()},
+	}
+	allPolicies = append(allPolicies, guestPolicies...)
 
 	return allPolicies
 }
@@ -186,10 +191,27 @@ func GetPlatformRoleHierarchy() [][]string {
 		// Super Admin inherits Admin
 		{RoleSuperAdmin.String(), RoleAdmin.String(), DomainPlatform},
 
-		// Admin inherits Premium Attendee
-		{RoleAdmin.String(), RolePremiumAttendee.String(), DomainPlatform},
-
-		// Premium Attendee inherits Attendee
-		{RolePremiumAttendee.String(), RoleAttendee.String(), DomainPlatform},
+		// Admin inherits Account Admin (platform admin can act as account admin)
+		{RoleAdmin.String(), RoleAccountAdmin.String(), DomainPlatform},
 	}
+}
+
+// GetAllPolicies returns all policies for a domain (platform + account)
+func GetAllPolicies(domain string) [][]string {
+	var allPolicies [][]string
+
+	allPolicies = append(allPolicies, GetPlatformPolicies()...)
+	allPolicies = append(allPolicies, GetAccountPolicies(domain)...)
+
+	return allPolicies
+}
+
+// GetAllRoleHierarchy returns all role inheritance rules
+func GetAllRoleHierarchy(domain string) [][]string {
+	var allHierarchy [][]string
+
+	allHierarchy = append(allHierarchy, GetPlatformRoleHierarchy()...)
+	allHierarchy = append(allHierarchy, GetAccountRoleHierarchy(domain)...)
+
+	return allHierarchy
 }

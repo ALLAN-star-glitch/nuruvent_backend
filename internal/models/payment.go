@@ -13,7 +13,7 @@ import (
 type Payment struct {
 	ID         uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
 	EventID    uuid.UUID      `gorm:"type:uuid;index;not null" json:"event_id"`
-	UserID     uuid.UUID      `gorm:"type:uuid;index;not null" json:"user_id"`
+	AccountID  uuid.UUID      `gorm:"type:uuid;index;not null" json:"account_id"` // Changed from UserID
 	Amount     float64        `gorm:"not null" json:"amount"`
 	Currency   string         `gorm:"default:'KES'" json:"currency"`
 	Method     string         `gorm:"default:'mpesa'" json:"method"` // mpesa, card, bank
@@ -27,11 +27,6 @@ type Payment struct {
 	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// Relationships
-	Event Event `gorm:"foreignKey:EventID" json:"event,omitempty"`
-	User  User  `gorm:"foreignKey:UserID" json:"user,omitempty"`
-}
-
-// TableName returns the table name
-func (Payment) TableName() string {
-	return "payments"
+	Event   Event   `gorm:"foreignKey:EventID" json:"event,omitempty"`
+	Account Account `gorm:"foreignKey:AccountID" json:"account,omitempty"` // Changed from User
 }

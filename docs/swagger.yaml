@@ -71,10 +71,11 @@ definitions:
         example: 550e8400-e29b-41d4-a716-446655440000
         type: string
       email:
-        description: Removed omitempty, added required
+        description: 'Changed: optional for organizations'
         example: john@example.com
         type: string
       name:
+        description: 'Changed: optional for organizations'
         example: John Doe
         type: string
       password:
@@ -92,8 +93,6 @@ definitions:
         example: attendee
         type: string
     required:
-    - email
-    - name
     - password
     type: object
   auth.ResendOTPRequest:
@@ -233,6 +232,99 @@ definitions:
         type: string
     required:
     - role
+    type: object
+  eventhandler.CreateEventRequest:
+    properties:
+      certificate_price:
+        example: 500
+        type: number
+      date:
+        example: "2024-12-01"
+        type: string
+      description:
+        example: A conference for tech enthusiasts
+        type: string
+      duration:
+        example: 120
+        type: integer
+      event_type_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      is_virtual:
+        example: true
+        type: boolean
+      location:
+        example: Nairobi, Kenya
+        type: string
+      max_attendees:
+        example: 100
+        type: integer
+      meet_link:
+        example: https://meet.google.com/abc-defg-hij
+        type: string
+      price:
+        example: 2500
+        type: number
+      time:
+        example: "09:00"
+        type: string
+      title:
+        example: Annual Tech Conference 2024
+        type: string
+      zoom_link:
+        example: https://zoom.us/j/123456789
+        type: string
+    required:
+    - date
+    - duration
+    - event_type_id
+    - time
+    - title
+    type: object
+  eventhandler.UpdateEventRequest:
+    properties:
+      certificate_price:
+        example: 500
+        type: number
+      date:
+        example: "2024-12-01"
+        type: string
+      description:
+        example: Updated description
+        type: string
+      duration:
+        example: 120
+        type: integer
+      event_status_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      event_type_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      is_virtual:
+        example: true
+        type: boolean
+      location:
+        example: Nairobi, Kenya
+        type: string
+      max_attendees:
+        example: 100
+        type: integer
+      meet_link:
+        example: https://meet.google.com/abc-defg-hij
+        type: string
+      price:
+        example: 2500
+        type: number
+      time:
+        example: "09:00"
+        type: string
+      title:
+        example: Updated Conference Title
+        type: string
+      zoom_link:
+        example: https://zoom.us/j/123456789
+        type: string
     type: object
   models.Attendee:
     properties:
@@ -393,53 +485,216 @@ definitions:
           $ref: '#/definitions/models.Attendee'
         type: array
       business:
-        allOf:
-        - $ref: '#/definitions/models.Business'
-        description: Relationships
+        $ref: '#/definitions/models.Business'
       business_id:
+        description: Foreign Keys
         type: string
       certificate_price:
         type: number
       created_at:
+        description: Timestamps
         type: string
       created_by:
         type: string
       current_attendees:
         type: integer
       date:
+        description: Date & Time
         type: string
       description:
         type: string
       duration:
-        description: in minutes
         type: integer
+      event_status:
+        $ref: '#/definitions/models.EventStatus'
+      event_status_id:
+        type: string
+      event_type:
+        allOf:
+        - $ref: '#/definitions/models.EventType'
+        description: Relationships
+      event_type_id:
+        type: string
       id:
         type: string
+      image_url:
+        description: Images
+        type: string
+      is_active:
+        description: Active status
+        type: boolean
       is_virtual:
         type: boolean
       location:
+        description: Location & Virtual
         type: string
       max_attendees:
+        description: Capacity
         type: integer
       meet_link:
         type: string
       price:
+        description: Pricing
         type: number
       slug:
         type: string
-      status:
-        description: draft, published, cancelled, completed
+      thumbnail_url:
         type: string
       time:
         type: string
       title:
         type: string
-      type:
-        description: workshop, webinar, bootcamp, meetup
-        type: string
       updated_at:
         type: string
       zoom_link:
+        type: string
+    type: object
+  models.EventStatus:
+    properties:
+      can_edit:
+        description: Can event be edited in this state?
+        type: boolean
+      can_register:
+        description: Can attendees register in this state?
+        type: boolean
+      color:
+        description: '#6B7280, #10B981, #EF4444, #3B82F6'
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      display_name:
+        description: Draft
+        type: string
+      icon:
+        description: pencil, globe, x-circle, check-circle
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      is_final:
+        description: Status properties
+        type: boolean
+      name:
+        description: draft, published, cancelled, completed
+        type: string
+      sort_order:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.EventType:
+    properties:
+      color:
+        description: '#4F46E5, #7C3AED, etc.'
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      display_name:
+        description: Workshop
+        type: string
+      icon:
+        description: graduation-cap, video, users, laptop
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      max_duration:
+        description: Maximum duration in minutes
+        type: integer
+      meta_description:
+        type: string
+      meta_title:
+        description: SEO and discoverability
+        type: string
+      min_duration:
+        description: Minimum duration in minutes
+        type: integer
+      name:
+        description: workshop, webinar, meetup, bootcamp
+        type: string
+      slug:
+        type: string
+      sort_order:
+        type: integer
+      supports_certificate:
+        description: Event type properties
+        type: boolean
+      updated_at:
+        type: string
+    type: object
+  models.Media:
+    properties:
+      bucket:
+        type: string
+      created_at:
+        type: string
+      entity_id:
+        type: string
+      file_name:
+        type: string
+      file_size:
+        type: integer
+      id:
+        type: string
+      is_active:
+        type: boolean
+      media_type:
+        allOf:
+        - $ref: '#/definitions/models.MediaType'
+        description: Relationships
+      media_type_id:
+        description: Foreign keys
+        type: string
+      mime_type:
+        type: string
+      path:
+        type: string
+      updated_at:
+        type: string
+      uploaded_by:
+        type: string
+      url:
+        type: string
+    type: object
+  models.MediaType:
+    properties:
+      allowed_mime_types:
+        description: Not stored in DB, used for validation
+        items:
+          type: string
+        type: array
+      bucket:
+        description: Supabase bucket name
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      display_name:
+        description: Event Image
+        type: string
+      icon:
+        description: image, building, user, certificate, video
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      max_file_size:
+        description: 10MB default
+        type: integer
+      name:
+        description: event, business, profile, certificate, recording
+        type: string
+      sort_order:
+        type: integer
+      updated_at:
         type: string
     type: object
   models.User:
@@ -900,6 +1155,339 @@ paths:
       summary: Create a new business
       tags:
       - Businesses
+  /api/v1/businesses/{businessId}/events:
+    get:
+      description: Get all events for a business
+      parameters:
+      - description: Business ID
+        in: path
+        name: businessId
+        required: true
+        type: string
+      - description: Filter by event type ID
+        in: query
+        name: event_type_id
+        type: string
+      - description: Filter by event status ID
+        in: query
+        name: event_status_id
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get business events
+      tags:
+      - Events
+    post:
+      consumes:
+      - application/json
+      description: Create a new event for a business (requires event_manager or host
+        role)
+      parameters:
+      - description: Business ID
+        in: path
+        name: businessId
+        required: true
+        type: string
+      - description: Event details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.CreateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new event
+      tags:
+      - Events
+  /api/v1/businesses/{businessId}/events/{eventId}/certificate:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a certificate template for an event
+      parameters:
+      - description: Business ID
+        in: path
+        name: businessId
+        required: true
+        type: string
+      - description: Event ID
+        in: path
+        name: eventId
+        required: true
+        type: string
+      - description: Certificate template (PDF or image)
+        in: formData
+        name: certificate
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Media'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload certificate template
+      tags:
+      - Events
+  /api/v1/businesses/{businessId}/events/{eventId}/image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload an image for an event
+      parameters:
+      - description: Business ID
+        in: path
+        name: businessId
+        required: true
+        type: string
+      - description: Event ID
+        in: path
+        name: eventId
+        required: true
+        type: string
+      - description: Event image
+        in: formData
+        name: image
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Media'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Upload event image
+      tags:
+      - Events
+  /api/v1/businesses/{businessId}/events/with-image:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Create a new event for a business with an image upload
+      parameters:
+      - description: Business ID
+        in: path
+        name: businessId
+        required: true
+        type: string
+      - description: Event title
+        in: formData
+        name: title
+        required: true
+        type: string
+      - description: Event description
+        in: formData
+        name: description
+        type: string
+      - description: Event Type ID
+        in: formData
+        name: event_type_id
+        required: true
+        type: string
+      - description: Event date (YYYY-MM-DD)
+        in: formData
+        name: date
+        required: true
+        type: string
+      - description: Event time (HH:MM)
+        in: formData
+        name: time
+        required: true
+        type: string
+      - description: Event duration in minutes
+        in: formData
+        name: duration
+        required: true
+        type: integer
+      - description: Event price
+        in: formData
+        name: price
+        type: number
+      - description: Certificate price
+        in: formData
+        name: certificate_price
+        type: number
+      - description: Event location
+        in: formData
+        name: location
+        type: string
+      - description: Zoom link
+        in: formData
+        name: zoom_link
+        type: string
+      - description: Meet link
+        in: formData
+        name: meet_link
+        type: string
+      - description: Maximum attendees
+        in: formData
+        name: max_attendees
+        type: integer
+      - description: Is virtual event
+        in: formData
+        name: is_virtual
+        type: boolean
+      - description: Event image
+        in: formData
+        name: image
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new event with image
+      tags:
+      - Events
   /api/v1/businesses/{id}:
     delete:
       description: Delete a business (requires business_admin or admin role)
@@ -1414,6 +2002,353 @@ paths:
       summary: Get all business types
       tags:
       - Businesses
+  /api/v1/events/{id}:
+    delete:
+      description: Delete an event
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete an event
+      tags:
+      - Events
+    get:
+      description: Get event details by ID (public)
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Get event by ID
+      tags:
+      - Events
+    put:
+      consumes:
+      - application/json
+      description: Update event details
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Event update details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.UpdateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update an event
+      tags:
+      - Events
+  /api/v1/events/past:
+    get:
+      description: Get all past published events
+      parameters:
+      - default: 10
+        description: Number of events to return
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.Event'
+                  type: array
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Get past events
+      tags:
+      - Events
+  /api/v1/events/search:
+    get:
+      description: Search events by title or description
+      parameters:
+      - description: Search query
+        in: query
+        name: q
+        type: string
+      - description: Business ID
+        in: query
+        name: business_id
+        type: string
+      - description: Event Type ID
+        in: query
+        name: event_type_id
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Search events
+      tags:
+      - Events
+  /api/v1/events/slug/{slug}:
+    get:
+      description: Get event details by slug (public)
+      parameters:
+      - description: Event Slug
+        in: path
+        name: slug
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Get event by slug
+      tags:
+      - Events
+  /api/v1/events/type/{type}:
+    get:
+      description: Get all events of a specific type (workshop, webinar, meetup, bootcamp)
+      parameters:
+      - description: Event Type
+        enum:
+        - workshop
+        - webinar
+        - meetup
+        - bootcamp
+        in: path
+        name: type
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Get events by type
+      tags:
+      - Events
+  /api/v1/events/types:
+    get:
+      description: Get list of all event types
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.EventType'
+                  type: array
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Get all event types
+      tags:
+      - Events
+  /api/v1/events/upcoming:
+    get:
+      description: Get all upcoming published events
+      parameters:
+      - default: 10
+        description: Number of events to return
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.Event'
+                  type: array
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Get upcoming events
+      tags:
+      - Events
 securityDefinitions:
   BearerAuth:
     description: Type "Bearer" followed by a space and the JWT token.

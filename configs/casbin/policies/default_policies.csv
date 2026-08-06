@@ -1,85 +1,77 @@
-# configs/casbin/policies/default_policies.csv
 # Nuruvent Default Platform Policies
 # Format: p, subject, domain, object, action
 
 # ============================================================
-# PLATFORM POLICIES
+# PLATFORM POLICIES (Static)
 # ============================================================
 
 # Super Admin - Full platform access
 p, super_admin, platform, *, *
 
 # Admin - Platform management
-p, admin, platform, user, read
-p, admin, platform, user, update
+p, admin, platform, account, read
+p, admin, platform, account, update
 p, admin, platform, event, read
 p, admin, platform, event, update
 p, admin, platform, event, delete
-p, admin, platform, business, read
+p, admin, platform, institution, read
 p, admin, platform, analytics, read
 p, admin, platform, payment, read
 p, admin, platform, certificate, read
+p, admin, platform, member, read
+p, admin, platform, member, delete
 
 # ============================================================
-# HOST POLICIES (Professional trainers/coaches)
+# ROLE DEFINITIONS (What each role can do)
 # ============================================================
 
-# Event management
-p, host, *, event, create
-p, host, *, event, read
-p, host, *, event, update
-p, host, *, event, delete
-p, host, *, event, manage
+# Account Admin - Full account management
+p, account_admin, *, event, create
+p, account_admin, *, event, read
+p, account_admin, *, event, update
+p, account_admin, *, event, delete
+p, account_admin, *, event, manage
+p, account_admin, *, certificate, create
+p, account_admin, *, certificate, read
+p, account_admin, *, certificate, update
+p, account_admin, *, certificate, issue
+p, account_admin, *, certificate, delete
+p, account_admin, *, attendee, read
+p, account_admin, *, attendee, update
+p, account_admin, *, attendee, export
+p, account_admin, *, payment, read
+p, account_admin, *, payment, create
+p, account_admin, *, payment, refund
+p, account_admin, *, member, create
+p, account_admin, *, member, read
+p, account_admin, *, member, update
+p, account_admin, *, member, delete
+p, account_admin, *, member, invite
+p, account_admin, *, dashboard, read
 
-# Certificate management
-p, host, *, certificate, create
-p, host, *, certificate, read
-p, host, *, certificate, update
-p, host, *, certificate, issue
-p, host, *, certificate, delete
+# Event Manager - Manage events and attendees
+p, event_manager, *, event, create
+p, event_manager, *, event, read
+p, event_manager, *, event, update
+p, event_manager, *, event, delete
+p, event_manager, *, attendee, read
+p, event_manager, *, attendee, update
+p, event_manager, *, attendee, export
+p, event_manager, *, certificate, create
+p, event_manager, *, certificate, read
+p, event_manager, *, certificate, issue
+p, event_manager, *, payment, read
+p, event_manager, *, dashboard, read
 
-# Attendee management
-p, host, *, attendee, read
-p, host, *, attendee, update
-p, host, *, attendee, export
-
-# Payment management
-p, host, *, payment, read
-p, host, *, payment, create
-p, host, *, payment, refund
-
-# Payout management
-p, host, *, payout, read
-
-# Dashboard access
-p, host, *, dashboard, read
-
-# ============================================================
-# ATTENDEE POLICIES (Event participants)
-# ============================================================
-
-# Event browsing and registration
-p, attendee, *, event, read
-p, attendee, *, event, register
-
-# Certificate management
-p, attendee, *, certificate, read
-p, attendee, *, certificate, download
-
-# Payment management
-p, attendee, *, payment, create
-p, attendee, *, payment, read
-
-# User profile management
-p, attendee, *, user, read
-p, attendee, *, user, update
-
-# Dashboard access
-p, attendee, *, dashboard, read
+# Team Member - View-only access
+p, team_member, *, event, read
+p, team_member, *, attendee, read
+p, team_member, *, certificate, read
+p, team_member, *, dashboard, read
 
 # ============================================================
-# GUEST POLICIES (Unauthenticated users)
+# GUEST POLICIES (Static)
 # ============================================================
 
-# Public event viewing only
+# Guest - Public event viewing only
 p, guest, *, event, read

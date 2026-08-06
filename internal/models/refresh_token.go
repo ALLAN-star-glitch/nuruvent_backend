@@ -10,8 +10,8 @@ import (
 
 type RefreshToken struct {
 	BaseModel
-	UserID    uuid.UUID `gorm:"type:uuid;not null;index" json:"user_id"`
-	User      User      `gorm:"foreignKey:UserID" json:"-"`
+	AccountID uuid.UUID `gorm:"type:uuid;not null;index" json:"account_id"` // Changed from UserID
+	Account   Account   `gorm:"foreignKey:AccountID" json:"-"`              // Changed from User
 	Token     string    `gorm:"uniqueIndex;not null;size:512" json:"token"`
 	ExpiresAt time.Time `gorm:"not null" json:"expires_at"`
 	Revoked   bool      `gorm:"default:false" json:"revoked"`

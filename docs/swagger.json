@@ -869,6 +869,532 @@
                 }
             }
         },
+        "/api/v1/businesses/{businessId}/events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all events for a business",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get business events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Business ID",
+                        "name": "businessId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by event type ID",
+                        "name": "event_type_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by event status ID",
+                        "name": "event_status_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new event for a business (requires event_manager or host role)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Create a new event",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Business ID",
+                        "name": "businessId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Event details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/eventhandler.CreateEventRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Event"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/businesses/{businessId}/events/with-image": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new event for a business with an image upload",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Create a new event with image",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Business ID",
+                        "name": "businessId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event title",
+                        "name": "title",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event description",
+                        "name": "description",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event Type ID",
+                        "name": "event_type_id",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event date (YYYY-MM-DD)",
+                        "name": "date",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event time (HH:MM)",
+                        "name": "time",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Event duration in minutes",
+                        "name": "duration",
+                        "in": "formData",
+                        "required": true
+                    },
+                    {
+                        "type": "number",
+                        "description": "Event price",
+                        "name": "price",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "number",
+                        "description": "Certificate price",
+                        "name": "certificate_price",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event location",
+                        "name": "location",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Zoom link",
+                        "name": "zoom_link",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Meet link",
+                        "name": "meet_link",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum attendees",
+                        "name": "max_attendees",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "Is virtual event",
+                        "name": "is_virtual",
+                        "in": "formData"
+                    },
+                    {
+                        "type": "file",
+                        "description": "Event image",
+                        "name": "image",
+                        "in": "formData"
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/businesses/{businessId}/events/{eventId}/certificate": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upload a certificate template for an event",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Upload certificate template",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Business ID",
+                        "name": "businessId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "eventId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Certificate template (PDF or image)",
+                        "name": "certificate",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Media"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/businesses/{businessId}/events/{eventId}/image": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Upload an image for an event",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Upload event image",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Business ID",
+                        "name": "businessId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "eventId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "file",
+                        "description": "Event image",
+                        "name": "image",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Media"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/businesses/{id}": {
             "get": {
                 "description": "Get business details by ID (public)",
@@ -1494,6 +2020,566 @@
                     }
                 }
             }
+        },
+        "/api/v1/events/past": {
+            "get": {
+                "description": "Get all past published events",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get past events",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Number of events to return",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/models.Event"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/search": {
+            "get": {
+                "description": "Search events by title or description",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Search events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Search query",
+                        "name": "q",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Business ID",
+                        "name": "business_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event Type ID",
+                        "name": "event_type_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/slug/{slug}": {
+            "get": {
+                "description": "Get event details by slug (public)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get event by slug",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event Slug",
+                        "name": "slug",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Event"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/type/{type}": {
+            "get": {
+                "description": "Get all events of a specific type (workshop, webinar, meetup, bootcamp)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get events by type",
+                "parameters": [
+                    {
+                        "enum": [
+                            "workshop",
+                            "webinar",
+                            "meetup",
+                            "bootcamp"
+                        ],
+                        "type": "string",
+                        "description": "Event Type",
+                        "name": "type",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/types": {
+            "get": {
+                "description": "Get list of all event types",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get all event types",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/models.EventType"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/upcoming": {
+            "get": {
+                "description": "Get all upcoming published events",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get upcoming events",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Number of events to return",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/models.Event"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/{id}": {
+            "get": {
+                "description": "Get event details by ID (public)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get event by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Event"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update event details",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Update an event",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Event update details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/eventhandler.UpdateEventRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.Event"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete an event",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Delete an event",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -1576,8 +2662,6 @@
         "auth.RegisterRequest": {
             "type": "object",
             "required": [
-                "email",
-                "name",
                 "password"
             ],
             "properties": {
@@ -1603,11 +2687,12 @@
                     "example": "550e8400-e29b-41d4-a716-446655440000"
                 },
                 "email": {
-                    "description": "Removed omitempty, added required",
+                    "description": "Changed: optional for organizations",
                     "type": "string",
                     "example": "john@example.com"
                 },
                 "name": {
+                    "description": "Changed: optional for organizations",
                     "type": "string",
                     "example": "John Doe"
                 },
@@ -1824,6 +2909,131 @@
                 "role": {
                     "type": "string",
                     "example": "host"
+                }
+            }
+        },
+        "eventhandler.CreateEventRequest": {
+            "type": "object",
+            "required": [
+                "date",
+                "duration",
+                "event_type_id",
+                "time",
+                "title"
+            ],
+            "properties": {
+                "certificate_price": {
+                    "type": "number",
+                    "example": 500
+                },
+                "date": {
+                    "type": "string",
+                    "example": "2024-12-01"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "A conference for tech enthusiasts"
+                },
+                "duration": {
+                    "type": "integer",
+                    "example": 120
+                },
+                "event_type_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "is_virtual": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "location": {
+                    "type": "string",
+                    "example": "Nairobi, Kenya"
+                },
+                "max_attendees": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "meet_link": {
+                    "type": "string",
+                    "example": "https://meet.google.com/abc-defg-hij"
+                },
+                "price": {
+                    "type": "number",
+                    "example": 2500
+                },
+                "time": {
+                    "type": "string",
+                    "example": "09:00"
+                },
+                "title": {
+                    "type": "string",
+                    "example": "Annual Tech Conference 2024"
+                },
+                "zoom_link": {
+                    "type": "string",
+                    "example": "https://zoom.us/j/123456789"
+                }
+            }
+        },
+        "eventhandler.UpdateEventRequest": {
+            "type": "object",
+            "properties": {
+                "certificate_price": {
+                    "type": "number",
+                    "example": 500
+                },
+                "date": {
+                    "type": "string",
+                    "example": "2024-12-01"
+                },
+                "description": {
+                    "type": "string",
+                    "example": "Updated description"
+                },
+                "duration": {
+                    "type": "integer",
+                    "example": 120
+                },
+                "event_status_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "event_type_id": {
+                    "type": "string",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                },
+                "is_virtual": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "location": {
+                    "type": "string",
+                    "example": "Nairobi, Kenya"
+                },
+                "max_attendees": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "meet_link": {
+                    "type": "string",
+                    "example": "https://meet.google.com/abc-defg-hij"
+                },
+                "price": {
+                    "type": "number",
+                    "example": 2500
+                },
+                "time": {
+                    "type": "string",
+                    "example": "09:00"
+                },
+                "title": {
+                    "type": "string",
+                    "example": "Updated Conference Title"
+                },
+                "zoom_link": {
+                    "type": "string",
+                    "example": "https://zoom.us/j/123456789"
                 }
             }
         },
@@ -2066,20 +3276,17 @@
                     }
                 },
                 "business": {
-                    "description": "Relationships",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.Business"
-                        }
-                    ]
+                    "$ref": "#/definitions/models.Business"
                 },
                 "business_id": {
+                    "description": "Foreign Keys",
                     "type": "string"
                 },
                 "certificate_price": {
                     "type": "number"
                 },
                 "created_at": {
+                    "description": "Timestamps",
                     "type": "string"
                 },
                 "created_by": {
@@ -2089,38 +3296,65 @@
                     "type": "integer"
                 },
                 "date": {
+                    "description": "Date \u0026 Time",
                     "type": "string"
                 },
                 "description": {
                     "type": "string"
                 },
                 "duration": {
-                    "description": "in minutes",
                     "type": "integer"
+                },
+                "event_status": {
+                    "$ref": "#/definitions/models.EventStatus"
+                },
+                "event_status_id": {
+                    "type": "string"
+                },
+                "event_type": {
+                    "description": "Relationships",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.EventType"
+                        }
+                    ]
+                },
+                "event_type_id": {
+                    "type": "string"
                 },
                 "id": {
                     "type": "string"
+                },
+                "image_url": {
+                    "description": "Images",
+                    "type": "string"
+                },
+                "is_active": {
+                    "description": "Active status",
+                    "type": "boolean"
                 },
                 "is_virtual": {
                     "type": "boolean"
                 },
                 "location": {
+                    "description": "Location \u0026 Virtual",
                     "type": "string"
                 },
                 "max_attendees": {
+                    "description": "Capacity",
                     "type": "integer"
                 },
                 "meet_link": {
                     "type": "string"
                 },
                 "price": {
+                    "description": "Pricing",
                     "type": "number"
                 },
                 "slug": {
                     "type": "string"
                 },
-                "status": {
-                    "description": "draft, published, cancelled, completed",
+                "thumbnail_url": {
                     "type": "string"
                 },
                 "time": {
@@ -2129,14 +3363,225 @@
                 "title": {
                     "type": "string"
                 },
-                "type": {
-                    "description": "workshop, webinar, bootcamp, meetup",
+                "updated_at": {
+                    "type": "string"
+                },
+                "zoom_link": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.EventStatus": {
+            "type": "object",
+            "properties": {
+                "can_edit": {
+                    "description": "Can event be edited in this state?",
+                    "type": "boolean"
+                },
+                "can_register": {
+                    "description": "Can attendees register in this state?",
+                    "type": "boolean"
+                },
+                "color": {
+                    "description": "#6B7280, #10B981, #EF4444, #3B82F6",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "description": "Draft",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "pencil, globe, x-circle, check-circle",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "is_final": {
+                    "description": "Status properties",
+                    "type": "boolean"
+                },
+                "name": {
+                    "description": "draft, published, cancelled, completed",
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.EventType": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "description": "#4F46E5, #7C3AED, etc.",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "description": "Workshop",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "graduation-cap, video, users, laptop",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "max_duration": {
+                    "description": "Maximum duration in minutes",
+                    "type": "integer"
+                },
+                "meta_description": {
+                    "type": "string"
+                },
+                "meta_title": {
+                    "description": "SEO and discoverability",
+                    "type": "string"
+                },
+                "min_duration": {
+                    "description": "Minimum duration in minutes",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "workshop, webinar, meetup, bootcamp",
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "supports_certificate": {
+                    "description": "Event type properties",
+                    "type": "boolean"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.Media": {
+            "type": "object",
+            "properties": {
+                "bucket": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "entity_id": {
+                    "type": "string"
+                },
+                "file_name": {
+                    "type": "string"
+                },
+                "file_size": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "media_type": {
+                    "description": "Relationships",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.MediaType"
+                        }
+                    ]
+                },
+                "media_type_id": {
+                    "description": "Foreign keys",
+                    "type": "string"
+                },
+                "mime_type": {
+                    "type": "string"
+                },
+                "path": {
                     "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
                 },
-                "zoom_link": {
+                "uploaded_by": {
+                    "type": "string"
+                },
+                "url": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.MediaType": {
+            "type": "object",
+            "properties": {
+                "allowed_mime_types": {
+                    "description": "Not stored in DB, used for validation",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "bucket": {
+                    "description": "Supabase bucket name",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "description": "Event Image",
+                    "type": "string"
+                },
+                "icon": {
+                    "description": "image, building, user, certificate, video",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "max_file_size": {
+                    "description": "10MB default",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "event, business, profile, certificate, recording",
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "updated_at": {
                     "type": "string"
                 }
             }
