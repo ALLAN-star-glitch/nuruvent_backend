@@ -38,7 +38,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.ForgotPasswordRequest"
+                            "$ref": "#/definitions/handler.ForgotPasswordRequest"
                         }
                     }
                 ],
@@ -54,8 +54,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
+                                            "$ref": "#/definitions/handler.PasswordResetResponse"
                                         }
                                     }
                                 }
@@ -97,7 +96,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.LoginRequest"
+                            "$ref": "#/definitions/handler.LoginRequest"
                         }
                     }
                 ],
@@ -113,8 +112,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
+                                            "$ref": "#/definitions/handler.TwoFactorResponse"
                                         }
                                     }
                                 }
@@ -167,7 +165,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.LogoutRequest"
+                            "$ref": "#/definitions/handler.LogoutRequest"
                         }
                     }
                 ],
@@ -219,7 +217,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.RefreshTokenRequest"
+                            "$ref": "#/definitions/handler.RefreshTokenRequest"
                         }
                     }
                 ],
@@ -235,8 +233,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
+                                            "$ref": "#/definitions/handler.TokenResponse"
                                         }
                                     }
                                 }
@@ -266,7 +263,7 @@
         },
         "/api/v1/auth/register": {
             "post": {
-                "description": "Register a new user account with optional business creation for business_admin role",
+                "description": "Register a new account (personal or institution)",
                 "consumes": [
                     "application/json"
                 ],
@@ -276,7 +273,7 @@
                 "tags": [
                     "Authentication"
                 ],
-                "summary": "Register a new user",
+                "summary": "Register a new account",
                 "parameters": [
                     {
                         "description": "Registration details",
@@ -284,7 +281,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.RegisterRequest"
+                            "$ref": "#/definitions/handler.RegisterRequest"
                         }
                     }
                 ],
@@ -300,8 +297,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
+                                            "$ref": "#/definitions/handler.OTPResponse"
                                         }
                                     }
                                 }
@@ -349,7 +345,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.ResendOTPRequest"
+                            "$ref": "#/definitions/handler.ResendOTPRequest"
                         }
                     }
                 ],
@@ -365,8 +361,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
+                                            "$ref": "#/definitions/handler.OTPResponse"
                                         }
                                     }
                                 }
@@ -414,7 +409,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.VerifyTwoFactorOTPRequest"
+                            "$ref": "#/definitions/handler.VerifyTwoFactorOTPRequest"
                         }
                     }
                 ],
@@ -430,7 +425,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/auth.AuthResponse"
+                                            "$ref": "#/definitions/handler.AuthResponse"
                                         }
                                     }
                                 }
@@ -478,7 +473,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.VerifyOTPRequest"
+                            "$ref": "#/definitions/handler.VerifyOTPRequest"
                         }
                     }
                 ],
@@ -494,8 +489,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
+                                            "$ref": "#/definitions/handler.AuthResponse"
                                         }
                                     }
                                 }
@@ -543,7 +537,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/auth.VerifyResetOTPRequest"
+                            "$ref": "#/definitions/handler.VerifyResetOTPRequest"
                         }
                     }
                 ],
@@ -551,20 +545,7 @@
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
-                                        }
-                                    }
-                                }
-                            ]
+                            "$ref": "#/definitions/response.BaseResponse"
                         }
                     },
                     "400": {
@@ -577,287 +558,6 @@
                         "description": "Unauthorized",
                         "schema": {
                             "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Create a new business (requires authentication)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Businesses"
-                ],
-                "summary": "Create a new business",
-                "parameters": [
-                    {
-                        "description": "Business details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/bizhandler.CreateBusinessRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/models.Business"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses/me": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get the primary business of the authenticated user",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Businesses"
-                ],
-                "summary": "Get my primary business",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/models.Business"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses/my": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get all businesses the authenticated user belongs to",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Businesses"
-                ],
-                "summary": "Get all my businesses",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/models.Business"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses/search": {
-            "get": {
-                "description": "Search businesses by name or description",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Businesses"
-                ],
-                "summary": "Search businesses",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Search query",
-                        "name": "q",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 1,
-                        "description": "Page number",
-                        "name": "page",
-                        "in": "query"
-                    },
-                    {
-                        "type": "integer",
-                        "default": 20,
-                        "description": "Page size",
-                        "name": "page_size",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses/types": {
-            "get": {
-                "description": "Get list of all business types",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Businesses"
-                ],
-                "summary": "Get all business types",
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/models.BusinessType"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
                         }
                     },
                     "500": {
@@ -1366,632 +1066,6 @@
                         "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses/{id}": {
-            "get": {
-                "description": "Get business details by ID (public)",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Businesses"
-                ],
-                "summary": "Get business by ID",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Business ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/models.Business"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Update business details (requires business_admin or admin role)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Businesses"
-                ],
-                "summary": "Update a business",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Business ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Business update details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/bizhandler.UpdateBusinessRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/models.Business"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            },
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Delete a business (requires business_admin or admin role)",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Businesses"
-                ],
-                "summary": "Delete a business",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Business ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses/{id}/members": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get all members of a business",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Business Members"
-                ],
-                "summary": "Get business members",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Business ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "array",
-                                            "items": {
-                                                "$ref": "#/definitions/models.BusinessMember"
-                                            }
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Add a user as a member of a business (requires host or admin role)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Business Members"
-                ],
-                "summary": "Add a member to a business",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Business ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Member details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/bizhandler.AddMemberRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/models.BusinessMember"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses/{id}/members/check": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Check if the current user is a member of a business",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Business Members"
-                ],
-                "summary": "Check membership",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Business ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses/{id}/members/{memberId}": {
-            "delete": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Remove a member from a business (requires host or admin role)",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Business Members"
-                ],
-                "summary": "Remove a member from a business",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Business ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Member User ID",
-                        "name": "memberId",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses/{id}/members/{memberId}/role": {
-            "put": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Update a member's role in a business (requires host or admin role)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Business Members"
-                ],
-                "summary": "Update a member's role",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Business ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Member User ID",
-                        "name": "memberId",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "New role",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/bizhandler.UpdateMemberRoleRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Not Found",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses/{id}/stats": {
-            "get": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Get statistics for a business (events, attendees, revenue, members)",
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Businesses"
-                ],
-                "summary": "Get business statistics",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "Business ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
-                                        }
-                                    }
-                                }
-                            ]
                         }
                     },
                     "401": {
@@ -2583,343 +1657,14 @@
         }
     },
     "definitions": {
-        "auth.AuthResponse": {
-            "type": "object",
-            "properties": {
-                "access_token": {
-                    "type": "string"
-                },
-                "expires_in": {
-                    "type": "integer"
-                },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "token_type": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/auth.UserInfo"
-                }
-            }
-        },
-        "auth.ForgotPasswordRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "new_password"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "john@example.com"
-                },
-                "new_password": {
-                    "type": "string",
-                    "minLength": 8,
-                    "example": "SecurePass123!"
-                }
-            }
-        },
-        "auth.LoginRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "password"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "john@example.com"
-                },
-                "password": {
-                    "type": "string",
-                    "example": "SecurePass123!"
-                }
-            }
-        },
-        "auth.LogoutRequest": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string",
-                    "example": "abc123xyz789..."
-                }
-            }
-        },
-        "auth.RefreshTokenRequest": {
-            "type": "object",
-            "required": [
-                "refresh_token"
-            ],
-            "properties": {
-                "refresh_token": {
-                    "type": "string",
-                    "example": "abc123xyz789..."
-                }
-            }
-        },
-        "auth.RegisterRequest": {
-            "type": "object",
-            "required": [
-                "password"
-            ],
-            "properties": {
-                "business_email": {
-                    "description": "Business fields (for business_admin - Formal Individual \u0026 Organization)",
-                    "type": "string",
-                    "example": "info@business.com"
-                },
-                "business_name": {
-                    "type": "string",
-                    "example": "Nuruvent Training Institute"
-                },
-                "business_phone": {
-                    "type": "string",
-                    "example": "+254700000000"
-                },
-                "business_type": {
-                    "type": "string",
-                    "example": "training_institute"
-                },
-                "business_type_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "email": {
-                    "description": "Changed: optional for organizations",
-                    "type": "string",
-                    "example": "john@example.com"
-                },
-                "name": {
-                    "description": "Changed: optional for organizations",
-                    "type": "string",
-                    "example": "John Doe"
-                },
-                "password": {
-                    "type": "string",
-                    "minLength": 8,
-                    "example": "SecurePass123!"
-                },
-                "phone": {
-                    "description": "Personal fields (for all users)",
-                    "type": "string",
-                    "example": "+254712345678"
-                },
-                "role": {
-                    "type": "string",
-                    "enum": [
-                        "business_admin",
-                        "attendee"
-                    ],
-                    "example": "attendee"
-                }
-            }
-        },
-        "auth.ResendOTPRequest": {
-            "type": "object",
-            "required": [
-                "email"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "john@example.com"
-                }
-            }
-        },
-        "auth.UserInfo": {
-            "type": "object",
-            "properties": {
-                "avatar": {
-                    "type": "string"
-                },
-                "business_id": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                }
-            }
-        },
-        "auth.VerifyOTPRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "otp"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "john@example.com"
-                },
-                "otp": {
-                    "type": "string",
-                    "example": "123456"
-                }
-            }
-        },
-        "auth.VerifyResetOTPRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "otp"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "john@example.com"
-                },
-                "otp": {
-                    "type": "string",
-                    "example": "123456"
-                }
-            }
-        },
-        "auth.VerifyTwoFactorOTPRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "otp"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string",
-                    "example": "john@example.com"
-                },
-                "otp": {
-                    "type": "string",
-                    "example": "123456"
-                }
-            }
-        },
-        "bizhandler.AddMemberRequest": {
-            "type": "object",
-            "required": [
-                "role",
-                "user_id"
-            ],
-            "properties": {
-                "role": {
-                    "type": "string",
-                    "example": "event_manager"
-                },
-                "user_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                }
-            }
-        },
-        "bizhandler.CreateBusinessRequest": {
-            "type": "object",
-            "required": [
-                "business_type_id",
-                "name"
-            ],
-            "properties": {
-                "address": {
-                    "type": "string",
-                    "example": "Nairobi, Kenya"
-                },
-                "business_type_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "description": {
-                    "type": "string",
-                    "example": "Leading training provider in Kenya"
-                },
-                "email": {
-                    "type": "string",
-                    "example": "info@nuruvent.com"
-                },
-                "logo": {
-                    "type": "string",
-                    "example": "https://example.com/logo.png"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Nuruvent Training Institute"
-                },
-                "phone": {
-                    "type": "string",
-                    "example": "+254700000000"
-                },
-                "website": {
-                    "type": "string",
-                    "example": "https://nuruvent.com"
-                }
-            }
-        },
-        "bizhandler.UpdateBusinessRequest": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "type": "string",
-                    "example": "Nairobi, Kenya"
-                },
-                "business_type_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "description": {
-                    "type": "string",
-                    "example": "Leading training provider in Kenya"
-                },
-                "email": {
-                    "type": "string",
-                    "example": "info@nuruvent.com"
-                },
-                "logo": {
-                    "type": "string",
-                    "example": "https://example.com/logo.png"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Nuruvent Training Institute"
-                },
-                "phone": {
-                    "type": "string",
-                    "example": "+254700000000"
-                },
-                "website": {
-                    "type": "string",
-                    "example": "https://nuruvent.com"
-                }
-            }
-        },
-        "bizhandler.UpdateMemberRoleRequest": {
-            "type": "object",
-            "required": [
-                "role"
-            ],
-            "properties": {
-                "role": {
-                    "type": "string",
-                    "example": "host"
-                }
-            }
-        },
         "eventhandler.CreateEventRequest": {
             "type": "object",
             "required": [
                 "date",
                 "duration",
                 "event_type_id",
-                "time",
-                "title"
+                "name",
+                "time"
             ],
             "properties": {
                 "certificate_price": {
@@ -2958,6 +1703,10 @@
                     "type": "string",
                     "example": "https://meet.google.com/abc-defg-hij"
                 },
+                "name": {
+                    "type": "string",
+                    "example": "Annual Tech Conference 2024"
+                },
                 "price": {
                     "type": "number",
                     "example": 2500
@@ -2965,10 +1714,6 @@
                 "time": {
                     "type": "string",
                     "example": "09:00"
-                },
-                "title": {
-                    "type": "string",
-                    "example": "Annual Tech Conference 2024"
                 },
                 "zoom_link": {
                     "type": "string",
@@ -3037,9 +1782,472 @@
                 }
             }
         },
+        "handler.AccountResponse": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_verified": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.AuthResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "account": {
+                    "$ref": "#/definitions/handler.AccountResponse"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "institution": {
+                    "$ref": "#/definitions/handler.InstitutionResponse"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.ForgotPasswordRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "new_password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "john@example.com"
+                },
+                "new_password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "example": "SecurePass123!"
+                }
+            }
+        },
+        "handler.InstitutionResponse": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "logo": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "website": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.LoginRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "john@example.com"
+                },
+                "password": {
+                    "type": "string",
+                    "example": "SecurePass123!"
+                }
+            }
+        },
+        "handler.LogoutRequest": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string",
+                    "example": "abc123xyz789..."
+                }
+            }
+        },
+        "handler.OTPResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.PasswordResetResponse": {
+            "type": "object",
+            "properties": {
+                "expires_in": {
+                    "type": "integer"
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.RefreshTokenRequest": {
+            "type": "object",
+            "required": [
+                "refresh_token"
+            ],
+            "properties": {
+                "refresh_token": {
+                    "type": "string",
+                    "example": "abc123xyz789..."
+                }
+            }
+        },
+        "handler.RegisterRequest": {
+            "type": "object",
+            "required": [
+                "account_type",
+                "email",
+                "name",
+                "password",
+                "phone"
+            ],
+            "properties": {
+                "account_type": {
+                    "description": "Account type: personal or institution",
+                    "type": "string",
+                    "enum": [
+                        "personal",
+                        "institution"
+                    ],
+                    "example": "personal"
+                },
+                "email": {
+                    "description": "Personal fields (for all users)",
+                    "type": "string",
+                    "example": "john@example.com"
+                },
+                "institution_email": {
+                    "type": "string",
+                    "example": "info@nuruventinstitute.com"
+                },
+                "institution_name": {
+                    "description": "Institution fields (only for institution accounts)",
+                    "type": "string",
+                    "example": "Nuruvent Training Institute"
+                },
+                "institution_phone": {
+                    "type": "string",
+                    "example": "+254745678901"
+                },
+                "institution_type": {
+                    "type": "string",
+                    "example": "training_institute"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "John Doe"
+                },
+                "password": {
+                    "type": "string",
+                    "minLength": 8,
+                    "example": "SecurePass123!"
+                },
+                "phone": {
+                    "type": "string",
+                    "example": "+254712345678"
+                }
+            }
+        },
+        "handler.ResendOTPRequest": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "john@example.com"
+                }
+            }
+        },
+        "handler.TokenResponse": {
+            "type": "object",
+            "properties": {
+                "access_token": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "refresh_token": {
+                    "type": "string"
+                },
+                "token_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "handler.TwoFactorResponse": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "expires_in": {
+                    "type": "integer"
+                },
+                "requires_2fa": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handler.VerifyOTPRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "otp"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "john@example.com"
+                },
+                "otp": {
+                    "type": "string",
+                    "example": "123456"
+                }
+            }
+        },
+        "handler.VerifyResetOTPRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "otp"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "john@example.com"
+                },
+                "otp": {
+                    "type": "string",
+                    "example": "123456"
+                }
+            }
+        },
+        "handler.VerifyTwoFactorOTPRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "otp"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string",
+                    "example": "john@example.com"
+                },
+                "otp": {
+                    "type": "string",
+                    "example": "123456"
+                }
+            }
+        },
+        "models.Account": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "description": "Essential Relationships Only",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.AccountType"
+                        }
+                    ]
+                },
+                "account_type_id": {
+                    "description": "Foreign Keys",
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "email_verified": {
+                    "description": "Verification Status",
+                    "type": "boolean"
+                },
+                "email_verified_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "identity_verified": {
+                    "type": "boolean"
+                },
+                "identity_verified_at": {
+                    "type": "string"
+                },
+                "institution": {
+                    "$ref": "#/definitions/models.Institution"
+                },
+                "institution_id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "description": "Status",
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "professional_type": {
+                    "$ref": "#/definitions/models.ProfessionalType"
+                },
+                "professional_type_id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "team_members": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.TeamMember"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.AccountType": {
+            "type": "object",
+            "properties": {
+                "accounts": {
+                    "description": "Relationships",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Account"
+                    }
+                },
+                "color": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "models.Attendee": {
             "type": "object",
             "properties": {
+                "account": {
+                    "description": "Changed from User to Account",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Account"
+                        }
+                    ]
+                },
+                "account_id": {
+                    "description": "Changed from UserID to AccountID",
+                    "type": "string"
+                },
                 "attended_at": {
                     "type": "string"
                 },
@@ -3085,184 +2293,6 @@
                 },
                 "updated_at": {
                     "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/models.User"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.Business": {
-            "type": "object",
-            "properties": {
-                "address": {
-                    "type": "string"
-                },
-                "business_type": {
-                    "description": "Relationships",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.BusinessType"
-                        }
-                    ]
-                },
-                "business_type_id": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "email_verified_at": {
-                    "type": "string"
-                },
-                "events": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.Event"
-                    }
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "is_email_verified": {
-                    "type": "boolean"
-                },
-                "is_verified": {
-                    "type": "boolean"
-                },
-                "logo": {
-                    "type": "string"
-                },
-                "members": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.BusinessMember"
-                    }
-                },
-                "name": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "verification_method": {
-                    "type": "string"
-                },
-                "verified_at": {
-                    "type": "string"
-                },
-                "verified_by": {
-                    "type": "string"
-                },
-                "website": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.BusinessMember": {
-            "type": "object",
-            "properties": {
-                "business": {
-                    "description": "Relationships",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.Business"
-                        }
-                    ]
-                },
-                "business_id": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "joined_at": {
-                    "type": "string"
-                },
-                "role": {
-                    "description": "host, event_manager, member",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user": {
-                    "$ref": "#/definitions/models.User"
-                },
-                "user_id": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.BusinessType": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "description": "Business type category for grouping",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "description": "Training Institute",
-                    "type": "string"
-                },
-                "icon": {
-                    "description": "school, university, briefcase, user, etc.",
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "description": "training_institute, college, individual_formal, individual_informal, etc.",
-                    "type": "string"
-                },
-                "requires_business_email": {
-                    "type": "boolean"
-                },
-                "requires_business_name": {
-                    "description": "For individual types: indicates if business registration is required",
-                    "type": "boolean"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
                 }
             }
         },
@@ -3275,13 +2305,6 @@
                         "$ref": "#/definitions/models.Attendee"
                     }
                 },
-                "business": {
-                    "$ref": "#/definitions/models.Business"
-                },
-                "business_id": {
-                    "description": "Foreign Keys",
-                    "type": "string"
-                },
                 "certificate_price": {
                     "type": "number"
                 },
@@ -3292,6 +2315,9 @@
                 "created_by": {
                     "type": "string"
                 },
+                "creator": {
+                    "$ref": "#/definitions/models.Account"
+                },
                 "current_attendees": {
                     "type": "integer"
                 },
@@ -3300,6 +2326,10 @@
                     "type": "string"
                 },
                 "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "description": "UI: \"🚀 Annual Tech Conference 2024\"",
                     "type": "string"
                 },
                 "duration": {
@@ -3329,6 +2359,13 @@
                     "description": "Images",
                     "type": "string"
                 },
+                "institution": {
+                    "$ref": "#/definitions/models.Institution"
+                },
+                "institution_id": {
+                    "description": "Foreign Keys",
+                    "type": "string"
+                },
                 "is_active": {
                     "description": "Active status",
                     "type": "boolean"
@@ -3347,20 +2384,22 @@
                 "meet_link": {
                     "type": "string"
                 },
+                "name": {
+                    "description": "Canonical: \"Annual Tech Conference 2024\"",
+                    "type": "string"
+                },
                 "price": {
                     "description": "Pricing",
                     "type": "number"
                 },
                 "slug": {
+                    "description": "URL-safe: \"annual-tech-conference-2024\"",
                     "type": "string"
                 },
                 "thumbnail_url": {
                     "type": "string"
                 },
                 "time": {
-                    "type": "string"
-                },
-                "title": {
                     "type": "string"
                 },
                 "updated_at": {
@@ -3375,15 +2414,12 @@
             "type": "object",
             "properties": {
                 "can_edit": {
-                    "description": "Can event be edited in this state?",
                     "type": "boolean"
                 },
                 "can_register": {
-                    "description": "Can attendees register in this state?",
                     "type": "boolean"
                 },
                 "color": {
-                    "description": "#6B7280, #10B981, #EF4444, #3B82F6",
                     "type": "string"
                 },
                 "created_at": {
@@ -3393,11 +2429,10 @@
                     "type": "string"
                 },
                 "display_name": {
-                    "description": "Draft",
+                    "description": "UI: \"✅ Published\"",
                     "type": "string"
                 },
                 "icon": {
-                    "description": "pencil, globe, x-circle, check-circle",
                     "type": "string"
                 },
                 "id": {
@@ -3411,7 +2446,11 @@
                     "type": "boolean"
                 },
                 "name": {
-                    "description": "draft, published, cancelled, completed",
+                    "description": "Canonical: \"Published\"",
+                    "type": "string"
+                },
+                "slug": {
+                    "description": "URL-safe: \"published\"",
                     "type": "string"
                 },
                 "sort_order": {
@@ -3436,7 +2475,7 @@
                     "type": "string"
                 },
                 "display_name": {
-                    "description": "Workshop",
+                    "description": "UI: \"🛠️ Workshop\"",
                     "type": "string"
                 },
                 "icon": {
@@ -3450,7 +2489,6 @@
                     "type": "boolean"
                 },
                 "max_duration": {
-                    "description": "Maximum duration in minutes",
                     "type": "integer"
                 },
                 "meta_description": {
@@ -3461,14 +2499,14 @@
                     "type": "string"
                 },
                 "min_duration": {
-                    "description": "Minimum duration in minutes",
                     "type": "integer"
                 },
                 "name": {
-                    "description": "workshop, webinar, meetup, bootcamp",
+                    "description": "Canonical: \"Workshop\"",
                     "type": "string"
                 },
                 "slug": {
+                    "description": "URL-safe: \"workshop\"",
                     "type": "string"
                 },
                 "sort_order": {
@@ -3477,6 +2515,116 @@
                 "supports_certificate": {
                     "description": "Event type properties",
                     "type": "boolean"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.Institution": {
+            "type": "object",
+            "properties": {
+                "accounts": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Account"
+                    }
+                },
+                "address": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "institution_type": {
+                    "description": "Relationships",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.InstitutionType"
+                        }
+                    ]
+                },
+                "institution_type_id": {
+                    "description": "Institution Type (Foreign Key)",
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "logo": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "website": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.InstitutionType": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "description": "UI: \"🏫 Training Institute\"",
+                    "type": "string"
+                },
+                "icon": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "meta_description": {
+                    "type": "string"
+                },
+                "meta_title": {
+                    "description": "SEO and discoverability",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Canonical: \"Training Institute\"",
+                    "type": "string"
+                },
+                "slug": {
+                    "description": "URL-safe: \"training-institute\"",
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
                 },
                 "updated_at": {
                     "type": "string"
@@ -3539,15 +2687,8 @@
         "models.MediaType": {
             "type": "object",
             "properties": {
-                "allowed_mime_types": {
-                    "description": "Not stored in DB, used for validation",
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
                 "bucket": {
-                    "description": "Supabase bucket name",
+                    "description": "Supabase bucket",
                     "type": "string"
                 },
                 "created_at": {
@@ -3557,11 +2698,10 @@
                     "type": "string"
                 },
                 "display_name": {
-                    "description": "Event Image",
+                    "description": "UI: \"🖼️ Event Image\"",
                     "type": "string"
                 },
                 "icon": {
-                    "description": "image, building, user, certificate, video",
                     "type": "string"
                 },
                 "id": {
@@ -3575,7 +2715,11 @@
                     "type": "integer"
                 },
                 "name": {
-                    "description": "event, business, profile, certificate, recording",
+                    "description": "Canonical: \"Event Image\"",
+                    "type": "string"
+                },
+                "slug": {
+                    "description": "URL-safe: \"event-image\"",
                     "type": "string"
                 },
                 "sort_order": {
@@ -3586,66 +2730,124 @@
                 }
             }
         },
-        "models.User": {
+        "models.ProfessionalType": {
             "type": "object",
             "properties": {
-                "avatar": {
-                    "type": "string"
-                },
-                "business": {
+                "accounts": {
                     "description": "Relationships",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.Business"
-                        }
-                    ]
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.Account"
+                    }
                 },
-                "business_id": {
+                "can_host": {
+                    "type": "boolean"
+                },
+                "color": {
                     "type": "string"
                 },
                 "created_at": {
                     "type": "string"
                 },
-                "email": {
+                "description": {
                     "type": "string"
                 },
-                "email_verified_at": {
+                "display_name": {
+                    "type": "string"
+                },
+                "icon": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
-                "is_email_verified": {
+                "is_active": {
                     "type": "boolean"
                 },
-                "is_verified": {
-                    "type": "boolean"
-                },
-                "last_active_at": {
+                "name": {
                     "type": "string"
                 },
-                "last_login_at": {
+                "slug": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.TeamMember": {
+            "type": "object",
+            "properties": {
+                "account": {
+                    "description": "Relationships",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.Account"
+                        }
+                    ]
+                },
+                "account_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "created_by": {
+                    "type": "string"
+                },
+                "creator": {
+                    "$ref": "#/definitions/models.Account"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "job_title": {
+                    "type": "string"
+                },
+                "joined_at": {
+                    "type": "string"
+                },
+                "member": {
+                    "$ref": "#/definitions/models.Account"
+                },
+                "member_id": {
                     "type": "string"
                 },
                 "name": {
                     "type": "string"
                 },
-                "phone": {
-                    "type": "string"
-                },
                 "role": {
-                    "type": "string"
+                    "$ref": "#/definitions/models.TeamMemberRole"
                 },
-                "two_factor_enabled": {
-                    "type": "boolean"
+                "slug": {
+                    "type": "string"
                 },
                 "updated_at": {
                     "type": "string"
-                },
-                "verified_at": {
-                    "type": "string"
                 }
             }
+        },
+        "models.TeamMemberRole": {
+            "type": "string",
+            "enum": [
+                "admin",
+                "event_manager",
+                "team_member"
+            ],
+            "x-enum-varnames": [
+                "TeamMemberRoleAdmin",
+                "TeamMemberRoleEventManager",
+                "TeamMemberRoleTeamMember"
+            ]
         },
         "response.BaseResponse": {
             "type": "object",

@@ -1,238 +1,5 @@
 basePath: /
 definitions:
-  auth.AuthResponse:
-    properties:
-      access_token:
-        type: string
-      expires_in:
-        type: integer
-      refresh_token:
-        type: string
-      token_type:
-        type: string
-      user:
-        $ref: '#/definitions/auth.UserInfo'
-    type: object
-  auth.ForgotPasswordRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-      new_password:
-        example: SecurePass123!
-        minLength: 8
-        type: string
-    required:
-    - email
-    - new_password
-    type: object
-  auth.LoginRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-      password:
-        example: SecurePass123!
-        type: string
-    required:
-    - email
-    - password
-    type: object
-  auth.LogoutRequest:
-    properties:
-      refresh_token:
-        example: abc123xyz789...
-        type: string
-    type: object
-  auth.RefreshTokenRequest:
-    properties:
-      refresh_token:
-        example: abc123xyz789...
-        type: string
-    required:
-    - refresh_token
-    type: object
-  auth.RegisterRequest:
-    properties:
-      business_email:
-        description: Business fields (for business_admin - Formal Individual & Organization)
-        example: info@business.com
-        type: string
-      business_name:
-        example: Nuruvent Training Institute
-        type: string
-      business_phone:
-        example: "+254700000000"
-        type: string
-      business_type:
-        example: training_institute
-        type: string
-      business_type_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-      email:
-        description: 'Changed: optional for organizations'
-        example: john@example.com
-        type: string
-      name:
-        description: 'Changed: optional for organizations'
-        example: John Doe
-        type: string
-      password:
-        example: SecurePass123!
-        minLength: 8
-        type: string
-      phone:
-        description: Personal fields (for all users)
-        example: "+254712345678"
-        type: string
-      role:
-        enum:
-        - business_admin
-        - attendee
-        example: attendee
-        type: string
-    required:
-    - password
-    type: object
-  auth.ResendOTPRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-    required:
-    - email
-    type: object
-  auth.UserInfo:
-    properties:
-      avatar:
-        type: string
-      business_id:
-        type: string
-      email:
-        type: string
-      id:
-        type: string
-      name:
-        type: string
-      phone:
-        type: string
-      role:
-        type: string
-    type: object
-  auth.VerifyOTPRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-      otp:
-        example: "123456"
-        type: string
-    required:
-    - email
-    - otp
-    type: object
-  auth.VerifyResetOTPRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-      otp:
-        example: "123456"
-        type: string
-    required:
-    - email
-    - otp
-    type: object
-  auth.VerifyTwoFactorOTPRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-      otp:
-        example: "123456"
-        type: string
-    required:
-    - email
-    - otp
-    type: object
-  bizhandler.AddMemberRequest:
-    properties:
-      role:
-        example: event_manager
-        type: string
-      user_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-    required:
-    - role
-    - user_id
-    type: object
-  bizhandler.CreateBusinessRequest:
-    properties:
-      address:
-        example: Nairobi, Kenya
-        type: string
-      business_type_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-      description:
-        example: Leading training provider in Kenya
-        type: string
-      email:
-        example: info@nuruvent.com
-        type: string
-      logo:
-        example: https://example.com/logo.png
-        type: string
-      name:
-        example: Nuruvent Training Institute
-        type: string
-      phone:
-        example: "+254700000000"
-        type: string
-      website:
-        example: https://nuruvent.com
-        type: string
-    required:
-    - business_type_id
-    - name
-    type: object
-  bizhandler.UpdateBusinessRequest:
-    properties:
-      address:
-        example: Nairobi, Kenya
-        type: string
-      business_type_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-      description:
-        example: Leading training provider in Kenya
-        type: string
-      email:
-        example: info@nuruvent.com
-        type: string
-      logo:
-        example: https://example.com/logo.png
-        type: string
-      name:
-        example: Nuruvent Training Institute
-        type: string
-      phone:
-        example: "+254700000000"
-        type: string
-      website:
-        example: https://nuruvent.com
-        type: string
-    type: object
-  bizhandler.UpdateMemberRoleRequest:
-    properties:
-      role:
-        example: host
-        type: string
-    required:
-    - role
-    type: object
   eventhandler.CreateEventRequest:
     properties:
       certificate_price:
@@ -262,14 +29,14 @@ definitions:
       meet_link:
         example: https://meet.google.com/abc-defg-hij
         type: string
+      name:
+        example: Annual Tech Conference 2024
+        type: string
       price:
         example: 2500
         type: number
       time:
         example: "09:00"
-        type: string
-      title:
-        example: Annual Tech Conference 2024
         type: string
       zoom_link:
         example: https://zoom.us/j/123456789
@@ -278,8 +45,8 @@ definitions:
     - date
     - duration
     - event_type_id
+    - name
     - time
-    - title
     type: object
   eventhandler.UpdateEventRequest:
     properties:
@@ -326,8 +93,322 @@ definitions:
         example: https://zoom.us/j/123456789
         type: string
     type: object
+  handler.AccountResponse:
+    properties:
+      account_type:
+        type: string
+      created_at:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      is_verified:
+        type: boolean
+      name:
+        type: string
+      phone:
+        type: string
+      slug:
+        type: string
+    type: object
+  handler.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      account:
+        $ref: '#/definitions/handler.AccountResponse'
+      expires_in:
+        type: integer
+      institution:
+        $ref: '#/definitions/handler.InstitutionResponse'
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+    type: object
+  handler.ForgotPasswordRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      new_password:
+        example: SecurePass123!
+        minLength: 8
+        type: string
+    required:
+    - email
+    - new_password
+    type: object
+  handler.InstitutionResponse:
+    properties:
+      address:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      logo:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      slug:
+        type: string
+      type:
+        type: string
+      website:
+        type: string
+    type: object
+  handler.LoginRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      password:
+        example: SecurePass123!
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  handler.LogoutRequest:
+    properties:
+      refresh_token:
+        example: abc123xyz789...
+        type: string
+    type: object
+  handler.OTPResponse:
+    properties:
+      email:
+        type: string
+      expires_at:
+        type: string
+      message:
+        type: string
+    type: object
+  handler.PasswordResetResponse:
+    properties:
+      expires_in:
+        type: integer
+      message:
+        type: string
+    type: object
+  handler.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        example: abc123xyz789...
+        type: string
+    required:
+    - refresh_token
+    type: object
+  handler.RegisterRequest:
+    properties:
+      account_type:
+        description: 'Account type: personal or institution'
+        enum:
+        - personal
+        - institution
+        example: personal
+        type: string
+      email:
+        description: Personal fields (for all users)
+        example: john@example.com
+        type: string
+      institution_email:
+        example: info@nuruventinstitute.com
+        type: string
+      institution_name:
+        description: Institution fields (only for institution accounts)
+        example: Nuruvent Training Institute
+        type: string
+      institution_phone:
+        example: "+254745678901"
+        type: string
+      institution_type:
+        example: training_institute
+        type: string
+      name:
+        example: John Doe
+        type: string
+      password:
+        example: SecurePass123!
+        minLength: 8
+        type: string
+      phone:
+        example: "+254712345678"
+        type: string
+    required:
+    - account_type
+    - email
+    - name
+    - password
+    - phone
+    type: object
+  handler.ResendOTPRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+    required:
+    - email
+    type: object
+  handler.TokenResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+    type: object
+  handler.TwoFactorResponse:
+    properties:
+      email:
+        type: string
+      expires_in:
+        type: integer
+      requires_2fa:
+        type: boolean
+    type: object
+  handler.VerifyOTPRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      otp:
+        example: "123456"
+        type: string
+    required:
+    - email
+    - otp
+    type: object
+  handler.VerifyResetOTPRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      otp:
+        example: "123456"
+        type: string
+    required:
+    - email
+    - otp
+    type: object
+  handler.VerifyTwoFactorOTPRequest:
+    properties:
+      email:
+        example: john@example.com
+        type: string
+      otp:
+        example: "123456"
+        type: string
+    required:
+    - email
+    - otp
+    type: object
+  models.Account:
+    properties:
+      account_type:
+        allOf:
+        - $ref: '#/definitions/models.AccountType'
+        description: Essential Relationships Only
+      account_type_id:
+        description: Foreign Keys
+        type: string
+      created_at:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      email_verified:
+        description: Verification Status
+        type: boolean
+      email_verified_at:
+        type: string
+      id:
+        type: string
+      identity_verified:
+        type: boolean
+      identity_verified_at:
+        type: string
+      institution:
+        $ref: '#/definitions/models.Institution'
+      institution_id:
+        type: string
+      is_active:
+        description: Status
+        type: boolean
+      name:
+        type: string
+      phone:
+        type: string
+      professional_type:
+        $ref: '#/definitions/models.ProfessionalType'
+      professional_type_id:
+        type: string
+      slug:
+        type: string
+      team_members:
+        items:
+          $ref: '#/definitions/models.TeamMember'
+        type: array
+      updated_at:
+        type: string
+    type: object
+  models.AccountType:
+    properties:
+      accounts:
+        description: Relationships
+        items:
+          $ref: '#/definitions/models.Account'
+        type: array
+      color:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      slug:
+        type: string
+      sort_order:
+        type: integer
+      updated_at:
+        type: string
+    type: object
   models.Attendee:
     properties:
+      account:
+        allOf:
+        - $ref: '#/definitions/models.Account'
+        description: Changed from User to Account
+      account_id:
+        description: Changed from UserID to AccountID
+        type: string
       attended_at:
         type: string
       created_at:
@@ -358,125 +439,6 @@ definitions:
         type: string
       updated_at:
         type: string
-      user:
-        $ref: '#/definitions/models.User'
-      user_id:
-        type: string
-    type: object
-  models.Business:
-    properties:
-      address:
-        type: string
-      business_type:
-        allOf:
-        - $ref: '#/definitions/models.BusinessType'
-        description: Relationships
-      business_type_id:
-        type: string
-      created_at:
-        type: string
-      created_by:
-        type: string
-      description:
-        type: string
-      email:
-        type: string
-      email_verified_at:
-        type: string
-      events:
-        items:
-          $ref: '#/definitions/models.Event'
-        type: array
-      id:
-        type: string
-      is_active:
-        type: boolean
-      is_email_verified:
-        type: boolean
-      is_verified:
-        type: boolean
-      logo:
-        type: string
-      members:
-        items:
-          $ref: '#/definitions/models.BusinessMember'
-        type: array
-      name:
-        type: string
-      phone:
-        type: string
-      slug:
-        type: string
-      updated_at:
-        type: string
-      verification_method:
-        type: string
-      verified_at:
-        type: string
-      verified_by:
-        type: string
-      website:
-        type: string
-    type: object
-  models.BusinessMember:
-    properties:
-      business:
-        allOf:
-        - $ref: '#/definitions/models.Business'
-        description: Relationships
-      business_id:
-        type: string
-      created_at:
-        type: string
-      id:
-        type: string
-      is_active:
-        type: boolean
-      joined_at:
-        type: string
-      role:
-        description: host, event_manager, member
-        type: string
-      updated_at:
-        type: string
-      user:
-        $ref: '#/definitions/models.User'
-      user_id:
-        type: string
-    type: object
-  models.BusinessType:
-    properties:
-      category:
-        description: Business type category for grouping
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      display_name:
-        description: Training Institute
-        type: string
-      icon:
-        description: school, university, briefcase, user, etc.
-        type: string
-      id:
-        type: string
-      is_active:
-        type: boolean
-      name:
-        description: training_institute, college, individual_formal, individual_informal,
-          etc.
-        type: string
-      requires_business_email:
-        type: boolean
-      requires_business_name:
-        description: 'For individual types: indicates if business registration is
-          required'
-        type: boolean
-      sort_order:
-        type: integer
-      updated_at:
-        type: string
     type: object
   models.Event:
     properties:
@@ -484,11 +446,6 @@ definitions:
         items:
           $ref: '#/definitions/models.Attendee'
         type: array
-      business:
-        $ref: '#/definitions/models.Business'
-      business_id:
-        description: Foreign Keys
-        type: string
       certificate_price:
         type: number
       created_at:
@@ -496,12 +453,17 @@ definitions:
         type: string
       created_by:
         type: string
+      creator:
+        $ref: '#/definitions/models.Account'
       current_attendees:
         type: integer
       date:
         description: Date & Time
         type: string
       description:
+        type: string
+      display_name:
+        description: "UI: \"\U0001F680 Annual Tech Conference 2024\""
         type: string
       duration:
         type: integer
@@ -520,6 +482,11 @@ definitions:
       image_url:
         description: Images
         type: string
+      institution:
+        $ref: '#/definitions/models.Institution'
+      institution_id:
+        description: Foreign Keys
+        type: string
       is_active:
         description: Active status
         type: boolean
@@ -533,16 +500,18 @@ definitions:
         type: integer
       meet_link:
         type: string
+      name:
+        description: 'Canonical: "Annual Tech Conference 2024"'
+        type: string
       price:
         description: Pricing
         type: number
       slug:
+        description: 'URL-safe: "annual-tech-conference-2024"'
         type: string
       thumbnail_url:
         type: string
       time:
-        type: string
-      title:
         type: string
       updated_at:
         type: string
@@ -552,23 +521,19 @@ definitions:
   models.EventStatus:
     properties:
       can_edit:
-        description: Can event be edited in this state?
         type: boolean
       can_register:
-        description: Can attendees register in this state?
         type: boolean
       color:
-        description: '#6B7280, #10B981, #EF4444, #3B82F6'
         type: string
       created_at:
         type: string
       description:
         type: string
       display_name:
-        description: Draft
+        description: 'UI: "✅ Published"'
         type: string
       icon:
-        description: pencil, globe, x-circle, check-circle
         type: string
       id:
         type: string
@@ -578,7 +543,10 @@ definitions:
         description: Status properties
         type: boolean
       name:
-        description: draft, published, cancelled, completed
+        description: 'Canonical: "Published"'
+        type: string
+      slug:
+        description: 'URL-safe: "published"'
         type: string
       sort_order:
         type: integer
@@ -595,7 +563,7 @@ definitions:
       description:
         type: string
       display_name:
-        description: Workshop
+        description: "UI: \"\U0001F6E0️ Workshop\""
         type: string
       icon:
         description: graduation-cap, video, users, laptop
@@ -605,7 +573,6 @@ definitions:
       is_active:
         type: boolean
       max_duration:
-        description: Maximum duration in minutes
         type: integer
       meta_description:
         type: string
@@ -613,18 +580,91 @@ definitions:
         description: SEO and discoverability
         type: string
       min_duration:
-        description: Minimum duration in minutes
         type: integer
       name:
-        description: workshop, webinar, meetup, bootcamp
+        description: 'Canonical: "Workshop"'
         type: string
       slug:
+        description: 'URL-safe: "workshop"'
         type: string
       sort_order:
         type: integer
       supports_certificate:
         description: Event type properties
         type: boolean
+      updated_at:
+        type: string
+    type: object
+  models.Institution:
+    properties:
+      accounts:
+        items:
+          $ref: '#/definitions/models.Account'
+        type: array
+      address:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      institution_type:
+        allOf:
+        - $ref: '#/definitions/models.InstitutionType'
+        description: Relationships
+      institution_type_id:
+        description: Institution Type (Foreign Key)
+        type: string
+      is_active:
+        type: boolean
+      logo:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      slug:
+        type: string
+      updated_at:
+        type: string
+      website:
+        type: string
+    type: object
+  models.InstitutionType:
+    properties:
+      color:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      display_name:
+        description: "UI: \"\U0001F3EB Training Institute\""
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      meta_description:
+        type: string
+      meta_title:
+        description: SEO and discoverability
+        type: string
+      name:
+        description: 'Canonical: "Training Institute"'
+        type: string
+      slug:
+        description: 'URL-safe: "training-institute"'
+        type: string
+      sort_order:
+        type: integer
       updated_at:
         type: string
     type: object
@@ -664,23 +704,17 @@ definitions:
     type: object
   models.MediaType:
     properties:
-      allowed_mime_types:
-        description: Not stored in DB, used for validation
-        items:
-          type: string
-        type: array
       bucket:
-        description: Supabase bucket name
+        description: Supabase bucket
         type: string
       created_at:
         type: string
       description:
         type: string
       display_name:
-        description: Event Image
+        description: "UI: \"\U0001F5BC️ Event Image\""
         type: string
       icon:
-        description: image, building, user, certificate, video
         type: string
       id:
         type: string
@@ -690,52 +724,95 @@ definitions:
         description: 10MB default
         type: integer
       name:
-        description: event, business, profile, certificate, recording
+        description: 'Canonical: "Event Image"'
+        type: string
+      slug:
+        description: 'URL-safe: "event-image"'
         type: string
       sort_order:
         type: integer
       updated_at:
         type: string
     type: object
-  models.User:
+  models.ProfessionalType:
     properties:
-      avatar:
-        type: string
-      business:
-        allOf:
-        - $ref: '#/definitions/models.Business'
+      accounts:
         description: Relationships
-      business_id:
+        items:
+          $ref: '#/definitions/models.Account'
+        type: array
+      can_host:
+        type: boolean
+      color:
         type: string
       created_at:
         type: string
-      email:
+      description:
         type: string
-      email_verified_at:
+      display_name:
+        type: string
+      icon:
         type: string
       id:
         type: string
-      is_email_verified:
+      is_active:
         type: boolean
-      is_verified:
-        type: boolean
-      last_active_at:
+      name:
         type: string
-      last_login_at:
+      slug:
+        type: string
+      sort_order:
+        type: integer
+      updated_at:
+        type: string
+    type: object
+  models.TeamMember:
+    properties:
+      account:
+        allOf:
+        - $ref: '#/definitions/models.Account'
+        description: Relationships
+      account_id:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      creator:
+        $ref: '#/definitions/models.Account'
+      display_name:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      job_title:
+        type: string
+      joined_at:
+        type: string
+      member:
+        $ref: '#/definitions/models.Account'
+      member_id:
         type: string
       name:
         type: string
-      phone:
-        type: string
       role:
+        $ref: '#/definitions/models.TeamMemberRole'
+      slug:
         type: string
-      two_factor_enabled:
-        type: boolean
       updated_at:
         type: string
-      verified_at:
-        type: string
     type: object
+  models.TeamMemberRole:
+    enum:
+    - admin
+    - event_manager
+    - team_member
+    type: string
+    x-enum-varnames:
+    - TeamMemberRoleAdmin
+    - TeamMemberRoleEventManager
+    - TeamMemberRoleTeamMember
   response.BaseResponse:
     properties:
       data: {}
@@ -772,7 +849,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/auth.ForgotPasswordRequest'
+          $ref: '#/definitions/handler.ForgotPasswordRequest'
       produces:
       - application/json
       responses:
@@ -783,8 +860,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  additionalProperties: true
-                  type: object
+                  $ref: '#/definitions/handler.PasswordResetResponse'
               type: object
         "400":
           description: Bad Request
@@ -808,7 +884,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/auth.LoginRequest'
+          $ref: '#/definitions/handler.LoginRequest'
       produces:
       - application/json
       responses:
@@ -819,8 +895,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  additionalProperties: true
-                  type: object
+                  $ref: '#/definitions/handler.TwoFactorResponse'
               type: object
         "400":
           description: Bad Request
@@ -848,7 +923,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/auth.LogoutRequest'
+          $ref: '#/definitions/handler.LogoutRequest'
       produces:
       - application/json
       responses:
@@ -884,7 +959,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/auth.RefreshTokenRequest'
+          $ref: '#/definitions/handler.RefreshTokenRequest'
       produces:
       - application/json
       responses:
@@ -895,8 +970,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  additionalProperties: true
-                  type: object
+                  $ref: '#/definitions/handler.TokenResponse'
               type: object
         "400":
           description: Bad Request
@@ -917,15 +991,14 @@ paths:
     post:
       consumes:
       - application/json
-      description: Register a new user account with optional business creation for
-        business_admin role
+      description: Register a new account (personal or institution)
       parameters:
       - description: Registration details
         in: body
         name: request
         required: true
         schema:
-          $ref: '#/definitions/auth.RegisterRequest'
+          $ref: '#/definitions/handler.RegisterRequest'
       produces:
       - application/json
       responses:
@@ -936,8 +1009,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  additionalProperties: true
-                  type: object
+                  $ref: '#/definitions/handler.OTPResponse'
               type: object
         "400":
           description: Bad Request
@@ -951,7 +1023,7 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.BaseResponse'
-      summary: Register a new user
+      summary: Register a new account
       tags:
       - Authentication
   /api/v1/auth/resend-otp:
@@ -965,7 +1037,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/auth.ResendOTPRequest'
+          $ref: '#/definitions/handler.ResendOTPRequest'
       produces:
       - application/json
       responses:
@@ -976,8 +1048,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  additionalProperties: true
-                  type: object
+                  $ref: '#/definitions/handler.OTPResponse'
               type: object
         "400":
           description: Bad Request
@@ -1006,7 +1077,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/auth.VerifyTwoFactorOTPRequest'
+          $ref: '#/definitions/handler.VerifyTwoFactorOTPRequest'
       produces:
       - application/json
       responses:
@@ -1017,7 +1088,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/auth.AuthResponse'
+                  $ref: '#/definitions/handler.AuthResponse'
               type: object
         "400":
           description: Bad Request
@@ -1045,7 +1116,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/auth.VerifyOTPRequest'
+          $ref: '#/definitions/handler.VerifyOTPRequest'
       produces:
       - application/json
       responses:
@@ -1056,8 +1127,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  additionalProperties: true
-                  type: object
+                  $ref: '#/definitions/handler.AuthResponse'
               type: object
         "400":
           description: Bad Request
@@ -1085,20 +1155,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/auth.VerifyResetOTPRequest'
+          $ref: '#/definitions/handler.VerifyResetOTPRequest'
       produces:
       - application/json
       responses:
         "200":
           description: OK
           schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  additionalProperties: true
-                  type: object
-              type: object
+            $ref: '#/definitions/response.BaseResponse'
         "400":
           description: Bad Request
           schema:
@@ -1114,47 +1178,6 @@ paths:
       summary: Verify reset OTP and reset password
       tags:
       - Authentication
-  /api/v1/businesses:
-    post:
-      consumes:
-      - application/json
-      description: Create a new business (requires authentication)
-      parameters:
-      - description: Business details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/bizhandler.CreateBusinessRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/models.Business'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Create a new business
-      tags:
-      - Businesses
   /api/v1/businesses/{businessId}/events:
     get:
       description: Get all events for a business
@@ -1488,520 +1511,6 @@ paths:
       summary: Create a new event with image
       tags:
       - Events
-  /api/v1/businesses/{id}:
-    delete:
-      description: Delete a business (requires business_admin or admin role)
-      parameters:
-      - description: Business ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Delete a business
-      tags:
-      - Businesses
-    get:
-      description: Get business details by ID (public)
-      parameters:
-      - description: Business ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/models.Business'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Get business by ID
-      tags:
-      - Businesses
-    put:
-      consumes:
-      - application/json
-      description: Update business details (requires business_admin or admin role)
-      parameters:
-      - description: Business ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Business update details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/bizhandler.UpdateBusinessRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/models.Business'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Update a business
-      tags:
-      - Businesses
-  /api/v1/businesses/{id}/members:
-    get:
-      description: Get all members of a business
-      parameters:
-      - description: Business ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/models.BusinessMember'
-                  type: array
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Get business members
-      tags:
-      - Business Members
-    post:
-      consumes:
-      - application/json
-      description: Add a user as a member of a business (requires host or admin role)
-      parameters:
-      - description: Business ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Member details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/bizhandler.AddMemberRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/models.BusinessMember'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Add a member to a business
-      tags:
-      - Business Members
-  /api/v1/businesses/{id}/members/{memberId}:
-    delete:
-      description: Remove a member from a business (requires host or admin role)
-      parameters:
-      - description: Business ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Member User ID
-        in: path
-        name: memberId
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Remove a member from a business
-      tags:
-      - Business Members
-  /api/v1/businesses/{id}/members/{memberId}/role:
-    put:
-      consumes:
-      - application/json
-      description: Update a member's role in a business (requires host or admin role)
-      parameters:
-      - description: Business ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Member User ID
-        in: path
-        name: memberId
-        required: true
-        type: string
-      - description: New role
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/bizhandler.UpdateMemberRoleRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Update a member's role
-      tags:
-      - Business Members
-  /api/v1/businesses/{id}/members/check:
-    get:
-      description: Check if the current user is a member of a business
-      parameters:
-      - description: Business ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  additionalProperties: true
-                  type: object
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Check membership
-      tags:
-      - Business Members
-  /api/v1/businesses/{id}/stats:
-    get:
-      description: Get statistics for a business (events, attendees, revenue, members)
-      parameters:
-      - description: Business ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  additionalProperties: true
-                  type: object
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Get business statistics
-      tags:
-      - Businesses
-  /api/v1/businesses/me:
-    get:
-      description: Get the primary business of the authenticated user
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/models.Business'
-                  type: array
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Get my primary business
-      tags:
-      - Businesses
-  /api/v1/businesses/my:
-    get:
-      description: Get all businesses the authenticated user belongs to
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/models.Business'
-                  type: array
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Get all my businesses
-      tags:
-      - Businesses
-  /api/v1/businesses/search:
-    get:
-      description: Search businesses by name or description
-      parameters:
-      - description: Search query
-        in: query
-        name: q
-        type: string
-      - default: 1
-        description: Page number
-        in: query
-        name: page
-        type: integer
-      - default: 20
-        description: Page size
-        in: query
-        name: page_size
-        type: integer
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  additionalProperties: true
-                  type: object
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Search businesses
-      tags:
-      - Businesses
-  /api/v1/businesses/types:
-    get:
-      description: Get list of all business types
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  items:
-                    $ref: '#/definitions/models.BusinessType'
-                  type: array
-              type: object
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Get all business types
-      tags:
-      - Businesses
   /api/v1/events/{id}:
     delete:
       description: Delete an event
