@@ -1,151 +1,73 @@
-// internal/app/wire.go
-
 //go:build wireinject
 // +build wireinject
 
 package app
 
 import (
-	"time"
-
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/database"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth/handler"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/authorization"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/events"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/media"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/email"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/queue"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/storage"
-	"github.com/google/wire"
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/cors"
-	"github.com/gofiber/fiber/v3/middleware/logger"
-	"github.com/gofiber/fiber/v3/middleware/recover"
+	"github.com/google/wire"
 	"gorm.io/gorm"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account"
+	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/acchandler"
+	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth"
+	authHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
+	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events"
+	eventsHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
+	eventsService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media"
+	mediaService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
 )
 
 type AppDependencies struct {
-	Config               *config.Config
-	DB                   *gorm.DB
-	App                  *fiber.App
-	AuthorizationModule  *authorization.Module
-	AuthModule           *auth.Module
-	MediaModule          *media.Module
-	EventsModule         *events.Module
-	AuthorizationService *authorization.Service
-	Enforcer             *authorization.Enforcer
-	AuthHandler          *handler.Handler
-	StorageClient        *storage.Client
+	Config         *config.Config
+	DB             *gorm.DB
+	App            *fiber.App
+	StorageClient  *storage.Client
+	Enforcer       *authorization.Enforcer
+	AuthService    authService.Service
+	AccountService accountService.Service
+	EventsService  eventsService.Service
+	MediaService   mediaService.Service
+	AuthHandler    *authHandler.AuthHandler
+	AccountHandler *accountHandler.AccountHandler
+	EventsHandler  *eventsHandler.EventHandler
 }
 
 func InitializeApp() (*AppDependencies, error) {
 	wire.Build(
-		// Configuration & Database
+		// Shared Infrastructure Providers
 		config.Load,
 		database.Connect,
-
-		// Storage Client
 		provideStorageClient,
-
-		// Email Service
 		provideEmailService,
-
-		// Queue Client
 		provideQueueClient,
-
-		// Fiber App
 		provideFiberAppWithMiddleware,
 
-		// Modules
-		authorization.ProviderSet,
-		media.ProviderSet,
+		// Domain Module Provider Sets
 		auth.ProviderSet,
+		media.ProviderSet,
+		account.ProviderSet,
 		events.ProviderSet,
 
-		// App
+		// Cross-Module Adapters
+		NewAccountPermissionAdapter,
+		NewEventsPermissionAdapter,
+		NewEventsMediaAdapter,
+
+		// Root Assembly
 		provideAppDependencies,
 	)
 	return nil, nil
-}
-
-// ================================================
-// PROVIDERS
-// ================================================
-
-func provideStorageClient(cfg *config.Config) *storage.Client {
-	return storage.NewClient(
-		cfg.Supabase.URL,
-		cfg.Supabase.SecretKey,
-		storage.BucketConfig{
-			Events:       cfg.Supabase.BucketEvent,
-			Businesses:   cfg.Supabase.BucketBusiness,
-			Profiles:     cfg.Supabase.BucketProfile,
-			Certificates: cfg.Supabase.BucketCertificate,
-			Recordings:   cfg.Supabase.BucketRecording,
-		},
-	)
-}
-
-func provideEmailService(cfg *config.Config) *email.EmailService {
-	return email.NewEmailService(cfg.Email.APIKey, cfg.Email.From)
-}
-
-func provideQueueClient(cfg *config.Config) *queue.Client {
-	return queue.NewClient(cfg.Redis.URL)
-}
-
-func provideFiberAppWithMiddleware() *fiber.App {
-	app := fiber.New(fiber.Config{
-		AppName:      "Nuruvent API",
-		ServerHeader: "Nuruvent",
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	})
-
-	app.Use(logger.New())
-	app.Use(recover.New())
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:3000",
-			"http://localhost:3001",
-			"http://localhost:3002",
-			"http://localhost:8080",
-			"https://nuruvent.vercel.app",
-		},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
-		AllowCredentials: true,
-	}))
-
-	return app
-}
-
-func provideAppDependencies(
-	cfg *config.Config,
-	db *gorm.DB,
-	app *fiber.App,
-	authModule *auth.Module,
-	authHandler *handler.Handler,
-	authorizationModule *authorization.Module,
-	authorizationService *authorization.Service,
-	enforcer *authorization.Enforcer,
-	mediaModule *media.Module,
-	eventsModule *events.Module,
-	storageClient *storage.Client,
-) *AppDependencies {
-	return &AppDependencies{
-		Config:               cfg,
-		DB:                   db,
-		App:                  app,
-		AuthModule:           authModule,
-		AuthHandler:          authHandler,
-		AuthorizationModule:  authorizationModule,
-		AuthorizationService: authorizationService,
-		Enforcer:             enforcer,
-		MediaModule:          mediaModule,
-		EventsModule:         eventsModule,
-		StorageClient:        storageClient,
-	}
 }

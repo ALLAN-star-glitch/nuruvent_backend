@@ -1,26 +1,18 @@
+//go:build wireinject
+// +build wireinject
+
 package events
 
 import (
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/authorization"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/media"
 	"github.com/google/wire"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 )
 
 var ProviderSet = wire.NewSet(
-	ProvideEventsModule,
+	postgres.NewPostgresRepository,
+	service.NewService,
+	eventhandler.NewEventHandler,
 )
-
-func ProvideEventsModule(
-	cfg *config.Config,
-	enforcer *authorization.Enforcer,
-	permService *authorization.Service,
-	mediaModule *media.Module,
-) *Module {
-	return NewModule(
-		cfg,
-		enforcer,
-		permService,
-		mediaModule.GetService(),
-	)
-}

@@ -7,22 +7,25 @@
 package app
 
 import (
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/database"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth/handler"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/authorization"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/events"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/media"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/email"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/queue"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/storage"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/acchandler"
+	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/postgres"
+	service2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/jwt"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/redis"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
+	postgres3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
+	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
+	postgres4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
+	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
 	"github.com/gofiber/fiber/v3"
-	"github.com/gofiber/fiber/v3/middleware/cors"
-	"github.com/gofiber/fiber/v3/middleware/logger"
-	recover2 "github.com/gofiber/fiber/v3/middleware/recover"
 	"gorm.io/gorm"
-	"time"
 )
 
 // Injectors from wire.go:
@@ -34,113 +37,47 @@ func InitializeApp() (*AppDependencies, error) {
 		return nil, err
 	}
 	app := provideFiberAppWithMiddleware()
-	repository := auth.ProvideRepository(db)
-	tokenService := auth.ProvideTokenService(repository, configConfig)
-	module, err := authorization.ProvideAuthorizationModule(db, configConfig)
+	client := provideStorageClient(configConfig)
+	enforcer, err := authorization.NewEnforcer(db, configConfig)
 	if err != nil {
 		return nil, err
 	}
-	service := authorization.ProvideAuthorizationService(module)
+	repository := postgres.NewPostgresRepository(db)
+	queueClient := provideQueueClient(configConfig)
+	permissionService := authorization.NewService(enforcer)
+	tokenService := jwt.NewTokenService(configConfig)
+	otpService := redis.NewOTPService()
 	emailService := provideEmailService(configConfig)
-	client := provideQueueClient(configConfig)
-	serviceService := auth.ProvideAuthService(repository, tokenService, service, configConfig, emailService, client)
-	handler := auth.ProvideAuthHandler(serviceService, configConfig)
-	authModule := auth.ProvideAuthModule(handler, serviceService)
-	enforcer := authorization.ProvideEnforcer(module)
-	storageClient := provideStorageClient(configConfig)
-	mediaModule := media.ProvideMediaModule(configConfig, storageClient)
-	eventsModule := events.ProvideEventsModule(configConfig, enforcer, service, mediaModule)
-	appDependencies := provideAppDependencies(configConfig, db, app, authModule, handler, module, service, enforcer, mediaModule, eventsModule, storageClient)
+	serviceService := service.NewService(repository, configConfig, queueClient, permissionService, tokenService, otpService, emailService)
+	domainRepository := postgres2.NewPostgresRepository(db)
+	domainPermissionService := NewAccountPermissionAdapter(permissionService)
+	service5 := service2.NewService(domainRepository, domainPermissionService)
+	repository2 := postgres3.NewPostgresRepository(db)
+	permissionChecker := NewEventsPermissionAdapter(permissionService)
+	repository3 := postgres4.NewPostgresRepository(db)
+	service6 := service3.NewService(repository3, client)
+	mediaService := NewEventsMediaAdapter(service6)
+	service7 := service4.NewService(repository2, permissionChecker, mediaService)
+	authHandler := authhandler.NewAuthHandler(serviceService, configConfig)
+	accountHandler := acchandler.NewAccountHandler(service5)
+	eventHandler := eventhandler.NewEventHandler(service7)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, enforcer, serviceService, service5, service7, service6, authHandler, accountHandler, eventHandler)
 	return appDependencies, nil
 }
 
 // wire.go:
 
 type AppDependencies struct {
-	Config               *config.Config
-	DB                   *gorm.DB
-	App                  *fiber.App
-	AuthorizationModule  *authorization.Module
-	AuthModule           *auth.Module
-	MediaModule          *media.Module
-	EventsModule         *events.Module
-	AuthorizationService *authorization.Service
-	Enforcer             *authorization.Enforcer
-	AuthHandler          *handler.Handler
-	StorageClient        *storage.Client
-}
-
-func provideStorageClient(cfg *config.Config) *storage.Client {
-	return storage.NewClient(
-		cfg.Supabase.URL,
-		cfg.Supabase.SecretKey, storage.BucketConfig{
-			Events:       cfg.Supabase.BucketEvent,
-			Businesses:   cfg.Supabase.BucketBusiness,
-			Profiles:     cfg.Supabase.BucketProfile,
-			Certificates: cfg.Supabase.BucketCertificate,
-			Recordings:   cfg.Supabase.BucketRecording,
-		},
-	)
-}
-
-func provideEmailService(cfg *config.Config) *email.EmailService {
-	return email.NewEmailService(cfg.Email.APIKey, cfg.Email.From)
-}
-
-func provideQueueClient(cfg *config.Config) *queue.Client {
-	return queue.NewClient(cfg.Redis.URL)
-}
-
-func provideFiberAppWithMiddleware() *fiber.App {
-	app := fiber.New(fiber.Config{
-		AppName:      "Nuruvent API",
-		ServerHeader: "Nuruvent",
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
-	})
-
-	app.Use(logger.New())
-	app.Use(recover2.New())
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"http://localhost:3000",
-			"http://localhost:3001",
-			"http://localhost:3002",
-			"http://localhost:8080",
-			"https://nuruvent.vercel.app",
-		},
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
-		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
-		AllowCredentials: true,
-	}))
-
-	return app
-}
-
-func provideAppDependencies(
-	cfg *config.Config,
-	db *gorm.DB,
-	app *fiber.App,
-	authModule *auth.Module,
-	authHandler *handler.Handler,
-	authorizationModule *authorization.Module,
-	authorizationService *authorization.Service,
-	enforcer *authorization.Enforcer,
-	mediaModule *media.Module,
-	eventsModule *events.Module,
-	storageClient *storage.Client,
-) *AppDependencies {
-	return &AppDependencies{
-		Config:               cfg,
-		DB:                   db,
-		App:                  app,
-		AuthModule:           authModule,
-		AuthHandler:          authHandler,
-		AuthorizationModule:  authorizationModule,
-		AuthorizationService: authorizationService,
-		Enforcer:             enforcer,
-		MediaModule:          mediaModule,
-		EventsModule:         eventsModule,
-		StorageClient:        storageClient,
-	}
+	Config         *config.Config
+	DB             *gorm.DB
+	App            *fiber.App
+	StorageClient  *storage.Client
+	Enforcer       *authorization.Enforcer
+	AuthService    service.Service
+	AccountService service2.Service
+	EventsService  service4.Service
+	MediaService   service3.Service
+	AuthHandler    *authhandler.AuthHandler
+	AccountHandler *acchandler.AccountHandler
+	EventsHandler  *eventhandler.EventHandler
 }

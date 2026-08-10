@@ -24,591 +24,280 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/api/v1/auth/forgot-password": {
-            "post": {
-                "description": "Send OTP to reset password for a user",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Initiate password reset",
-                "parameters": [
-                    {
-                        "description": "Password reset request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.ForgotPasswordRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/handler.PasswordResetResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/auth/login": {
-            "post": {
-                "description": "Authenticate a user with email and password, initiates 2FA",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Login user",
-                "parameters": [
-                    {
-                        "description": "Login credentials",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.LoginRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/handler.TwoFactorResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/auth/logout": {
-            "post": {
-                "security": [
-                    {
-                        "BearerAuth": []
-                    }
-                ],
-                "description": "Logout the current user and revoke the refresh token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Logout user",
-                "parameters": [
-                    {
-                        "description": "Logout request",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.LogoutRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/auth/refresh": {
-            "post": {
-                "description": "Refresh the access token using a valid refresh token",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Refresh access token",
-                "parameters": [
-                    {
-                        "description": "Refresh token",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.RefreshTokenRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/handler.TokenResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/auth/register": {
-            "post": {
-                "description": "Register a new account (personal or institution)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Register a new account",
-                "parameters": [
-                    {
-                        "description": "Registration details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.RegisterRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/handler.OTPResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/auth/resend-otp": {
-            "post": {
-                "description": "Resend the verification OTP to the user's email",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Resend OTP",
-                "parameters": [
-                    {
-                        "description": "Email for OTP resend",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.ResendOTPRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/handler.OTPResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/auth/verify-2fa": {
-            "post": {
-                "description": "Verify the two-factor authentication OTP and complete the login process",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Verify 2FA OTP and complete login",
-                "parameters": [
-                    {
-                        "description": "2FA OTP verification",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.VerifyTwoFactorOTPRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/handler.AuthResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/auth/verify-otp": {
-            "post": {
-                "description": "Verify the OTP sent to your email and complete account creation",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Verify OTP and complete registration",
-                "parameters": [
-                    {
-                        "description": "OTP verification details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.VerifyOTPRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "201": {
-                        "description": "Created",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/response.BaseResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/handler.AuthResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/auth/verify-reset-otp": {
-            "post": {
-                "description": "Verify the OTP and complete password reset",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Authentication"
-                ],
-                "summary": "Verify reset OTP and reset password",
-                "parameters": [
-                    {
-                        "description": "OTP verification",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.VerifyResetOTPRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/businesses/{businessId}/events": {
+        "/api/v1/accounts/email/{email}": {
             "get": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all events for a business",
+                "description": "Get account details by email address",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Get account by email",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Email address",
+                        "name": "email",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/acchandler.AccountResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/accounts/me": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get the currently authenticated user's account",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Get current account",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/acchandler.AccountResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update the currently authenticated user's account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Update current account",
+                "parameters": [
+                    {
+                        "description": "Update account request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/acchandler.UpdateAccountRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/acchandler.AccountResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/accounts/me/profile": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update the currently authenticated user's profile",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Update current profile",
+                "parameters": [
+                    {
+                        "description": "Update profile request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/acchandler.UpdateProfileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/acchandler.AccountResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/accounts/{accountId}/events": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all events for an account",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Events"
                 ],
-                "summary": "Get business events",
+                "summary": "Get events by account",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Business ID",
-                        "name": "businessId",
+                        "description": "Account ID",
+                        "name": "accountId",
                         "in": "path",
                         "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by event type ID",
-                        "name": "event_type_id",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Filter by event status ID",
-                        "name": "event_status_id",
-                        "in": "query"
                     },
                     {
                         "type": "integer",
@@ -677,7 +366,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new event for a business (requires event_manager or host role)",
+                "description": "Create a new event for an account",
                 "consumes": [
                     "application/json"
                 ],
@@ -691,8 +380,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Business ID",
-                        "name": "businessId",
+                        "description": "Account ID",
+                        "name": "accountId",
                         "in": "path",
                         "required": true
                     },
@@ -718,7 +407,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.Event"
+                                            "$ref": "#/definitions/domain.Event"
                                         }
                                     }
                                 }
@@ -752,14 +441,14 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/businesses/{businessId}/events/with-image": {
+        "/api/v1/accounts/{accountId}/events/with-image": {
             "post": {
                 "security": [
                     {
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new event for a business with an image upload",
+                "description": "Create a new event for an account with an image upload",
                 "consumes": [
                     "multipart/form-data"
                 ],
@@ -773,15 +462,15 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Business ID",
-                        "name": "businessId",
+                        "description": "Account ID",
+                        "name": "accountId",
                         "in": "path",
                         "required": true
                     },
                     {
                         "type": "string",
-                        "description": "Event title",
-                        "name": "title",
+                        "description": "Event name",
+                        "name": "name",
                         "in": "formData",
                         "required": true
                     },
@@ -838,6 +527,12 @@ const docTemplate = `{
                         "in": "formData"
                     },
                     {
+                        "type": "boolean",
+                        "description": "Is virtual event",
+                        "name": "is_virtual",
+                        "in": "formData"
+                    },
+                    {
                         "type": "string",
                         "description": "Zoom link",
                         "name": "zoom_link",
@@ -853,12 +548,6 @@ const docTemplate = `{
                         "type": "integer",
                         "description": "Maximum attendees",
                         "name": "max_attendees",
-                        "in": "formData"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Is virtual event",
-                        "name": "is_virtual",
                         "in": "formData"
                     },
                     {
@@ -880,8 +569,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "type": "object",
-                                            "additionalProperties": true
+                                            "$ref": "#/definitions/domain.Event"
                                         }
                                     }
                                 }
@@ -915,7 +603,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/businesses/{businessId}/events/{eventId}/certificate": {
+        "/api/v1/accounts/{accountId}/events/{eventId}/certificate": {
             "post": {
                 "security": [
                     {
@@ -936,8 +624,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Business ID",
-                        "name": "businessId",
+                        "description": "Account ID",
+                        "name": "accountId",
                         "in": "path",
                         "required": true
                     },
@@ -968,7 +656,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.Media"
+                                            "$ref": "#/definitions/domain.MediaInfo"
                                         }
                                     }
                                 }
@@ -1008,7 +696,7 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/v1/businesses/{businessId}/events/{eventId}/image": {
+        "/api/v1/accounts/{accountId}/events/{eventId}/image": {
             "post": {
                 "security": [
                     {
@@ -1029,8 +717,8 @@ const docTemplate = `{
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Business ID",
-                        "name": "businessId",
+                        "description": "Account ID",
+                        "name": "accountId",
                         "in": "path",
                         "required": true
                     },
@@ -1061,7 +749,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.Media"
+                                            "$ref": "#/definitions/domain.MediaInfo"
                                         }
                                     }
                                 }
@@ -1088,6 +776,982 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/accounts/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get account details by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Get account by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/acchandler.AccountResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update account details",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Update account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update account request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/acchandler.UpdateAccountRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/acchandler.AccountResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Soft delete an account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Delete account",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/accounts/{id}/professional-type": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update account professional type",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Update professional type",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update professional type request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/acchandler.UpdateProfessionalTypeRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/acchandler.AccountResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/accounts/{id}/profile": {
+            "put": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update account profile (name, phone, display name)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Accounts"
+                ],
+                "summary": "Update profile",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Update profile request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/acchandler.UpdateProfileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/acchandler.AccountResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/forgot-password": {
+            "post": {
+                "description": "Send OTP to reset password for a user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Initiate password reset",
+                "parameters": [
+                    {
+                        "description": "Password reset request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/authhandler.ForgotPasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/authhandler.PasswordResetResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/login": {
+            "post": {
+                "description": "Authenticate a user with email and password, initiates 2FA",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Login user",
+                "parameters": [
+                    {
+                        "description": "Login credentials",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/authhandler.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/authhandler.TwoFactorResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/logout": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Logout the current user and revoke the refresh token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Logout user",
+                "parameters": [
+                    {
+                        "description": "Logout request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/authhandler.LogoutRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/refresh": {
+            "post": {
+                "description": "Refresh the access token using a valid refresh token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Refresh access token",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/authhandler.RefreshTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/authhandler.TokenResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/register": {
+            "post": {
+                "description": "Register a new account (personal or institution)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Register a new account",
+                "parameters": [
+                    {
+                        "description": "Registration details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/authhandler.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/authhandler.OTPResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/resend-otp": {
+            "post": {
+                "description": "Resend the verification OTP to the user's email",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Resend OTP",
+                "parameters": [
+                    {
+                        "description": "Email for OTP resend",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/authhandler.ResendOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/authhandler.OTPResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/verify-2fa": {
+            "post": {
+                "description": "Verify the two-factor authentication OTP and complete the login process",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Verify 2FA OTP and complete login",
+                "parameters": [
+                    {
+                        "description": "2FA OTP verification",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/authhandler.VerifyTwoFactorOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/authhandler.AuthResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/verify-otp": {
+            "post": {
+                "description": "Verify the OTP sent to your email and complete account creation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Verify OTP and complete registration",
+                "parameters": [
+                    {
+                        "description": "OTP verification details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/authhandler.VerifyOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/authhandler.AuthResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/verify-reset-otp": {
+            "post": {
+                "description": "Verify the OTP and complete password reset",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Verify reset OTP and reset password",
+                "parameters": [
+                    {
+                        "description": "OTP verification",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/authhandler.VerifyResetOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events": {
+            "get": {
+                "description": "List events with filters",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "List events",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "account_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event Type ID",
+                        "name": "event_type_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Event Status ID",
+                        "name": "event_status_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Limit",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 0,
+                        "description": "Offset",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/response.BaseResponse"
                         }
@@ -1134,7 +1798,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/models.Event"
+                                                "$ref": "#/definitions/domain.Event"
                                             }
                                         }
                                     }
@@ -1170,8 +1834,8 @@ const docTemplate = `{
                     },
                     {
                         "type": "string",
-                        "description": "Business ID",
-                        "name": "business_id",
+                        "description": "Account ID",
+                        "name": "account_id",
                         "in": "query"
                     },
                     {
@@ -1261,7 +1925,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.Event"
+                                            "$ref": "#/definitions/domain.Event"
                                         }
                                     }
                                 }
@@ -1289,9 +1953,50 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/events/statuses": {
+            "get": {
+                "description": "Get list of all event statuses",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get all event statuses",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/domain.EventStatus"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/events/type/{type}": {
             "get": {
-                "description": "Get all events of a specific type (workshop, webinar, meetup, bootcamp)",
+                "description": "Get all events of a specific type",
                 "produces": [
                     "application/json"
                 ],
@@ -1387,7 +2092,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/models.EventType"
+                                                "$ref": "#/definitions/domain.EventType"
                                             }
                                         }
                                     }
@@ -1437,7 +2142,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/models.Event"
+                                                "$ref": "#/definitions/domain.Event"
                                             }
                                         }
                                     }
@@ -1485,7 +2190,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.Event"
+                                            "$ref": "#/definitions/domain.Event"
                                         }
                                     }
                                 }
@@ -1559,7 +2264,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/models.Event"
+                                            "$ref": "#/definitions/domain.Event"
                                         }
                                     }
                                 }
@@ -1660,138 +2365,241 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/api/v1/events/{id}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Cancel an event",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Cancel an event",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.Event"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/{id}/complete": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Mark an event as completed",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Complete an event",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.Event"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/events/{id}/publish": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Publish an event to make it public",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Publish an event",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/domain.Event"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
-        "eventhandler.CreateEventRequest": {
-            "type": "object",
-            "required": [
-                "date",
-                "duration",
-                "event_type_id",
-                "name",
-                "time"
-            ],
-            "properties": {
-                "certificate_price": {
-                    "type": "number",
-                    "example": 500
-                },
-                "date": {
-                    "type": "string",
-                    "example": "2024-12-01"
-                },
-                "description": {
-                    "type": "string",
-                    "example": "A conference for tech enthusiasts"
-                },
-                "duration": {
-                    "type": "integer",
-                    "example": 120
-                },
-                "event_type_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "is_virtual": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "location": {
-                    "type": "string",
-                    "example": "Nairobi, Kenya"
-                },
-                "max_attendees": {
-                    "type": "integer",
-                    "example": 100
-                },
-                "meet_link": {
-                    "type": "string",
-                    "example": "https://meet.google.com/abc-defg-hij"
-                },
-                "name": {
-                    "type": "string",
-                    "example": "Annual Tech Conference 2024"
-                },
-                "price": {
-                    "type": "number",
-                    "example": 2500
-                },
-                "time": {
-                    "type": "string",
-                    "example": "09:00"
-                },
-                "zoom_link": {
-                    "type": "string",
-                    "example": "https://zoom.us/j/123456789"
-                }
-            }
-        },
-        "eventhandler.UpdateEventRequest": {
+        "acchandler.AccountResponse": {
             "type": "object",
             "properties": {
-                "certificate_price": {
-                    "type": "number",
-                    "example": 500
-                },
-                "date": {
-                    "type": "string",
-                    "example": "2024-12-01"
-                },
-                "description": {
-                    "type": "string",
-                    "example": "Updated description"
-                },
-                "duration": {
-                    "type": "integer",
-                    "example": 120
-                },
-                "event_status_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "event_type_id": {
-                    "type": "string",
-                    "example": "550e8400-e29b-41d4-a716-446655440000"
-                },
-                "is_virtual": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "location": {
-                    "type": "string",
-                    "example": "Nairobi, Kenya"
-                },
-                "max_attendees": {
-                    "type": "integer",
-                    "example": 100
-                },
-                "meet_link": {
-                    "type": "string",
-                    "example": "https://meet.google.com/abc-defg-hij"
-                },
-                "price": {
-                    "type": "number",
-                    "example": 2500
-                },
-                "time": {
-                    "type": "string",
-                    "example": "09:00"
-                },
-                "title": {
-                    "type": "string",
-                    "example": "Updated Conference Title"
-                },
-                "zoom_link": {
-                    "type": "string",
-                    "example": "https://zoom.us/j/123456789"
-                }
-            }
-        },
-        "handler.AccountResponse": {
-            "type": "object",
-            "properties": {
-                "account_type": {
+                "account_type_id": {
                     "type": "string"
                 },
                 "created_at": {
@@ -1803,10 +2611,105 @@ const docTemplate = `{
                 "email": {
                     "type": "string"
                 },
+                "email_verified": {
+                    "type": "boolean"
+                },
                 "id": {
                     "type": "string"
                 },
-                "is_verified": {
+                "identity_verified": {
+                    "type": "boolean"
+                },
+                "institution_id": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "professional_type_id": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "acchandler.UpdateAccountRequest": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
+        "acchandler.UpdateProfessionalTypeRequest": {
+            "type": "object",
+            "properties": {
+                "professional_type_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "acchandler.UpdateProfileRequest": {
+            "type": "object",
+            "properties": {
+                "display_name": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
+        "authhandler.AccountResponse": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "account_type_id": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "email_verified": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "identity_verified": {
+                    "type": "boolean"
+                },
+                "institution_id": {
+                    "type": "string"
+                },
+                "is_active": {
                     "type": "boolean"
                 },
                 "name": {
@@ -1817,59 +2720,40 @@ const docTemplate = `{
                 },
                 "slug": {
                     "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },
-        "handler.AuthResponse": {
+        "authhandler.AuthResponse": {
             "type": "object",
             "properties": {
-                "access_token": {
-                    "type": "string"
-                },
                 "account": {
-                    "$ref": "#/definitions/handler.AccountResponse"
-                },
-                "expires_in": {
-                    "type": "integer"
+                    "$ref": "#/definitions/authhandler.AccountResponse"
                 },
                 "institution": {
-                    "$ref": "#/definitions/handler.InstitutionResponse"
+                    "$ref": "#/definitions/authhandler.InstitutionResponse"
                 },
-                "refresh_token": {
-                    "type": "string"
-                },
-                "token_type": {
-                    "type": "string"
+                "token": {
+                    "$ref": "#/definitions/authhandler.TokenResponse"
                 }
             }
         },
-        "handler.ForgotPasswordRequest": {
+        "authhandler.ForgotPasswordRequest": {
             "type": "object",
-            "required": [
-                "email",
-                "new_password"
-            ],
             "properties": {
                 "email": {
-                    "type": "string",
-                    "example": "john@example.com"
+                    "type": "string"
                 },
                 "new_password": {
-                    "type": "string",
-                    "minLength": 8,
-                    "example": "SecurePass123!"
+                    "type": "string"
                 }
             }
         },
-        "handler.InstitutionResponse": {
+        "authhandler.InstitutionResponse": {
             "type": "object",
             "properties": {
-                "address": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
                 "description": {
                     "type": "string"
                 },
@@ -1897,41 +2781,31 @@ const docTemplate = `{
                 "slug": {
                     "type": "string"
                 },
-                "type": {
-                    "type": "string"
-                },
                 "website": {
                     "type": "string"
                 }
             }
         },
-        "handler.LoginRequest": {
+        "authhandler.LoginRequest": {
             "type": "object",
-            "required": [
-                "email",
-                "password"
-            ],
             "properties": {
                 "email": {
-                    "type": "string",
-                    "example": "john@example.com"
+                    "type": "string"
                 },
                 "password": {
-                    "type": "string",
-                    "example": "SecurePass123!"
+                    "type": "string"
                 }
             }
         },
-        "handler.LogoutRequest": {
+        "authhandler.LogoutRequest": {
             "type": "object",
             "properties": {
                 "refresh_token": {
-                    "type": "string",
-                    "example": "abc123xyz789..."
+                    "type": "string"
                 }
             }
         },
-        "handler.OTPResponse": {
+        "authhandler.OTPResponse": {
             "type": "object",
             "properties": {
                 "email": {
@@ -1945,7 +2819,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.PasswordResetResponse": {
+        "authhandler.PasswordResetResponse": {
             "type": "object",
             "properties": {
                 "expires_in": {
@@ -1956,87 +2830,56 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.RefreshTokenRequest": {
+        "authhandler.RefreshTokenRequest": {
             "type": "object",
-            "required": [
-                "refresh_token"
-            ],
             "properties": {
                 "refresh_token": {
-                    "type": "string",
-                    "example": "abc123xyz789..."
+                    "type": "string"
                 }
             }
         },
-        "handler.RegisterRequest": {
+        "authhandler.RegisterRequest": {
             "type": "object",
-            "required": [
-                "account_type",
-                "email",
-                "name",
-                "password",
-                "phone"
-            ],
             "properties": {
                 "account_type": {
-                    "description": "Account type: personal or institution",
-                    "type": "string",
-                    "enum": [
-                        "personal",
-                        "institution"
-                    ],
-                    "example": "personal"
+                    "type": "string"
                 },
                 "email": {
-                    "description": "Personal fields (for all users)",
-                    "type": "string",
-                    "example": "john@example.com"
+                    "type": "string"
                 },
                 "institution_email": {
-                    "type": "string",
-                    "example": "info@nuruventinstitute.com"
+                    "type": "string"
                 },
                 "institution_name": {
                     "description": "Institution fields (only for institution accounts)",
-                    "type": "string",
-                    "example": "Nuruvent Training Institute"
+                    "type": "string"
                 },
                 "institution_phone": {
-                    "type": "string",
-                    "example": "+254745678901"
+                    "type": "string"
                 },
                 "institution_type": {
-                    "type": "string",
-                    "example": "training_institute"
+                    "type": "string"
                 },
                 "name": {
-                    "type": "string",
-                    "example": "John Doe"
+                    "type": "string"
                 },
                 "password": {
-                    "type": "string",
-                    "minLength": 8,
-                    "example": "SecurePass123!"
+                    "type": "string"
                 },
                 "phone": {
-                    "type": "string",
-                    "example": "+254712345678"
+                    "type": "string"
                 }
             }
         },
-        "handler.ResendOTPRequest": {
+        "authhandler.ResendOTPRequest": {
             "type": "object",
-            "required": [
-                "email"
-            ],
             "properties": {
                 "email": {
-                    "type": "string",
-                    "example": "john@example.com"
+                    "type": "string"
                 }
             }
         },
-        "handler.TokenResponse": {
+        "authhandler.TokenResponse": {
             "type": "object",
             "properties": {
                 "access_token": {
@@ -2053,7 +2896,7 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.TwoFactorResponse": {
+        "authhandler.TwoFactorResponse": {
             "type": "object",
             "properties": {
                 "email": {
@@ -2067,375 +2910,141 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.VerifyOTPRequest": {
+        "authhandler.VerifyOTPRequest": {
             "type": "object",
-            "required": [
-                "email",
-                "otp"
-            ],
             "properties": {
                 "email": {
-                    "type": "string",
-                    "example": "john@example.com"
+                    "type": "string"
                 },
                 "otp": {
-                    "type": "string",
-                    "example": "123456"
+                    "type": "string"
                 }
             }
         },
-        "handler.VerifyResetOTPRequest": {
+        "authhandler.VerifyResetOTPRequest": {
             "type": "object",
-            "required": [
-                "email",
-                "otp"
-            ],
             "properties": {
                 "email": {
-                    "type": "string",
-                    "example": "john@example.com"
+                    "type": "string"
                 },
                 "otp": {
-                    "type": "string",
-                    "example": "123456"
+                    "type": "string"
                 }
             }
         },
-        "handler.VerifyTwoFactorOTPRequest": {
+        "authhandler.VerifyTwoFactorOTPRequest": {
             "type": "object",
-            "required": [
-                "email",
-                "otp"
-            ],
             "properties": {
                 "email": {
-                    "type": "string",
-                    "example": "john@example.com"
+                    "type": "string"
                 },
                 "otp": {
-                    "type": "string",
-                    "example": "123456"
-                }
-            }
-        },
-        "models.Account": {
-            "type": "object",
-            "properties": {
-                "account_type": {
-                    "description": "Essential Relationships Only",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.AccountType"
-                        }
-                    ]
-                },
-                "account_type_id": {
-                    "description": "Foreign Keys",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "email_verified": {
-                    "description": "Verification Status",
-                    "type": "boolean"
-                },
-                "email_verified_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "identity_verified": {
-                    "type": "boolean"
-                },
-                "identity_verified_at": {
-                    "type": "string"
-                },
-                "institution": {
-                    "$ref": "#/definitions/models.Institution"
-                },
-                "institution_id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "description": "Status",
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "professional_type": {
-                    "$ref": "#/definitions/models.ProfessionalType"
-                },
-                "professional_type_id": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "team_members": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.TeamMember"
-                    }
-                },
-                "updated_at": {
                     "type": "string"
                 }
             }
         },
-        "models.AccountType": {
+        "domain.Event": {
             "type": "object",
             "properties": {
-                "accounts": {
-                    "description": "Relationships",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.Account"
-                    }
-                },
-                "color": {
+                "accountID": {
+                    "description": "← Changed from InstitutionID",
                     "type": "string"
                 },
-                "created_at": {
+                "certificatePrice": {
+                    "type": "number",
+                    "format": "float64"
+                },
+                "createdAt": {
                     "type": "string"
                 },
-                "description": {
+                "createdBy": {
                     "type": "string"
                 },
-                "display_name": {
-                    "type": "string"
-                },
-                "icon": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.Attendee": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "description": "Changed from User to Account",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.Account"
-                        }
-                    ]
-                },
-                "account_id": {
-                    "description": "Changed from UserID to AccountID",
-                    "type": "string"
-                },
-                "attended_at": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "duration": {
-                    "description": "in minutes",
-                    "type": "integer"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "event": {
-                    "description": "Relationships",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.Event"
-                        }
-                    ]
-                },
-                "event_id": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "joined_at": {
-                    "type": "string"
-                },
-                "left_at": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "phone": {
-                    "type": "string"
-                },
-                "status": {
-                    "description": "registered, joined, partial, full, confirmed, no-show",
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.Event": {
-            "type": "object",
-            "properties": {
-                "attendees": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.Attendee"
-                    }
-                },
-                "certificate_price": {
-                    "type": "number"
-                },
-                "created_at": {
-                    "description": "Timestamps",
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "creator": {
-                    "$ref": "#/definitions/models.Account"
-                },
-                "current_attendees": {
+                "currentAttendees": {
                     "type": "integer"
                 },
                 "date": {
-                    "description": "Date \u0026 Time",
+                    "type": "string"
+                },
+                "deletedAt": {
                     "type": "string"
                 },
                 "description": {
                     "type": "string"
                 },
-                "display_name": {
-                    "description": "UI: \"🚀 Annual Tech Conference 2024\"",
+                "displayName": {
                     "type": "string"
                 },
                 "duration": {
                     "type": "integer"
                 },
-                "event_status": {
-                    "$ref": "#/definitions/models.EventStatus"
-                },
-                "event_status_id": {
+                "eventStatusID": {
                     "type": "string"
                 },
-                "event_type": {
-                    "description": "Relationships",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.EventType"
-                        }
-                    ]
-                },
-                "event_type_id": {
+                "eventTypeID": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
-                "image_url": {
-                    "description": "Images",
+                "imageURL": {
                     "type": "string"
                 },
-                "institution": {
-                    "$ref": "#/definitions/models.Institution"
-                },
-                "institution_id": {
-                    "description": "Foreign Keys",
-                    "type": "string"
-                },
-                "is_active": {
-                    "description": "Active status",
+                "isActive": {
                     "type": "boolean"
                 },
-                "is_virtual": {
+                "isVirtual": {
                     "type": "boolean"
                 },
                 "location": {
-                    "description": "Location \u0026 Virtual",
                     "type": "string"
                 },
-                "max_attendees": {
-                    "description": "Capacity",
+                "maxAttendees": {
                     "type": "integer"
                 },
-                "meet_link": {
+                "meetLink": {
                     "type": "string"
                 },
                 "name": {
-                    "description": "Canonical: \"Annual Tech Conference 2024\"",
                     "type": "string"
                 },
                 "price": {
-                    "description": "Pricing",
-                    "type": "number"
+                    "type": "number",
+                    "format": "float64"
                 },
                 "slug": {
-                    "description": "URL-safe: \"annual-tech-conference-2024\"",
                     "type": "string"
                 },
-                "thumbnail_url": {
+                "thumbnailURL": {
                     "type": "string"
                 },
                 "time": {
                     "type": "string"
                 },
-                "updated_at": {
+                "updatedAt": {
                     "type": "string"
                 },
-                "zoom_link": {
+                "zoomLink": {
                     "type": "string"
                 }
             }
         },
-        "models.EventStatus": {
+        "domain.EventStatus": {
             "type": "object",
             "properties": {
-                "can_edit": {
-                    "type": "boolean"
-                },
-                "can_register": {
-                    "type": "boolean"
-                },
                 "color": {
                     "type": "string"
                 },
-                "created_at": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "deletedAt": {
                     "type": "string"
                 },
                 "description": {
                     "type": "string"
                 },
-                "display_name": {
-                    "description": "UI: \"✅ Published\"",
+                "displayName": {
                     "type": "string"
                 },
                 "icon": {
@@ -2444,165 +3053,42 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "is_active": {
+                "isActive": {
                     "type": "boolean"
                 },
-                "is_final": {
-                    "description": "Status properties",
+                "isFinal": {
                     "type": "boolean"
                 },
                 "name": {
-                    "description": "Canonical: \"Published\"",
-                    "type": "string"
-                },
-                "slug": {
-                    "description": "URL-safe: \"published\"",
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.EventType": {
-            "type": "object",
-            "properties": {
-                "color": {
-                    "description": "#4F46E5, #7C3AED, etc.",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "description": "UI: \"🛠️ Workshop\"",
-                    "type": "string"
-                },
-                "icon": {
-                    "description": "graduation-cap, video, users, laptop",
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "max_duration": {
-                    "type": "integer"
-                },
-                "meta_description": {
-                    "type": "string"
-                },
-                "meta_title": {
-                    "description": "SEO and discoverability",
-                    "type": "string"
-                },
-                "min_duration": {
-                    "type": "integer"
-                },
-                "name": {
-                    "description": "Canonical: \"Workshop\"",
-                    "type": "string"
-                },
-                "slug": {
-                    "description": "URL-safe: \"workshop\"",
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "supports_certificate": {
-                    "description": "Event type properties",
-                    "type": "boolean"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.Institution": {
-            "type": "object",
-            "properties": {
-                "accounts": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.Account"
-                    }
-                },
-                "address": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "institution_type": {
-                    "description": "Relationships",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.InstitutionType"
-                        }
-                    ]
-                },
-                "institution_type_id": {
-                    "description": "Institution Type (Foreign Key)",
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "logo": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "phone": {
                     "type": "string"
                 },
                 "slug": {
                     "type": "string"
                 },
-                "updated_at": {
-                    "type": "string"
+                "sortOrder": {
+                    "type": "integer"
                 },
-                "website": {
+                "updatedAt": {
                     "type": "string"
                 }
             }
         },
-        "models.InstitutionType": {
+        "domain.EventType": {
             "type": "object",
             "properties": {
                 "color": {
                     "type": "string"
                 },
-                "created_at": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "deletedAt": {
                     "type": "string"
                 },
                 "description": {
                     "type": "string"
                 },
-                "display_name": {
-                    "description": "UI: \"🏫 Training Institute\"",
+                "displayName": {
                     "type": "string"
                 },
                 "icon": {
@@ -2611,78 +3097,36 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
-                "is_active": {
+                "isActive": {
                     "type": "boolean"
                 },
-                "meta_description": {
-                    "type": "string"
+                "maxDuration": {
+                    "type": "integer"
                 },
-                "meta_title": {
-                    "description": "SEO and discoverability",
-                    "type": "string"
+                "minDuration": {
+                    "type": "integer"
                 },
                 "name": {
-                    "description": "Canonical: \"Training Institute\"",
                     "type": "string"
                 },
                 "slug": {
-                    "description": "URL-safe: \"training-institute\"",
                     "type": "string"
                 },
-                "sort_order": {
+                "sortOrder": {
                     "type": "integer"
                 },
-                "updated_at": {
+                "supportsCertificate": {
+                    "type": "boolean"
+                },
+                "updatedAt": {
                     "type": "string"
                 }
             }
         },
-        "models.Media": {
+        "domain.MediaInfo": {
             "type": "object",
             "properties": {
-                "bucket": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "entity_id": {
-                    "type": "string"
-                },
-                "file_name": {
-                    "type": "string"
-                },
-                "file_size": {
-                    "type": "integer"
-                },
                 "id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "media_type": {
-                    "description": "Relationships",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.MediaType"
-                        }
-                    ]
-                },
-                "media_type_id": {
-                    "description": "Foreign keys",
-                    "type": "string"
-                },
-                "mime_type": {
-                    "type": "string"
-                },
-                "path": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "uploaded_by": {
                     "type": "string"
                 },
                 "url": {
@@ -2690,170 +3134,107 @@ const docTemplate = `{
                 }
             }
         },
-        "models.MediaType": {
+        "eventhandler.CreateEventRequest": {
             "type": "object",
-            "properties": {
-                "bucket": {
-                    "description": "Supabase bucket",
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "description": "UI: \"🖼️ Event Image\"",
-                    "type": "string"
-                },
-                "icon": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "max_file_size": {
-                    "description": "10MB default",
-                    "type": "integer"
-                },
-                "name": {
-                    "description": "Canonical: \"Event Image\"",
-                    "type": "string"
-                },
-                "slug": {
-                    "description": "URL-safe: \"event-image\"",
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.ProfessionalType": {
-            "type": "object",
-            "properties": {
-                "accounts": {
-                    "description": "Relationships",
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/definitions/models.Account"
-                    }
-                },
-                "can_host": {
-                    "type": "boolean"
-                },
-                "color": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "icon": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.TeamMember": {
-            "type": "object",
-            "properties": {
-                "account": {
-                    "description": "Relationships",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.Account"
-                        }
-                    ]
-                },
-                "account_id": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "created_by": {
-                    "type": "string"
-                },
-                "creator": {
-                    "$ref": "#/definitions/models.Account"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "string"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "job_title": {
-                    "type": "string"
-                },
-                "joined_at": {
-                    "type": "string"
-                },
-                "member": {
-                    "$ref": "#/definitions/models.Account"
-                },
-                "member_id": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "role": {
-                    "$ref": "#/definitions/models.TeamMemberRole"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "models.TeamMemberRole": {
-            "type": "string",
-            "enum": [
-                "admin",
-                "event_manager",
-                "team_member"
+            "required": [
+                "date",
+                "duration",
+                "event_type_id",
+                "name",
+                "time"
             ],
-            "x-enum-varnames": [
-                "TeamMemberRoleAdmin",
-                "TeamMemberRoleEventManager",
-                "TeamMemberRoleTeamMember"
-            ]
+            "properties": {
+                "certificate_price": {
+                    "type": "number"
+                },
+                "date": {
+                    "description": "YYYY-MM-DD",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "event_type_id": {
+                    "type": "string"
+                },
+                "is_virtual": {
+                    "type": "boolean"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "max_attendees": {
+                    "type": "integer"
+                },
+                "meet_link": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price": {
+                    "type": "number"
+                },
+                "time": {
+                    "description": "HH:MM",
+                    "type": "string"
+                },
+                "zoom_link": {
+                    "type": "string"
+                }
+            }
+        },
+        "eventhandler.UpdateEventRequest": {
+            "type": "object",
+            "properties": {
+                "certificate_price": {
+                    "type": "number"
+                },
+                "date": {
+                    "description": "YYYY-MM-DD",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "event_status_id": {
+                    "type": "string"
+                },
+                "event_type_id": {
+                    "type": "string"
+                },
+                "is_virtual": {
+                    "type": "boolean"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "max_attendees": {
+                    "type": "integer"
+                },
+                "meet_link": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price": {
+                    "type": "number"
+                },
+                "time": {
+                    "description": "HH:MM",
+                    "type": "string"
+                },
+                "zoom_link": {
+                    "type": "string"
+                }
+            }
         },
         "response.BaseResponse": {
             "type": "object",

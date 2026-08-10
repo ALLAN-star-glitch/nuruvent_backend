@@ -1,24 +1,26 @@
-// internal/app/app.go
-
 package app
 
 import (
 	"context"
 	"log"
 
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/database"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/server"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/redis"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authmiddleware"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/server"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 )
 
+// App wraps the application dependencies
 type App struct {
 	*AppDependencies
 }
 
+// NewApp creates and initializes the application
 func NewApp() (*App, error) {
-	// Initialize Redis first
 	cfg := config.Load()
+
 	if err := redis.Init(cfg.Redis.URL); err != nil {
 		return nil, err
 	}
@@ -32,29 +34,36 @@ func NewApp() (*App, error) {
 }
 
 func (app *App) Init(ctx context.Context) error {
-	if err := app.AuthorizationModule.Init(ctx); err != nil {
-		return err
+	log.Println("Initializing modules...")
+	if app.AuthService != nil {
+		log.Println("Auth module ready")
 	}
-	if err := app.AuthModule.Init(ctx); err != nil {
-		return err
+	if app.AccountService != nil {
+		log.Println("Account module ready")
 	}
-	if err := app.MediaModule.Init(ctx); err != nil {
-		return err
+	if app.EventsService != nil {
+		log.Println("Events module ready")
 	}
-	if err := app.EventsModule.Init(ctx); err != nil {
-		return err
+	if app.MediaService != nil {
+		log.Println("Media module ready")
 	}
 	log.Println("All modules initialized successfully")
 	return nil
 }
 
+// SetupRoutes registers all API routes
 func (app *App) SetupRoutes() {
+	authMiddleware := authmiddleware.AuthMiddleware(app.Config.JWT.Secret)
+	authzMiddleware := authorization.AuthorizationMiddleware(app.Enforcer)
+
 	server.SetupRoutes(
 		app.App,
 		app.Config,
+		authMiddleware,
+		authzMiddleware,
 		app.AuthHandler,
-		app.Enforcer,
-		app.EventsModule,
+		app.AccountHandler,
+		app.EventsHandler,
 	)
 	log.Println("Routes registered successfully")
 }
@@ -65,17 +74,9 @@ func (app *App) Run() error {
 }
 
 func (app *App) Close() {
-	if app.AuthorizationModule != nil {
-		app.AuthorizationModule.Close()
-	}
-	if app.AuthModule != nil {
-		app.AuthModule.Close()
-	}
-	if app.MediaModule != nil {
-		app.MediaModule.Close()
-	}
-	if app.EventsModule != nil {
-		app.EventsModule.Close()
+	log.Println("Shutting down application...")
+	if app.Enforcer != nil {
+		app.Enforcer.Close()
 	}
 	if err := database.Close(); err != nil {
 		log.Printf("Error closing database: %v", err)

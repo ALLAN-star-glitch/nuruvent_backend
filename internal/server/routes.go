@@ -1,5 +1,3 @@
-// internal/server/routes.go
-
 package server
 
 import (
@@ -7,21 +5,22 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth/handler"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/authorization"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/events"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/response"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/acchandler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 )
 
 // SetupRoutes registers all API routes
 func SetupRoutes(
 	app *fiber.App,
 	cfg *config.Config,
-	authHandler *handler.Handler,
-	enforcer *authorization.Enforcer,
-	eventsModule *events.Module,
+	authMiddleware fiber.Handler,
+	authzMiddleware fiber.Handler,
+	authHandler *authhandler.AuthHandler,
+	accountHandler *acchandler.AccountHandler,
+	eventsHandler *eventhandler.EventHandler,
 ) {
 	// ================================================
 	// 1. SWAGGER - Must be FIRST to avoid 404
@@ -29,33 +28,28 @@ func SetupRoutes(
 	SetupSwagger(app)
 
 	// ================================================
-	// 2. PUBLIC ROUTES (No authentication required)
+	// 2. API ROUTES
 	// ================================================
 	api := app.Group("/api/v1")
 
-	// Health check
+	// Health check (public)
 	api.Get("/health", healthCheck)
 
-	// Root endpoint
+	// Root endpoint (public)
 	app.Get("/", welcome)
 
-	// Auth routes (public)
-	auth.RegisterAuthRoutes(api, authHandler)
-
-	// Events module routes (includes public and protected)
-	eventsModule.SetupRoutes(api, enforcer)
-
-	// Media module - NO routes needed (just internal service)
-	// Media service is injected into Events module for file operations
-
 	// ================================================
-	// 3. PROTECTED ROUTES (Authentication required)
+	// 3. MODULE ROUTES
 	// ================================================
-	protected := api.Group("/")
-	protected.Use(auth.AuthMiddleware(cfg.JWT.Secret))
 
-	// Auth protected routes
-	auth.RegisterProtectedRoutes(protected, authHandler)
+	// Auth routes (public + protected)
+	authHandler.RegisterRoutes(api, authMiddleware)
+
+	// Account routes
+	accountHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
+
+	// Events routes
+	eventsHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
 
 	// ================================================
 	// 4. 404 Handler - Must be LAST

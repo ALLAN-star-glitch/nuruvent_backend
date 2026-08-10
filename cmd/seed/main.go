@@ -12,13 +12,12 @@ import (
 	"os"
 	"time"
 
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/database"
-	bizseeder "github.com/ALLAN_star_glitch/nuruvent-backend/internal/database/seeders/business_seeders"
-	coreseeder "github.com/ALLAN_star_glitch/nuruvent-backend/internal/database/seeders/core_seeders"
-	eventseeder "github.com/ALLAN_star_glitch/nuruvent-backend/internal/database/seeders/event_seeders"
-	institutionseeder "github.com/ALLAN_star_glitch/nuruvent-backend/internal/database/seeders/institution_seeders"
-	mediaseeder "github.com/ALLAN_star_glitch/nuruvent-backend/internal/database/seeders/media_seeders"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accseeder"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/permseeder"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/eventseeder"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/mediaseeder"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
 	"gorm.io/gorm"
 )
 
@@ -72,41 +71,32 @@ func main() {
 
 	// Define seeders with dependencies
 	seedersList := []SeederInfo{
-		// ============================================
-		// CORE SEEDERS (Foundation)
-		// ============================================
 		{
 			Name:        "permissions",
-			Fn:          coreseeder.SeedPermissions,
+			Fn:          permseeder.SeedPermissions,
 			Description: "Seed platform permissions (Casbin policies)",
 			Deps:        []string{},
 		},
 
 		{
 		Name:        "account_types",
-		Fn:          coreseeder.SeedAccountTypes,
+		Fn:          accseeder.SeedAccountTypes,
 		Description: "Seed account types (personal, institution)",
 		Deps:        []string{},
 		},
 		{
 			Name:        "professional_types",
-			Fn:          coreseeder.SeedProfessionalTypes,
+			Fn:          accseeder.SeedProfessionalTypes,
 			Description: "Seed professional types (trainer, professional, student, other)",
 			Deps:        []string{},
 		},
 		{
 			Name:        "institution_types",
-			Fn:          institutionseeder.SeedInstitutionTypes,
+			Fn:          accseeder.SeedInstitutionTypes,
 			Description: "Seed institution types (training_institute, college, professional_body, ngo, corporate, government)",
 			Deps:        []string{},
 		},
 
-		{
-			Name:        "business_types",
-			Fn:          bizseeder.SeedBusinessTypes,
-			Description: "Seed business types (training_institute, college, etc.)",
-			Deps:        []string{},
-		},
 		{
 			Name:        "event_types",
 			Fn:          eventseeder.SeedEventTypes,
@@ -125,12 +115,12 @@ func main() {
 			Description: "Seed media types (event, business, profile, certificate, recording)",
 			Deps:        []string{},
 		},
-		{
-			Name:        "attendance_statuses",
-			Fn:          eventseeder.SeedAttendanceStatuses,
-			Description: "Seed attendance statuses (registered, joined, partial, full, confirmed, no_show)",
-			Deps:        []string{},
-		},
+		// {
+		// 	Name:        "attendance_statuses",
+		// 	Fn:          eventseeder.SeedAttendanceStatuses,
+		// 	Description: "Seed attendance statuses (registered, joined, partial, full, confirmed, no_show)",
+		// 	Deps:        []string{},
+		// },
 		// Add more seeders here as they are created
 		// {
 		//     Name:        "super_admin",

@@ -1,4 +1,4 @@
-module github.com/ALLAN_star_glitch/nuruvent-backend
+module github.com/ALLAN-star-glitch/nuruvent-backend
 
 go 1.26.1
 
@@ -8,8 +8,10 @@ require (
 	github.com/gofiber/fiber/v3 v3.4.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
+	github.com/google/wire v0.7.0
 	github.com/joho/godotenv v1.5.1
 	github.com/redis/go-redis/v9 v9.21.0
+	github.com/supabase-community/storage-go v0.8.1
 	github.com/swaggo/swag v1.16.6
 	golang.org/x/crypto v0.54.0
 	gorm.io/datatypes v1.2.7
@@ -18,12 +20,8 @@ require (
 )
 
 require (
-	github.com/google/subcommands v1.2.0 // indirect
-	github.com/google/wire v0.7.0 // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
-	github.com/supabase-community/storage-go v0.8.1 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/protobuf v1.36.10 // indirect
 )
@@ -90,3 +88,5 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.54.0 // indirect
 )
+
+replace github.com/ALLAN-star-glitch/nuruvent-backend => ./
