@@ -2,15 +2,14 @@ package main
 
 import (
 	"log"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/email"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
-	authemail "github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth/auth_email"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/email"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/redis"
 	"github.com/hibiken/asynq"
 )
 
@@ -31,7 +30,7 @@ func main() {
 	// Initialize Email Service
 	// ================================================
 	emailService := email.NewEmailService(cfg.Email.APIKey, cfg.Email.From)
-	emailWorker := authemail.NewEmailWorker(emailService)
+	emailWorker := email.NewEmailWorker(emailService)
 
 	// ================================================
 	// Create Asynq Server
@@ -58,18 +57,18 @@ func main() {
 	mux := asynq.NewServeMux()
 
 	// Verification OTP (generic - handles registration, email change, phone change, password reset, 2FA, business verification)
-	mux.HandleFunc(authemail.TypeVerificationOTP, emailWorker.HandleVerificationOTP)
+	mux.HandleFunc(email.TypeVerificationOTP, emailWorker.HandleVerificationOTP)
 
 	// Welcome emails
-	mux.HandleFunc(authemail.TypeWelcome, emailWorker.HandleWelcome)
-	mux.HandleFunc(authemail.TypeBusinessWelcome, emailWorker.HandleBusinessWelcome)
+	mux.HandleFunc(email.TypeWelcome, emailWorker.HandleWelcome)
+	mux.HandleFunc(email.TypeBusinessWelcome, emailWorker.HandleBusinessWelcome)
 
 	// Security emails
-	mux.HandleFunc(authemail.TypeTwoFactorOTP, emailWorker.HandleTwoFactorOTP)
-	mux.HandleFunc(authemail.TypePasswordResetOTP, emailWorker.HandlePasswordResetOTP)
-	mux.HandleFunc(authemail.TypePasswordResetConfirm, emailWorker.HandlePasswordResetConfirm)
-	mux.HandleFunc(authemail.TypeLoginNotification, emailWorker.HandleLoginNotification)
-	mux.HandleFunc(authemail.TypeEmailIndividualProfessionalWelcome, emailWorker.HandleIndividualCoachWelcome)
+	mux.HandleFunc(email.TypeTwoFactorOTP, emailWorker.HandleTwoFactorOTP)
+	mux.HandleFunc(email.TypePasswordResetOTP, emailWorker.HandlePasswordResetOTP)
+	mux.HandleFunc(email.TypePasswordResetConfirm, emailWorker.HandlePasswordResetConfirm)
+	mux.HandleFunc(email.TypeLoginNotification, emailWorker.HandleLoginNotification)
+	mux.HandleFunc(email.TypeEmailIndividualProfessionalWelcome, emailWorker.HandleIndividualCoachWelcome)
 
 
 	// ================================================

@@ -1,70 +1,36 @@
-// internal/modules/auth/wire.go
+//go:build wireinject
+// +build wireinject
 
 package auth
 
 import (
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/config"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth/domain"
-	authRepo "github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth/repository"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth/handler"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/auth/service"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/authorization"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/email"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/pkg/queue"
 	"github.com/google/wire"
-	"gorm.io/gorm"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization" // <-- Add this
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/jwt"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/redis"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 )
 
 var ProviderSet = wire.NewSet(
-	ProvideRepository,
-	ProvideTokenService,
-	ProvideAuthService,
-	ProvideAuthHandler,
-	ProvideAuthModule,
+	// Repository
+	postgres.NewPostgresRepository,
+
+	// Authorization (Casbin Enforcer & Permission Service)
+	authorization.NewEnforcer, // Make sure you have a constructor for Enforcer if needed, or pass database setup
+	authorization.NewService,  // Returns domain.PermissionService
+
+	// Token Service
+	jwt.NewTokenService,
+
+	// OTP Service
+	redis.NewOTPService,
+
+	// Auth Service
+	service.NewService,
+
+	// Handler
+	authhandler.NewAuthHandler,
 )
-
-func ProvideRepository(db *gorm.DB) domain.Repository {
-	return authRepo.NewGormRepo(db)
-}
-
-func ProvideTokenService(
-	repo domain.Repository,
-	cfg *config.Config,
-) service.TokenService {
-	return service.NewTokenService(repo, cfg)
-}
-
-func ProvideAuthService(
-	repo domain.Repository,
-	tokenService service.TokenService,
-	permService *authorization.Service,
-	cfg *config.Config,
-	emailService *email.EmailService,
-	queueClient *queue.Client,
-) service.Service {
-	return service.NewService(
-		repo,
-		cfg,
-		queueClient,
-		permService,
-		tokenService,
-		emailService,
-	)
-}
-
-func ProvideAuthHandler(
-	svc service.Service,
-	cfg *config.Config,
-) *handler.Handler {
-	return handler.NewHandler(svc, cfg)
-}
-
-func ProvideAuthModule(
-	h *handler.Handler,
-	svc service.Service,
-) *Module {
-	return &Module{
-		handler: h,
-		service: svc,
-	}
-}

@@ -4,7 +4,7 @@ import (
 	"github.com/Flussen/swagger-fiber-v3"
 	"github.com/gofiber/fiber/v3"
 
-	_ "github.com/ALLAN_star_glitch/nuruvent-backend/docs"
+	_ "github.com/ALLAN-star-glitch/nuruvent-backend/docs"
 )
 
 func SetupSwagger(app *fiber.App) {

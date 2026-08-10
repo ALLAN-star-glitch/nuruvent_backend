@@ -1,30 +1,18 @@
-// internal/modules/account/wire.go
+//go:build wireinject
+// +build wireinject
 
 package account
 
 import (
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/account/accountrepo"
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/modules/account/accountservice"
 	"github.com/google/wire"
-	"gorm.io/gorm"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/acchandler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/postgres"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 )
 
 var ProviderSet = wire.NewSet(
-	ProvideAccountRepository,
-	ProvideAccountService,
-	ProvideAccountModule,
+	postgres.NewPostgresRepository,
+	service.NewService,
+	acchandler.NewAccountHandler,
 )
-
-func ProvideAccountRepository(db *gorm.DB) *accountrepo.Repository {
-	return accountrepo.NewRepository(db)
-}
-
-func ProvideAccountService(repo *accountrepo.Repository) accountservice.Service {
-	return accountservice.NewService(repo)
-}
-
-func ProvideAccountModule(svc accountservice.Service) *Module {
-	return &Module{
-		service: svc,
-	}
-}

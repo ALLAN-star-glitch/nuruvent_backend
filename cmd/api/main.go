@@ -5,8 +5,7 @@ package main
 import (
 	"context"
 	"log"
-
-	"github.com/ALLAN_star_glitch/nuruvent-backend/internal/app"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app"
 )
 
 // @title           Nuruvent API

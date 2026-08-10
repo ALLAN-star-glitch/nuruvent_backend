@@ -1,45 +1,386 @@
 basePath: /
 definitions:
+  acchandler.AccountResponse:
+    properties:
+      account_type_id:
+        type: string
+      created_at:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      id:
+        type: string
+      identity_verified:
+        type: boolean
+      institution_id:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      phone:
+        type: string
+      professional_type_id:
+        type: string
+      slug:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  acchandler.UpdateAccountRequest:
+    properties:
+      display_name:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+    type: object
+  acchandler.UpdateProfessionalTypeRequest:
+    properties:
+      professional_type_id:
+        type: string
+    type: object
+  acchandler.UpdateProfileRequest:
+    properties:
+      display_name:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+    type: object
+  authhandler.AccountResponse:
+    properties:
+      account_type:
+        type: string
+      account_type_id:
+        type: string
+      created_at:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      email_verified:
+        type: boolean
+      id:
+        type: string
+      identity_verified:
+        type: boolean
+      institution_id:
+        type: string
+      is_active:
+        type: boolean
+      name:
+        type: string
+      phone:
+        type: string
+      slug:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  authhandler.AuthResponse:
+    properties:
+      account:
+        $ref: '#/definitions/authhandler.AccountResponse'
+      institution:
+        $ref: '#/definitions/authhandler.InstitutionResponse'
+      token:
+        $ref: '#/definitions/authhandler.TokenResponse'
+    type: object
+  authhandler.ForgotPasswordRequest:
+    properties:
+      email:
+        type: string
+      new_password:
+        type: string
+    type: object
+  authhandler.InstitutionResponse:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      logo:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+      slug:
+        type: string
+      website:
+        type: string
+    type: object
+  authhandler.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  authhandler.LogoutRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  authhandler.OTPResponse:
+    properties:
+      email:
+        type: string
+      expires_at:
+        type: string
+      message:
+        type: string
+    type: object
+  authhandler.PasswordResetResponse:
+    properties:
+      expires_in:
+        type: integer
+      message:
+        type: string
+    type: object
+  authhandler.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  authhandler.RegisterRequest:
+    properties:
+      account_type:
+        type: string
+      email:
+        type: string
+      institution_email:
+        type: string
+      institution_name:
+        description: Institution fields (only for institution accounts)
+        type: string
+      institution_phone:
+        type: string
+      institution_type:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+      phone:
+        type: string
+    type: object
+  authhandler.ResendOTPRequest:
+    properties:
+      email:
+        type: string
+    type: object
+  authhandler.TokenResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token_type:
+        type: string
+    type: object
+  authhandler.TwoFactorResponse:
+    properties:
+      email:
+        type: string
+      expires_in:
+        type: integer
+      requires_2fa:
+        type: boolean
+    type: object
+  authhandler.VerifyOTPRequest:
+    properties:
+      email:
+        type: string
+      otp:
+        type: string
+    type: object
+  authhandler.VerifyResetOTPRequest:
+    properties:
+      email:
+        type: string
+      otp:
+        type: string
+    type: object
+  authhandler.VerifyTwoFactorOTPRequest:
+    properties:
+      email:
+        type: string
+      otp:
+        type: string
+    type: object
+  domain.Event:
+    properties:
+      accountID:
+        description: ← Changed from InstitutionID
+        type: string
+      certificatePrice:
+        format: float64
+        type: number
+      createdAt:
+        type: string
+      createdBy:
+        type: string
+      currentAttendees:
+        type: integer
+      date:
+        type: string
+      deletedAt:
+        type: string
+      description:
+        type: string
+      displayName:
+        type: string
+      duration:
+        type: integer
+      eventStatusID:
+        type: string
+      eventTypeID:
+        type: string
+      id:
+        type: string
+      imageURL:
+        type: string
+      isActive:
+        type: boolean
+      isVirtual:
+        type: boolean
+      location:
+        type: string
+      maxAttendees:
+        type: integer
+      meetLink:
+        type: string
+      name:
+        type: string
+      price:
+        format: float64
+        type: number
+      slug:
+        type: string
+      thumbnailURL:
+        type: string
+      time:
+        type: string
+      updatedAt:
+        type: string
+      zoomLink:
+        type: string
+    type: object
+  domain.EventStatus:
+    properties:
+      color:
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        type: string
+      description:
+        type: string
+      displayName:
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      isActive:
+        type: boolean
+      isFinal:
+        type: boolean
+      name:
+        type: string
+      slug:
+        type: string
+      sortOrder:
+        type: integer
+      updatedAt:
+        type: string
+    type: object
+  domain.EventType:
+    properties:
+      color:
+        type: string
+      createdAt:
+        type: string
+      deletedAt:
+        type: string
+      description:
+        type: string
+      displayName:
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      isActive:
+        type: boolean
+      maxDuration:
+        type: integer
+      minDuration:
+        type: integer
+      name:
+        type: string
+      slug:
+        type: string
+      sortOrder:
+        type: integer
+      supportsCertificate:
+        type: boolean
+      updatedAt:
+        type: string
+    type: object
+  domain.MediaInfo:
+    properties:
+      id:
+        type: string
+      url:
+        type: string
+    type: object
   eventhandler.CreateEventRequest:
     properties:
       certificate_price:
-        example: 500
         type: number
       date:
-        example: "2024-12-01"
+        description: YYYY-MM-DD
         type: string
       description:
-        example: A conference for tech enthusiasts
         type: string
       duration:
-        example: 120
         type: integer
       event_type_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
         type: string
       is_virtual:
-        example: true
         type: boolean
       location:
-        example: Nairobi, Kenya
         type: string
       max_attendees:
-        example: 100
         type: integer
       meet_link:
-        example: https://meet.google.com/abc-defg-hij
         type: string
       name:
-        example: Annual Tech Conference 2024
         type: string
       price:
-        example: 2500
         type: number
       time:
-        example: "09:00"
+        description: HH:MM
         type: string
       zoom_link:
-        example: https://zoom.us/j/123456789
         type: string
     required:
     - date
@@ -51,768 +392,36 @@ definitions:
   eventhandler.UpdateEventRequest:
     properties:
       certificate_price:
-        example: 500
         type: number
       date:
-        example: "2024-12-01"
+        description: YYYY-MM-DD
         type: string
       description:
-        example: Updated description
         type: string
       duration:
-        example: 120
         type: integer
       event_status_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
         type: string
       event_type_id:
-        example: 550e8400-e29b-41d4-a716-446655440000
         type: string
-      is_virtual:
-        example: true
-        type: boolean
-      location:
-        example: Nairobi, Kenya
-        type: string
-      max_attendees:
-        example: 100
-        type: integer
-      meet_link:
-        example: https://meet.google.com/abc-defg-hij
-        type: string
-      price:
-        example: 2500
-        type: number
-      time:
-        example: "09:00"
-        type: string
-      title:
-        example: Updated Conference Title
-        type: string
-      zoom_link:
-        example: https://zoom.us/j/123456789
-        type: string
-    type: object
-  handler.AccountResponse:
-    properties:
-      account_type:
-        type: string
-      created_at:
-        type: string
-      display_name:
-        type: string
-      email:
-        type: string
-      id:
-        type: string
-      is_verified:
-        type: boolean
-      name:
-        type: string
-      phone:
-        type: string
-      slug:
-        type: string
-    type: object
-  handler.AuthResponse:
-    properties:
-      access_token:
-        type: string
-      account:
-        $ref: '#/definitions/handler.AccountResponse'
-      expires_in:
-        type: integer
-      institution:
-        $ref: '#/definitions/handler.InstitutionResponse'
-      refresh_token:
-        type: string
-      token_type:
-        type: string
-    type: object
-  handler.ForgotPasswordRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-      new_password:
-        example: SecurePass123!
-        minLength: 8
-        type: string
-    required:
-    - email
-    - new_password
-    type: object
-  handler.InstitutionResponse:
-    properties:
-      address:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      display_name:
-        type: string
-      email:
-        type: string
-      id:
-        type: string
-      is_active:
-        type: boolean
-      logo:
-        type: string
-      name:
-        type: string
-      phone:
-        type: string
-      slug:
-        type: string
-      type:
-        type: string
-      website:
-        type: string
-    type: object
-  handler.LoginRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-      password:
-        example: SecurePass123!
-        type: string
-    required:
-    - email
-    - password
-    type: object
-  handler.LogoutRequest:
-    properties:
-      refresh_token:
-        example: abc123xyz789...
-        type: string
-    type: object
-  handler.OTPResponse:
-    properties:
-      email:
-        type: string
-      expires_at:
-        type: string
-      message:
-        type: string
-    type: object
-  handler.PasswordResetResponse:
-    properties:
-      expires_in:
-        type: integer
-      message:
-        type: string
-    type: object
-  handler.RefreshTokenRequest:
-    properties:
-      refresh_token:
-        example: abc123xyz789...
-        type: string
-    required:
-    - refresh_token
-    type: object
-  handler.RegisterRequest:
-    properties:
-      account_type:
-        description: 'Account type: personal or institution'
-        enum:
-        - personal
-        - institution
-        example: personal
-        type: string
-      email:
-        description: Personal fields (for all users)
-        example: john@example.com
-        type: string
-      institution_email:
-        example: info@nuruventinstitute.com
-        type: string
-      institution_name:
-        description: Institution fields (only for institution accounts)
-        example: Nuruvent Training Institute
-        type: string
-      institution_phone:
-        example: "+254745678901"
-        type: string
-      institution_type:
-        example: training_institute
-        type: string
-      name:
-        example: John Doe
-        type: string
-      password:
-        example: SecurePass123!
-        minLength: 8
-        type: string
-      phone:
-        example: "+254712345678"
-        type: string
-    required:
-    - account_type
-    - email
-    - name
-    - password
-    - phone
-    type: object
-  handler.ResendOTPRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-    required:
-    - email
-    type: object
-  handler.TokenResponse:
-    properties:
-      access_token:
-        type: string
-      expires_in:
-        type: integer
-      refresh_token:
-        type: string
-      token_type:
-        type: string
-    type: object
-  handler.TwoFactorResponse:
-    properties:
-      email:
-        type: string
-      expires_in:
-        type: integer
-      requires_2fa:
-        type: boolean
-    type: object
-  handler.VerifyOTPRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-      otp:
-        example: "123456"
-        type: string
-    required:
-    - email
-    - otp
-    type: object
-  handler.VerifyResetOTPRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-      otp:
-        example: "123456"
-        type: string
-    required:
-    - email
-    - otp
-    type: object
-  handler.VerifyTwoFactorOTPRequest:
-    properties:
-      email:
-        example: john@example.com
-        type: string
-      otp:
-        example: "123456"
-        type: string
-    required:
-    - email
-    - otp
-    type: object
-  models.Account:
-    properties:
-      account_type:
-        allOf:
-        - $ref: '#/definitions/models.AccountType'
-        description: Essential Relationships Only
-      account_type_id:
-        description: Foreign Keys
-        type: string
-      created_at:
-        type: string
-      display_name:
-        type: string
-      email:
-        type: string
-      email_verified:
-        description: Verification Status
-        type: boolean
-      email_verified_at:
-        type: string
-      id:
-        type: string
-      identity_verified:
-        type: boolean
-      identity_verified_at:
-        type: string
-      institution:
-        $ref: '#/definitions/models.Institution'
-      institution_id:
-        type: string
-      is_active:
-        description: Status
-        type: boolean
-      name:
-        type: string
-      phone:
-        type: string
-      professional_type:
-        $ref: '#/definitions/models.ProfessionalType'
-      professional_type_id:
-        type: string
-      slug:
-        type: string
-      team_members:
-        items:
-          $ref: '#/definitions/models.TeamMember'
-        type: array
-      updated_at:
-        type: string
-    type: object
-  models.AccountType:
-    properties:
-      accounts:
-        description: Relationships
-        items:
-          $ref: '#/definitions/models.Account'
-        type: array
-      color:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      display_name:
-        type: string
-      icon:
-        type: string
-      id:
-        type: string
-      is_active:
-        type: boolean
-      name:
-        type: string
-      slug:
-        type: string
-      sort_order:
-        type: integer
-      updated_at:
-        type: string
-    type: object
-  models.Attendee:
-    properties:
-      account:
-        allOf:
-        - $ref: '#/definitions/models.Account'
-        description: Changed from User to Account
-      account_id:
-        description: Changed from UserID to AccountID
-        type: string
-      attended_at:
-        type: string
-      created_at:
-        type: string
-      duration:
-        description: in minutes
-        type: integer
-      email:
-        type: string
-      event:
-        allOf:
-        - $ref: '#/definitions/models.Event'
-        description: Relationships
-      event_id:
-        type: string
-      id:
-        type: string
-      joined_at:
-        type: string
-      left_at:
-        type: string
-      name:
-        type: string
-      phone:
-        type: string
-      status:
-        description: registered, joined, partial, full, confirmed, no-show
-        type: string
-      updated_at:
-        type: string
-    type: object
-  models.Event:
-    properties:
-      attendees:
-        items:
-          $ref: '#/definitions/models.Attendee'
-        type: array
-      certificate_price:
-        type: number
-      created_at:
-        description: Timestamps
-        type: string
-      created_by:
-        type: string
-      creator:
-        $ref: '#/definitions/models.Account'
-      current_attendees:
-        type: integer
-      date:
-        description: Date & Time
-        type: string
-      description:
-        type: string
-      display_name:
-        description: "UI: \"\U0001F680 Annual Tech Conference 2024\""
-        type: string
-      duration:
-        type: integer
-      event_status:
-        $ref: '#/definitions/models.EventStatus'
-      event_status_id:
-        type: string
-      event_type:
-        allOf:
-        - $ref: '#/definitions/models.EventType'
-        description: Relationships
-      event_type_id:
-        type: string
-      id:
-        type: string
-      image_url:
-        description: Images
-        type: string
-      institution:
-        $ref: '#/definitions/models.Institution'
-      institution_id:
-        description: Foreign Keys
-        type: string
-      is_active:
-        description: Active status
-        type: boolean
       is_virtual:
         type: boolean
       location:
-        description: Location & Virtual
         type: string
       max_attendees:
-        description: Capacity
         type: integer
       meet_link:
         type: string
       name:
-        description: 'Canonical: "Annual Tech Conference 2024"'
         type: string
       price:
-        description: Pricing
         type: number
-      slug:
-        description: 'URL-safe: "annual-tech-conference-2024"'
-        type: string
-      thumbnail_url:
-        type: string
       time:
-        type: string
-      updated_at:
+        description: HH:MM
         type: string
       zoom_link:
         type: string
     type: object
-  models.EventStatus:
-    properties:
-      can_edit:
-        type: boolean
-      can_register:
-        type: boolean
-      color:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      display_name:
-        description: 'UI: "✅ Published"'
-        type: string
-      icon:
-        type: string
-      id:
-        type: string
-      is_active:
-        type: boolean
-      is_final:
-        description: Status properties
-        type: boolean
-      name:
-        description: 'Canonical: "Published"'
-        type: string
-      slug:
-        description: 'URL-safe: "published"'
-        type: string
-      sort_order:
-        type: integer
-      updated_at:
-        type: string
-    type: object
-  models.EventType:
-    properties:
-      color:
-        description: '#4F46E5, #7C3AED, etc.'
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      display_name:
-        description: "UI: \"\U0001F6E0️ Workshop\""
-        type: string
-      icon:
-        description: graduation-cap, video, users, laptop
-        type: string
-      id:
-        type: string
-      is_active:
-        type: boolean
-      max_duration:
-        type: integer
-      meta_description:
-        type: string
-      meta_title:
-        description: SEO and discoverability
-        type: string
-      min_duration:
-        type: integer
-      name:
-        description: 'Canonical: "Workshop"'
-        type: string
-      slug:
-        description: 'URL-safe: "workshop"'
-        type: string
-      sort_order:
-        type: integer
-      supports_certificate:
-        description: Event type properties
-        type: boolean
-      updated_at:
-        type: string
-    type: object
-  models.Institution:
-    properties:
-      accounts:
-        items:
-          $ref: '#/definitions/models.Account'
-        type: array
-      address:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      display_name:
-        type: string
-      email:
-        type: string
-      id:
-        type: string
-      institution_type:
-        allOf:
-        - $ref: '#/definitions/models.InstitutionType'
-        description: Relationships
-      institution_type_id:
-        description: Institution Type (Foreign Key)
-        type: string
-      is_active:
-        type: boolean
-      logo:
-        type: string
-      name:
-        type: string
-      phone:
-        type: string
-      slug:
-        type: string
-      updated_at:
-        type: string
-      website:
-        type: string
-    type: object
-  models.InstitutionType:
-    properties:
-      color:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      display_name:
-        description: "UI: \"\U0001F3EB Training Institute\""
-        type: string
-      icon:
-        type: string
-      id:
-        type: string
-      is_active:
-        type: boolean
-      meta_description:
-        type: string
-      meta_title:
-        description: SEO and discoverability
-        type: string
-      name:
-        description: 'Canonical: "Training Institute"'
-        type: string
-      slug:
-        description: 'URL-safe: "training-institute"'
-        type: string
-      sort_order:
-        type: integer
-      updated_at:
-        type: string
-    type: object
-  models.Media:
-    properties:
-      bucket:
-        type: string
-      created_at:
-        type: string
-      entity_id:
-        type: string
-      file_name:
-        type: string
-      file_size:
-        type: integer
-      id:
-        type: string
-      is_active:
-        type: boolean
-      media_type:
-        allOf:
-        - $ref: '#/definitions/models.MediaType'
-        description: Relationships
-      media_type_id:
-        description: Foreign keys
-        type: string
-      mime_type:
-        type: string
-      path:
-        type: string
-      updated_at:
-        type: string
-      uploaded_by:
-        type: string
-      url:
-        type: string
-    type: object
-  models.MediaType:
-    properties:
-      bucket:
-        description: Supabase bucket
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      display_name:
-        description: "UI: \"\U0001F5BC️ Event Image\""
-        type: string
-      icon:
-        type: string
-      id:
-        type: string
-      is_active:
-        type: boolean
-      max_file_size:
-        description: 10MB default
-        type: integer
-      name:
-        description: 'Canonical: "Event Image"'
-        type: string
-      slug:
-        description: 'URL-safe: "event-image"'
-        type: string
-      sort_order:
-        type: integer
-      updated_at:
-        type: string
-    type: object
-  models.ProfessionalType:
-    properties:
-      accounts:
-        description: Relationships
-        items:
-          $ref: '#/definitions/models.Account'
-        type: array
-      can_host:
-        type: boolean
-      color:
-        type: string
-      created_at:
-        type: string
-      description:
-        type: string
-      display_name:
-        type: string
-      icon:
-        type: string
-      id:
-        type: string
-      is_active:
-        type: boolean
-      name:
-        type: string
-      slug:
-        type: string
-      sort_order:
-        type: integer
-      updated_at:
-        type: string
-    type: object
-  models.TeamMember:
-    properties:
-      account:
-        allOf:
-        - $ref: '#/definitions/models.Account'
-        description: Relationships
-      account_id:
-        type: string
-      created_at:
-        type: string
-      created_by:
-        type: string
-      creator:
-        $ref: '#/definitions/models.Account'
-      display_name:
-        type: string
-      id:
-        type: string
-      is_active:
-        type: boolean
-      job_title:
-        type: string
-      joined_at:
-        type: string
-      member:
-        $ref: '#/definitions/models.Account'
-      member_id:
-        type: string
-      name:
-        type: string
-      role:
-        $ref: '#/definitions/models.TeamMemberRole'
-      slug:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  models.TeamMemberRole:
-    enum:
-    - admin
-    - event_manager
-    - team_member
-    type: string
-    x-enum-varnames:
-    - TeamMemberRoleAdmin
-    - TeamMemberRoleEventManager
-    - TeamMemberRoleTeamMember
   response.BaseResponse:
     properties:
       data: {}
@@ -838,362 +447,14 @@ info:
   title: Nuruvent API
   version: 1.0.0
 paths:
-  /api/v1/auth/forgot-password:
-    post:
-      consumes:
-      - application/json
-      description: Send OTP to reset password for a user
-      parameters:
-      - description: Password reset request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.ForgotPasswordRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/handler.PasswordResetResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Initiate password reset
-      tags:
-      - Authentication
-  /api/v1/auth/login:
-    post:
-      consumes:
-      - application/json
-      description: Authenticate a user with email and password, initiates 2FA
-      parameters:
-      - description: Login credentials
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.LoginRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/handler.TwoFactorResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Login user
-      tags:
-      - Authentication
-  /api/v1/auth/logout:
-    post:
-      consumes:
-      - application/json
-      description: Logout the current user and revoke the refresh token
-      parameters:
-      - description: Logout request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.LogoutRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Logout user
-      tags:
-      - Authentication
-  /api/v1/auth/refresh:
-    post:
-      consumes:
-      - application/json
-      description: Refresh the access token using a valid refresh token
-      parameters:
-      - description: Refresh token
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.RefreshTokenRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/handler.TokenResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Refresh access token
-      tags:
-      - Authentication
-  /api/v1/auth/register:
-    post:
-      consumes:
-      - application/json
-      description: Register a new account (personal or institution)
-      parameters:
-      - description: Registration details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.RegisterRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/handler.OTPResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Register a new account
-      tags:
-      - Authentication
-  /api/v1/auth/resend-otp:
-    post:
-      consumes:
-      - application/json
-      description: Resend the verification OTP to the user's email
-      parameters:
-      - description: Email for OTP resend
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.ResendOTPRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/handler.OTPResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "409":
-          description: Conflict
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Resend OTP
-      tags:
-      - Authentication
-  /api/v1/auth/verify-2fa:
-    post:
-      consumes:
-      - application/json
-      description: Verify the two-factor authentication OTP and complete the login
-        process
-      parameters:
-      - description: 2FA OTP verification
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.VerifyTwoFactorOTPRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/handler.AuthResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Verify 2FA OTP and complete login
-      tags:
-      - Authentication
-  /api/v1/auth/verify-otp:
-    post:
-      consumes:
-      - application/json
-      description: Verify the OTP sent to your email and complete account creation
-      parameters:
-      - description: OTP verification details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.VerifyOTPRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/handler.AuthResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Verify OTP and complete registration
-      tags:
-      - Authentication
-  /api/v1/auth/verify-reset-otp:
-    post:
-      consumes:
-      - application/json
-      description: Verify the OTP and complete password reset
-      parameters:
-      - description: OTP verification
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/handler.VerifyResetOTPRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Verify reset OTP and reset password
-      tags:
-      - Authentication
-  /api/v1/businesses/{businessId}/events:
+  /api/v1/accounts/{accountId}/events:
     get:
-      description: Get all events for a business
+      description: Get all events for an account
       parameters:
-      - description: Business ID
+      - description: Account ID
         in: path
-        name: businessId
+        name: accountId
         required: true
-        type: string
-      - description: Filter by event type ID
-        in: query
-        name: event_type_id
-        type: string
-      - description: Filter by event status ID
-        in: query
-        name: event_status_id
         type: string
       - default: 1
         description: Page number
@@ -1236,18 +497,17 @@ paths:
             $ref: '#/definitions/response.BaseResponse'
       security:
       - BearerAuth: []
-      summary: Get business events
+      summary: Get events by account
       tags:
       - Events
     post:
       consumes:
       - application/json
-      description: Create a new event for a business (requires event_manager or host
-        role)
+      description: Create a new event for an account
       parameters:
-      - description: Business ID
+      - description: Account ID
         in: path
-        name: businessId
+        name: accountId
         required: true
         type: string
       - description: Event details
@@ -1266,7 +526,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/models.Event'
+                  $ref: '#/definitions/domain.Event'
               type: object
         "400":
           description: Bad Request
@@ -1289,15 +549,15 @@ paths:
       summary: Create a new event
       tags:
       - Events
-  /api/v1/businesses/{businessId}/events/{eventId}/certificate:
+  /api/v1/accounts/{accountId}/events/{eventId}/certificate:
     post:
       consumes:
       - multipart/form-data
       description: Upload a certificate template for an event
       parameters:
-      - description: Business ID
+      - description: Account ID
         in: path
-        name: businessId
+        name: accountId
         required: true
         type: string
       - description: Event ID
@@ -1320,7 +580,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/models.Media'
+                  $ref: '#/definitions/domain.MediaInfo'
               type: object
         "400":
           description: Bad Request
@@ -1347,15 +607,15 @@ paths:
       summary: Upload certificate template
       tags:
       - Events
-  /api/v1/businesses/{businessId}/events/{eventId}/image:
+  /api/v1/accounts/{accountId}/events/{eventId}/image:
     post:
       consumes:
       - multipart/form-data
       description: Upload an image for an event
       parameters:
-      - description: Business ID
+      - description: Account ID
         in: path
-        name: businessId
+        name: accountId
         required: true
         type: string
       - description: Event ID
@@ -1378,7 +638,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/models.Media'
+                  $ref: '#/definitions/domain.MediaInfo'
               type: object
         "400":
           description: Bad Request
@@ -1405,20 +665,20 @@ paths:
       summary: Upload event image
       tags:
       - Events
-  /api/v1/businesses/{businessId}/events/with-image:
+  /api/v1/accounts/{accountId}/events/with-image:
     post:
       consumes:
       - multipart/form-data
-      description: Create a new event for a business with an image upload
+      description: Create a new event for an account with an image upload
       parameters:
-      - description: Business ID
+      - description: Account ID
         in: path
-        name: businessId
+        name: accountId
         required: true
         type: string
-      - description: Event title
+      - description: Event name
         in: formData
-        name: title
+        name: name
         required: true
         type: string
       - description: Event description
@@ -1457,6 +717,10 @@ paths:
         in: formData
         name: location
         type: string
+      - description: Is virtual event
+        in: formData
+        name: is_virtual
+        type: boolean
       - description: Zoom link
         in: formData
         name: zoom_link
@@ -1469,10 +733,6 @@ paths:
         in: formData
         name: max_attendees
         type: integer
-      - description: Is virtual event
-        in: formData
-        name: is_virtual
-        type: boolean
       - description: Event image
         in: formData
         name: image
@@ -1487,8 +747,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  additionalProperties: true
-                  type: object
+                  $ref: '#/definitions/domain.Event'
               type: object
         "400":
           description: Bad Request
@@ -1509,6 +768,756 @@ paths:
       security:
       - BearerAuth: []
       summary: Create a new event with image
+      tags:
+      - Events
+  /api/v1/accounts/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Soft delete an account
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete account
+      tags:
+      - Accounts
+    get:
+      consumes:
+      - application/json
+      description: Get account details by ID
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/acchandler.AccountResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get account by ID
+      tags:
+      - Accounts
+    put:
+      consumes:
+      - application/json
+      description: Update account details
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update account request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/acchandler.UpdateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/acchandler.AccountResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update account
+      tags:
+      - Accounts
+  /api/v1/accounts/{id}/professional-type:
+    put:
+      consumes:
+      - application/json
+      description: Update account professional type
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update professional type request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/acchandler.UpdateProfessionalTypeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/acchandler.AccountResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update professional type
+      tags:
+      - Accounts
+  /api/v1/accounts/{id}/profile:
+    put:
+      consumes:
+      - application/json
+      description: Update account profile (name, phone, display name)
+      parameters:
+      - description: Account ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update profile request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/acchandler.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/acchandler.AccountResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update profile
+      tags:
+      - Accounts
+  /api/v1/accounts/email/{email}:
+    get:
+      consumes:
+      - application/json
+      description: Get account details by email address
+      parameters:
+      - description: Email address
+        in: path
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/acchandler.AccountResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get account by email
+      tags:
+      - Accounts
+  /api/v1/accounts/me:
+    get:
+      description: Get the currently authenticated user's account
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/acchandler.AccountResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current account
+      tags:
+      - Accounts
+    put:
+      consumes:
+      - application/json
+      description: Update the currently authenticated user's account
+      parameters:
+      - description: Update account request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/acchandler.UpdateAccountRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/acchandler.AccountResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update current account
+      tags:
+      - Accounts
+  /api/v1/accounts/me/profile:
+    put:
+      consumes:
+      - application/json
+      description: Update the currently authenticated user's profile
+      parameters:
+      - description: Update profile request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/acchandler.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/acchandler.AccountResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Update current profile
+      tags:
+      - Accounts
+  /api/v1/auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Send OTP to reset password for a user
+      parameters:
+      - description: Password reset request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authhandler.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/authhandler.PasswordResetResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Initiate password reset
+      tags:
+      - Authentication
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate a user with email and password, initiates 2FA
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authhandler.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/authhandler.TwoFactorResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Login user
+      tags:
+      - Authentication
+  /api/v1/auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Logout the current user and revoke the refresh token
+      parameters:
+      - description: Logout request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authhandler.LogoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Logout user
+      tags:
+      - Authentication
+  /api/v1/auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh the access token using a valid refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authhandler.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/authhandler.TokenResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Refresh access token
+      tags:
+      - Authentication
+  /api/v1/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new account (personal or institution)
+      parameters:
+      - description: Registration details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authhandler.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/authhandler.OTPResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Register a new account
+      tags:
+      - Authentication
+  /api/v1/auth/resend-otp:
+    post:
+      consumes:
+      - application/json
+      description: Resend the verification OTP to the user's email
+      parameters:
+      - description: Email for OTP resend
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authhandler.ResendOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/authhandler.OTPResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Resend OTP
+      tags:
+      - Authentication
+  /api/v1/auth/verify-2fa:
+    post:
+      consumes:
+      - application/json
+      description: Verify the two-factor authentication OTP and complete the login
+        process
+      parameters:
+      - description: 2FA OTP verification
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authhandler.VerifyTwoFactorOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/authhandler.AuthResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Verify 2FA OTP and complete login
+      tags:
+      - Authentication
+  /api/v1/auth/verify-otp:
+    post:
+      consumes:
+      - application/json
+      description: Verify the OTP sent to your email and complete account creation
+      parameters:
+      - description: OTP verification details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authhandler.VerifyOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/authhandler.AuthResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Verify OTP and complete registration
+      tags:
+      - Authentication
+  /api/v1/auth/verify-reset-otp:
+    post:
+      consumes:
+      - application/json
+      description: Verify the OTP and complete password reset
+      parameters:
+      - description: OTP verification
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authhandler.VerifyResetOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Verify reset OTP and reset password
+      tags:
+      - Authentication
+  /api/v1/events:
+    get:
+      description: List events with filters
+      parameters:
+      - description: Account ID
+        in: query
+        name: account_id
+        type: string
+      - description: Event Type ID
+        in: query
+        name: event_type_id
+        type: string
+      - description: Event Status ID
+        in: query
+        name: event_status_id
+        type: string
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: List events
       tags:
       - Events
   /api/v1/events/{id}:
@@ -1570,7 +1579,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/models.Event'
+                  $ref: '#/definitions/domain.Event'
               type: object
         "400":
           description: Bad Request
@@ -1613,7 +1622,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/models.Event'
+                  $ref: '#/definitions/domain.Event'
               type: object
         "400":
           description: Bad Request
@@ -1640,6 +1649,144 @@ paths:
       summary: Update an event
       tags:
       - Events
+  /api/v1/events/{id}/cancel:
+    post:
+      description: Cancel an event
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Cancel an event
+      tags:
+      - Events
+  /api/v1/events/{id}/complete:
+    post:
+      description: Mark an event as completed
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Complete an event
+      tags:
+      - Events
+  /api/v1/events/{id}/publish:
+    post:
+      description: Publish an event to make it public
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Publish an event
+      tags:
+      - Events
   /api/v1/events/past:
     get:
       description: Get all past published events
@@ -1660,7 +1807,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/models.Event'
+                    $ref: '#/definitions/domain.Event'
                   type: array
               type: object
         "500":
@@ -1678,9 +1825,9 @@ paths:
         in: query
         name: q
         type: string
-      - description: Business ID
+      - description: Account ID
         in: query
-        name: business_id
+        name: account_id
         type: string
       - description: Event Type ID
         in: query
@@ -1739,7 +1886,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/models.Event'
+                  $ref: '#/definitions/domain.Event'
               type: object
         "400":
           description: Bad Request
@@ -1756,9 +1903,33 @@ paths:
       summary: Get event by slug
       tags:
       - Events
+  /api/v1/events/statuses:
+    get:
+      description: Get list of all event statuses
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/domain.EventStatus'
+                  type: array
+              type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Get all event statuses
+      tags:
+      - Events
   /api/v1/events/type/{type}:
     get:
-      description: Get all events of a specific type (workshop, webinar, meetup, bootcamp)
+      description: Get all events of a specific type
       parameters:
       - description: Event Type
         enum:
@@ -1818,7 +1989,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/models.EventType'
+                    $ref: '#/definitions/domain.EventType'
                   type: array
               type: object
         "500":
@@ -1848,7 +2019,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/models.Event'
+                    $ref: '#/definitions/domain.Event'
                   type: array
               type: object
         "500":
