@@ -19,7 +19,7 @@ func (s *service) LoginAccount(ctx context.Context, email, password, ipAddress, 
         return nil, "", domain.ErrInvalidCredentials
     }
 
-    if err := bcrypt.CompareHashAndPassword([]byte(account.Password), []byte(password)); err != nil {
+    if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)); err != nil {
         return nil, "", domain.ErrInvalidCredentials
     }
 

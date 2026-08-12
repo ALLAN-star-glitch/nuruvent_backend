@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log"
 
-
 	"github.com/hibiken/asynq"
 )
 
@@ -50,25 +49,48 @@ func (w *EmailWorker) HandleVerificationOTP(ctx context.Context, task *asynq.Tas
 }
 
 // ================================================
-// WELCOME HANDLER
+// INDIVIDUAL WELCOME HANDLER
 // ================================================
 
-// HandleWelcome handles welcome email
-func (w *EmailWorker) HandleWelcome(ctx context.Context, task *asynq.Task) error {
-	var data WelcomeTask
+// HandleWelcomeIndividual handles individual professional welcome email
+func (w *EmailWorker) HandleWelcomeIndividual(ctx context.Context, task *asynq.Task) error {
+	var data WelcomeIndividualTask
 	if err := json.Unmarshal(task.Payload(), &data); err != nil {
-		log.Printf("[EmailWorker] Failed to parse welcome task: %v", err)
+		log.Printf("[EmailWorker] Failed to parse individual welcome task: %v", err)
 		return err
 	}
 
-	log.Printf("[EmailWorker] Processing welcome email for %s", data.To)
+	log.Printf("[EmailWorker] Processing individual welcome email for %s", data.To)
 
-	if err := w.emailService.SendWelcome(data.To, data.Name); err != nil {
-		log.Printf("[EmailWorker] Failed to send welcome email to %s: %v", data.To, err)
+	if err := w.emailService.SendIndividualWelcome(data.To, data.Name); err != nil {
+		log.Printf("[EmailWorker] Failed to send individual welcome email to %s: %v", data.To, err)
 		return err
 	}
 
-	log.Printf("[EmailWorker] Welcome email sent to %s", data.To)
+	log.Printf("[EmailWorker] Individual welcome email sent to %s", data.To)
+	return nil
+}
+
+// ================================================
+// INSTITUTION WELCOME HANDLER
+// ================================================
+
+// HandleWelcomeInstitution handles institution welcome email
+func (w *EmailWorker) HandleWelcomeInstitution(ctx context.Context, task *asynq.Task) error {
+	var data WelcomeInstitutionTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[EmailWorker] Failed to parse institution welcome task: %v", err)
+		return err
+	}
+
+	log.Printf("[EmailWorker] Processing institution welcome email for %s - Institution: %s", data.To, data.InstitutionName)
+
+	if err := w.emailService.SendInstitutionWelcome(data.To, data.AdminName, data.InstitutionName); err != nil {
+		log.Printf("[EmailWorker] Failed to send institution welcome email to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[EmailWorker] Institution welcome email sent to %s", data.To)
 	return nil
 }
 
@@ -92,50 +114,6 @@ func (w *EmailWorker) HandleTwoFactorOTP(ctx context.Context, task *asynq.Task) 
 	}
 
 	log.Printf("[EmailWorker] 2FA OTP sent to %s", data.To)
-	return nil
-}
-
-// ================================================
-// BUSINESS WELCOME HANDLER
-// ================================================
-
-// HandleBusinessWelcome handles business welcome email
-func (w *EmailWorker) HandleBusinessWelcome(ctx context.Context, task *asynq.Task) error {
-	var data BusinessWelcomeTask
-	if err := json.Unmarshal(task.Payload(), &data); err != nil {
-		log.Printf("[EmailWorker] Failed to parse business welcome task: %v", err)
-		return err
-	}
-
-	log.Printf("[EmailWorker] Processing business welcome email for %s", data.To)
-
-	if err := w.emailService.SendBusinessWelcome(data.To, data.BusinessName, data.OwnerName); err != nil {
-		log.Printf("[EmailWorker] Failed to send business welcome email to %s: %v", data.To, err)
-		return err
-	}
-
-	log.Printf("[EmailWorker] Business welcome email sent to %s", data.To)
-	return nil
-}
-
-// ================================================
-// Individual Coach/Professional WELCOME HANDLER
-// ================================================
-
-func (w *EmailWorker) HandleIndividualCoachWelcome(ctx context.Context, task *asynq.Task) error {
-	var data IndividualProfessionalWelcomeEmailTask
-
-	err := json.Unmarshal(task.Payload(), &data); if err != nil {
-		log.Printf("Email worker - Processing individual coach business welcome for %s", data.To)
-		return err
-
-	}
-
-	if err := w.emailService.SendIndividualProfessionalWelcome(data.To, data.Name); err != nil{
-		log.Printf("Error: Failed to send to %s", data.To)
-		return nil
-	}
-	log.Printf("Email Worker - Individual coach email sent to %s", data.To)
 	return nil
 }
 

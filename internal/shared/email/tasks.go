@@ -8,10 +8,9 @@ import "encoding/json"
 
 const (
 	TypeVerificationOTP      = "email:verification_otp"
-	TypeWelcome              = "email:welcome"
-	TypeEmailIndividualProfessionalWelcome = "email:individual_professional_welcome"
+	TypeWelcomeIndividual    = "email:welcome_individual"
+	TypeWelcomeInstitution   = "email:welcome_institution"
 	TypeTwoFactorOTP         = "email:two_factor_otp"
-	TypeBusinessWelcome      = "email:business_welcome"
 	TypePasswordResetOTP     = "email:password_reset_otp"
 	TypePasswordResetConfirm = "email:password_reset_confirm"
 	TypeLoginNotification    = "email:login_notification"
@@ -24,11 +23,11 @@ const (
 type VerificationPurpose string
 
 const (
-	PurposeRegistration   VerificationPurpose = "registration"
-	PurposeEmailChange    VerificationPurpose = "email_change"
-	PurposePhoneChange    VerificationPurpose = "phone_change"
-	PurposePasswordReset  VerificationPurpose = "password_reset"
-	PurposeTwoFactor      VerificationPurpose = "two_factor"
+	PurposeRegistration  VerificationPurpose = "registration"
+	PurposeEmailChange   VerificationPurpose = "email_change"
+	PurposePhoneChange   VerificationPurpose = "phone_change"
+	PurposePasswordReset VerificationPurpose = "password_reset"
+	PurposeTwoFactor     VerificationPurpose = "two_factor"
 )
 
 // ================================================
@@ -49,13 +48,24 @@ func (t VerificationOTPTask) Payload() ([]byte, error) {
 	return json.Marshal(t)
 }
 
-// WelcomeTask
-type WelcomeTask struct {
+// WelcomeIndividualTask - Individual professional welcome
+type WelcomeIndividualTask struct {
 	To   string `json:"to"`
 	Name string `json:"name"`
 }
 
-func (t WelcomeTask) Payload() ([]byte, error) {
+func (t WelcomeIndividualTask) Payload() ([]byte, error) {
+	return json.Marshal(t)
+}
+
+// WelcomeInstitutionTask - Institution welcome
+type WelcomeInstitutionTask struct {
+	To              string `json:"to"`
+	AdminName       string `json:"admin_name"`
+	InstitutionName string `json:"institution_name"`
+}
+
+func (t WelcomeInstitutionTask) Payload() ([]byte, error) {
 	return json.Marshal(t)
 }
 
@@ -68,17 +78,6 @@ type TwoFactorOTPTask struct {
 }
 
 func (t TwoFactorOTPTask) Payload() ([]byte, error) {
-	return json.Marshal(t)
-}
-
-// BusinessWelcomeTask
-type BusinessWelcomeTask struct {
-	To           string `json:"to"`
-	BusinessName string `json:"business_name"`
-	OwnerName    string `json:"owner_name"`
-}
-
-func (t BusinessWelcomeTask) Payload() ([]byte, error) {
 	return json.Marshal(t)
 }
 
@@ -115,13 +114,4 @@ type LoginNotificationTask struct {
 
 func (t LoginNotificationTask) Payload() ([]byte, error) {
 	return json.Marshal(t)
-}
-
-type IndividualProfessionalWelcomeEmailTask struct {
-    To   string `json:"to"`
-    Name string `json:"name"`
-}
-
-func (t IndividualProfessionalWelcomeEmailTask) Payload() ([]byte, error) {
-    return json.Marshal(t)
 }

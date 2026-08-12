@@ -13,7 +13,7 @@ type Account struct {
     Name           string
     DisplayName    string
     Email          string
-    Password       string
+    PasswordHash       string
     Phone          string
     AccountTypeID  string
     ProfessionalTypeID *string
@@ -28,11 +28,11 @@ type Account struct {
 }
 
 // NewAccount creates a validated account
-func NewAccount(email, password, name, phone, accountTypeID string) (*Account, error) {
+func NewAccount(email, passwordHash, name, phone, accountTypeID string) (*Account, error) {
     if email == "" {
         return nil, errors.New("email is required")
     }
-    if password == "" {
+    if passwordHash == "" {
         return nil, errors.New("password is required")
     }
     if name == "" {
@@ -49,7 +49,7 @@ func NewAccount(email, password, name, phone, accountTypeID string) (*Account, e
         Name:          name,
         DisplayName:   name,
         Email:         email,
-        Password:      password,
+        PasswordHash:  passwordHash,
         Phone:         phone,
         AccountTypeID: accountTypeID,
         EmailVerified: false,
@@ -126,7 +126,7 @@ func (a *Account) UpdatePhone(phone string) error {
 }
 
 func (a *Account) UpdatePassword(hashedPassword string) {
-    a.Password = hashedPassword
+    a.PasswordHash = hashedPassword
     a.UpdatedAt = time.Now()
 }
 

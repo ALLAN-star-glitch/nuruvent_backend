@@ -183,7 +183,7 @@ type AccountModel struct {
 	Name        string         `gorm:"type:varchar(100);not null" json:"name"`
 	DisplayName string         `gorm:"type:varchar(150)" json:"display_name,omitempty"`
 	Email       string         `gorm:"uniqueIndex;not null;size:255" json:"email"`
-	Password    string         `gorm:"not null" json:"-"`
+	PasswordHash    string         `gorm:"not null" json:"-"`
 	Phone       string         `gorm:"size:50" json:"phone"`
 	
 	AccountTypeID     uuid.UUID  `gorm:"type:uuid;index;not null" json:"account_type_id"`

@@ -41,29 +41,29 @@ func NewEmailService(apiKey, from string) *EmailService {
 // ================================================
 
 func (s *EmailService) renderEmail(templateName, title string, data interface{}) (string, error) {
-    var contentBuf bytes.Buffer
-    if err := s.tmpl.ExecuteTemplate(&contentBuf, templateName, data); err != nil {
-        return "", fmt.Errorf("failed to execute template %s: %w", templateName, err)
-    }
+	var contentBuf bytes.Buffer
+	if err := s.tmpl.ExecuteTemplate(&contentBuf, templateName, data); err != nil {
+		return "", fmt.Errorf("failed to execute template %s: %w", templateName, err)
+	}
 
-    baseData := struct {
-        Title   string
-        Content template.HTML
-        Year    int
-    }{
-        Title:   title,
-        Content: template.HTML(contentBuf.String()),
-        Year:    time.Now().Year(),
-    }
+	baseData := struct {
+		Title   string
+		Content template.HTML
+		Year    int
+	}{
+		Title:   title,
+		Content: template.HTML(contentBuf.String()),
+		Year:    time.Now().Year(),
+	}
 
-    var htmlBuf bytes.Buffer
-    if err := s.tmpl.ExecuteTemplate(&htmlBuf, "base", baseData); err != nil {
-        // If base template fails, try rendering without it
-        log.Printf("[EmailService] Base template failed, rendering without wrapper: %v", err)
-        return contentBuf.String(), nil
-    }
+	var htmlBuf bytes.Buffer
+	if err := s.tmpl.ExecuteTemplate(&htmlBuf, "base", baseData); err != nil {
+		// If base template fails, try rendering without it
+		log.Printf("[EmailService] Base template failed, rendering without wrapper: %v", err)
+		return contentBuf.String(), nil
+	}
 
-    return htmlBuf.String(), nil
+	return htmlBuf.String(), nil
 }
 
 func (s *EmailService) sendEmail(to, subject, html, text string) error {
@@ -175,45 +175,6 @@ func (s *EmailService) getVerificationContent(purpose string, meta map[string]st
 	return
 }
 
-// SendIndividualProfessionalWelcome sends welcome email for individual professionals
-func (s *EmailService) SendIndividualProfessionalWelcome(to, name string) error {
-    data := struct {
-        Name string
-    }{
-        Name: name,
-    }
-
-    html, err := s.renderEmail("individual-professional-welcome", "Welcome to Nuruvent", data)
-    if err != nil {
-        return err
-    }
-
-    text := fmt.Sprintf(`Welcome to Nuruvent!
-
-Hello %s,
-
-Welcome to Nuruvent — the platform that empowers independent trainers, coaches, and consultants to host professional training events in Kenya.
-
-Here is what you can do as an individual professional:
-- Create and publish training events (workshops, webinars, bootcamps, meetups)
-- Accept M-Pesa payments instantly — no manual reconciliation
-- Issue QR-verified certificates to attendees
-- Track attendance automatically via Zoom or Google Meet
-- Get paid every Monday — only 10%% commission
-- Save 3+ hours per event with automation
-- Build your personal brand as a trainer
-
-Ready to host your first event? Log in to your dashboard and start creating.
-
-Light Your Events. Illuminate Your Growth.
-
---
-Nuruvent - Light Your Events. Illuminate Your Growth.
-`, name)
-
-    return s.sendEmail(to, "Welcome to Nuruvent - Your Professional Account is Ready", html, text)
-}
-
 func (s *EmailService) buildVerificationText(data struct {
 	Name        string
 	OTP         string
@@ -250,15 +211,15 @@ func (s *EmailService) buildVerificationText(data struct {
 // WELCOME EMAILS
 // ================================================
 
-// SendWelcome sends user welcome email
-func (s *EmailService) SendWelcome(to, name string) error {
+// SendIndividualWelcome sends welcome email for individual professionals
+func (s *EmailService) SendIndividualWelcome(to, name string) error {
 	data := struct {
 		Name string
 	}{
 		Name: name,
 	}
 
-	html, err := s.renderEmail("welcome", "Welcome to Nuruvent", data)
+	html, err := s.renderEmail("welcome-individual", "Welcome to Nuruvent", data)
 	if err != nil {
 		return err
 	}
@@ -267,36 +228,39 @@ func (s *EmailService) SendWelcome(to, name string) error {
 
 Hello %s,
 
-We are thrilled to welcome you to Nuruvent — the platform that illuminates your path to professional growth. Your account has been successfully created.
+Welcome to Nuruvent — the platform that empowers independent trainers, coaches, and consultants to host professional training events in Kenya.
 
-Here is what you can do on Nuruvent:
-- Discover professional events near you
-- Register for workshops, webinars, and bootcamps
-- Pay instantly with M-Pesa
-- Earn verifiable certificates with QR codes
-- Access 30-day replays after events
-- Track your professional development
+Here is what you can do as an individual professional:
+- Create and publish training events (workshops, webinars, bootcamps, meetups)
+- Accept M-Pesa payments instantly — no manual reconciliation
+- Issue QR-verified certificates to attendees
+- Track attendance automatically via Zoom or Google Meet
+- Get paid every Monday — only 10%% commission
+- Save 3+ hours per event with automation
+- Build your personal brand as a trainer
 
-Nuru means light. We illuminate your path to professional growth.
+Ready to host your first event? Log in to your dashboard and start creating.
+
+Light Your Events. Illuminate Your Growth.
 
 --
 Nuruvent - Light Your Events. Illuminate Your Growth.
 `, name)
 
-	return s.sendEmail(to, "Welcome to Nuruvent", html, text)
+	return s.sendEmail(to, "Welcome to Nuruvent - Your Professional Account is Ready", html, text)
 }
 
-// SendBusinessWelcome sends business welcome email
-func (s *EmailService) SendBusinessWelcome(to, businessName, ownerName string) error {
+// SendInstitutionWelcome sends welcome email for institutions
+func (s *EmailService) SendInstitutionWelcome(to, adminName, institutionName string) error {
 	data := struct {
-		BusinessName string
-		OwnerName    string
+		AdminName       string
+		InstitutionName string
 	}{
-		BusinessName: businessName,
-		OwnerName:    ownerName,
+		AdminName:       adminName,
+		InstitutionName: institutionName,
 	}
 
-	html, err := s.renderEmail("business-welcome", "Welcome to Nuruvent", data)
+	html, err := s.renderEmail("welcome-institution", "Welcome to Nuruvent", data)
 	if err != nil {
 		return err
 	}
@@ -305,25 +269,34 @@ func (s *EmailService) SendBusinessWelcome(to, businessName, ownerName string) e
 
 Hello %s,
 
-Congratulations! Your business %s has been successfully registered on Nuruvent. You are now ready to host professional events and grow your brand.
+Congratulations! Your institution %s has been successfully registered on Nuruvent.
 
-Here is what you can do as a Nuruvent host:
-- Create and publish events (workshops, webinars, bootcamps, meetups)
+Here is what you can do as an institution account owner:
+- Create and publish events under your institution's brand
 - Accept payments instantly with M-Pesa
 - Issue QR-verified certificates to attendees
-- Track attendance automatically via Zoom or Meet
-- Get paid every Monday with 10%% commission
-- Save 3+ hours per event with automation
+- Track attendance automatically via Zoom or Google Meet
+- Get paid every Monday — only 10%% commission
+- Invite team members to manage events
+- Build your institution's professional brand
 
 Ready to host your first event? Log in to your dashboard and start creating.
 
-Manage Your Events. Get Paid. Build Your Brand.
+Light Your Events. Illuminate Your Growth.
 
 --
 Nuruvent - Light Your Events. Illuminate Your Growth.
-`, ownerName, businessName)
+`, adminName, institutionName)
 
-	return s.sendEmail(to, "Welcome to Nuruvent - Business Registration Complete", html, text)
+	return s.sendEmail(to, "Welcome to Nuruvent - Your Institution is Live!", html, text)
+}
+
+// SendWelcome is a generic welcome method that delegates based on account type
+func (s *EmailService) SendWelcome(to, name, accountType string, institutionName ...string) error {
+	if accountType == "institution" && len(institutionName) > 0 {
+		return s.SendInstitutionWelcome(to, name, institutionName[0])
+	}
+	return s.SendIndividualWelcome(to, name)
 }
 
 // ================================================
@@ -371,12 +344,6 @@ Nuruvent - Light Your Events. Illuminate Your Growth.
 // SendPasswordResetOTP sends password reset OTP
 func (s *EmailService) SendPasswordResetOTP(to, name, otp, expires string) error {
 	return s.SendVerificationOTP(to, name, otp, expires, "password_reset", nil)
-}
-
-// SendBusinessVerificationOTP sends business verification OTP
-func (s *EmailService) SendBusinessVerificationOTP(to, businessName, otp, expires string) error {
-	meta := map[string]string{"business_name": businessName}
-	return s.SendVerificationOTP(to, businessName, otp, expires, "business_verify", meta)
 }
 
 // SendPasswordResetConfirm sends password reset confirmation

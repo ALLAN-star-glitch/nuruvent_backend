@@ -2,14 +2,14 @@ package main
 
 import (
 	"log"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/email"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/email"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/hibiken/asynq"
 )
 
@@ -56,20 +56,18 @@ func main() {
 	// ================================================
 	mux := asynq.NewServeMux()
 
-	// Verification OTP (generic - handles registration, email change, phone change, password reset, 2FA, business verification)
+	// Verification OTP (generic - handles registration, email change, phone change, password reset, 2FA)
 	mux.HandleFunc(email.TypeVerificationOTP, emailWorker.HandleVerificationOTP)
 
-	// Welcome emails
-	mux.HandleFunc(email.TypeWelcome, emailWorker.HandleWelcome)
-	mux.HandleFunc(email.TypeBusinessWelcome, emailWorker.HandleBusinessWelcome)
+	// Welcome emails - Individual & Institution
+	mux.HandleFunc(email.TypeWelcomeIndividual, emailWorker.HandleWelcomeIndividual)
+	mux.HandleFunc(email.TypeWelcomeInstitution, emailWorker.HandleWelcomeInstitution)
 
 	// Security emails
 	mux.HandleFunc(email.TypeTwoFactorOTP, emailWorker.HandleTwoFactorOTP)
 	mux.HandleFunc(email.TypePasswordResetOTP, emailWorker.HandlePasswordResetOTP)
 	mux.HandleFunc(email.TypePasswordResetConfirm, emailWorker.HandlePasswordResetConfirm)
 	mux.HandleFunc(email.TypeLoginNotification, emailWorker.HandleLoginNotification)
-	mux.HandleFunc(email.TypeEmailIndividualProfessionalWelcome, emailWorker.HandleIndividualCoachWelcome)
-
 
 	// ================================================
 	// Start Worker

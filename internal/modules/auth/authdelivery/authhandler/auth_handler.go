@@ -142,6 +142,8 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 }
 
 func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
+
+	//Verify  and validate email
 	if req.Email == "" {
 		return errors.New("email is required")
 	}
@@ -149,18 +151,17 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 		return errors.New("invalid email format")
 	}
 
+	//validadte password
 	if valid, msg := validator.Password.Validate(req.Password); !valid {
 		return errors.New(msg)
 	}
 
+	//validate name
 	if req.Name == "" {
 		return errors.New("name is required")
 	}
 
-	if req.AccountType != "personal" && req.AccountType != "institution" {
-		return errors.New("account_type must be 'personal' or 'institution'")
-	}
-
+	//validate phone
 	if req.Phone == "" {
 		return errors.New("phone is required")
 	}
@@ -169,6 +170,13 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 	}
 	req.Phone = validator.Phone.Normalize(req.Phone)
 
+
+	//  Account type is optional - default to "personal"
+	if req.AccountType == "" {
+		req.AccountType = "personal"
+	}
+
+	// Only validate institution fields if account_type is "institution"
 	if req.AccountType == "institution" {
 		if req.InstitutionName == "" {
 			return errors.New("institution_name is required for institution accounts")
@@ -189,6 +197,8 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 		if req.InstitutionType == "" {
 			return errors.New("institution_type is required for institution accounts")
 		}
+	} else if req.AccountType != "personal" {
+		return errors.New("account_type must be 'personal' or 'institution'")
 	}
 
 	return nil
