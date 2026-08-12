@@ -26,8 +26,6 @@ type AccountType struct {
 	DeletedAt   *time.Time
 }
 
-
-
 // ============================================================
 // FACTORY
 // ============================================================
@@ -83,7 +81,7 @@ func NewAccountTypeFromRepository(
 }
 
 // ============================================================
-// DOMAIN BEHAVIORS
+// ACCOUNT TYPE BEHAVIORS
 // ============================================================
 
 // IsValid checks if the account type has a valid ID

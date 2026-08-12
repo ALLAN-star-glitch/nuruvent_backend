@@ -14,22 +14,25 @@ func ToDomainAccount(model *AccountModel) *domain.Account {
 		return nil
 	}
 	return &domain.Account{
-		ID:             model.ID,
-		Slug:           model.Slug,
-		Name:           model.Name,
-		DisplayName:    model.DisplayName,
-		Email:          model.Email,
-		Password:       model.Password,
-		Phone:          model.Phone,
-		AccountTypeID:  model.AccountTypeID,
+		ID:                 model.ID,
+		Slug:               model.Slug,
+		Name:               model.Name,
+		DisplayName:        model.DisplayName,
+		Email:              model.Email,
+		PasswordHash:       model.PasswordHash, // Updated from Password
+		Phone:              model.Phone,
+		AccountTypeID:      model.AccountTypeID,
 		ProfessionalTypeID: model.ProfessionalTypeID,
-		InstitutionID:  model.InstitutionID,
-		EmailVerified:  model.EmailVerified,
-		EmailVerifiedAt: model.EmailVerifiedAt,
-		IdentityVerified: model.IdentityVerified,
-		IsActive:       model.IsActive,
-		CreatedAt:      model.CreatedAt,
-		UpdatedAt:      model.UpdatedAt,
+		InstitutionID:      model.InstitutionID,
+		EmailVerified:      model.EmailVerified,
+		EmailVerifiedAt:    model.EmailVerifiedAt,
+		PhoneVerified:      model.PhoneVerified,
+		PhoneVerifiedAt:    model.PhoneVerifiedAt,
+		IdentityVerified:   model.IdentityVerified,
+		KYCStatus:          model.KYCStatus,
+		IsActive:           model.IsActive,
+		CreatedAt:          model.CreatedAt,
+		UpdatedAt:          model.UpdatedAt,
 	}
 }
 
@@ -39,22 +42,25 @@ func ToModelAccount(account *domain.Account) *AccountModel {
 		return nil
 	}
 	return &AccountModel{
-		ID:             account.ID,
-		Slug:           account.Slug,
-		Name:           account.Name,
-		DisplayName:    account.DisplayName,
-		Email:          account.Email,
-		Password:       account.Password,
-		Phone:          account.Phone,
-		AccountTypeID:  account.AccountTypeID,
+		ID:                 account.ID,
+		Slug:               account.Slug,
+		Name:               account.Name,
+		DisplayName:        account.DisplayName,
+		Email:              account.Email,
+		PasswordHash:       account.PasswordHash, // Updated from Password
+		Phone:              account.Phone,
+		AccountTypeID:      account.AccountTypeID,
 		ProfessionalTypeID: account.ProfessionalTypeID,
-		InstitutionID:  account.InstitutionID,
-		EmailVerified:  account.EmailVerified,
-		EmailVerifiedAt: account.EmailVerifiedAt,
-		IdentityVerified: account.IdentityVerified,
-		IsActive:       account.IsActive,
-		CreatedAt:      account.CreatedAt,
-		UpdatedAt:      account.UpdatedAt,
+		InstitutionID:      account.InstitutionID,
+		EmailVerified:      account.EmailVerified,
+		EmailVerifiedAt:    account.EmailVerifiedAt,
+		PhoneVerified:      account.PhoneVerified,
+		PhoneVerifiedAt:    account.PhoneVerifiedAt,
+		IdentityVerified:   account.IdentityVerified,
+		KYCStatus:          account.KYCStatus,
+		IsActive:           account.IsActive,
+		CreatedAt:          account.CreatedAt,
+		UpdatedAt:          account.UpdatedAt,
 	}
 }
 
@@ -387,18 +393,18 @@ func ToDomainTeamMember(model *TeamMemberModel) *domain.TeamMember {
 		return nil
 	}
 	return &domain.TeamMember{
-		ID:         model.ID,
-		Slug:       model.Slug,
-		Name:       model.Name,
+		ID:          model.ID,
+		Slug:        model.Slug,
+		Name:        model.Name,
 		DisplayName: model.DisplayName,
-		AccountID:  model.AccountID,
-		MemberID:   model.MemberID,
-		Role:       model.Role,
-		JobTitle:   model.JobTitle,
-		IsActive:   model.IsActive,
-		JoinedAt:   model.JoinedAt,
-		CreatedAt:  model.CreatedAt,
-		UpdatedAt:  model.UpdatedAt,
+		AccountID:   model.AccountID,
+		MemberID:    model.MemberID,
+		Role:        model.Role,
+		JobTitle:    model.JobTitle,
+		IsActive:    model.IsActive,
+		JoinedAt:    model.JoinedAt,
+		CreatedAt:   model.CreatedAt,
+		UpdatedAt:   model.UpdatedAt,
 	}
 }
 
@@ -408,17 +414,17 @@ func ToModelTeamMember(member *domain.TeamMember) *TeamMemberModel {
 		return nil
 	}
 	return &TeamMemberModel{
-		ID:         member.ID,
-		Slug:       member.Slug,
-		Name:       member.Name,
+		ID:          member.ID,
+		Slug:        member.Slug,
+		Name:        member.Name,
 		DisplayName: member.DisplayName,
-		AccountID:  member.AccountID,
-		MemberID:   member.MemberID,
-		Role:       member.Role,
-		JobTitle:   member.JobTitle,
-		IsActive:   member.IsActive,
-		JoinedAt:   member.JoinedAt,
-		CreatedAt:  member.CreatedAt,
-		UpdatedAt:  member.UpdatedAt,
+		AccountID:   member.AccountID,
+		MemberID:    member.MemberID,
+		Role:        member.Role,
+		JobTitle:    member.JobTitle,
+		IsActive:    member.IsActive,
+		JoinedAt:    member.JoinedAt,
+		CreatedAt:   member.CreatedAt,
+		UpdatedAt:   member.UpdatedAt,
 	}
 }

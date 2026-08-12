@@ -1,7 +1,7 @@
-.PHONY: help migrate-up migrate-down migrate-status migrate-create migrate-reset dev build test lint worker worker-build seed seed-only seed-dry seed-reset db-shell db-list db-tables db-desc db-query db-count db-psql
+.PHONY: help migrate-up migrate-down migrate-status migrate-create migrate-reset dev build test lint worker worker-build seed seed-only seed-dry seed-reset db-shell db-list db-tables db-desc db-query db-count db-psql db-drop db-reset cache-clear cache-clear-go cache-clear-all
 
 # Migration directory
-MIGRATION_DIR=internal/database/migrations
+MIGRATION_DIR=internal/shared/database/migrations
 
 # Database URL - Using nuruvent_user (port 54582)
 DB_HOST=localhost
@@ -20,36 +20,36 @@ DB_CONTAINER=nuruvent-postgres
 # ================================================
 
 help:
-	@echo "Available commands:"
+	@echo "📋 Available commands:"
 	@echo ""
-	@echo "  Development:"
+	@echo "  🚀 Development:"
 	@echo "  make dev                      - Run the API server"
 	@echo "  make worker                   - Run the background worker"
 	@echo "  make dev-all                  - Run both API and worker in parallel"
 	@echo "  make build                    - Build the API binary"
 	@echo "  make worker-build             - Build the worker binary"
-	@echo "  make build-all                - Build both binaries"
+	@echo "  make build-all                - Build all binaries"
 	@echo "  make test                     - Run tests"
 	@echo "  make test-coverage            - Run tests with coverage report"
 	@echo "  make lint                     - Run linter"
 	@echo "  make lint-fix                 - Auto-fix lint issues"
 	@echo "  make clean                    - Clean build artifacts"
 	@echo ""
-	@echo "  Migrations:"
+	@echo "  🗄️  Migrations:"
 	@echo "  make migrate-create NAME=<name>  - Create a new migration"
 	@echo "  make migrate-up                  - Apply all pending migrations"
 	@echo "  make migrate-down                - Rollback the last migration"
 	@echo "  make migrate-status              - Check migration status"
 	@echo "  make migrate-reset               - Reset all migrations (dangerous!)"
 	@echo ""
-	@echo "  Seeders:"
+	@echo "  🌱 Seeders:"
 	@echo "  make seed                     - Run all seeders"
 	@echo "  make seed-only NAME=<seeder>  - Run only a specific seeder"
 	@echo "  make seed-dry                 - Preview what would be seeded (dry run)"
 	@echo "  make seed-reset               - Reset all seeders (dangerous!)"
 	@echo "  make seed-force               - Force re-seed even if already run"
 	@echo ""
-	@echo "  Database (PostgreSQL):"
+	@echo "  🐘 Database (PostgreSQL):"
 	@echo "  make db-shell                 - Open psql shell"
 	@echo "  make db-list                  - List all databases"
 	@echo "  make db-tables                - List all tables"
@@ -57,34 +57,58 @@ help:
 	@echo "  make db-count TABLE=<name>    - Count rows in a table"
 	@echo "  make db-query QUERY=<sql>     - Run a custom SQL query"
 	@echo "  make db-psql CMD=<command>    - Run a psql command"
+	@echo "  make db-drop                  - ⚠️ DROP entire database (dangerous!)"
+	@echo "  make db-reset                 - Drop and recreate database"
+	@echo "  make db-backup                - Backup database to file"
+	@echo "  make db-restore FILE=<name>   - Restore database from backup"
+	@echo "  make db-seed-export           - Export seed data to SQL file"
 	@echo ""
-	@echo "  Docker:"
+	@echo "  🧹 Cache & Cleanup:"
+	@echo "  make cache-clear              - Clear all caches (Go, build, test)"
+	@echo "  make cache-clear-go           - Clear only Go module cache"
+	@echo "  make cache-clear-build        - Clear only build cache"
+	@echo "  make cache-clear-test         - Clear only test cache"
+	@echo "  make cache-clear-docker       - Clear Docker system cache"
+	@echo "  make cache-clear-all          - Clear ALL caches (Go, build, test, Docker)"
+	@echo "  make clean-all                - Clean everything (cache + build + wire)"
+	@echo ""
+	@echo "  🐳 Docker:"
 	@echo "  make docker-up                - Start Docker services"
 	@echo "  make docker-down              - Stop Docker services"
 	@echo "  make docker-logs              - View Docker logs"
 	@echo "  make docker-restart           - Restart Docker services"
+	@echo "  make docker-rebuild           - Rebuild and restart Docker services"
+	@echo "  make docker-clean             - Remove Docker containers and volumes"
 	@echo ""
-	@echo "  Swagger:"
+	@echo "  📚 Swagger:"
 	@echo "  make swagger                  - Generate Swagger documentation"
 	@echo "  make swagger-fmt              - Format Swagger comments"
 	@echo "  make swagger-install          - Install swag CLI"
 	@echo "  make swagger-clean            - Remove generated docs"
 	@echo ""
-	@echo "Examples:"
+	@echo "  🔧 Wire (DI):"
+	@echo "  make wire                     - Generate wire_gen.go"
+	@echo "  make wire-install             - Install wire CLI"
+	@echo "  make wire-verify              - Check wire configuration"
+	@echo "  make wire-clean               - Remove wire_gen.go files"
+	@echo "  make wire-regen               - Clean and regenerate wire"
+	@echo ""
+	@echo "  🧹 Terminal:"
+	@echo "  make c                        - Clear terminal"
+	@echo ""
+	@echo "📌 Examples:"
 	@echo "  make migrate-create NAME=add_slug_to_business"
-	@echo "  make db-desc TABLE=users"
+	@echo "  make db-desc TABLE=accounts"
 	@echo "  make db-count TABLE=events"
-	@echo "  make db-query QUERY=\"SELECT * FROM users LIMIT 5\""
-	@echo "  make dev"
-	@echo "  make worker"
+	@echo "  make db-query QUERY=\"SELECT * FROM accounts LIMIT 5\""
 	@echo "  make seed-only NAME=permissions"
-	@echo "  make c 						-Clear terminal
+	@echo "  make cache-clear-all"
+	@echo "  make db-reset"
 
 # ================================================
 # MIGRATIONS
 # ================================================
 
-# Sequential numbering for migrations
 migrate-create:
 	@echo "Creating migration: $(NAME)"
 	@COUNT=$$(ls -1 $(MIGRATION_DIR)/*.sql 2>/dev/null | wc -l | tr -d ' '); \
@@ -101,17 +125,21 @@ migrate-status:
 	goose -dir $(MIGRATION_DIR) postgres "$(DB_URL)" status
 
 migrate-reset:
+	@echo "⚠️  This will reset ALL migrations!"
+	@read -p "Are you sure? (yes/no): " confirm; \
+	if [ "$$confirm" != "yes" ]; then \
+		echo "Cancelled"; \
+		exit 1; \
+	fi
 	goose -dir $(MIGRATION_DIR) postgres "$(DB_URL)" reset
 
 # ================================================
 # SEEDERS
 # ================================================
 
-# Run all seeders
 seed:
 	go run cmd/seed/main.go
 
-# Run specific seeder
 seed-only:
 	@if [ -z "$(NAME)" ]; then \
 		echo "Error: NAME is required"; \
@@ -121,15 +149,12 @@ seed-only:
 	fi
 	go run cmd/seed/main.go -only=$(NAME)
 
-# Dry run - preview what would be seeded
 seed-dry:
 	go run cmd/seed/main.go -dry-run
 
-# Force re-seed (run even if already run)
 seed-force:
 	go run cmd/seed/main.go -force
 
-# Reset all seeders (remove logs)
 seed-reset:
 	@echo "⚠️  This will remove all seeder logs, allowing seeders to run again."
 	@read -p "Are you sure? (yes/no): " confirm; \
@@ -139,11 +164,9 @@ seed-reset:
 	fi
 	go run cmd/seed/main.go -force
 
-# Seed in production (with confirmation)
 seed-prod:
 	go run cmd/seed/main.go -env=production
 
-# Seed in production without confirmation (CI/CD)
 seed-prod-ci:
 	go run cmd/seed/main.go -env=production -skip-confirm
 
@@ -151,15 +174,12 @@ seed-prod-ci:
 # DEVELOPMENT
 # ================================================
 
-# Run API server
 dev:
 	go run cmd/api/main.go
 
-# Run worker
 worker:
 	go run cmd/worker/main.go
 
-# Run both API and worker in parallel
 dev-all:
 	@echo "Starting API server and worker..."
 	@make -j2 dev worker
@@ -168,19 +188,15 @@ dev-all:
 # BUILD
 # ================================================
 
-# Build API binary
 build:
 	go build -o bin/nuruvent cmd/api/main.go
 
-# Build worker binary
 worker-build:
 	go build -o bin/worker cmd/worker/main.go
 
-# Build seed binary
 seed-build:
 	go build -o bin/seed cmd/seed/main.go
 
-# Build all binaries
 build-all: build worker-build seed-build
 	@echo "Built API, worker, and seed binaries"
 
@@ -202,13 +218,67 @@ lint-fix:
 	golangci-lint run --fix
 
 # ================================================
-# CLEANUP
+# CACHE CLEANUP
 # ================================================
 
+cache-clear:
+	@echo "🧹 Clearing all caches..."
+	@go clean -modcache -cache -testcache
+	@echo "✅ All caches cleared"
+
+cache-clear-go:
+	@echo "🧹 Clearing Go module cache..."
+	@go clean -modcache
+	@echo "✅ Go module cache cleared"
+
+cache-clear-build:
+	@echo "🧹 Clearing build cache..."
+	@go clean -cache
+	@echo "✅ Build cache cleared"
+
+cache-clear-test:
+	@echo "🧹 Clearing test cache..."
+	@go clean -testcache
+	@echo "✅ Test cache cleared"
+
+cache-clear-docker:
+	@echo "🧹 Clearing Docker system cache..."
+	@docker system prune -f
+	@echo "✅ Docker cache cleared"
+
+cache-clear-all: cache-clear-go cache-clear-build cache-clear-test cache-clear-docker
+	@echo "✅ All caches cleared"
+
 clean:
-	rm -rf bin/
-	rm -f coverage.out
-	rm -rf docs/
+	@echo "🧹 Cleaning build artifacts..."
+	@rm -rf bin/
+	@rm -f coverage.out
+	@rm -rf docs/
+	@echo "✅ Clean complete"
+
+clean-all: cache-clear clean wire-clean
+	@echo "🧹 Cleaned everything (cache, builds, wire_gen.go)"
+
+# ================================================
+# WIRE - Dependency Injection
+# ================================================
+
+wire:
+	@echo "Generating wire_gen.go..."
+	wire gen ./internal/app
+
+wire-install:
+	go install github.com/google/wire/cmd/wire@latest
+
+wire-verify:
+	wire check ./...
+
+wire-clean:
+	@rm -f internal/app/wire_gen.go
+	@find . -name "wire_gen.go" -delete
+
+wire-regen: wire-clean wire
+	@echo "✅ Wire regenerated"
 
 # ================================================
 # DOCKER
@@ -226,53 +296,62 @@ docker-logs:
 docker-restart:
 	docker-compose restart
 
+docker-rebuild:
+	docker-compose down
+	docker-compose build --no-cache
+	docker-compose up -d
+
+docker-clean:
+	@echo "⚠️  This will remove Docker containers, volumes, and images!"
+	@read -p "Are you sure? (yes/no): " confirm; \
+	if [ "$$confirm" != "yes" ]; then \
+		echo "Cancelled"; \
+		exit 1; \
+	fi
+	docker-compose down -v
+	docker system prune -af
+	@echo "✅ Docker cleaned"
+
 # ================================================
 # DATABASE (PostgreSQL)
 # ================================================
 
-# Open psql shell
 db-shell:
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME)
 
-# List all databases
 db-list:
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\l"
 
-# List all tables
 db-tables:
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\dt"
 
-# Describe table structure
 db-desc:
 	@if [ -z "$(TABLE)" ]; then \
 		echo "Error: TABLE is required"; \
 		echo "Usage: make db-desc TABLE=<table_name>"; \
-		echo "Example: make db-desc TABLE=users"; \
+		echo "Example: make db-desc TABLE=accounts"; \
 		exit 1; \
 	fi
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\d $(TABLE)"
 
-# Count rows in a table
 db-count:
 	@if [ -z "$(TABLE)" ]; then \
 		echo "Error: TABLE is required"; \
 		echo "Usage: make db-count TABLE=<table_name>"; \
-		echo "Example: make db-count TABLE=users"; \
+		echo "Example: make db-count TABLE=accounts"; \
 		exit 1; \
 	fi
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "SELECT COUNT(*) FROM $(TABLE);"
 
-# Run a custom SQL query
 db-query:
 	@if [ -z "$(QUERY)" ]; then \
 		echo "Error: QUERY is required"; \
 		echo "Usage: make db-query QUERY=\"<sql_query>\""; \
-		echo "Example: make db-query QUERY=\"SELECT * FROM users LIMIT 5\""; \
+		echo "Example: make db-query QUERY=\"SELECT * FROM accounts LIMIT 5\""; \
 		exit 1; \
 	fi
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "$(QUERY)"
 
-# Run a psql command
 db-psql:
 	@if [ -z "$(CMD)" ]; then \
 		echo "Error: CMD is required"; \
@@ -282,32 +361,110 @@ db-psql:
 	fi
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "$(CMD)"
 
-# Check database connection
 db-ping:
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "SELECT 1;"
 
-# Show database size
 db-size:
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "SELECT pg_database_size('$(DB_NAME)');"
 
-# Show all users
 db-users:
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\du"
+
+# ⚠️ DANGEROUS COMMANDS - Use with caution!
+db-drop:
+	@echo "⚠️  ⚠️  ⚠️  DANGEROUS COMMAND  ⚠️  ⚠️  ⚠️"
+	@echo "This will DROP the ENTIRE database: $(DB_NAME)"
+	@read -p "Are you ABSOLUTELY sure? Type the database name to confirm: " confirm; \
+	if [ "$$confirm" != "$(DB_NAME)" ]; then \
+		echo "Cancelled"; \
+		exit 1; \
+	fi
+	@read -p "Type YES to confirm: " confirm2; \
+	if [ "$$confirm2" != "YES" ]; then \
+		echo "Cancelled"; \
+		exit 1; \
+	fi
+	@echo "Terminating all connections to $(DB_NAME)..."
+	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$(DB_NAME)' AND pid <> pg_backend_pid();"
+	@echo "Dropping database $(DB_NAME)..."
+	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "DROP DATABASE IF EXISTS $(DB_NAME);"
+	@echo "✅ Database $(DB_NAME) dropped"
+	@echo "⚠️  ⚠️  ⚠️  DANGEROUS COMMAND  ⚠️  ⚠️  ⚠️"
+	@echo "This will DROP the ENTIRE database: $(DB_NAME)"
+	@read -p "Are you ABSOLUTELY sure? Type the database name to confirm: " confirm; \
+	if [ "$$confirm" != "$(DB_NAME)" ]; then \
+		echo "Cancelled"; \
+		exit 1; \
+	fi
+	@read -p "Type YES to confirm: " confirm2; \
+	if [ "$$confirm2" != "YES" ]; then \
+		echo "Cancelled"; \
+		exit 1; \
+	fi
+	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "DROP DATABASE IF EXISTS $(DB_NAME);"
+	@echo "✅ Database $(DB_NAME) dropped"
+
+db-reset: db-drop
+	@echo "Recreating database $(DB_NAME)..."
+	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "CREATE DATABASE $(DB_NAME);"
+	@echo "✅ Database $(DB_NAME) recreated"
+	@echo "Running migrations..."
+	@make migrate-up
+	@echo "Running seeders..."
+	@make seed
+	@echo "✅ Database reset complete!"
+
+db-backup:
+	@echo "📦 Backing up database to backup_$(DB_NAME)_$(shell date +%Y%m%d_%H%M%S).sql..."
+	@mkdir -p backups
+	docker exec -it $(DB_CONTAINER) pg_dump -U $(DB_USER) $(DB_NAME) > backups/backup_$(DB_NAME)_$(shell date +%Y%m%d_%H%M%S).sql
+	@echo "✅ Backup complete"
+
+db-restore:
+	@if [ -z "$(FILE)" ]; then \
+		echo "Error: FILE is required"; \
+		echo "Usage: make db-restore FILE=<backup_file.sql>"; \
+		echo "Example: make db-restore FILE=backups/backup_nuruvent_20260811_123456.sql"; \
+		exit 1; \
+	fi
+	@if [ ! -f "$(FILE)" ]; then \
+		echo "Error: File $(FILE) not found"; \
+		exit 1; \
+	fi
+	@echo "⚠️  Restoring database from $(FILE)"
+	@read -p "This will overwrite current data. Continue? (yes/no): " confirm; \
+	if [ "$$confirm" != "yes" ]; then \
+		echo "Cancelled"; \
+		exit 1; \
+	fi
+	docker exec -i $(DB_CONTAINER) psql -U $(DB_USER) $(DB_NAME) < $(FILE)
+	@echo "✅ Database restored from $(FILE)"
+
+db-seed-export:
+	@echo "📦 Exporting seed data to seed_data.sql..."
+	@mkdir -p backups
+	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\copy (SELECT * FROM account_types ORDER BY slug) TO '/tmp/account_types.csv' WITH CSV HEADER"
+	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\copy (SELECT * FROM professional_types ORDER BY slug) TO '/tmp/professional_types.csv' WITH CSV HEADER"
+	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\copy (SELECT * FROM institution_types ORDER BY slug) TO '/tmp/institution_types.csv' WITH CSV HEADER"
+	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\copy (SELECT * FROM event_types ORDER BY slug) TO '/tmp/event_types.csv' WITH CSV HEADER"
+	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\copy (SELECT * FROM event_statuses ORDER BY slug) TO '/tmp/event_statuses.csv' WITH CSV HEADER"
+	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d $(DB_NAME) -c "\copy (SELECT * FROM media_types ORDER BY slug) TO '/tmp/media_types.csv' WITH CSV HEADER"
+	@echo "✅ Seed data exported"
 
 # ================================================
 # FULL SETUP
 # ================================================
 
-# Full setup: migrate + seed
 setup:
+	@echo "🚀 Running full setup..."
 	@echo "Running migrations..."
 	@make migrate-up
 	@echo "Running seeders..."
 	@make seed
 	@echo "✅ Setup complete!"
 
-# Full setup with force re-seed
 setup-force:
+	@echo "🚀 Running full setup (force re-seed)..."
 	@echo "Running migrations..."
 	@make migrate-up
 	@echo "Running seeders (force)..."
@@ -332,21 +489,8 @@ swagger-clean:
 	rm -rf docs/
 
 # ================================================
-# WIRE - Dependency Injection
+# TERMINAL
 # ================================================
-
-wire:
-	@echo "Generating wire_gen.go..."
-	wire gen ./internal/app
-
-wire-install:
-	go install github.com/google/wire/cmd/wire@latest
-
-wire-verify:
-	wire check ./...
-
-wire-clean:
-	rm -f internal/app/wire_gen.go
 
 c:
 	@echo "Clear Terminal"

@@ -11,7 +11,7 @@ import (
 // ============================================================
 
 type EventModel struct {
-	ID               string `gorm:"primaryKey"`
+	ID               string `gorm:"primaryKey;default:gen_random_uuid()"`
 	Slug             string `gorm:"uniqueIndex"`
 	Name             string
 	DisplayName      string
@@ -48,7 +48,7 @@ func (EventModel) TableName() string {
 // ============================================================
 
 type EventTypeModel struct {
-	ID          string `gorm:"primaryKey"`
+	ID          string `gorm:"primaryKey;default:gen_random_uuid()"`
 	Slug        string `gorm:"uniqueIndex;not null"`
 	Name        string `gorm:"not null"`
 	DisplayName string
@@ -74,7 +74,7 @@ func (EventTypeModel) TableName() string {
 // ============================================================
 
 type EventStatusModel struct {
-	ID          string `gorm:"primaryKey"`
+	ID          string `gorm:"primaryKey;default:gen_random_uuid()"`
 	Slug        string `gorm:"uniqueIndex;not null"`
 	Name        string `gorm:"not null"`
 	DisplayName string

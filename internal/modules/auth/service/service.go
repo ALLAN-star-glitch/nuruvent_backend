@@ -80,7 +80,7 @@ func NewService(
     otpSvc domain.OTPService,
     emailSvc *email.EmailService,
 ) Service {
-    return &service{
+    return &service{ // This must satisfy the interface 
         repo:        repo,
         config:      cfg,
         queue:       queueClient,

@@ -11,19 +11,22 @@ import (
 // ============================================================
 
 type AccountModel struct {
-	ID             string `gorm:"primaryKey"`
+	ID             string `gorm:"primaryKey;default:gen_random_uuid()"`
 	Slug           string `gorm:"uniqueIndex"`
 	Name           string
 	DisplayName    string
 	Email          string `gorm:"uniqueIndex"`
-	Password       string
+	PasswordHash   string // Updated from Password to match migration
 	Phone          string `gorm:"uniqueIndex"`
 	AccountTypeID  string `gorm:"index"`
 	ProfessionalTypeID *string
 	InstitutionID  *string
 	EmailVerified  bool
 	EmailVerifiedAt *time.Time
+	PhoneVerified  bool   // Added for individual registration
+	PhoneVerifiedAt *time.Time // Added for individual registration
 	IdentityVerified bool
+	KYCStatus      string `gorm:"default:'pending'"` // Added for individual registration
 	IsActive       bool
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
@@ -39,7 +42,7 @@ func (AccountModel) TableName() string {
 // ============================================================
 
 type AccountTypeModel struct {
-	ID          string `gorm:"primaryKey"`
+	ID          string `gorm:"primaryKey;default:gen_random_uuid()"`
 	Slug        string `gorm:"uniqueIndex;not null"`
 	Name        string `gorm:"not null"`
 	DisplayName string
@@ -62,7 +65,7 @@ func (AccountTypeModel) TableName() string {
 // ============================================================
 
 type ProfessionalTypeModel struct {
-	ID          string `gorm:"primaryKey"`
+	ID          string `gorm:"primaryKey;default:gen_random_uuid()"`
 	Slug        string `gorm:"uniqueIndex;not null"`
 	Name        string `gorm:"not null"`
 	DisplayName string
@@ -86,7 +89,7 @@ func (ProfessionalTypeModel) TableName() string {
 // ============================================================
 
 type InstitutionTypeModel struct {
-	ID          string `gorm:"primaryKey"`
+	ID          string `gorm:"primaryKey;default:gen_random_uuid()"`
 	Slug        string `gorm:"uniqueIndex;not null"`
 	Name        string `gorm:"not null"`
 	DisplayName string
@@ -109,7 +112,7 @@ func (InstitutionTypeModel) TableName() string {
 // ============================================================
 
 type InstitutionModel struct {
-	ID                string `gorm:"primaryKey"`
+	ID                string `gorm:"primaryKey;default:gen_random_uuid()"`
 	Slug              string `gorm:"uniqueIndex"`
 	Name              string `gorm:"not null"`
 	DisplayName       string
@@ -135,7 +138,7 @@ func (InstitutionModel) TableName() string {
 // ============================================================
 
 type TeamMemberModel struct {
-	ID         string `gorm:"primaryKey"`
+	ID         string `gorm:"primaryKey;default:gen_random_uuid()"`
 	Slug       string `gorm:"uniqueIndex"`
 	Name       string `gorm:"not null"`
 	DisplayName string
@@ -152,4 +155,24 @@ type TeamMemberModel struct {
 
 func (TeamMemberModel) TableName() string {
 	return "team_members"
+}
+
+// ============================================================
+// REFRESH TOKEN MODEL (GORM)
+// ============================================================
+
+type RefreshTokenModel struct {
+	ID        string `gorm:"primaryKey;default:gen_random_uuid()"`
+	AccountID string `gorm:"index;not null"`
+	Token     string `gorm:"uniqueIndex;not null"`
+	UserAgent string
+	IPAddress string
+	ExpiresAt time.Time
+	Revoked   bool `gorm:"default:false"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+func (RefreshTokenModel) TableName() string {
+	return "refresh_tokens"
 }
