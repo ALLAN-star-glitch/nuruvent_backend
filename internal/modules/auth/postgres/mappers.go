@@ -2,7 +2,6 @@ package postgres
 
 import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
-
 	"github.com/google/uuid"
 )
 
@@ -95,17 +94,28 @@ func ToTeamMemberModel(member *domain.TeamMember) *TeamMemberModel {
 		return nil
 	}
 
-	return &TeamMemberModel{
-		ID:        uuid.MustParse(member.ID),
-		AccountID: uuid.MustParse(member.AccountID),
-		MemberID:  uuid.MustParse(member.MemberID),
-		Role:      TeamMemberRole(member.Role),
-		JobTitle:  member.JobTitle,
-		IsActive:  member.IsActive,
-		JoinedAt:  member.JoinedAt,
-		CreatedAt: member.CreatedAt,
-		UpdatedAt: member.UpdatedAt,
+	model := &TeamMemberModel{
+		ID:          uuid.MustParse(member.ID),
+		Slug:        member.Slug,
+		Name:        member.Name,
+		DisplayName: member.DisplayName,
+		AccountID:   uuid.MustParse(member.AccountID),
+		MemberID:    uuid.MustParse(member.MemberID),
+		Role:        TeamMemberRole(member.Role),
+		JobTitle:    member.JobTitle,
+		IsActive:    member.IsActive,
+		JoinedAt:    member.JoinedAt,
+		CreatedAt:   member.CreatedAt,
+		UpdatedAt:   member.UpdatedAt,
 	}
+
+	// ✅ Handle nullable CreatedBy
+	if member.CreatedBy != nil && *member.CreatedBy != "" {
+		id := uuid.MustParse(*member.CreatedBy)
+		model.CreatedBy = &id
+	}
+
+	return model
 }
 
 // ============================================================
@@ -195,16 +205,26 @@ func ToDomainTeamMember(model *TeamMemberModel) *domain.TeamMember {
 		return nil
 	}
 
+	var createdBy *string
+	if model.CreatedBy != nil {
+		id := model.CreatedBy.String()
+		createdBy = &id
+	}
+
 	return &domain.TeamMember{
-		ID:        model.ID.String(),
-		AccountID: model.AccountID.String(),
-		MemberID:  model.MemberID.String(),
-		Role:      string(model.Role),
-		JobTitle:  model.JobTitle,
-		IsActive:  model.IsActive,
-		JoinedAt:  model.JoinedAt,
-		CreatedAt: model.CreatedAt,
-		UpdatedAt: model.UpdatedAt,
+		ID:          model.ID.String(),
+		Slug:        model.Slug,
+		Name:        model.Name,
+		DisplayName: model.DisplayName,
+		AccountID:   model.AccountID.String(),
+		MemberID:    model.MemberID.String(),
+		Role:        string(model.Role),
+		JobTitle:    model.JobTitle,
+		IsActive:    model.IsActive,
+		CreatedBy:   createdBy,
+		JoinedAt:    model.JoinedAt,
+		CreatedAt:   model.CreatedAt,
+		UpdatedAt:   model.UpdatedAt,
 	}
 }
 

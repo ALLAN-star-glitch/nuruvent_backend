@@ -82,19 +82,24 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 		return nil, nil, err
 	}
 
-	// 7. Handle institution creation if applicable
+	// 7. ✅ FIRST: Save account
+	if err := s.repo.CreateAccount(account); err != nil {
+		return nil, nil, fmt.Errorf("failed to create account: %w", err)
+	}
+
+	// 8. ✅ SECOND: Handle institution creation (which creates team member using account ID)
 	var institution *domain.Institution
 	if accountTypeSlug == "institution" {
-		institution, err = s.createInstitution(ctx, userData)
+		institution, err = s.createInstitution(ctx, userData, account.ID)
 		if err != nil {
 			return nil, nil, err
 		}
 		account.InstitutionID = &institution.ID
-	}
 
-	// 8. Save account
-	if err := s.repo.CreateAccount(account); err != nil {
-		return nil, nil, fmt.Errorf("failed to create account: %w", err)
+		// ✅ THIRD: Update account with institution ID
+		if err := s.repo.UpdateAccount(account); err != nil {
+			return nil, nil, fmt.Errorf("failed to update account with institution: %w", err)
+		}
 	}
 
 	// 9. Assign account_admin role in Casbin
@@ -136,23 +141,27 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 // ============================================================
 
 // createInstitution creates an institution from user data
-func (s *service) createInstitution(_ context.Context, userData map[string]string) (*domain.Institution, error) {
-	// ✅ No type assertions needed - userData is map[string]string
+// It assumes the account already exists and uses the accountID for team member creation
+func (s *service) createInstitution(_ context.Context, userData map[string]string, accountID string) (*domain.Institution, error) {
+	// Get institution name
 	institutionName := userData["institution_name"]
 	if institutionName == "" {
 		return nil, errors.New("institution name is required")
 	}
 
+	// Get institution email
 	institutionEmail := userData["institution_email"]
 	if institutionEmail == "" {
 		return nil, errors.New("institution email is required")
 	}
 
+	// Get institution phone
 	institutionPhone := userData["institution_phone"]
 	if institutionPhone == "" {
 		return nil, errors.New("institution phone is required")
 	}
 
+	// Get institution type
 	institutionTypeSlug := userData["institution_type"]
 	if institutionTypeSlug == "" {
 		return nil, errors.New("institution type is required")
@@ -191,8 +200,8 @@ func (s *service) createInstitution(_ context.Context, userData map[string]strin
 		return nil, fmt.Errorf("failed to create institution: %w", err)
 	}
 
-	// Create team member (admin)
-	teamMember, err := domain.NewTeamMember(institution.ID, institution.ID, "admin")
+	// ✅ Create team member (admin) using the existing account ID
+	teamMember, err := domain.NewTeamMember(accountID, accountID, "admin")
 	if err != nil {
 		return nil, err
 	}

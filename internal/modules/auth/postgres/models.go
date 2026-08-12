@@ -134,7 +134,7 @@ type TeamMemberModel struct {
 	Role        TeamMemberRole `gorm:"type:varchar(50);not null;default:'team_member'" json:"role"`
 	JobTitle    string         `gorm:"size:100" json:"job_title,omitempty"`
 	IsActive    bool           `gorm:"default:true" json:"is_active"`
-	CreatedBy   uuid.UUID      `gorm:"type:uuid" json:"created_by,omitempty"`
+    CreatedBy   *uuid.UUID     `gorm:"type:uuid" json:"created_by,omitempty"`
 	JoinedAt    time.Time      `gorm:"default:CURRENT_TIMESTAMP" json:"joined_at"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
