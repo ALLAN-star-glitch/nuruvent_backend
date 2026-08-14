@@ -67,8 +67,6 @@ func main() {
 	}
 	log.Println("✅ Email channel created")
 
-	// ✅ IMPORTANT: Use SYNCHRONOUS service for the worker
-	// This sends emails directly without enqueuing new tasks
 	notificationService := service.NewNotificationService(emailChannel)
 	if notificationService == nil {
 		log.Fatalf("❌ Failed to create notification service")
