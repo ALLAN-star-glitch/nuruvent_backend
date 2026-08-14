@@ -7,7 +7,6 @@ import (
 	"log"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/email"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -31,7 +30,7 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 	s.otpSvc.DeleteOTP(email)
 	s.otpSvc.DeleteUserData(email)
 
-	// 4. Get account type - ✅ No type assertion needed (already string)
+	// 4. Get account type
 	accountTypeSlug := userData["account_type"]
 	if accountTypeSlug == "" {
 		accountTypeSlug = "personal"
@@ -45,7 +44,7 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 		return nil, nil, domain.ErrAccountTypeNotFound
 	}
 
-	// 5. Hash password - ✅ No type assertion needed
+	// 5. Hash password
 	password := userData["password"]
 	if password == "" {
 		return nil, nil, errors.New("password not found")
@@ -55,7 +54,7 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 		return nil, nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	// 6. Create account - ✅ No type assertion needed
+	// 6. Create account
 	accountEmail := userData["email"]
 	if accountEmail == "" {
 		return nil, nil, errors.New("email not found")
@@ -82,12 +81,12 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 		return nil, nil, err
 	}
 
-	// 7. ✅ FIRST: Save account
+	// 7. Save account
 	if err := s.repo.CreateAccount(account); err != nil {
 		return nil, nil, fmt.Errorf("failed to create account: %w", err)
 	}
 
-	// 8. ✅ SECOND: Handle institution creation (which creates team member using account ID)
+	// 8. Handle institution creation
 	var institution *domain.Institution
 	if accountTypeSlug == "institution" {
 		institution, err = s.createInstitution(ctx, userData, account.ID)
@@ -96,7 +95,6 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 		}
 		account.InstitutionID = &institution.ID
 
-		// ✅ THIRD: Update account with institution ID
 		if err := s.repo.UpdateAccount(account); err != nil {
 			return nil, nil, fmt.Errorf("failed to update account with institution: %w", err)
 		}
@@ -113,13 +111,9 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 		return nil, nil, err
 	}
 
-	// 11. Send Welcome Email via Queue
-	if err := s.enqueueWelcomeEmail(account, institution); err != nil {
-		log.Printf("Failed to enqueue welcome email: %v", err)
-		// Fallback: send synchronously
-		if err := s.sendWelcomeEmailSync(account, institution); err != nil {
-			log.Printf("Failed to send welcome email: %v", err)
-		}
+	// 11. Send Welcome Email via Notification Service
+	if err := s.sendWelcomeNotification(account, institution); err != nil {
+		log.Printf("Failed to send welcome notification: %v", err)
 	}
 
 	// 12. Build response
@@ -141,7 +135,6 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 // ============================================================
 
 // createInstitution creates an institution from user data
-// It assumes the account already exists and uses the accountID for team member creation
 func (s *service) createInstitution(_ context.Context, userData map[string]string, accountID string) (*domain.Institution, error) {
 	// Get institution name
 	institutionName := userData["institution_name"]
@@ -200,7 +193,7 @@ func (s *service) createInstitution(_ context.Context, userData map[string]strin
 		return nil, fmt.Errorf("failed to create institution: %w", err)
 	}
 
-	// ✅ Create team member (admin) using the existing account ID
+	// Create team member (admin) using the existing account ID
 	teamMember, err := domain.NewTeamMember(accountID, accountID, "admin")
 	if err != nil {
 		return nil, err
@@ -214,45 +207,23 @@ func (s *service) createInstitution(_ context.Context, userData map[string]strin
 }
 
 // ============================================================
-// WELCOME EMAIL HELPERS
+// WELCOME NOTIFICATION HELPERS
 // ============================================================
 
-// enqueueWelcomeEmail enqueues a welcome email task
-func (s *service) enqueueWelcomeEmail(account *domain.Account, institution *domain.Institution) error {
-	if s.queue == nil {
-		return fmt.Errorf("queue client not available")
-	}
-
+// sendWelcomeNotification sends welcome notification via notification service
+func (s *service) sendWelcomeNotification(account *domain.Account, institution *domain.Institution) error {
 	// Check if it's an institution account
 	if account.InstitutionID != nil && institution != nil {
-		task := email.WelcomeInstitutionTask{
+		return s.notifSvc.SendInstitutionWelcome(context.Background(), domain.SendInstitutionWelcomeRequest{
 			To:              account.Email,
 			AdminName:       account.Name,
 			InstitutionName: institution.Name,
-		}
-		payload, err := task.Payload()
-		if err != nil {
-			return err
-		}
-		return s.queue.Enqueue(email.TypeWelcomeInstitution, payload)
+		})
 	}
 
 	// Individual welcome
-	task := email.WelcomeIndividualTask{
+	return s.notifSvc.SendIndividualWelcome(context.Background(), domain.SendWelcomeRequest{
 		To:   account.Email,
 		Name: account.Name,
-	}
-	payload, err := task.Payload()
-	if err != nil {
-		return err
-	}
-	return s.queue.Enqueue(email.TypeWelcomeIndividual, payload)
-}
-
-// sendWelcomeEmailSync sends welcome email synchronously (fallback)
-func (s *service) sendWelcomeEmailSync(account *domain.Account, institution *domain.Institution) error {
-	if account.InstitutionID != nil && institution != nil {
-		return s.emailSvc.SendInstitutionWelcome(account.Email, account.Name, institution.Name)
-	}
-	return s.emailSvc.SendIndividualWelcome(account.Email, account.Name)
+	})
 }

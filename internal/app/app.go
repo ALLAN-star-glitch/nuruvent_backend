@@ -33,19 +33,23 @@ func NewApp() (*App, error) {
 	return &App{AppDependencies: deps}, nil
 }
 
+// Init initializes all modules
 func (app *App) Init(ctx context.Context) error {
 	log.Println("Initializing modules...")
 	if app.AuthService != nil {
-		log.Println("Auth module ready")
+		log.Println("✅ Auth module ready")
 	}
 	if app.AccountService != nil {
-		log.Println("Account module ready")
+		log.Println("✅ Account module ready")
 	}
 	if app.EventsService != nil {
-		log.Println("Events module ready")
+		log.Println("✅ Events module ready")
 	}
 	if app.MediaService != nil {
-		log.Println("Media module ready")
+		log.Println("✅ Media module ready")
+	}
+	if app.Notification != nil {
+		log.Println("✅ Notification module ready")
 	}
 	log.Println("All modules initialized successfully")
 	return nil

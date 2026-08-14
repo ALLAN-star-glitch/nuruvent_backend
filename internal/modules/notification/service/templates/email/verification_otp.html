@@ -1,0 +1,27 @@
+{{define "verification-otp"}}
+<h1 class="title">{{.title}} <span class="highlight">{{.subtitle}}</span></h1>
+<p class="subtitle">{{.description}}</p>
+
+<p class="greeting">Hello <span class="name">{{.name}}</span>,</p>
+<p class="body-text">{{.message}}</p>
+
+<div class="otp-box">
+    <div class="otp-label">Your Verification Code</div>
+    <div class="otp-code">{{.otp}}</div>
+    <div class="otp-expiry">This code expires in <span class="highlight">{{.expires}}</span></div>
+</div>
+
+{{if .extra_info}}
+<div class="alert-info">
+    <p>{{.extra_info}}</p>
+</div>
+{{end}}
+
+{{if .warning}}
+<div class="alert-warning">
+    <p>{{.warning}}</p>
+</div>
+{{end}}
+
+<p class="body-text text-muted text-center">If you did not request this, please ignore this email.</p>
+{{end}}

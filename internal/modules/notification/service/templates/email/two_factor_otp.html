@@ -2,7 +2,7 @@
 <h1 class="title">Two-Factor <span class="highlight">Authentication</span></h1>
 <p class="subtitle">Secure your account access</p>
 
-<p class="greeting">Hello <span class="name">{{.Name}}</span>,</p>
+<p class="greeting">Hello <span class="name">{{.name}}</span>,</p>
 <p class="body-text">
     You requested a two-factor authentication code for your <span class="highlight">Nuruvent</span> account.
     Please use the verification code below to complete your login.
@@ -10,8 +10,19 @@
 
 <div class="otp-box">
     <div class="otp-label">Your 2FA Verification Code</div>
-    <div class="otp-code">{{.OTP}}</div>
-    <div class="otp-expiry">This code expires in <span class="highlight">{{.Expires}}</span></div>
+    <div class="otp-code">{{.otp}}</div>
+    <div class="otp-expiry">This code expires in <span class="highlight">{{.expires}}</span></div>
+</div>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">IP Address</span>
+        <span class="value">{{.ip_address}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Device</span>
+        <span class="value">{{.user_agent}}</span>
+    </div>
 </div>
 
 <div class="alert-danger">

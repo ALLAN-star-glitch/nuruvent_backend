@@ -9,18 +9,21 @@ package app
 import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/acchandler"
 	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/postgres"
-	service2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
+	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/jwt"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/redis"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
+	service2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	postgres3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
-	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
+	service5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 	postgres4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
-	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
+	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
@@ -47,21 +50,26 @@ func InitializeApp() (*AppDependencies, error) {
 	permissionService := authorization.NewService(enforcer)
 	tokenService := jwt.NewTokenService(configConfig)
 	otpService := redis.NewOTPService()
-	emailService := provideEmailService(configConfig)
-	serviceService := service.NewService(repository, configConfig, queueClient, permissionService, tokenService, otpService, emailService)
+	taskEnqueuer := service.NewTaskEnqueuer(queueClient)
+	emailChannelConfig := notification.ProvideEmailChannelConfig(configConfig)
+	channel := service.NewEmailChannel(emailChannelConfig)
+	v := notification.ProvideChannelSlice(channel)
+	notificationService := service.NewNotificationServiceWithQueue(taskEnqueuer, v...)
+	domainNotificationService := NewAuthNotificationAdapter(notificationService)
+	serviceService := service2.NewService(repository, configConfig, queueClient, permissionService, tokenService, otpService, domainNotificationService)
 	domainRepository := postgres2.NewPostgresRepository(db)
 	domainPermissionService := NewAccountPermissionAdapter(permissionService)
-	service5 := service2.NewService(domainRepository, domainPermissionService)
+	service6 := service3.NewService(domainRepository, domainPermissionService)
 	repository2 := postgres3.NewPostgresRepository(db)
 	permissionChecker := NewEventsPermissionAdapter(permissionService)
 	repository3 := postgres4.NewPostgresRepository(db)
-	service6 := service3.NewService(repository3, client)
-	mediaService := NewEventsMediaAdapter(service6)
-	service7 := service4.NewService(repository2, permissionChecker, mediaService)
+	service7 := service4.NewService(repository3, client)
+	mediaService := NewEventsMediaAdapter(service7)
+	service8 := service5.NewService(repository2, permissionChecker, mediaService)
 	authHandler := authhandler.NewAuthHandler(serviceService, configConfig)
-	accountHandler := acchandler.NewAccountHandler(service5)
-	eventHandler := eventhandler.NewEventHandler(service7)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, enforcer, serviceService, service5, service7, service6, authHandler, accountHandler, eventHandler)
+	accountHandler := acchandler.NewAccountHandler(service6)
+	eventHandler := eventhandler.NewEventHandler(service8)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, enforcer, serviceService, service6, service8, service7, authHandler, accountHandler, eventHandler)
 	return appDependencies, nil
 }
 
@@ -73,10 +81,11 @@ type AppDependencies struct {
 	App            *fiber.App
 	StorageClient  *storage.Client
 	Enforcer       *authorization.Enforcer
-	AuthService    service.Service
-	AccountService service2.Service
-	EventsService  service4.Service
-	MediaService   service3.Service
+	Notification   notificationdomain.NotificationService // ✅ Add this
+	AuthService    service2.Service
+	AccountService service3.Service
+	EventsService  service5.Service
+	MediaService   service4.Service
 	AuthHandler    *authhandler.AuthHandler
 	AccountHandler *acchandler.AccountHandler
 	EventsHandler  *eventhandler.EventHandler

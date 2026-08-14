@@ -7,16 +7,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/email"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/hibiken/asynq"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 )
 
 func main() {
 	// Load configuration
 	cfg := config.Load()
-	log.Printf("Starting Nuruvent email worker in %s mode", cfg.Environment)
+	log.Printf("Starting Nuruvent notification worker in %s mode", cfg.Environment)
 
 	// ================================================
 	// Initialize Redis
@@ -27,10 +29,22 @@ func main() {
 	log.Println("Redis initialized successfully")
 
 	// ================================================
-	// Initialize Email Service
+	// Initialize Notification Service
 	// ================================================
-	emailService := email.NewEmailService(cfg.Email.APIKey, cfg.Email.From)
-	emailWorker := email.NewEmailWorker(emailService)
+	// ✅ Create email channel config
+	emailConfig := service.EmailChannelConfig{
+		APIKey: cfg.Email.APIKey,
+		From:   cfg.Email.From,
+	}
+
+	// ✅ Create email channel using config
+	emailChannel := service.NewEmailChannel(emailConfig)
+
+	// Create notification service with channels
+	notificationService := service.NewNotificationService(emailChannel)
+
+	// Create notification worker
+	notificationWorker := service.NewNotificationWorker(notificationService)
 
 	// ================================================
 	// Create Asynq Server
@@ -44,7 +58,6 @@ func main() {
 				"default":  3,
 				"low":      1,
 			},
-			// Retry delay for failed tasks
 			RetryDelayFunc: func(n int, err error, task *asynq.Task) time.Duration {
 				return time.Duration(n) * 30 * time.Second
 			},
@@ -56,24 +69,24 @@ func main() {
 	// ================================================
 	mux := asynq.NewServeMux()
 
-	// Verification OTP (generic - handles registration, email change, phone change, password reset, 2FA)
-	mux.HandleFunc(email.TypeVerificationOTP, emailWorker.HandleVerificationOTP)
+	// Verification OTP
+	mux.HandleFunc(notificationdomain.TaskVerificationOTP, notificationWorker.HandleVerificationOTP)
 
 	// Welcome emails - Individual & Institution
-	mux.HandleFunc(email.TypeWelcomeIndividual, emailWorker.HandleWelcomeIndividual)
-	mux.HandleFunc(email.TypeWelcomeInstitution, emailWorker.HandleWelcomeInstitution)
+	mux.HandleFunc(notificationdomain.TaskWelcomeIndividual, notificationWorker.HandleWelcomeIndividual)
+	mux.HandleFunc(notificationdomain.TaskWelcomeInstitution, notificationWorker.HandleWelcomeInstitution)
 
 	// Security emails
-	mux.HandleFunc(email.TypeTwoFactorOTP, emailWorker.HandleTwoFactorOTP)
-	mux.HandleFunc(email.TypePasswordResetOTP, emailWorker.HandlePasswordResetOTP)
-	mux.HandleFunc(email.TypePasswordResetConfirm, emailWorker.HandlePasswordResetConfirm)
-	mux.HandleFunc(email.TypeLoginNotification, emailWorker.HandleLoginNotification)
+	mux.HandleFunc(notificationdomain.TaskTwoFactorOTP, notificationWorker.HandleTwoFactorOTP)
+	mux.HandleFunc(notificationdomain.TaskPasswordResetOTP, notificationWorker.HandlePasswordResetOTP)
+	mux.HandleFunc(notificationdomain.TaskPasswordResetConfirm, notificationWorker.HandlePasswordResetConfirm)
+	mux.HandleFunc(notificationdomain.TaskLoginNotification, notificationWorker.HandleLoginNotification)
 
 	// ================================================
 	// Start Worker
 	// ================================================
 	go func() {
-		log.Println("Asynq email worker started. Listening for tasks...")
+		log.Println("Asynq notification worker started. Listening for tasks...")
 		log.Printf("Queue priorities: critical=6, default=3, low=1")
 		if err := srv.Run(mux); err != nil {
 			log.Fatalf("Worker failed: %v", err)
@@ -87,7 +100,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down email worker gracefully...")
+	log.Println("Shutting down notification worker gracefully...")
 	srv.Shutdown()
-	log.Println("Email worker stopped")
+	log.Println("Notification worker stopped")
 }

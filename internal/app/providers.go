@@ -27,9 +27,13 @@ import (
 	mediaService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/email"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
+
+	// ❌ Remove this line - it's not used
+	// "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
+
+	notificationdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 )
 
 // ============================================================
@@ -38,10 +42,6 @@ import (
 
 func provideStorageClient(cfg *config.Config) *storage.Client {
 	return storage.NewClientFromConfig(&cfg.Supabase)
-}
-
-func provideEmailService(cfg *config.Config) *email.EmailService {
-	return email.NewEmailService(cfg.Email.APIKey, cfg.Email.From)
 }
 
 func provideQueueClient(cfg *config.Config) *queue.Client {
@@ -232,4 +232,98 @@ func (a *EventsMediaAdapter) GetMediaByID(ctx context.Context, id string) (*even
 
 func (a *EventsMediaAdapter) DeleteMediaByEntity(ctx context.Context, entityID string) error {
 	return a.mediaSvc.DeleteFilesByEntity(ctx, entityID)
+}
+
+// ============================================================
+// AUTH NOTIFICATION ADAPTER
+// ============================================================
+
+// AuthNotificationAdapter adapts notificationdomain.NotificationService 
+// to authDomain.NotificationService
+type AuthNotificationAdapter struct {
+	notifSvc notificationdomain.NotificationService
+}
+
+func NewAuthNotificationAdapter(notifSvc notificationdomain.NotificationService) authDomain.NotificationService {
+	return &AuthNotificationAdapter{notifSvc: notifSvc}
+}
+
+func (a *AuthNotificationAdapter) SendVerificationOTP(ctx context.Context, req authDomain.SendOTPRequest) error {
+	notifReq := notificationdomain.SendOTPRequest{
+		To:      req.To,
+		Name:    req.Name,
+		OTP:     req.OTP,
+		Expires: req.Expires,
+		Purpose: notificationdomain.VerificationPurpose(req.Purpose),
+		Meta:    req.Meta,
+	}
+	return a.notifSvc.SendVerificationOTP(ctx, notifReq)
+}
+
+func (a *AuthNotificationAdapter) SendIndividualWelcome(ctx context.Context, req authDomain.SendWelcomeRequest) error {
+	notifReq := notificationdomain.SendWelcomeRequest{
+		To:   req.To,
+		Name: req.Name,
+	}
+	return a.notifSvc.SendIndividualWelcome(ctx, notifReq)
+}
+
+func (a *AuthNotificationAdapter) SendInstitutionWelcome(ctx context.Context, req authDomain.SendInstitutionWelcomeRequest) error {
+	notifReq := notificationdomain.SendInstitutionWelcomeRequest{
+		To:              req.To,
+		AdminName:       req.AdminName,
+		InstitutionName: req.InstitutionName,
+	}
+	return a.notifSvc.SendInstitutionWelcome(ctx, notifReq)
+}
+
+func (a *AuthNotificationAdapter) SendWelcome(ctx context.Context, req authDomain.SendWelcomeRequest) error {
+	notifReq := notificationdomain.SendWelcomeRequest{
+		To:   req.To,
+		Name: req.Name,
+	}
+	return a.notifSvc.SendWelcome(ctx, notifReq)
+}
+
+func (a *AuthNotificationAdapter) SendTwoFactorOTP(ctx context.Context, req authDomain.SendTwoFactorRequest) error {
+	notifReq := notificationdomain.SendTwoFactorRequest{
+		To:        req.To,
+		Name:      req.Name,
+		OTP:       req.OTP,
+		Expires:   req.Expires,
+		IPAddress: req.IPAddress,
+		UserAgent: req.UserAgent,
+	}
+	return a.notifSvc.SendTwoFactorOTP(ctx, notifReq)
+}
+
+func (a *AuthNotificationAdapter) SendPasswordResetOTP(ctx context.Context, req authDomain.SendOTPRequest) error {
+	notifReq := notificationdomain.SendOTPRequest{
+		To:      req.To,
+		Name:    req.Name,
+		OTP:     req.OTP,
+		Expires: req.Expires,
+		Purpose: notificationdomain.PurposePasswordReset,
+		Meta:    req.Meta,
+	}
+	return a.notifSvc.SendPasswordResetOTP(ctx, notifReq)
+}
+
+func (a *AuthNotificationAdapter) SendPasswordResetConfirm(ctx context.Context, req authDomain.SendPasswordResetConfirmRequest) error {
+	notifReq := notificationdomain.SendPasswordResetConfirmRequest{
+		To:   req.To,
+		Name: req.Name,
+	}
+	return a.notifSvc.SendPasswordResetConfirm(ctx, notifReq)
+}
+
+func (a *AuthNotificationAdapter) SendLoginNotification(ctx context.Context, req authDomain.SendLoginNotificationRequest) error {
+	notifReq := notificationdomain.SendLoginNotificationRequest{
+		To:        req.To,
+		Name:      req.Name,
+		Time:      req.Time,
+		IPAddress: req.IPAddress,
+		UserAgent: req.UserAgent,
+	}
+	return a.notifSvc.SendLoginNotification(ctx, notifReq)
 }

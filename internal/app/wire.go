@@ -25,6 +25,9 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media"
 	mediaService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
+	notificationdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
+
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
@@ -36,6 +39,7 @@ type AppDependencies struct {
 	App            *fiber.App
 	StorageClient  *storage.Client
 	Enforcer       *authorization.Enforcer
+	Notification   notificationdomain.NotificationService // ✅ Add this
 	AuthService    authService.Service
 	AccountService accountService.Service
 	EventsService  eventsService.Service
@@ -51,9 +55,14 @@ func InitializeApp() (*AppDependencies, error) {
 		config.Load,
 		database.Connect,
 		provideStorageClient,
-		provideEmailService,
 		provideQueueClient,
 		provideFiberAppWithMiddleware,
+
+		// Notification Module
+		notification.ProviderSet,
+
+		// Auth Notification Adapter
+		NewAuthNotificationAdapter,
 
 		// Domain Module Provider Sets
 		auth.ProviderSet,
