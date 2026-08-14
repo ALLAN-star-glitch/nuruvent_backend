@@ -1,3 +1,5 @@
+// internal/modules/notification/service/service.go
+
 package service
 
 import (
@@ -12,7 +14,7 @@ import (
 // notificationService implements notificationdomain.NotificationService
 type notificationService struct {
 	channels     map[notificationdomain.NotificationChannel]notificationdomain.Channel
-	taskEnqueuer *TaskEnqueuer
+	taskEnqueuer notificationdomain.TaskEnqueuer // ← Inbound port (interface)
 	async        bool
 }
 
@@ -29,7 +31,11 @@ func NewNotificationService(channels ...notificationdomain.Channel) notification
 }
 
 // NewNotificationServiceWithQueue creates a notification service with queue support
-func NewNotificationServiceWithQueue(taskEnqueuer *TaskEnqueuer, channels ...notificationdomain.Channel) notificationdomain.NotificationService {
+// ✅ Depends on notificationdomain.TaskEnqueuer (inbound port)
+func NewNotificationServiceWithQueue(
+	taskEnqueuer notificationdomain.TaskEnqueuer, // ← Interface, not concrete
+	channels ...notificationdomain.Channel,
+) notificationdomain.NotificationService {
 	channelMap := make(map[notificationdomain.NotificationChannel]notificationdomain.Channel)
 	for _, ch := range channels {
 		channelMap[ch.GetChannel()] = ch
@@ -160,7 +166,6 @@ func (s *notificationService) getVerificationContent(req notificationdomain.Send
 // ============================================================
 
 func (s *notificationService) SendIndividualWelcome(ctx context.Context, req notificationdomain.SendWelcomeRequest) error {
-	// Validate channel exists
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
 		return err
@@ -200,7 +205,6 @@ func (s *notificationService) sendIndividualWelcomeSync(ctx context.Context, req
 }
 
 func (s *notificationService) SendInstitutionWelcome(ctx context.Context, req notificationdomain.SendInstitutionWelcomeRequest) error {
-	// Validate channel exists
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
 		return err
@@ -250,7 +254,6 @@ func (s *notificationService) SendWelcome(ctx context.Context, req notificationd
 // ============================================================
 
 func (s *notificationService) SendTwoFactorOTP(ctx context.Context, req notificationdomain.SendTwoFactorRequest) error {
-	// Validate channel exists
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
 		return err
@@ -306,7 +309,6 @@ func (s *notificationService) SendPasswordResetOTP(ctx context.Context, req noti
 }
 
 func (s *notificationService) SendPasswordResetConfirm(ctx context.Context, req notificationdomain.SendPasswordResetConfirmRequest) error {
-	// Validate channel exists
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
 		return err
@@ -349,7 +351,6 @@ func (s *notificationService) sendPasswordResetConfirmSync(ctx context.Context, 
 // ============================================================
 
 func (s *notificationService) SendLoginNotification(ctx context.Context, req notificationdomain.SendLoginNotificationRequest) error {
-	// Validate channel exists
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
 		return err

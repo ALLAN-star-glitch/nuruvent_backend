@@ -29,7 +29,7 @@ func main() {
 	log.Printf("📧 Email Configuration:")
 	log.Printf("   API Key: %s", maskString(cfg.Email.EMAIL_API_KEY))
 	log.Printf("   From: %s", cfg.Email.EMAIL_FROM)
-	
+
 	if cfg.Email.EMAIL_API_KEY == "" {
 		log.Printf("⚠️ WARNING: EMAIL_API_KEY is empty! Check your .env file")
 	}
@@ -46,39 +46,30 @@ func main() {
 	log.Println("✅ Redis initialized successfully")
 
 	// ================================================
-	// Initialize Queue Client (for consuming tasks)
+	// Create Email Channel (Implements Outbound Port)
 	// ================================================
-	// We only need the queue client for the server, not for enqueuing
-	log.Println("✅ Queue client initialized")
-
-	// ================================================
-	// Initialize Notification Service
-	// ================================================
-	// Create email channel config
 	emailConfig := service.EmailChannelConfig{
 		EMAIL_API_KEY: cfg.Email.EMAIL_API_KEY,
-		EMAIL_FROM:   cfg.Email.EMAIL_FROM,
+		EMAIL_FROM:    cfg.Email.EMAIL_FROM,
 	}
 
-	// Create email channel
+	// ✅ EmailChannel implements notificationdomain.Channel (outbound port)
 	emailChannel := service.NewEmailChannel(emailConfig)
 	if emailChannel == nil {
 		log.Fatalf("❌ Failed to create email channel")
 	}
-	log.Println("✅ Email channel created")
+	log.Println("✅ Email channel created (implements notificationdomain.Channel)")
 
-	notificationService := service.NewNotificationService(emailChannel)
-	if notificationService == nil {
-		log.Fatalf("❌ Failed to create notification service")
-	}
-	log.Printf("✅ Notification service created (SYNCHRONOUS - no queue)")
-
-	// Create notification worker with the synchronous service
-	notificationWorker := service.NewNotificationWorker(notificationService)
+	// ================================================
+	// Create Worker (Implements Inbound Port)
+	// ================================================
+	// ✅ Worker implements notificationdomain.TaskProcessor (inbound port)
+	// ✅ Depends on notificationdomain.Channel (outbound port)
+	notificationWorker := service.NewNotificationWorker(emailChannel)
 	if notificationWorker == nil {
 		log.Fatalf("❌ Failed to create notification worker")
 	}
-	log.Println("✅ Notification worker created")
+	log.Println("✅ Notification worker created (implements TaskProcessor interface)")
 
 	// ================================================
 	// Create Asynq Server
@@ -135,7 +126,6 @@ func main() {
 
 	log.Println("🛑 Shutting down notification worker gracefully...")
 
-	// Graceful shutdown
 	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

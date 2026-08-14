@@ -1,3 +1,5 @@
+// internal/modules/notification/service/worker.go
+
 package service
 
 import (
@@ -11,13 +13,17 @@ import (
 )
 
 // NotificationWorker handles async notification tasks
+// ✅ Implements notificationdomain.TaskProcessor (inbound port)
+// ✅ Depends on notificationdomain.Channel (outbound port)
 type NotificationWorker struct {
-	service notificationdomain.NotificationService
+	emailChannel notificationdomain.Channel // ← Outbound Port (interface)
 }
 
-func NewNotificationWorker(svc notificationdomain.NotificationService) *NotificationWorker {
+// NewNotificationWorker creates a new notification worker
+// ✅ Injects the outbound port dependency
+func NewNotificationWorker(emailChannel notificationdomain.Channel) *NotificationWorker {
 	return &NotificationWorker{
-		service: svc,
+		emailChannel: emailChannel,
 	}
 }
 
@@ -25,26 +31,27 @@ func NewNotificationWorker(svc notificationdomain.NotificationService) *Notifica
 // VERIFICATION OTP HANDLER
 // ============================================================
 
-// HandleVerificationOTP handles verification OTP tasks
-func (w *NotificationWorker) HandleVerificationOTP(ctx context.Context, task *asynq.Task) error {
-	var data notificationdomain.VerificationOTPTask
-	if err := json.Unmarshal(task.Payload(), &data); err != nil {
-		log.Printf("[NotificationWorker] Failed to parse verification OTP task: %v", err)
-		return err
-	}
-
+// ProcessVerificationOTP implements notificationdomain.TaskProcessor
+func (w *NotificationWorker) ProcessVerificationOTP(ctx context.Context, data notificationdomain.VerificationOTPTask) error {
 	log.Printf("[NotificationWorker] Processing verification OTP for %s", data.To)
 
-	req := notificationdomain.SendOTPRequest{
+	channelReq := notificationdomain.ChannelRequest{
 		To:      data.To,
-		Name:    data.Name,
-		OTP:     data.OTP,
-		Expires: data.Expires,
-		Purpose: data.Purpose,
-		Meta:    data.Meta,
+		Subject: "Verify Your Account - Nuruvent",
+		Type:    notificationdomain.TypeVerificationOTP,
+		Meta: map[string]string{
+			"name":        data.Name,
+			"otp":         data.OTP,
+			"expires":     data.Expires,
+			"title":       "Verify Your",
+			"subtitle":    "Account",
+			"description": "Complete your Nuruvent registration",
+			"message":     "Thank you for joining Nuruvent. Please use the verification code below to complete your account setup.",
+			"warning":     "If you did not create an account on Nuruvent, please ignore this email.",
+		},
 	}
 
-	if err := w.service.SendVerificationOTP(ctx, req); err != nil {
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
 		log.Printf("[NotificationWorker] Failed to send verification OTP to %s: %v", data.To, err)
 		return err
 	}
@@ -53,26 +60,35 @@ func (w *NotificationWorker) HandleVerificationOTP(ctx context.Context, task *as
 	return nil
 }
 
+// HandleVerificationOTP is the asynq task handler
+func (w *NotificationWorker) HandleVerificationOTP(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.VerificationOTPTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse verification OTP task: %v", err)
+		return err
+	}
+	return w.ProcessVerificationOTP(ctx, data)
+}
+
 // ============================================================
 // WELCOME HANDLERS
 // ============================================================
 
-// HandleWelcomeIndividual handles individual welcome tasks
-func (w *NotificationWorker) HandleWelcomeIndividual(ctx context.Context, task *asynq.Task) error {
-	var data notificationdomain.WelcomeIndividualTask
-	if err := json.Unmarshal(task.Payload(), &data); err != nil {
-		log.Printf("[NotificationWorker] Failed to parse individual welcome task: %v", err)
-		return err
-	}
-
+// ProcessWelcomeIndividual implements notificationdomain.TaskProcessor
+func (w *NotificationWorker) ProcessWelcomeIndividual(ctx context.Context, data notificationdomain.WelcomeIndividualTask) error {
 	log.Printf("[NotificationWorker] Processing individual welcome for %s", data.To)
 
-	req := notificationdomain.SendWelcomeRequest{
-		To:   data.To,
-		Name: data.Name,
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Welcome to Nuruvent - Your Professional Account is Ready!",
+		Type:    notificationdomain.TypeWelcome,
+		Meta: map[string]string{
+			"name":         data.Name,
+			"account_type": "individual",
+		},
 	}
 
-	if err := w.service.SendIndividualWelcome(ctx, req); err != nil {
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
 		log.Printf("[NotificationWorker] Failed to send individual welcome to %s: %v", data.To, err)
 		return err
 	}
@@ -81,23 +97,32 @@ func (w *NotificationWorker) HandleWelcomeIndividual(ctx context.Context, task *
 	return nil
 }
 
-// HandleWelcomeInstitution handles institution welcome tasks
-func (w *NotificationWorker) HandleWelcomeInstitution(ctx context.Context, task *asynq.Task) error {
-	var data notificationdomain.WelcomeInstitutionTask
+// HandleWelcomeIndividual is the asynq task handler
+func (w *NotificationWorker) HandleWelcomeIndividual(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.WelcomeIndividualTask
 	if err := json.Unmarshal(task.Payload(), &data); err != nil {
-		log.Printf("[NotificationWorker] Failed to parse institution welcome task: %v", err)
+		log.Printf("[NotificationWorker] Failed to parse individual welcome task: %v", err)
 		return err
 	}
+	return w.ProcessWelcomeIndividual(ctx, data)
+}
 
+// ProcessWelcomeInstitution implements notificationdomain.TaskProcessor
+func (w *NotificationWorker) ProcessWelcomeInstitution(ctx context.Context, data notificationdomain.WelcomeInstitutionTask) error {
 	log.Printf("[NotificationWorker] Processing institution welcome for %s - Institution: %s", data.To, data.InstitutionName)
 
-	req := notificationdomain.SendInstitutionWelcomeRequest{
-		To:              data.To,
-		AdminName:       data.AdminName,
-		InstitutionName: data.InstitutionName,
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Welcome to Nuruvent - Your Institution is Live!",
+		Type:    notificationdomain.TypeWelcome,
+		Meta: map[string]string{
+			"admin_name":        data.AdminName,
+			"institution_name":  data.InstitutionName,
+			"account_type":      "institution",
+		},
 	}
 
-	if err := w.service.SendInstitutionWelcome(ctx, req); err != nil {
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
 		log.Printf("[NotificationWorker] Failed to send institution welcome to %s: %v", data.To, err)
 		return err
 	}
@@ -106,30 +131,38 @@ func (w *NotificationWorker) HandleWelcomeInstitution(ctx context.Context, task 
 	return nil
 }
 
+// HandleWelcomeInstitution is the asynq task handler
+func (w *NotificationWorker) HandleWelcomeInstitution(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.WelcomeInstitutionTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse institution welcome task: %v", err)
+		return err
+	}
+	return w.ProcessWelcomeInstitution(ctx, data)
+}
+
 // ============================================================
 // TWO FACTOR OTP HANDLER
 // ============================================================
 
-// HandleTwoFactorOTP handles 2FA OTP tasks
-func (w *NotificationWorker) HandleTwoFactorOTP(ctx context.Context, task *asynq.Task) error {
-	var data notificationdomain.TwoFactorOTPTask
-	if err := json.Unmarshal(task.Payload(), &data); err != nil {
-		log.Printf("[NotificationWorker] Failed to parse 2FA OTP task: %v", err)
-		return err
-	}
-
+// ProcessTwoFactorOTP implements notificationdomain.TaskProcessor
+func (w *NotificationWorker) ProcessTwoFactorOTP(ctx context.Context, data notificationdomain.TwoFactorOTPTask) error {
 	log.Printf("[NotificationWorker] Processing 2FA OTP for %s", data.To)
 
-	req := notificationdomain.SendTwoFactorRequest{
-		To:        data.To,
-		Name:      data.Name,
-		OTP:       data.OTP,
-		Expires:   data.Expires,
-		IPAddress: data.IPAddress,
-		UserAgent: data.UserAgent,
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Two-Factor Authentication - Nuruvent",
+		Type:    notificationdomain.TypeTwoFactor,
+		Meta: map[string]string{
+			"name":       data.Name,
+			"otp":        data.OTP,
+			"expires":    data.Expires,
+			"ip_address": data.IPAddress,
+			"user_agent": data.UserAgent,
+		},
 	}
 
-	if err := w.service.SendTwoFactorOTP(ctx, req); err != nil {
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
 		log.Printf("[NotificationWorker] Failed to send 2FA OTP to %s: %v", data.To, err)
 		return err
 	}
@@ -138,30 +171,41 @@ func (w *NotificationWorker) HandleTwoFactorOTP(ctx context.Context, task *asynq
 	return nil
 }
 
+// HandleTwoFactorOTP is the asynq task handler
+func (w *NotificationWorker) HandleTwoFactorOTP(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.TwoFactorOTPTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse 2FA OTP task: %v", err)
+		return err
+	}
+	return w.ProcessTwoFactorOTP(ctx, data)
+}
+
 // ============================================================
 // PASSWORD RESET HANDLERS
 // ============================================================
 
-// HandlePasswordResetOTP handles password reset OTP tasks
-func (w *NotificationWorker) HandlePasswordResetOTP(ctx context.Context, task *asynq.Task) error {
-	var data notificationdomain.PasswordResetOTPTask
-	if err := json.Unmarshal(task.Payload(), &data); err != nil {
-		log.Printf("[NotificationWorker] Failed to parse password reset OTP task: %v", err)
-		return err
-	}
-
+// ProcessPasswordResetOTP implements notificationdomain.TaskProcessor
+func (w *NotificationWorker) ProcessPasswordResetOTP(ctx context.Context, data notificationdomain.PasswordResetOTPTask) error {
 	log.Printf("[NotificationWorker] Processing password reset OTP for %s", data.To)
 
-	req := notificationdomain.SendOTPRequest{
+	channelReq := notificationdomain.ChannelRequest{
 		To:      data.To,
-		Name:    data.Name,
-		OTP:     data.OTP,
-		Expires: data.Expires,
-		Purpose: notificationdomain.PurposePasswordReset,
-		Meta:    nil,
+		Subject: "Reset Your Password - Nuruvent",
+		Type:    notificationdomain.TypeVerificationOTP,
+		Meta: map[string]string{
+			"name":        data.Name,
+			"otp":         data.OTP,
+			"expires":     data.Expires,
+			"title":       "Reset Your",
+			"subtitle":    "Password",
+			"description": "Secure access to your account",
+			"message":     "We received a request to reset your password for your Nuruvent account. Use the verification code below to continue.",
+			"warning":     "If you did not request a password reset, please ignore this email. Your account remains secure.",
+		},
 	}
 
-	if err := w.service.SendPasswordResetOTP(ctx, req); err != nil {
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
 		log.Printf("[NotificationWorker] Failed to send password reset OTP to %s: %v", data.To, err)
 		return err
 	}
@@ -170,22 +214,30 @@ func (w *NotificationWorker) HandlePasswordResetOTP(ctx context.Context, task *a
 	return nil
 }
 
-// HandlePasswordResetConfirm handles password reset confirmation tasks
-func (w *NotificationWorker) HandlePasswordResetConfirm(ctx context.Context, task *asynq.Task) error {
-	var data notificationdomain.PasswordResetConfirmTask
+// HandlePasswordResetOTP is the asynq task handler
+func (w *NotificationWorker) HandlePasswordResetOTP(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.PasswordResetOTPTask
 	if err := json.Unmarshal(task.Payload(), &data); err != nil {
-		log.Printf("[NotificationWorker] Failed to parse password reset confirm task: %v", err)
+		log.Printf("[NotificationWorker] Failed to parse password reset OTP task: %v", err)
 		return err
 	}
+	return w.ProcessPasswordResetOTP(ctx, data)
+}
 
+// ProcessPasswordResetConfirm implements notificationdomain.TaskProcessor
+func (w *NotificationWorker) ProcessPasswordResetConfirm(ctx context.Context, data notificationdomain.PasswordResetConfirmTask) error {
 	log.Printf("[NotificationWorker] Processing password reset confirmation for %s", data.To)
 
-	req := notificationdomain.SendPasswordResetConfirmRequest{
-		To:   data.To,
-		Name: data.Name,
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Password Reset Confirmation - Nuruvent",
+		Type:    notificationdomain.TypePasswordResetConfirm,
+		Meta: map[string]string{
+			"name": data.Name,
+		},
 	}
 
-	if err := w.service.SendPasswordResetConfirm(ctx, req); err != nil {
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
 		log.Printf("[NotificationWorker] Failed to send password reset confirmation to %s: %v", data.To, err)
 		return err
 	}
@@ -194,29 +246,37 @@ func (w *NotificationWorker) HandlePasswordResetConfirm(ctx context.Context, tas
 	return nil
 }
 
+// HandlePasswordResetConfirm is the asynq task handler
+func (w *NotificationWorker) HandlePasswordResetConfirm(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.PasswordResetConfirmTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse password reset confirm task: %v", err)
+		return err
+	}
+	return w.ProcessPasswordResetConfirm(ctx, data)
+}
+
 // ============================================================
 // LOGIN NOTIFICATION HANDLER
 // ============================================================
 
-// HandleLoginNotification handles login notification tasks
-func (w *NotificationWorker) HandleLoginNotification(ctx context.Context, task *asynq.Task) error {
-	var data notificationdomain.LoginNotificationTask
-	if err := json.Unmarshal(task.Payload(), &data); err != nil {
-		log.Printf("[NotificationWorker] Failed to parse login notification task: %v", err)
-		return err
-	}
-
+// ProcessLoginNotification implements notificationdomain.TaskProcessor
+func (w *NotificationWorker) ProcessLoginNotification(ctx context.Context, data notificationdomain.LoginNotificationTask) error {
 	log.Printf("[NotificationWorker] Processing login notification for %s", data.To)
 
-	req := notificationdomain.SendLoginNotificationRequest{
-		To:        data.To,
-		Name:      data.Name,
-		Time:      data.Time,
-		IPAddress: data.IPAddress,
-		UserAgent: data.UserAgent,
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "New Login Notification - Nuruvent",
+		Type:    notificationdomain.TypeLoginNotification,
+		Meta: map[string]string{
+			"name":       data.Name,
+			"time":       data.Time,
+			"ip_address": data.IPAddress,
+			"user_agent": data.UserAgent,
+		},
 	}
 
-	if err := w.service.SendLoginNotification(ctx, req); err != nil {
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
 		log.Printf("[NotificationWorker] Failed to send login notification to %s: %v", data.To, err)
 		return err
 	}
@@ -224,3 +284,16 @@ func (w *NotificationWorker) HandleLoginNotification(ctx context.Context, task *
 	log.Printf("[NotificationWorker] Login notification sent to %s", data.To)
 	return nil
 }
+
+// HandleLoginNotification is the asynq task handler
+func (w *NotificationWorker) HandleLoginNotification(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.LoginNotificationTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse login notification task: %v", err)
+		return err
+	}
+	return w.ProcessLoginNotification(ctx, data)
+}
+
+// Ensure NotificationWorker implements notificationdomain.TaskProcessor
+var _ notificationdomain.TaskProcessor = (*NotificationWorker)(nil)
