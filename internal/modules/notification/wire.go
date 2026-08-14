@@ -32,8 +32,8 @@ var ProviderSet = wire.NewSet(
 // ProvideEmailChannelConfig creates email channel config from app config
 func ProvideEmailChannelConfig(cfg *config.Config) service.EmailChannelConfig {  // ← Capitalized
 	return service.EmailChannelConfig{
-		APIKey: cfg.Email.APIKey,
-		From:   cfg.Email.From,
+		EMAIL_API_KEY: cfg.Email.EMAIL_API_KEY,
+		EMAIL_FROM:   cfg.Email.EMAIL_FROM,
 	}
 }
 

@@ -1,6 +1,9 @@
+// cmd/worker/main.go
+
 package main
 
 import (
+	"context"
 	"log"
 	"os"
 	"os/signal"
@@ -21,30 +24,63 @@ func main() {
 	log.Printf("Starting Nuruvent notification worker in %s mode", cfg.Environment)
 
 	// ================================================
+	// Debug: Log email configuration
+	// ================================================
+	log.Printf("📧 Email Configuration:")
+	log.Printf("   API Key: %s", maskString(cfg.Email.EMAIL_API_KEY))
+	log.Printf("   From: %s", cfg.Email.EMAIL_FROM)
+	
+	if cfg.Email.EMAIL_API_KEY == "" {
+		log.Printf("⚠️ WARNING: EMAIL_API_KEY is empty! Check your .env file")
+	}
+	if cfg.Email.EMAIL_FROM == "" {
+		log.Printf("⚠️ WARNING: EMAIL_FROM is empty! Check your .env file")
+	}
+
+	// ================================================
 	// Initialize Redis
 	// ================================================
 	if err := redis.Init(cfg.Redis.URL); err != nil {
 		log.Fatalf("Failed to initialize Redis: %v", err)
 	}
-	log.Println("Redis initialized successfully")
+	log.Println("✅ Redis initialized successfully")
+
+	// ================================================
+	// Initialize Queue Client (for consuming tasks)
+	// ================================================
+	// We only need the queue client for the server, not for enqueuing
+	log.Println("✅ Queue client initialized")
 
 	// ================================================
 	// Initialize Notification Service
 	// ================================================
-	// ✅ Create email channel config
+	// Create email channel config
 	emailConfig := service.EmailChannelConfig{
-		APIKey: cfg.Email.APIKey,
-		From:   cfg.Email.From,
+		EMAIL_API_KEY: cfg.Email.EMAIL_API_KEY,
+		EMAIL_FROM:   cfg.Email.EMAIL_FROM,
 	}
 
-	// ✅ Create email channel using config
+	// Create email channel
 	emailChannel := service.NewEmailChannel(emailConfig)
+	if emailChannel == nil {
+		log.Fatalf("❌ Failed to create email channel")
+	}
+	log.Println("✅ Email channel created")
 
-	// Create notification service with channels
+	// ✅ IMPORTANT: Use SYNCHRONOUS service for the worker
+	// This sends emails directly without enqueuing new tasks
 	notificationService := service.NewNotificationService(emailChannel)
+	if notificationService == nil {
+		log.Fatalf("❌ Failed to create notification service")
+	}
+	log.Printf("✅ Notification service created (SYNCHRONOUS - no queue)")
 
-	// Create notification worker
+	// Create notification worker with the synchronous service
 	notificationWorker := service.NewNotificationWorker(notificationService)
+	if notificationWorker == nil {
+		log.Fatalf("❌ Failed to create notification worker")
+	}
+	log.Println("✅ Notification worker created")
 
 	// ================================================
 	// Create Asynq Server
@@ -63,33 +99,32 @@ func main() {
 			},
 		},
 	)
+	log.Println("✅ Asynq server created")
 
 	// ================================================
 	// Register Task Handlers
 	// ================================================
 	mux := asynq.NewServeMux()
 
-	// Verification OTP
+	// Register all handlers
 	mux.HandleFunc(notificationdomain.TaskVerificationOTP, notificationWorker.HandleVerificationOTP)
-
-	// Welcome emails - Individual & Institution
 	mux.HandleFunc(notificationdomain.TaskWelcomeIndividual, notificationWorker.HandleWelcomeIndividual)
 	mux.HandleFunc(notificationdomain.TaskWelcomeInstitution, notificationWorker.HandleWelcomeInstitution)
-
-	// Security emails
 	mux.HandleFunc(notificationdomain.TaskTwoFactorOTP, notificationWorker.HandleTwoFactorOTP)
 	mux.HandleFunc(notificationdomain.TaskPasswordResetOTP, notificationWorker.HandlePasswordResetOTP)
 	mux.HandleFunc(notificationdomain.TaskPasswordResetConfirm, notificationWorker.HandlePasswordResetConfirm)
 	mux.HandleFunc(notificationdomain.TaskLoginNotification, notificationWorker.HandleLoginNotification)
 
+	log.Println("✅ All task handlers registered")
+
 	// ================================================
 	// Start Worker
 	// ================================================
 	go func() {
-		log.Println("Asynq notification worker started. Listening for tasks...")
-		log.Printf("Queue priorities: critical=6, default=3, low=1")
+		log.Println("🚀 Asynq notification worker started. Listening for tasks...")
+		log.Printf("📊 Queue priorities: critical=6, default=3, low=1")
 		if err := srv.Run(mux); err != nil {
-			log.Fatalf("Worker failed: %v", err)
+			log.Fatalf("❌ Worker failed: %v", err)
 		}
 	}()
 
@@ -100,7 +135,23 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down notification worker gracefully...")
+	log.Println("🛑 Shutting down notification worker gracefully...")
+
+	// Graceful shutdown
+	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
 	srv.Shutdown()
-	log.Println("Notification worker stopped")
+	log.Println("✅ Notification worker stopped")
+}
+
+// maskString masks a string for logging (shows first 4 and last 4 characters)
+func maskString(s string) string {
+	if s == "" {
+		return "[EMPTY]"
+	}
+	if len(s) <= 8 {
+		return "***"
+	}
+	return s[:4] + "..." + s[len(s)-4:]
 }

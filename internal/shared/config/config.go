@@ -58,8 +58,8 @@ type JWTConfig struct {
 }
 
 type EmailConfig struct {
-	APIKey string
-	From   string
+	EMAIL_API_KEY string
+	EMAIL_FROM   string
 }
 
 type CasbinConfig struct {
@@ -104,8 +104,8 @@ func Load() *Config {
 			RefreshExpiration: getEnvDuration("JWT_REFRESH_EXPIRATION", 168*time.Hour),
 		},
 		Email: EmailConfig{
-			APIKey: getEnv("RESEND_API_KEY", ""),
-			From:   getEnv("EMAIL_FROM", "noreply@nuruvent.com"),
+			EMAIL_API_KEY: getEnv("EMAIL_API_KEY", ""),
+			EMAIL_FROM:   getEnv("EMAIL_FROM", "noreply@nuruvent.com"),
 		},
 		Casbin: CasbinConfig{
 			ModelPath:        getEnv("CASBIN_MODEL", "configs/casbin/model.conf"),

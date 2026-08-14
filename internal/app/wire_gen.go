@@ -81,7 +81,7 @@ type AppDependencies struct {
 	App            *fiber.App
 	StorageClient  *storage.Client
 	Enforcer       *authorization.Enforcer
-	Notification   notificationdomain.NotificationService // ✅ Add this
+	Notification   notificationdomain.NotificationService
 	AuthService    service2.Service
 	AccountService service3.Service
 	EventsService  service5.Service

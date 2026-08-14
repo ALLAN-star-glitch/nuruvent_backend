@@ -1,3 +1,5 @@
+// internal/app/wire.go
+
 //go:build wireinject
 // +build wireinject
 
@@ -39,7 +41,7 @@ type AppDependencies struct {
 	App            *fiber.App
 	StorageClient  *storage.Client
 	Enforcer       *authorization.Enforcer
-	Notification   notificationdomain.NotificationService // ✅ Add this
+	Notification   notificationdomain.NotificationService
 	AuthService    authService.Service
 	AccountService accountService.Service
 	EventsService  eventsService.Service
@@ -58,7 +60,7 @@ func InitializeApp() (*AppDependencies, error) {
 		provideQueueClient,
 		provideFiberAppWithMiddleware,
 
-		// Notification Module
+		// ✅ Notification Module (uses NewNotificationServiceWithQueue)
 		notification.ProviderSet,
 
 		// Auth Notification Adapter

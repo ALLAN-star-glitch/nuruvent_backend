@@ -26,8 +26,8 @@ type EmailChannel struct {
 
 // EmailChannelConfig holds configuration for email channel
 type EmailChannelConfig struct {
-	APIKey string
-	From   string
+	EMAIL_API_KEY string
+	EMAIL_FROM    string
 }
 
 // NewEmailChannel creates a new email channel
@@ -39,8 +39,8 @@ func NewEmailChannel(cfg EmailChannelConfig) notificationdomain.Channel {
 	}
 
 	return &EmailChannel{
-		client: resend.NewClient(cfg.APIKey),
-		from:   cfg.From,
+		client: resend.NewClient(cfg.EMAIL_API_KEY),
+		from:   cfg.EMAIL_FROM,
 		tmpl:   tmpl,
 	}
 }
@@ -104,20 +104,21 @@ func (c *EmailChannel) renderEmail(req notificationdomain.ChannelRequest) (strin
 	return html, text, nil
 }
 
+// ✅ UPDATED: All template names use hyphens to match template definitions
 func (c *EmailChannel) getTemplateName(notifType notificationdomain.NotificationType) string {
 	switch notifType {
 	case notificationdomain.TypeVerificationOTP:
-		return "verification_otp"
+		return "verification-otp"        // ← hyphen
 	case notificationdomain.TypeWelcome:
-		return "welcome_individual"
+		return "welcome-individual"      // ← hyphen
 	case notificationdomain.TypeTwoFactor:
-		return "two_factor_otp"
+		return "two-factor-otp"          // ← hyphen
 	case notificationdomain.TypePasswordResetConfirm:
-		return "password_reset_confirm"
+		return "password-reset-confirm"  // ← hyphen
 	case notificationdomain.TypeLoginNotification:
-		return "login_notification"
+		return "login-notification"      // ← hyphen
 	default:
-		return "welcome_individual"
+		return "welcome-individual"      // ← hyphen
 	}
 }
 
@@ -171,9 +172,9 @@ func (c *EmailChannel) renderHTML(templateName, title string, data map[string]st
 
 	// For welcome emails, determine if we need individual or institution template
 	actualTemplateName := templateName
-	if templateName == "welcome_individual" {
+	if templateName == "welcome-individual" {
 		if data["account_type"] == "institution" {
-			actualTemplateName = "welcome_institution"
+			actualTemplateName = "welcome-institution" // ← hyphen
 		}
 	}
 
