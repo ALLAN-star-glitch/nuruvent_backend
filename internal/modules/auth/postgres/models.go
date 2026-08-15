@@ -119,7 +119,7 @@ func (InstitutionModel) TableName() string {
 type TeamMemberRole string
 
 const (
-	TeamMemberRoleAdmin        TeamMemberRole = "admin"
+	TeamMemberRoleAdmin        TeamMemberRole = "account_admin"
 	TeamMemberRoleEventManager TeamMemberRole = "event_manager"
 	TeamMemberRoleTeamMember   TeamMemberRole = "team_member"
 )

@@ -11,6 +11,7 @@ import (
 	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/postgres"
 	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/jwt"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
@@ -61,7 +62,7 @@ func InitializeApp() (*AppDependencies, error) {
 	v := notification.NewEmailChannels(channel)
 	notificationService := service.NewNotificationServiceWithQueue(taskEnqueuer, v...)
 	authdomainNotificationService := NewAuthNotificationAdapter(notificationService)
-	serviceService := service2.NewService(repository, configConfig, redisClient, queueService, permissionService, tokenService, authdomainNotificationService)
+	serviceService := service2.NewService(repository, configConfig, redisClient, queueService, permissionService, tokenService, authdomainNotificationService, enforcer)
 	domainRepository := postgres2.NewPostgresRepository(db)
 	domainPermissionService := NewAccountPermissionAdapter(permissionService)
 	service6 := service3.NewService(domainRepository, domainPermissionService)
@@ -74,25 +75,26 @@ func InitializeApp() (*AppDependencies, error) {
 	authHandler := authhandler.NewAuthHandler(serviceService, configConfig)
 	accountHandler := acchandler.NewAccountHandler(service6)
 	eventHandler := eventhandler.NewEventHandler(service8)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, serviceService, service6, service8, service7, authHandler, accountHandler, eventHandler)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, serviceService, tokenService, service6, service8, service7, authHandler, accountHandler, eventHandler)
 	return appDependencies, nil
 }
 
 // wire.go:
 
 type AppDependencies struct {
-	Config         *config.Config
-	DB             *gorm.DB
-	App            *fiber.App
-	StorageClient  *storage.Client
-	RedisClient    *redis.Client // ✅ Added
-	Enforcer       *authorization.Enforcer
-	Notification   notificationdomain.NotificationService
-	AuthService    service2.Service
-	AccountService service3.Service
-	EventsService  service5.Service
-	MediaService   service4.Service
-	AuthHandler    *authhandler.AuthHandler
-	AccountHandler *acchandler.AccountHandler
-	EventsHandler  *eventhandler.EventHandler
+	Config           *config.Config
+	DB               *gorm.DB
+	App              *fiber.App
+	StorageClient    *storage.Client
+	RedisClient      *redis.Client
+	Enforcer         *authorization.Enforcer
+	AuthTokenService authdomain.TokenService
+	Notification     notificationdomain.NotificationService
+	AuthService      service2.Service
+	AccountService   service3.Service
+	EventsService    service5.Service
+	MediaService     service4.Service
+	AuthHandler      *authhandler.AuthHandler
+	AccountHandler   *acchandler.AccountHandler
+	EventsHandler    *eventhandler.EventHandler
 }

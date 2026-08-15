@@ -1,48 +1,69 @@
+// internal/modules/auth/authdomain/repository.go
+
 package authdomain
 
-// Repository defines the data access operations the domain needs
+import "context"
+
 type Repository interface {
-    // ================================================
-    // ACCOUNT OPERATIONS
-    // ================================================
+	// ============================================================
+	// ACCOUNT OPERATIONS
+	// ============================================================
 
-    // Account existence checks
-    AccountExistsByEmail(email string) (bool, error)
-    AccountExistsByPhone(phone string) (bool, error)
+	AccountExistsByEmail(email string) (bool, error)
+	AccountExistsByPhone(phone string) (bool, error)
+	GetAccountByEmail(email string) (*Account, error)
+	GetAccountByPhone(phone string) (*Account, error)
+	GetAccountByID(id string) (*Account, error)
+	CreateAccount(account *Account) error
+	UpdateAccount(account *Account) error
+	GetAccountTypeByID(id string) (*AccountType, error)
+	GetAccountTypeBySlug(slug string) (*AccountType, error)
 
-    // Account retrieval
-    GetAccountByEmail(email string) (*Account, error)
-    GetAccountByPhone(phone string) (*Account, error)
-    GetAccountByID(id string) (*Account, error)
+	// ============================================================
+	// REFRESH TOKEN OPERATIONS
+	// ============================================================
 
-    // Account CRUD
-    CreateAccount(account *Account) error
-    UpdateAccount(account *Account) error
+	CreateRefreshToken(token *RefreshToken) error
+	GetRefreshTokenByToken(token string) (*RefreshToken, error)
+	RevokeRefreshToken(token string) error
+	RevokeAllAccountRefreshTokens(accountID string) error
 
-    // Account type
-    GetAccountTypeBySlug(slug string) (*AccountType, error)
+	// ============================================================
+	// INSTITUTION OPERATIONS
+	// ============================================================
 
-    // ================================================
-    // REFRESH TOKEN OPERATIONS
-    // ================================================
+	CreateInstitution(institution *Institution) error
+	GetInstitutionByID(id string) (*Institution, error)
+	GetInstitutionByAccountID(accountID string) (*Institution, error)
+	GetInstitutionTypeBySlug(slug string) (*InstitutionType, error)
+	UpdateInstitution(institution *Institution) error
+	InstitutionExists(id string) (bool, error)
+	GetInstitutionsByType(institutionTypeID string) ([]*Institution, error)
 
-    CreateRefreshToken(token *RefreshToken) error
-    GetRefreshTokenByToken(token string) (*RefreshToken, error)
-    RevokeRefreshToken(token string) error
-    RevokeAllAccountRefreshTokens(accountID string) error
+	// ============================================================
+	// TEAM MEMBER OPERATIONS
+	// ============================================================
 
-    // ================================================
-    // INSTITUTION OPERATIONS
-    // ================================================
+	CreateTeamMember(member *TeamMember) error
+	GetTeamMemberByID(id string) (*TeamMember, error)
+	GetTeamMemberByAccountAndInstitution(accountID, institutionID string) (*TeamMember, error)
+	UpdateTeamMember(member *TeamMember) error
+	DeleteTeamMember(id string) error
+	GetTeamMembersByInstitution(institutionID string) ([]*TeamMember, error)
+	GetTeamMembersByAccount(accountID string) ([]*TeamMember, error)
+	IsMemberOfInstitution(ctx context.Context, accountID, institutionID string) (bool, error)
+	GetMemberRole(ctx context.Context, accountID, institutionID string) (string, error)
 
-    CreateInstitution(institution *Institution) error
-    GetInstitutionByID(id string) (*Institution, error)
-    GetInstitutionTypeBySlug(slug string) (*InstitutionType, error)
+	// ============================================================
+	// INSTITUTION ADMIN CHECKS
+	// ============================================================
 
-    // ================================================
-    // TEAM MEMBER OPERATIONS
-    // ================================================
+	IsInstitutionAdmin(ctx context.Context, accountID, institutionID string) (bool, error)
 
-    CreateTeamMember(member *TeamMember) error
-    GetTeamMemberByAccountAndInstitution(accountID, institutionID string) (*TeamMember, error)
+	// ============================================================
+	// PLATFORM ADMIN CHECKS
+	// ============================================================
+
+	IsPlatformAdmin(ctx context.Context, accountID string) (bool, error)
+	IsSuperAdmin(ctx context.Context, accountID string) (bool, error)
 }

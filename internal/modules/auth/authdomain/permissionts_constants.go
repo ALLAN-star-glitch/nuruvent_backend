@@ -1,20 +1,21 @@
-// internal/modules/authorization/constants.go
+// internal/modules/auth/authdomain/constants.go
 
-package authorization
+package authdomain
 
 // Role represents a user role in the system
 type Role string
 
 // Context keys for storing values in Fiber context
+// Note: These are domain concepts - the actual context keys are used in delivery layer
 const (
-	ContextKeyUserID       = "user_id"
-	ContextKeyUserRole     = "user_role"
-	ContextKeyUserEmail    = "user_email"
-	ContextKeyUserName     = "user_name"
-	ContextKeyDomain       = "domain"
-	ContextKeyAccountID    = "account_id"
+	ContextKeyUserID        = "user_id"
+	ContextKeyUserRole      = "user_role"
+	ContextKeyUserEmail     = "user_email"
+	ContextKeyUserName      = "user_name"
+	ContextKeyDomain        = "domain"
+	ContextKeyAccountID     = "account_id"
 	ContextKeyInstitutionID = "institution_id"
-	ContextKeyUserRoles    = "user_roles"
+	ContextKeyUserRoles     = "user_roles"
 )
 
 const (
@@ -23,9 +24,9 @@ const (
 	RoleAdmin      Role = "admin"       // Platform management
 
 	// Account team roles (assigned within an account domain)
-	RoleAccountAdmin   Role = "account_admin"   // Full account management
-	RoleEventManager   Role = "event_manager"   // Manage events, attendees, certificates
-	RoleTeamMember     Role = "team_member"     // View-only access
+	RoleAccountAdmin   Role = "account_admin" // Full account management
+	RoleEventManager   Role = "event_manager" // Manage events, attendees, certificates
+	RoleTeamMember     Role = "team_member"   // View-only access
 
 	// System
 	RoleGuest Role = "guest" // Unregistered user
@@ -99,12 +100,12 @@ func (a Action) String() string {
 // IsValidRole checks if a role is valid
 func IsValidRole(role string) bool {
 	validRoles := map[string]bool{
-		RoleSuperAdmin.String():  true,
-		RoleAdmin.String():       true,
+		RoleSuperAdmin.String():   true,
+		RoleAdmin.String():        true,
 		RoleAccountAdmin.String(): true,
 		RoleEventManager.String(): true,
-		RoleTeamMember.String():  true,
-		RoleGuest.String():       true,
+		RoleTeamMember.String():   true,
+		RoleGuest.String():        true,
 	}
 	return validRoles[role]
 }
@@ -112,7 +113,7 @@ func IsValidRole(role string) bool {
 // IsTeamRole checks if a role is a team-level role (within an account domain)
 func IsTeamRole(role string) bool {
 	teamRoles := map[string]bool{
-		RoleAccountAdmin.String():  true,
+		RoleAccountAdmin.String(): true,
 		RoleEventManager.String(): true,
 		RoleTeamMember.String():   true,
 	}

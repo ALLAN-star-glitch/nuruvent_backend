@@ -6,6 +6,7 @@ import (
 	"context"
 
 	authdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	sharedRedis "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 )
@@ -81,21 +82,23 @@ type RegisterRequest struct {
 type service struct {
 	repo        authdomain.Repository
 	config      *config.Config
-	redisClient *sharedRedis.Client          // ✅ Injected Redis client
+	redisClient *sharedRedis.Client
 	queue       authdomain.QueueService
 	permService authdomain.PermissionService
 	tokenSvc    authdomain.TokenService
 	notifSvc    authdomain.NotificationService
+	enforcer    *authorization.Enforcer // ✅ Added for Casbin role checking
 }
 
 func NewService(
 	repo authdomain.Repository,
 	cfg *config.Config,
-	redisClient *sharedRedis.Client,        // ✅ Inject Redis client
+	redisClient *sharedRedis.Client,
 	queueClient authdomain.QueueService,
 	permService authdomain.PermissionService,
 	tokenSvc authdomain.TokenService,
 	notifSvc authdomain.NotificationService,
+	enforcer *authorization.Enforcer, // ✅ Added as dependency
 ) Service {
 	return &service{
 		repo:        repo,
@@ -105,5 +108,6 @@ func NewService(
 		permService: permService,
 		tokenSvc:    tokenSvc,
 		notifSvc:    notifSvc,
+		enforcer:    enforcer,
 	}
 }

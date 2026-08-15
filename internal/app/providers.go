@@ -20,7 +20,7 @@ import (
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 
 	authHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 
@@ -75,6 +75,7 @@ func provideAppDependencies(
 	redisClient *redis.Client,
 	enforcer *authorization.Enforcer,
 	authService authService.Service,
+	authTokenService authDomain.TokenService,
 	accountService accountService.Service,
 	eventsService eventsService.Service,
 	mediaService mediaService.Service,
@@ -83,19 +84,20 @@ func provideAppDependencies(
 	eventsHandler *eventsHandler.EventHandler,
 ) *AppDependencies {
 	return &AppDependencies{
-		Config:         cfg,
-		DB:             db,
-		App:            app,
-		StorageClient:  storageClient,
-		RedisClient:    redisClient,
-		Enforcer:       enforcer,
-		AuthService:    authService,
-		AccountService: accountService,
-		EventsService:  eventsService,
-		MediaService:   mediaService,
-		AuthHandler:    authHandler,
-		AccountHandler: accountHandler,
-		EventsHandler:  eventsHandler,
+		Config:           cfg,
+		DB:               db,
+		App:              app,
+		StorageClient:    storageClient,
+		RedisClient:      redisClient,
+		Enforcer:         enforcer,
+		AuthService:      authService,
+		AuthTokenService: authTokenService,
+		AccountService:   accountService,
+		EventsService:    eventsService,
+		MediaService:     mediaService,
+		AuthHandler:      authHandler,
+		AccountHandler:   accountHandler,
+		EventsHandler:    eventsHandler,
 	}
 }
 
@@ -103,12 +105,12 @@ func provideAppDependencies(
 // CROSS-MODULE ADAPTERS
 // ============================================================
 
-// QueueAdapter adapts notificationdomain.TaskQueue to authdomain.QueueService
+// QueueAdapter adapts notificationdomain.TaskQueue to authDomain.QueueService
 type QueueAdapter struct {
 	queue notificationdomain.TaskQueue
 }
 
-func NewQueueAdapter(queue notificationdomain.TaskQueue) authdomain.QueueService {
+func NewQueueAdapter(queue notificationdomain.TaskQueue) authDomain.QueueService {
 	return &QueueAdapter{queue: queue}
 }
 
@@ -128,12 +130,12 @@ func (a *QueueAdapter) EnqueueDelayed(ctx context.Context, task string, payload 
 	return a.queue.EnqueueDelayed(ctx, task, data, delaySeconds)
 }
 
-// AccountPermissionAdapter adapts authdomain.PermissionService to account domain.PermissionService
+// AccountPermissionAdapter adapts authDomain.PermissionService to account domain.PermissionService
 type AccountPermissionAdapter struct {
-	permSvc authdomain.PermissionService
+	permSvc authDomain.PermissionService
 }
 
-func NewAccountPermissionAdapter(permSvc authdomain.PermissionService) accountDomain.PermissionService {
+func NewAccountPermissionAdapter(permSvc authDomain.PermissionService) accountDomain.PermissionService {
 	return &AccountPermissionAdapter{permSvc: permSvc}
 }
 
@@ -169,12 +171,12 @@ func (a *AccountPermissionAdapter) IsTeamMember(ctx context.Context, accountID, 
 	return a.permSvc.IsTeamMember(ctx, accountID, userID)
 }
 
-// EventsPermissionAdapter adapts authdomain.PermissionService to events domain.PermissionChecker
+// EventsPermissionAdapter adapts authDomain.PermissionService to events domain.PermissionChecker
 type EventsPermissionAdapter struct {
-	permSvc authdomain.PermissionService
+	permSvc authDomain.PermissionService
 }
 
-func NewEventsPermissionAdapter(permSvc authdomain.PermissionService) eventsDomain.PermissionChecker {
+func NewEventsPermissionAdapter(permSvc authDomain.PermissionService) eventsDomain.PermissionChecker {
 	return &EventsPermissionAdapter{permSvc: permSvc}
 }
 
@@ -183,15 +185,18 @@ func (a *EventsPermissionAdapter) CanManageEvent(ctx context.Context, userID, ev
 }
 
 func (a *EventsPermissionAdapter) CanReadEvent(ctx context.Context, userID, eventAccountID string) bool {
-	return a.permSvc.HasPermission(ctx, userID, authorization.AccountDomain(eventAccountID), "event", "read")
+	domain := authDomain.AccountDomain(eventAccountID)
+	return a.permSvc.HasPermission(ctx, userID, domain, authDomain.ResourceEvent.String(), authDomain.ActionRead.String())
 }
 
 func (a *EventsPermissionAdapter) CanUpdateEvent(ctx context.Context, userID, eventAccountID string) bool {
-	return a.permSvc.HasPermission(ctx, userID, authorization.AccountDomain(eventAccountID), "event", "update")
+	domain := authDomain.AccountDomain(eventAccountID)
+	return a.permSvc.HasPermission(ctx, userID, domain, authDomain.ResourceEvent.String(), authDomain.ActionUpdate.String())
 }
 
 func (a *EventsPermissionAdapter) CanDeleteEvent(ctx context.Context, userID, eventAccountID string) bool {
-	return a.permSvc.HasPermission(ctx, userID, authorization.AccountDomain(eventAccountID), "event", "delete")
+	domain := authDomain.AccountDomain(eventAccountID)
+	return a.permSvc.HasPermission(ctx, userID, domain, authDomain.ResourceEvent.String(), authDomain.ActionDelete.String())
 }
 
 // EventsMediaAdapter adapts media.Service to events domain.MediaService
@@ -261,16 +266,16 @@ func (a *EventsMediaAdapter) DeleteMediaByEntity(ctx context.Context, entityID s
 // ============================================================
 
 // AuthNotificationAdapter adapts notificationdomain.NotificationService 
-// to authdomain.NotificationService
+// to authDomain.NotificationService
 type AuthNotificationAdapter struct {
 	notifSvc notificationdomain.NotificationService
 }
 
-func NewAuthNotificationAdapter(notifSvc notificationdomain.NotificationService) authdomain.NotificationService {
+func NewAuthNotificationAdapter(notifSvc notificationdomain.NotificationService) authDomain.NotificationService {
 	return &AuthNotificationAdapter{notifSvc: notifSvc}
 }
 
-func (a *AuthNotificationAdapter) SendVerificationOTP(ctx context.Context, req authdomain.SendOTPRequest) error {
+func (a *AuthNotificationAdapter) SendVerificationOTP(ctx context.Context, req authDomain.SendOTPRequest) error {
 	notifReq := notificationdomain.SendOTPRequest{
 		To:      req.To,
 		Name:    req.Name,
@@ -282,7 +287,7 @@ func (a *AuthNotificationAdapter) SendVerificationOTP(ctx context.Context, req a
 	return a.notifSvc.SendVerificationOTP(ctx, notifReq)
 }
 
-func (a *AuthNotificationAdapter) SendIndividualWelcome(ctx context.Context, req authdomain.SendWelcomeRequest) error {
+func (a *AuthNotificationAdapter) SendIndividualWelcome(ctx context.Context, req authDomain.SendWelcomeRequest) error {
 	notifReq := notificationdomain.SendWelcomeRequest{
 		To:   req.To,
 		Name: req.Name,
@@ -290,7 +295,7 @@ func (a *AuthNotificationAdapter) SendIndividualWelcome(ctx context.Context, req
 	return a.notifSvc.SendIndividualWelcome(ctx, notifReq)
 }
 
-func (a *AuthNotificationAdapter) SendInstitutionWelcome(ctx context.Context, req authdomain.SendInstitutionWelcomeRequest) error {
+func (a *AuthNotificationAdapter) SendInstitutionWelcome(ctx context.Context, req authDomain.SendInstitutionWelcomeRequest) error {
 	notifReq := notificationdomain.SendInstitutionWelcomeRequest{
 		To:              req.To,
 		AdminName:       req.AdminName,
@@ -299,7 +304,7 @@ func (a *AuthNotificationAdapter) SendInstitutionWelcome(ctx context.Context, re
 	return a.notifSvc.SendInstitutionWelcome(ctx, notifReq)
 }
 
-func (a *AuthNotificationAdapter) SendWelcome(ctx context.Context, req authdomain.SendWelcomeRequest) error {
+func (a *AuthNotificationAdapter) SendWelcome(ctx context.Context, req authDomain.SendWelcomeRequest) error {
 	notifReq := notificationdomain.SendWelcomeRequest{
 		To:   req.To,
 		Name: req.Name,
@@ -307,7 +312,7 @@ func (a *AuthNotificationAdapter) SendWelcome(ctx context.Context, req authdomai
 	return a.notifSvc.SendWelcome(ctx, notifReq)
 }
 
-func (a *AuthNotificationAdapter) SendTwoFactorOTP(ctx context.Context, req authdomain.SendTwoFactorRequest) error {
+func (a *AuthNotificationAdapter) SendTwoFactorOTP(ctx context.Context, req authDomain.SendTwoFactorRequest) error {
 	notifReq := notificationdomain.SendTwoFactorRequest{
 		To:        req.To,
 		Name:      req.Name,
@@ -319,7 +324,7 @@ func (a *AuthNotificationAdapter) SendTwoFactorOTP(ctx context.Context, req auth
 	return a.notifSvc.SendTwoFactorOTP(ctx, notifReq)
 }
 
-func (a *AuthNotificationAdapter) SendPasswordResetOTP(ctx context.Context, req authdomain.SendOTPRequest) error {
+func (a *AuthNotificationAdapter) SendPasswordResetOTP(ctx context.Context, req authDomain.SendOTPRequest) error {
 	notifReq := notificationdomain.SendOTPRequest{
 		To:      req.To,
 		Name:    req.Name,
@@ -331,7 +336,7 @@ func (a *AuthNotificationAdapter) SendPasswordResetOTP(ctx context.Context, req 
 	return a.notifSvc.SendPasswordResetOTP(ctx, notifReq)
 }
 
-func (a *AuthNotificationAdapter) SendPasswordResetConfirm(ctx context.Context, req authdomain.SendPasswordResetConfirmRequest) error {
+func (a *AuthNotificationAdapter) SendPasswordResetConfirm(ctx context.Context, req authDomain.SendPasswordResetConfirmRequest) error {
 	notifReq := notificationdomain.SendPasswordResetConfirmRequest{
 		To:   req.To,
 		Name: req.Name,
@@ -339,7 +344,7 @@ func (a *AuthNotificationAdapter) SendPasswordResetConfirm(ctx context.Context, 
 	return a.notifSvc.SendPasswordResetConfirm(ctx, notifReq)
 }
 
-func (a *AuthNotificationAdapter) SendLoginNotification(ctx context.Context, req authdomain.SendLoginNotificationRequest) error {
+func (a *AuthNotificationAdapter) SendLoginNotification(ctx context.Context, req authDomain.SendLoginNotificationRequest) error {
 	notifReq := notificationdomain.SendLoginNotificationRequest{
 		To:        req.To,
 		Name:      req.Name,

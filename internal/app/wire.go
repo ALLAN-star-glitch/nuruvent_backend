@@ -19,6 +19,7 @@ import (
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
+	authdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events"
 	eventsHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
@@ -38,20 +39,21 @@ import (
 )
 
 type AppDependencies struct {
-	Config         *config.Config
-	DB             *gorm.DB
-	App            *fiber.App
-	StorageClient  *storage.Client
-	RedisClient    *redis.Client          // ✅ Added
-	Enforcer       *authorization.Enforcer
-	Notification   notificationdomain.NotificationService
-	AuthService    authService.Service
-	AccountService accountService.Service
-	EventsService  eventsService.Service
-	MediaService   mediaService.Service
-	AuthHandler    *authHandler.AuthHandler
-	AccountHandler *accountHandler.AccountHandler
-	EventsHandler  *eventsHandler.EventHandler
+	Config           *config.Config
+	DB               *gorm.DB
+	App              *fiber.App
+	StorageClient    *storage.Client
+	RedisClient      *redis.Client
+	Enforcer         *authorization.Enforcer
+	AuthTokenService authdomain.TokenService 
+	Notification     notificationdomain.NotificationService
+	AuthService      authService.Service
+	AccountService   accountService.Service
+	EventsService    eventsService.Service
+	MediaService     mediaService.Service
+	AuthHandler      *authHandler.AuthHandler
+	AccountHandler   *accountHandler.AccountHandler
+	EventsHandler    *eventsHandler.EventHandler
 }
 
 func InitializeApp() (*AppDependencies, error) {
@@ -62,7 +64,7 @@ func InitializeApp() (*AppDependencies, error) {
 		config.ProviderSet,
 		database.ProviderSet,
 		queue.ProviderSet,
-		redis.ProviderSet,      // ✅ Provides *redis.Client
+		redis.ProviderSet,
 		storage.ProviderSet,
 
 		// ============================================================

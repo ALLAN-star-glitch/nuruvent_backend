@@ -1,9 +1,13 @@
+// internal/modules/auth/authorization/middleware.go
+
 package authorization
 
 import (
 	"net/http"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 	"strings"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -12,7 +16,7 @@ import (
 func AuthorizationMiddleware(enforcer *Enforcer) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		// Get user ID from context (set by auth middleware)
-		userID := c.Locals(ContextKeyUserID)
+		userID := c.Locals(authdomain.ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -37,12 +41,12 @@ func AuthorizationMiddleware(enforcer *Enforcer) fiber.Handler {
 
 		// Get user's roles for this domain for context
 		roles := enforcer.GetRolesForUserInDomain(userIDStr, domain)
-		c.Locals(ContextKeyUserRoles, roles)
+		c.Locals(authdomain.ContextKeyUserRoles, roles)
 
 		// If domain is an account domain, store account ID
-		if IsAccountDomain(domain) {
-			accountID := ExtractAccountID(domain)
-			c.Locals(ContextKeyAccountID, accountID)
+		if authdomain.IsAccountDomain(domain) {
+			accountID := authdomain.ExtractAccountID(domain)
+			c.Locals(authdomain.ContextKeyAccountID, accountID)
 		}
 
 		// Enforce permission
@@ -68,16 +72,16 @@ func AuthorizationMiddleware(enforcer *Enforcer) fiber.Handler {
 		}
 
 		// Store domain in context for downstream handlers
-		c.Locals(ContextKeyDomain, domain)
+		c.Locals(authdomain.ContextKeyDomain, domain)
 
 		return c.Next()
 	}
 }
 
 // RequireRoles creates middleware that requires specific roles
-func RequireRoles(enforcer *Enforcer, roles ...Role) fiber.Handler {
+func RequireRoles(enforcer *Enforcer, roles ...authdomain.Role) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		userID := c.Locals(ContextKeyUserID)
+		userID := c.Locals(authdomain.ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -92,9 +96,9 @@ func RequireRoles(enforcer *Enforcer, roles ...Role) fiber.Handler {
 		}
 
 		// Get domain from context
-		domain := c.Locals(ContextKeyDomain)
+		domain := c.Locals(authdomain.ContextKeyDomain)
 		if domain == nil {
-			domain = DomainPlatform
+			domain = authdomain.DomainPlatform
 		}
 		domainStr, ok := domain.(string)
 		if !ok {
@@ -137,7 +141,7 @@ func RequireRoles(enforcer *Enforcer, roles ...Role) fiber.Handler {
 // RequireAccountAdmin creates middleware to check if user is an account admin
 func RequireAccountAdmin(enforcer *Enforcer) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		userID := c.Locals(ContextKeyUserID)
+		userID := c.Locals(authdomain.ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -172,11 +176,11 @@ func RequireAccountAdmin(enforcer *Enforcer) fiber.Handler {
 			return response.Forbidden(c, "Not an account admin", fiber.Map{
 				"user":          userIDStr,
 				"account_id":    accountID,
-				"required_role": RoleAccountAdmin.String(),
+				"required_role": authdomain.RoleAccountAdmin.String(),
 			})
 		}
 
-		c.Locals(ContextKeyAccountID, accountID)
+		c.Locals(authdomain.ContextKeyAccountID, accountID)
 		return c.Next()
 	}
 }
@@ -184,7 +188,7 @@ func RequireAccountAdmin(enforcer *Enforcer) fiber.Handler {
 // RequireAccountRole creates middleware that checks if user has ANY account role
 func RequireAccountRole(enforcer *Enforcer) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		userID := c.Locals(ContextKeyUserID)
+		userID := c.Locals(authdomain.ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -214,16 +218,16 @@ func RequireAccountRole(enforcer *Enforcer) fiber.Handler {
 			})
 		}
 
-		domain := AccountDomain(accountID)
+		domain := authdomain.AccountDomain(accountID)
 		roles := enforcer.GetRolesForUserInDomain(userIDStr, domain)
 
 		// Check if user has any account role
 		hasAccess := false
 		for _, role := range roles {
 			switch role {
-			case RoleAccountAdmin.String(),
-				RoleEventManager.String(),
-				RoleTeamMember.String():
+			case authdomain.RoleAccountAdmin.String(),
+				authdomain.RoleEventManager.String(),
+				authdomain.RoleTeamMember.String():
 				hasAccess = true
 				break
 			}
@@ -231,22 +235,22 @@ func RequireAccountRole(enforcer *Enforcer) fiber.Handler {
 
 		if !hasAccess {
 			return response.Forbidden(c, "No account access", fiber.Map{
-				"user":        userIDStr,
-				"account_id":  accountID,
-				"user_roles":  roles,
+				"user":       userIDStr,
+				"account_id": accountID,
+				"user_roles": roles,
 			})
 		}
 
-		c.Locals(ContextKeyAccountID, accountID)
-		c.Locals(ContextKeyDomain, domain)
+		c.Locals(authdomain.ContextKeyAccountID, accountID)
+		c.Locals(authdomain.ContextKeyDomain, domain)
 		return c.Next()
 	}
 }
 
 // RequirePlatformRole creates middleware that requires a platform-level role
-func RequirePlatformRole(enforcer *Enforcer, roles ...Role) fiber.Handler {
+func RequirePlatformRole(enforcer *Enforcer, roles ...authdomain.Role) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		userID := c.Locals(ContextKeyUserID)
+		userID := c.Locals(authdomain.ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -292,7 +296,7 @@ func RequirePlatformRole(enforcer *Enforcer, roles ...Role) fiber.Handler {
 // Use this for /accounts/me and /accounts/my endpoints
 func RequireAccountAccess(enforcer *Enforcer) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		userID := c.Locals(ContextKeyUserID)
+		userID := c.Locals(authdomain.ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
@@ -324,7 +328,7 @@ func RequireAccountAccess(enforcer *Enforcer) fiber.Handler {
 		// Get user's accounts and store the first one as default if needed
 		accounts := enforcer.GetUserAccountIDs(userIDStr)
 		if len(accounts) > 0 {
-			c.Locals(ContextKeyAccountID, accounts[0])
+			c.Locals(authdomain.ContextKeyAccountID, accounts[0])
 		}
 
 		return c.Next()
@@ -338,7 +342,7 @@ func RequireAccountAccess(enforcer *Enforcer) fiber.Handler {
 // getDomainFromRequest extracts the domain from the request
 func getDomainFromRequest(c fiber.Ctx) string {
 	// Check if domain is in context (set by previous middleware)
-	if domain := c.Locals(ContextKeyDomain); domain != nil {
+	if domain := c.Locals(authdomain.ContextKeyDomain); domain != nil {
 		if domainStr, ok := domain.(string); ok {
 			return domainStr
 		}
@@ -351,7 +355,7 @@ func getDomainFromRequest(c fiber.Ctx) string {
 		strings.Contains(path, "/account/me") ||
 		strings.Contains(path, "/accounts/my") ||
 		strings.Contains(path, "/account/my") {
-		return DomainPlatform
+		return authdomain.DomainPlatform
 	}
 
 	// Check for account ID in path
@@ -360,41 +364,41 @@ func getDomainFromRequest(c fiber.Ctx) string {
 		accountID = c.Params("id")
 	}
 	if accountID != "" {
-		return AccountDomain(accountID)
+		return authdomain.AccountDomain(accountID)
 	}
 
 	// Check if account ID is in query
 	accountID = c.Query("accountId")
 	if accountID != "" {
-		return AccountDomain(accountID)
+		return authdomain.AccountDomain(accountID)
 	}
 
 	// Check if it's a user-specific request (backward compatibility)
 	userID := c.Params("userId")
 	if userID != "" {
-		return AccountDomain(userID)
+		return authdomain.AccountDomain(userID)
 	}
 
 	// Check if it's the current user profile
 	if strings.Contains(path, "/profile") && !strings.Contains(path, "/accounts/") {
-		if userID := c.Locals(ContextKeyUserID); userID != nil {
+		if userID := c.Locals(authdomain.ContextKeyUserID); userID != nil {
 			if userIDStr, ok := userID.(string); ok {
-				return AccountDomain(userIDStr)
+				return authdomain.AccountDomain(userIDStr)
 			}
 		}
 	}
 
 	// Check if it's a me endpoint (but NOT account me - already handled above)
 	if strings.Contains(path, "/me") && !strings.Contains(path, "/accounts/") {
-		if userID := c.Locals(ContextKeyUserID); userID != nil {
+		if userID := c.Locals(authdomain.ContextKeyUserID); userID != nil {
 			if userIDStr, ok := userID.(string); ok {
-				return AccountDomain(userIDStr)
+				return authdomain.AccountDomain(userIDStr)
 			}
 		}
 	}
 
 	// Default to platform domain
-	return DomainPlatform
+	return authdomain.DomainPlatform
 }
 
 // getResourceFromRequest extracts the resource from the request path
@@ -413,11 +417,11 @@ func getResourceFromRequest(c fiber.Ctx) string {
 		// Handle account "me" endpoints
 		if resource == "accounts" || resource == "account" {
 			if len(segments) > 1 && (segments[1] == "me" || segments[1] == "my") {
-				return ResourceAccount.String()
+				return authdomain.ResourceAccount.String()
 			}
 			for _, segment := range segments {
 				if segment == "members" {
-					return ResourceMember.String()
+					return authdomain.ResourceMember.String()
 				}
 			}
 		}
@@ -425,29 +429,29 @@ func getResourceFromRequest(c fiber.Ctx) string {
 		// Map common URL patterns to resources
 		switch resource {
 		case "profile", "me":
-			return ResourceProfile.String()
+			return authdomain.ResourceProfile.String()
 		case "accounts", "account":
-			return ResourceAccount.String()
+			return authdomain.ResourceAccount.String()
 		case "institutions":
-			return ResourceInstitution.String()
+			return authdomain.ResourceInstitution.String()
 		case "events":
-			return ResourceEvent.String()
+			return authdomain.ResourceEvent.String()
 		case "certificates":
-			return ResourceCertificate.String()
+			return authdomain.ResourceCertificate.String()
 		case "attendees":
-			return ResourceAttendee.String()
+			return authdomain.ResourceAttendee.String()
 		case "payments":
-			return ResourcePayment.String()
+			return authdomain.ResourcePayment.String()
 		case "payouts":
-			return ResourcePayout.String()
+			return authdomain.ResourcePayout.String()
 		case "dashboard":
-			return ResourceDashboard.String()
+			return authdomain.ResourceDashboard.String()
 		case "analytics":
-			return ResourceAnalytics.String()
+			return authdomain.ResourceAnalytics.String()
 		case "notifications":
-			return ResourceNotification.String()
+			return authdomain.ResourceNotification.String()
 		case "media":
-			return ResourceMedia.String()
+			return authdomain.ResourceMedia.String()
 		default:
 			return resource
 		}
@@ -462,14 +466,14 @@ func getActionFromRequest(c fiber.Ctx) string {
 
 	switch method {
 	case http.MethodGet:
-		return ActionRead.String()
+		return authdomain.ActionRead.String()
 	case http.MethodPost:
-		return ActionCreate.String()
+		return authdomain.ActionCreate.String()
 	case http.MethodPut, http.MethodPatch:
-		return ActionUpdate.String()
+		return authdomain.ActionUpdate.String()
 	case http.MethodDelete:
-		return ActionDelete.String()
+		return authdomain.ActionDelete.String()
 	default:
-		return ActionRead.String()
+		return authdomain.ActionRead.String()
 	}
 }

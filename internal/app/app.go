@@ -53,7 +53,11 @@ func (app *App) Init(ctx context.Context) error {
 
 // SetupRoutes registers all API routes
 func (app *App) SetupRoutes() {
-	authMiddleware := authmiddleware.AuthMiddleware(app.Config.JWT.Secret)
+	// Get token service from app dependencies
+	tokenSvc := app.AuthTokenService
+	
+	// Create middleware with token service
+	authMiddleware := authmiddleware.AuthMiddleware(tokenSvc)
 	authzMiddleware := authorization.AuthorizationMiddleware(app.Enforcer)
 
 	server.SetupRoutes(
@@ -86,7 +90,7 @@ func (app *App) Close() {
 		log.Printf("Error closing database: %v", err)
 	}
 	
-	// ✅ Close Redis using the injected client
+	// Close Redis using the injected client
 	if app.RedisClient != nil {
 		if err := app.RedisClient.Close(); err != nil {
 			log.Printf("Error closing Redis: %v", err)

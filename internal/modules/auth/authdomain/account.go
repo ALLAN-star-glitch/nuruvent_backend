@@ -133,3 +133,4 @@ func (a *Account) UpdatePassword(hashedPassword string) {
 func slugify(name string) string {
     return "user-" + uuid.New().String()[:8]
 }
+
