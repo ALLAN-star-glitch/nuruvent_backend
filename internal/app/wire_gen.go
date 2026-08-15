@@ -14,7 +14,6 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/jwt"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/redis"
 	service2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	postgres3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
@@ -26,6 +25,8 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
 	"github.com/gofiber/fiber/v3"
 	"gorm.io/gorm"
@@ -40,23 +41,27 @@ func InitializeApp() (*AppDependencies, error) {
 		return nil, err
 	}
 	app := provideFiberAppWithMiddleware()
-	client := provideStorageClient(configConfig)
+	client := storage.NewClientFromConfig(configConfig)
+	redisClient, err := redis.NewClient(configConfig)
+	if err != nil {
+		return nil, err
+	}
 	enforcer, err := authorization.NewEnforcer(db, configConfig)
 	if err != nil {
 		return nil, err
 	}
 	repository := postgres.NewPostgresRepository(db)
-	queueClient := provideQueueClient(configConfig)
+	taskQueue := queue.NewClient(configConfig)
+	queueService := NewQueueAdapter(taskQueue)
 	permissionService := authorization.NewService(enforcer)
 	tokenService := jwt.NewTokenService(configConfig)
-	otpService := redis.NewOTPService()
-	taskEnqueuer := service.NewTaskEnqueuer(queueClient)
-	emailChannelConfig := notification.ProvideEmailChannelConfig(configConfig)
+	taskEnqueuer := service.NewTaskEnqueuer(taskQueue)
+	emailChannelConfig := notification.NewEmailConfig(configConfig)
 	channel := service.NewEmailChannel(emailChannelConfig)
-	v := notification.ProvideChannelSlice(channel)
+	v := notification.NewEmailChannels(channel)
 	notificationService := service.NewNotificationServiceWithQueue(taskEnqueuer, v...)
-	domainNotificationService := NewAuthNotificationAdapter(notificationService)
-	serviceService := service2.NewService(repository, configConfig, queueClient, permissionService, tokenService, otpService, domainNotificationService)
+	authdomainNotificationService := NewAuthNotificationAdapter(notificationService)
+	serviceService := service2.NewService(repository, configConfig, redisClient, queueService, permissionService, tokenService, authdomainNotificationService)
 	domainRepository := postgres2.NewPostgresRepository(db)
 	domainPermissionService := NewAccountPermissionAdapter(permissionService)
 	service6 := service3.NewService(domainRepository, domainPermissionService)
@@ -69,7 +74,7 @@ func InitializeApp() (*AppDependencies, error) {
 	authHandler := authhandler.NewAuthHandler(serviceService, configConfig)
 	accountHandler := acchandler.NewAccountHandler(service6)
 	eventHandler := eventhandler.NewEventHandler(service8)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, enforcer, serviceService, service6, service8, service7, authHandler, accountHandler, eventHandler)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, serviceService, service6, service8, service7, authHandler, accountHandler, eventHandler)
 	return appDependencies, nil
 }
 
@@ -80,6 +85,7 @@ type AppDependencies struct {
 	DB             *gorm.DB
 	App            *fiber.App
 	StorageClient  *storage.Client
+	RedisClient    *redis.Client // ✅ Added
 	Enforcer       *authorization.Enforcer
 	Notification   notificationdomain.NotificationService
 	AuthService    service2.Service

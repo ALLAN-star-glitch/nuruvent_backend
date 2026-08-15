@@ -14,7 +14,6 @@ require (
 	github.com/supabase-community/storage-go v0.8.1
 	github.com/swaggo/swag v1.16.6
 	golang.org/x/crypto v0.54.0
-	gorm.io/datatypes v1.2.7
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/gorm v1.31.2
 )

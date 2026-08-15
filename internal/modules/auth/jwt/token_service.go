@@ -4,9 +4,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"time"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -15,7 +16,7 @@ type TokenService struct {
     config *config.Config
 }
 
-func NewTokenService(cfg *config.Config) domain.TokenService {
+func NewTokenService(cfg *config.Config) authdomain.TokenService {
     return &TokenService{config: cfg}
 }
 

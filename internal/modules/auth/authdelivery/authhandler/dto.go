@@ -3,7 +3,7 @@ package authhandler
 import (
 	"time"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 )
 
 // ============================================================
@@ -145,8 +145,8 @@ type AuthResponse struct {
 // RESPONSE BUILDERS (Mappers)
 // ============================================================
 
-// NewAccountResponse converts domain.Account to AccountResponse
-func NewAccountResponse(account *domain.Account) AccountResponse {
+// NewAccountResponse converts authdomain.Account to AccountResponse
+func NewAccountResponse(account *authdomain.Account) AccountResponse {
 	if account == nil {
 		return AccountResponse{}
 	}
@@ -175,8 +175,8 @@ func NewAccountResponse(account *domain.Account) AccountResponse {
 	}
 }
 
-// NewInstitutionResponse converts domain.Institution to InstitutionResponse
-func NewInstitutionResponse(institution *domain.Institution) *InstitutionResponse {
+// NewInstitutionResponse converts authdomain.Institution to InstitutionResponse
+func NewInstitutionResponse(institution *authdomain.Institution) *InstitutionResponse {
 	if institution == nil {
 		return nil
 	}

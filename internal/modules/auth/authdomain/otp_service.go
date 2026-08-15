@@ -1,8 +1,10 @@
-package domain
+package authdomain
+
 
 // ============================================================
 // OUTBOUND PORT: OTPService
-// Defines what the domain NEEDS for OTP operations
+// Defines what the authdomain
+//  NEEDS for OTP operations
 // ============================================================
 
 type OTPService interface {

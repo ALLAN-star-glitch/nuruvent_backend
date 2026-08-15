@@ -1,15 +1,15 @@
 package postgres
 
 import (
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/google/uuid"
 )
 
 // ============================================================
-// DOMAIN → DATABASE MODEL MAPPERS
+// authdomain → DATABASE MODEL MAPPERS
 // ============================================================
 
-func ToAccountModel(account *domain.Account) *AccountModel {
+func ToAccountModel(account *authdomain.Account) *AccountModel {
 	if account == nil {
 		return nil
 	}
@@ -48,7 +48,7 @@ func ToAccountModel(account *domain.Account) *AccountModel {
 	}
 }
 
-func ToRefreshTokenModel(token *domain.RefreshToken) *RefreshTokenModel {
+func ToRefreshTokenModel(token *authdomain.RefreshToken) *RefreshTokenModel {
 	if token == nil {
 		return nil
 	}
@@ -66,7 +66,7 @@ func ToRefreshTokenModel(token *domain.RefreshToken) *RefreshTokenModel {
 	}
 }
 
-func ToInstitutionModel(institution *domain.Institution) *InstitutionModel {
+func ToInstitutionModel(institution *authdomain.Institution) *InstitutionModel {
 	if institution == nil {
 		return nil
 	}
@@ -89,7 +89,7 @@ func ToInstitutionModel(institution *domain.Institution) *InstitutionModel {
 	}
 }
 
-func ToTeamMemberModel(member *domain.TeamMember) *TeamMemberModel {
+func ToTeamMemberModel(member *authdomain.TeamMember) *TeamMemberModel {
 	if member == nil {
 		return nil
 	}
@@ -119,10 +119,10 @@ func ToTeamMemberModel(member *domain.TeamMember) *TeamMemberModel {
 }
 
 // ============================================================
-// DATABASE MODEL → DOMAIN MAPPERS
+// DATABASE MODEL → authdomain MAPPERS
 // ============================================================
 
-func ToDomainAccount(model *AccountModel) *domain.Account {
+func ToauthdomainAccount(model *AccountModel) *authdomain.Account {
 	if model == nil {
 		return nil
 	}
@@ -139,7 +139,7 @@ func ToDomainAccount(model *AccountModel) *domain.Account {
 		institutionID = &id
 	}
 
-	return &domain.Account{
+	return &authdomain.Account{
 		ID:                 model.ID.String(),
 		Slug:               model.Slug,
 		Name:               model.Name,
@@ -159,12 +159,12 @@ func ToDomainAccount(model *AccountModel) *domain.Account {
 	}
 }
 
-func ToDomainRefreshToken(model *RefreshTokenModel) *domain.RefreshToken {
+func ToauthdomainRefreshToken(model *RefreshTokenModel) *authdomain.RefreshToken {
 	if model == nil {
 		return nil
 	}
 
-	return &domain.RefreshToken{
+	return &authdomain.RefreshToken{
 		ID:         model.ID.String(),
 		AccountID:  model.AccountID.String(),
 		Token:      model.Token,
@@ -177,12 +177,12 @@ func ToDomainRefreshToken(model *RefreshTokenModel) *domain.RefreshToken {
 	}
 }
 
-func ToDomainInstitution(model *InstitutionModel) *domain.Institution {
+func ToauthdomainInstitution(model *InstitutionModel) *authdomain.Institution {
 	if model == nil {
 		return nil
 	}
 
-	return &domain.Institution{
+	return &authdomain.Institution{
 		ID:                model.ID.String(),
 		Slug:              model.Slug,
 		Name:              model.Name,
@@ -200,7 +200,7 @@ func ToDomainInstitution(model *InstitutionModel) *domain.Institution {
 	}
 }
 
-func ToDomainTeamMember(model *TeamMemberModel) *domain.TeamMember {
+func ToauthdomainTeamMember(model *TeamMemberModel) *authdomain.TeamMember {
 	if model == nil {
 		return nil
 	}
@@ -211,7 +211,7 @@ func ToDomainTeamMember(model *TeamMemberModel) *domain.TeamMember {
 		createdBy = &id
 	}
 
-	return &domain.TeamMember{
+	return &authdomain.TeamMember{
 		ID:          model.ID.String(),
 		Slug:        model.Slug,
 		Name:        model.Name,
@@ -232,12 +232,12 @@ func ToDomainTeamMember(model *TeamMemberModel) *domain.TeamMember {
 // VALUE OBJECT MAPPERS
 // ============================================================
 
-func ToDomainAccountType(model *AccountTypeModel) *domain.AccountType {
+func ToauthdomainAccountType(model *AccountTypeModel) *authdomain.AccountType {
 	if model == nil {
 		return nil
 	}
 
-	return &domain.AccountType{
+	return &authdomain.AccountType{
 		ID:          model.ID.String(),
 		Slug:        model.Slug,
 		Name:        model.Name,
@@ -249,12 +249,12 @@ func ToDomainAccountType(model *AccountTypeModel) *domain.AccountType {
 	}
 }
 
-func ToDomainProfessionalType(model *ProfessionalTypeModel) *domain.ProfessionalType {
+func ToauthdomainProfessionalType(model *ProfessionalTypeModel) *authdomain.ProfessionalType {
 	if model == nil {
 		return nil
 	}
 
-	return &domain.ProfessionalType{
+	return &authdomain.ProfessionalType{
 		ID:          model.ID.String(),
 		Slug:        model.Slug,
 		Name:        model.Name,
@@ -265,12 +265,12 @@ func ToDomainProfessionalType(model *ProfessionalTypeModel) *domain.Professional
 	}
 }
 
-func ToDomainInstitutionType(model *InstitutionTypeModel) *domain.InstitutionType {
+func ToauthdomainInstitutionType(model *InstitutionTypeModel) *authdomain.InstitutionType {
 	if model == nil {
 		return nil
 	}
 
-	return &domain.InstitutionType{
+	return &authdomain.InstitutionType{
 		ID:          model.ID.String(),
 		Slug:        model.Slug,
 		Name:        model.Name,

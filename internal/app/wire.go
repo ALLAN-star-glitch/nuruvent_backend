@@ -32,6 +32,8 @@ import (
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
 )
 
@@ -40,6 +42,7 @@ type AppDependencies struct {
 	DB             *gorm.DB
 	App            *fiber.App
 	StorageClient  *storage.Client
+	RedisClient    *redis.Client          // ✅ Added
 	Enforcer       *authorization.Enforcer
 	Notification   notificationdomain.NotificationService
 	AuthService    authService.Service
@@ -53,32 +56,38 @@ type AppDependencies struct {
 
 func InitializeApp() (*AppDependencies, error) {
 	wire.Build(
-		// Shared Infrastructure Providers
-		config.Load,
-		database.Connect,
-		provideStorageClient,
-		provideQueueClient,
+		// ============================================================
+		// SHARED INFRASTRUCTURE - PROVIDED ONCE
+		// ============================================================
+		config.ProviderSet,
+		database.ProviderSet,
+		queue.ProviderSet,
+		redis.ProviderSet,      // ✅ Provides *redis.Client
+		storage.ProviderSet,
+
+		// ============================================================
+		// APP-SPECIFIC
+		// ============================================================
 		provideFiberAppWithMiddleware,
+		provideAppDependencies,
 
-		// ✅ Notification Module (uses NewNotificationServiceWithQueue)
+		// ============================================================
+		// MODULES
+		// ============================================================
 		notification.ProviderSet,
-
-		// Auth Notification Adapter
-		NewAuthNotificationAdapter,
-
-		// Domain Module Provider Sets
 		auth.ProviderSet,
-		media.ProviderSet,
 		account.ProviderSet,
 		events.ProviderSet,
+		media.ProviderSet,
 
-		// Cross-Module Adapters
+		// ============================================================
+		// CROSS-MODULE ADAPTERS
+		// ============================================================
+		NewAuthNotificationAdapter,
+		NewQueueAdapter,
 		NewAccountPermissionAdapter,
 		NewEventsPermissionAdapter,
 		NewEventsMediaAdapter,
-
-		// Root Assembly
-		provideAppDependencies,
 	)
 	return nil, nil
 }

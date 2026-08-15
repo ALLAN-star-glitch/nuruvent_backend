@@ -1,11 +1,13 @@
+// internal/modules/auth/service/service.go
+
 package service
 
 import (
 	"context"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
+	authdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
+	sharedRedis "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 )
 
 // ============================================================
@@ -15,14 +17,14 @@ import (
 type Service interface {
 	// Registration
 	RegisterAccount(ctx context.Context, req RegisterRequest) error
-	VerifyOTPAndCreateAccount(ctx context.Context, email, otp string) (*domain.Account, map[string]interface{}, error)
+	VerifyOTPAndCreateAccount(ctx context.Context, email, otp string) (*authdomain.Account, map[string]interface{}, error)
 
 	// Login
-	LoginAccount(ctx context.Context, email, password, ipAddress, userAgent string) (*domain.Account, string, error)
-	VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAddress, userAgent string) (*domain.Account, string, string, error)
+	LoginAccount(ctx context.Context, email, password, ipAddress, userAgent string) (*authdomain.Account, string, error)
+	VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAddress, userAgent string) (*authdomain.Account, string, string, error)
 
 	// Token management
-	GenerateTokens(ctx context.Context, account *domain.Account) (string, string, error)
+	GenerateTokens(ctx context.Context, account *authdomain.Account) (string, string, error)
 	RefreshTokens(ctx context.Context, refreshToken, userAgent, ip string) (string, string, error)
 	RevokeToken(ctx context.Context, refreshToken string) error
 
@@ -36,8 +38,23 @@ type Service interface {
 	GetOTP(email string) (string, error)
 	DeleteOTP(email string) error
 
-	// Email
+	// Email - now handled by notification service
 	SendOTPEmail(to, name, otp string) error
+
+	// Two-factor OTP
+	StoreTwoFactorOTP(email, otp string) error
+	GetTwoFactorOTP(email string) (string, error)
+	DeleteTwoFactorOTP(email string) error
+
+	// User data
+	StoreUserData(email string, data map[string]interface{}) error
+	GetUserData(email string) (map[string]string, error)
+	DeleteUserData(email string) error
+
+	// Password reset data
+	StoreResetData(email, otp, newPassword string) error
+	GetResetData(email string) (map[string]string, error)
+	DeleteResetData(email string) error
 }
 
 // ============================================================
@@ -62,31 +79,31 @@ type RegisterRequest struct {
 // ============================================================
 
 type service struct {
-	repo        domain.Repository
+	repo        authdomain.Repository
 	config      *config.Config
-	queue       *queue.Client
-	permService domain.PermissionService
-	tokenSvc    domain.TokenService
-	otpSvc      domain.OTPService
-	notifSvc    domain.NotificationService // ✅ Changed from emailSvc to notifSvc
+	redisClient *sharedRedis.Client          // ✅ Injected Redis client
+	queue       authdomain.QueueService
+	permService authdomain.PermissionService
+	tokenSvc    authdomain.TokenService
+	notifSvc    authdomain.NotificationService
 }
 
 func NewService(
-	repo domain.Repository,
+	repo authdomain.Repository,
 	cfg *config.Config,
-	queueClient *queue.Client,
-	permService domain.PermissionService,
-	tokenSvc domain.TokenService,
-	otpSvc domain.OTPService,
-	notifSvc domain.NotificationService, // ✅ Changed from emailSvc to notifSvc
+	redisClient *sharedRedis.Client,        // ✅ Inject Redis client
+	queueClient authdomain.QueueService,
+	permService authdomain.PermissionService,
+	tokenSvc authdomain.TokenService,
+	notifSvc authdomain.NotificationService,
 ) Service {
 	return &service{
 		repo:        repo,
 		config:      cfg,
+		redisClient: redisClient,
 		queue:       queueClient,
 		permService: permService,
 		tokenSvc:    tokenSvc,
-		otpSvc:      otpSvc,
 		notifSvc:    notifSvc,
 	}
 }

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 )
 
 func (s *service) RegisterAccount(ctx context.Context, req RegisterRequest) error {
@@ -15,7 +15,7 @@ func (s *service) RegisterAccount(ctx context.Context, req RegisterRequest) erro
 		return err
 	}
 	if exists {
-		return domain.ErrAccountExists
+		return authdomain.ErrAccountExists
 	}
 
 	// 2. Check phone uniqueness
@@ -24,14 +24,14 @@ func (s *service) RegisterAccount(ctx context.Context, req RegisterRequest) erro
 		return err
 	}
 	if exists {
-		return domain.ErrInvalidPhone
+		return authdomain.ErrInvalidPhone
 	}
 
 	// 3. Generate OTP
-	otp := s.otpSvc.GenerateOTP()
+	otp := s.GenerateOTP()
 
 	// 4. Store OTP
-	if err := s.otpSvc.StoreOTP(req.Email, otp); err != nil {
+	if err := s.StoreOTP(req.Email, otp); err != nil {
 		return fmt.Errorf("failed to store OTP: %w", err)
 	}
 
@@ -51,11 +51,11 @@ func (s *service) RegisterAccount(ctx context.Context, req RegisterRequest) erro
 		userData["institution_type"] = req.InstitutionType
 	}
 
-	if err := s.otpSvc.StoreUserData(req.Email, userData); err != nil {
+	if err := s.StoreUserData(req.Email, userData); err != nil {
 		return fmt.Errorf("failed to store user data: %w", err)
 	}
 
-	// 6. Send OTP via Notification Service (using domain port)
+	// 6. Send OTP via Notification Service (using authdomain port)
 	if err := s.sendOTPNotification(req.Email, req.Name, otp, "registration"); err != nil {
 		log.Printf("Failed to send OTP notification: %v", err)
 		// Don't fail the registration - OTP can be resent later
@@ -67,7 +67,7 @@ func (s *service) RegisterAccount(ctx context.Context, req RegisterRequest) erro
 // sendOTPNotification sends OTP via notification service
 func (s *service) sendOTPNotification(to, name, otp, purpose string) error {
 	// Use the notification service port
-	if err := s.notifSvc.SendVerificationOTP(context.Background(), domain.SendOTPRequest{
+	if err := s.notifSvc.SendVerificationOTP(context.Background(), authdomain.SendOTPRequest{
 		To:      to,
 		Name:    name,
 		OTP:     otp,

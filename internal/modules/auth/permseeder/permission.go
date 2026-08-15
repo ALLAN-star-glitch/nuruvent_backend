@@ -6,11 +6,12 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"os"
 	"strings"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 
 	"gorm.io/gorm"
 )
@@ -75,7 +76,7 @@ func SeedPermissions(db *gorm.DB) error {
 // permissionSeeder handles the actual seeding
 type permissionSeeder struct {
 	enforcer *authorization.Enforcer
-	service  domain.PermissionService // ✅ Use interface
+	service  authdomain.PermissionService // ✅ Use interface
 }
 
 // seedPoliciesFromCSV seeds platform policies from default_policies.csv

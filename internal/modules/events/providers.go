@@ -1,4 +1,4 @@
-
+// internal/modules/events/providers.go
 
 package events
 
@@ -11,7 +11,13 @@ import (
 )
 
 var ProviderSet = wire.NewSet(
+
+	// Repository
 	postgres.NewPostgresRepository,
+
+	// Service
 	service.NewService,
+
+	// Handler
 	eventhandler.NewEventHandler,
 )

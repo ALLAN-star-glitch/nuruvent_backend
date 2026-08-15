@@ -38,9 +38,10 @@ func main() {
 	}
 
 	// ================================================
-	// Initialize Redis
+	// Initialize Redis Client
 	// ================================================
-	if err := redis.Init(cfg.Redis.URL); err != nil {
+	redisClient, err := redis.NewClient(cfg)
+	if err != nil {
 		log.Fatalf("Failed to initialize Redis: %v", err)
 	}
 	log.Println("✅ Redis initialized successfully")
@@ -126,10 +127,17 @@ func main() {
 
 	log.Println("🛑 Shutting down notification worker gracefully...")
 
+	// Graceful shutdown
 	_, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	srv.Shutdown()
+
+	// ✅ Close Redis connection
+	if err := redisClient.Close(); err != nil {
+		log.Printf("Error closing Redis: %v", err)
+	}
+
 	log.Println("✅ Notification worker stopped")
 }
 

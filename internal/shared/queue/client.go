@@ -5,25 +5,24 @@ package queue
 import (
 	"context"
 	"log"
+	"time"
 
 	"github.com/hibiken/asynq"
-
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 )
 
-// Client implements notificationdomain.TaskQueue (outbound port)
-type Client struct {
+type client struct {
 	client *asynq.Client
 }
 
-// NewClient creates a new queue client
-func NewClient(redisAddr string) *Client {
-	client := asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})
-	return &Client{client: client}
+func NewClient(cfg *config.Config) notificationdomain.TaskQueue {
+	c := asynq.NewClient(asynq.RedisClientOpt{Addr: cfg.Redis.URL})
+	return &client{client: c}
 }
 
 // Enqueue implements notificationdomain.TaskQueue
-func (c *Client) Enqueue(ctx context.Context, taskType string, payload []byte, opts ...interface{}) error {
+func (c *client) Enqueue(ctx context.Context, taskType string, payload []byte) error {
 	task := asynq.NewTask(taskType, payload)
 	info, err := c.client.Enqueue(task)
 	if err != nil {
@@ -34,10 +33,18 @@ func (c *Client) Enqueue(ctx context.Context, taskType string, payload []byte, o
 	return nil
 }
 
-// Close closes the queue client
-func (c *Client) Close() error {
-	return c.client.Close()
+// EnqueueDelayed implements notificationdomain.TaskQueue
+func (c *client) EnqueueDelayed(ctx context.Context, taskType string, payload []byte, delaySeconds int) error {
+	task := asynq.NewTask(taskType, payload)
+	info, err := c.client.Enqueue(task, asynq.ProcessIn(time.Duration(delaySeconds)*time.Second))
+	if err != nil {
+		log.Printf("Failed to enqueue delayed task %s: %v", taskType, err)
+		return err
+	}
+	log.Printf("Delayed task enqueued: ID=%s, Type=%s, Delay=%ds", info.ID, info.Type, delaySeconds)
+	return nil
 }
 
-// Ensure Client implements notificationdomain.TaskQueue
-var _ notificationdomain.TaskQueue = (*Client)(nil)
+func (c *client) Close() error {
+	return c.client.Close()
+}

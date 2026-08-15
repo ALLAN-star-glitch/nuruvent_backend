@@ -4,14 +4,17 @@ package notificationdomain
 
 import "context"
 
+
 // TaskQueue is the outbound port for task queue operations
 type TaskQueue interface {
 	// Enqueue enqueues a task for processing
-	Enqueue(ctx context.Context, taskType string, payload []byte, opts ...interface{}) error
+	Enqueue(ctx context.Context, taskType string, payload []byte) error
+	
+	// EnqueueDelayed enqueues a task with a delay
+	EnqueueDelayed(ctx context.Context, taskType string, payload []byte, delaySeconds int) error
 }
 
 // TaskEnqueuer is the inbound port for enqueuing tasks
-// The service uses this to enqueue tasks
 type TaskEnqueuer interface {
 	// EnqueueVerificationOTP enqueues a verification OTP task
 	EnqueueVerificationOTP(ctx context.Context, task VerificationOTPTask) error

@@ -1,5 +1,4 @@
-//go:build wireinject
-// +build wireinject
+// internal/modules/account/providers.go
 
 package account
 
@@ -12,7 +11,14 @@ import (
 )
 
 var ProviderSet = wire.NewSet(
+
+
+	// Repository
 	postgres.NewPostgresRepository,
+
+	// Service
 	service.NewService,
+
+	// Handler
 	acchandler.NewAccountHandler,
 )

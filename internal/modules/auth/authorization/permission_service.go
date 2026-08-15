@@ -1,15 +1,15 @@
 package authorization
 
 import (
-    "context"
-    "fmt"
-    "log"
+	"context"
+	"fmt"
+	"log"
 
-    "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 )
 
 // Ensure Service implements domain.PermissionService.  (*Service)(nil) is a nil pointer of type *Service, which is used to check if Service implements the interface. If it does not, the compiler will throw an error.	A nil pointer is used here because we don't need an actual instance of Service; we just want to check the type.
-var _ domain.PermissionService = (*Service)(nil) // _ is a compile-time check to ensure Service implements the interface and = symbol assigns the instance of Service to the interface type. If Service does not implement all methods of domain.PermissionService, this line will cause a compile-time error.
+var _ authdomain.PermissionService = (*Service)(nil) // _ is a compile-time check to ensure Service implements the interface and = symbol assigns the instance of Service to the interface type. If Service does not implement all methods of domain.PermissionService, this line will cause a compile-time error.
 
 // Service provides high-level permission management
 // Implements domain.PermissionService (outbound adapter)
@@ -18,7 +18,7 @@ type Service struct {
 }
 
 // NewService creates a new permission service
-func NewService(enforcer *Enforcer) domain.PermissionService {
+func NewService(enforcer *Enforcer) authdomain.PermissionService {
     return &Service{
         enforcer: enforcer,
     }

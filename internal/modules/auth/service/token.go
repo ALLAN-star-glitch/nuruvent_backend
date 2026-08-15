@@ -1,14 +1,14 @@
 package service
 
 import (
-    "context"
-    "fmt"
-    "time"
+	"context"
+	"fmt"
+	"time"
 
-    "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 )
 
-func (s *service) GenerateTokens(ctx context.Context, account *domain.Account) (string, string, error) {
+func (s *service) GenerateTokens(ctx context.Context, account *authdomain.Account) (string, string, error) {
     accessToken, err := s.tokenSvc.GenerateAccessToken(account.ID)
     if err != nil {
         return "", "", fmt.Errorf("failed to generate access token: %w", err)
@@ -20,7 +20,7 @@ func (s *service) GenerateTokens(ctx context.Context, account *domain.Account) (
     }
 
     // Store refresh token in database
-    newToken, err := domain.NewRefreshToken(
+    newToken, err := authdomain.NewRefreshToken(
         account.ID,
         refreshToken,
         "", // userAgent will be passed
@@ -45,12 +45,12 @@ func (s *service) RefreshTokens(ctx context.Context, refreshToken, userAgent, ip
         return "", "", err
     }
     if token == nil {
-        return "", "", domain.ErrInvalidToken
+        return "", "", authdomain.ErrInvalidToken
     }
 
     // 2. Check if valid
     if token.IsExpired() || token.IsRevoked() {
-        return "", "", domain.ErrInvalidToken
+        return "", "", authdomain.ErrInvalidToken
     }
 
     // 3. Revoke old token
@@ -70,7 +70,7 @@ func (s *service) RefreshTokens(ctx context.Context, refreshToken, userAgent, ip
     }
 
     // 5. Store new refresh token
-    newToken, err := domain.NewRefreshToken(
+    newToken, err := authdomain.NewRefreshToken(
         token.AccountID,
         newRefreshToken,
         userAgent,

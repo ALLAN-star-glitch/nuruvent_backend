@@ -3,12 +3,14 @@ package authhandler
 import (
 	"errors"
 	"log"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
+
+	"time"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/validation"
-	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -228,7 +230,7 @@ func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 
 	account, result, err := h.service.VerifyOTPAndCreateAccount(c.Context(), req.Email, req.OTP)
 	if err != nil {
-		if errors.Is(err, domain.ErrInvalidOTP) {
+		if errors.Is(err, authdomain.ErrInvalidOTP) {
 			return response.Unauthorized(c, "Invalid or expired OTP", nil)
 		}
 		return response.BadRequest(c, err.Error(), nil)
@@ -251,7 +253,7 @@ func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 		Account: NewAccountResponse(account),
 	}
 
-	if institution, ok := result["institution"].(*domain.Institution); ok && institution != nil {
+	if institution, ok := result["institution"].(*authdomain.Institution); ok && institution != nil {
 		authResp.Institution = NewInstitutionResponse(institution)
 	}
 
@@ -327,10 +329,10 @@ func (h *AuthHandler) Login(c fiber.Ctx) error {
 
 	account, _, err := h.service.LoginAccount(c.Context(), req.Email, req.Password, ipAddress, userAgent)
 	if err != nil {
-		if errors.Is(err, domain.ErrInvalidCredentials) {
+		if errors.Is(err, authdomain.ErrInvalidCredentials) {
 			return response.Unauthorized(c, "Invalid credentials", nil)
 		}
-		if errors.Is(err, domain.ErrAccountInactive) {
+		if errors.Is(err, authdomain.ErrAccountInactive) {
 			return response.Unauthorized(c, "Account is inactive", nil)
 		}
 		return response.InternalError(c, "Login failed", fiber.Map{"error": err.Error()})
@@ -376,7 +378,7 @@ func (h *AuthHandler) VerifyTwoFactorOTP(c fiber.Ctx) error {
 		userAgent,
 	)
 	if err != nil {
-		if errors.Is(err, domain.ErrInvalidOTP) {
+		if errors.Is(err, authdomain.ErrInvalidOTP) {
 			return response.Unauthorized(c, "Invalid or expired OTP", nil)
 		}
 		return response.Unauthorized(c, err.Error(), nil)
@@ -556,7 +558,7 @@ func (h *AuthHandler) VerifyResetOTP(c fiber.Ctx) error {
 	}
 
 	if err := h.service.VerifyResetOTPAndResetPassword(c.Context(), req.Email, req.OTP); err != nil {
-		if errors.Is(err, domain.ErrInvalidOTP) {
+		if errors.Is(err, authdomain.ErrInvalidOTP) {
 			return response.Unauthorized(c, "Invalid or expired OTP", nil)
 		}
 		return response.BadRequest(c, err.Error(), nil)

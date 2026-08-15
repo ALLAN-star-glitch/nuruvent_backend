@@ -40,9 +40,27 @@ func NewClient(supabaseURL, serviceKey string, bucketConfig BucketConfig) *Clien
 	}
 }
 
-// NewClientFromConfig creates a new storage client from Supabase config
-func NewClientFromConfig(supabaseConfig *config.SupabaseConfig) *Client {
-	// Create bucket configuration from config
+// NewClientFromConfig creates a new storage client from app config
+// ✅ Takes *config.Config directly
+func NewClientFromConfig(cfg *config.Config) *Client {
+	bucketConfig := BucketConfig{
+		Events:       cfg.Supabase.BucketEvent,
+		Businesses:   cfg.Supabase.BucketBusiness,
+		Profiles:     cfg.Supabase.BucketProfile,
+		Certificates: cfg.Supabase.BucketCertificate,
+		Recordings:   cfg.Supabase.BucketRecording,
+	}
+
+	return NewClient(
+		cfg.Supabase.URL,
+		cfg.Supabase.SecretKey,
+		bucketConfig,
+	)
+}
+
+// NewClientFromSupabaseConfig creates a new storage client from Supabase config
+// ✅ Kept for backward compatibility or direct use
+func NewClientFromSupabaseConfig(supabaseConfig *config.SupabaseConfig) *Client {
 	bucketConfig := BucketConfig{
 		Events:       supabaseConfig.BucketEvent,
 		Businesses:   supabaseConfig.BucketBusiness,
@@ -53,7 +71,7 @@ func NewClientFromConfig(supabaseConfig *config.SupabaseConfig) *Client {
 
 	return NewClient(
 		supabaseConfig.URL,
-		supabaseConfig.SecretKey, // Using SecretKey from your config
+		supabaseConfig.SecretKey,
 		bucketConfig,
 	)
 }

@@ -6,29 +6,29 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"golang.org/x/crypto/bcrypt"
 )
 
-func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp string) (*domain.Account, map[string]interface{}, error) {
+func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp string) (*authdomain.Account, map[string]interface{}, error) {
 	// 1. Verify OTP
-	storedOTP, err := s.otpSvc.GetOTP(email)
+	storedOTP, err := s.GetOTP(email)
 	if err != nil {
-		return nil, nil, domain.ErrInvalidOTP
+		return nil, nil, authdomain.ErrInvalidOTP
 	}
 	if otp != storedOTP {
-		return nil, nil, domain.ErrInvalidOTP
+		return nil, nil, authdomain.ErrInvalidOTP
 	}
 
 	// 2. Get user data
-	userData, err := s.otpSvc.GetUserData(email)
+	userData, err := s.GetUserData(email)
 	if err != nil {
 		return nil, nil, errors.New("registration data not found")
 	}
 
 	// 3. Clean up Redis
-	s.otpSvc.DeleteOTP(email)
-	s.otpSvc.DeleteUserData(email)
+	s.DeleteOTP(email)
+	s.DeleteUserData(email)
 
 	// 4. Get account type
 	accountTypeSlug := userData["account_type"]
@@ -41,7 +41,7 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 		return nil, nil, fmt.Errorf("failed to get account type: %w", err)
 	}
 	if accountType == nil {
-		return nil, nil, domain.ErrAccountTypeNotFound
+		return nil, nil, authdomain.ErrAccountTypeNotFound
 	}
 
 	// 5. Hash password
@@ -70,7 +70,7 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 		return nil, nil, errors.New("phone not found")
 	}
 
-	account, err := domain.NewAccount(
+	account, err := authdomain.NewAccount(
 		accountEmail,
 		string(hashedPassword),
 		accountName,
@@ -87,7 +87,7 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 	}
 
 	// 8. Handle institution creation
-	var institution *domain.Institution
+	var institution *authdomain.Institution
 	if accountTypeSlug == "institution" {
 		institution, err = s.createInstitution(ctx, userData, account.ID)
 		if err != nil {
@@ -135,7 +135,7 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 // ============================================================
 
 // createInstitution creates an institution from user data
-func (s *service) createInstitution(_ context.Context, userData map[string]string, accountID string) (*domain.Institution, error) {
+func (s *service) createInstitution(_ context.Context, userData map[string]string, accountID string) (*authdomain.Institution, error) {
 	// Get institution name
 	institutionName := userData["institution_name"]
 	if institutionName == "" {
@@ -166,11 +166,11 @@ func (s *service) createInstitution(_ context.Context, userData map[string]strin
 		return nil, fmt.Errorf("failed to get institution type: %w", err)
 	}
 	if institutionType == nil {
-		return nil, domain.ErrInstitutionNotFound
+		return nil, authdomain.ErrInstitutionNotFound
 	}
 
 	// Create institution
-	institution, err := domain.NewInstitution(
+	institution, err := authdomain.NewInstitution(
 		institutionName,
 		institutionEmail,
 		institutionPhone,
@@ -194,7 +194,7 @@ func (s *service) createInstitution(_ context.Context, userData map[string]strin
 	}
 
 	// Create team member (admin) using the existing account ID
-	teamMember, err := domain.NewTeamMember(accountID, accountID, "admin")
+	teamMember, err := authdomain.NewTeamMember(accountID, accountID, "admin")
 	if err != nil {
 		return nil, err
 	}
@@ -211,10 +211,10 @@ func (s *service) createInstitution(_ context.Context, userData map[string]strin
 // ============================================================
 
 // sendWelcomeNotification sends welcome notification via notification service
-func (s *service) sendWelcomeNotification(account *domain.Account, institution *domain.Institution) error {
+func (s *service) sendWelcomeNotification(account *authdomain.Account, institution *authdomain.Institution) error {
 	// Check if it's an institution account
 	if account.InstitutionID != nil && institution != nil {
-		return s.notifSvc.SendInstitutionWelcome(context.Background(), domain.SendInstitutionWelcomeRequest{
+		return s.notifSvc.SendInstitutionWelcome(context.Background(), authdomain.SendInstitutionWelcomeRequest{
 			To:              account.Email,
 			AdminName:       account.Name,
 			InstitutionName: institution.Name,
@@ -222,7 +222,7 @@ func (s *service) sendWelcomeNotification(account *domain.Account, institution *
 	}
 
 	// Individual welcome
-	return s.notifSvc.SendIndividualWelcome(context.Background(), domain.SendWelcomeRequest{
+	return s.notifSvc.SendIndividualWelcome(context.Background(), authdomain.SendWelcomeRequest{
 		To:   account.Email,
 		Name: account.Name,
 	})

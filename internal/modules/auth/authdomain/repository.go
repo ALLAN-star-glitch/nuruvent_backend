@@ -1,4 +1,4 @@
-package domain
+package authdomain
 
 // Repository defines the data access operations the domain needs
 type Repository interface {

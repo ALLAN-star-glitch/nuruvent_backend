@@ -1,4 +1,4 @@
-package domain
+package authdomain
 
 // AccountType is a value object
 type AccountType struct {
