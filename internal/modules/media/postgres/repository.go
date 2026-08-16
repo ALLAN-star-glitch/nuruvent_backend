@@ -1,3 +1,5 @@
+// internal/modules/media/postgres/repository.go
+
 package postgres
 
 import (

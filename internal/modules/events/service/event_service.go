@@ -1,9 +1,12 @@
+// internal/modules/events/service/service.go
+
 package service
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
@@ -39,6 +42,15 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 	// Check permission
 	if !s.permChecker.CanManageEvent(ctx, cmd.CreatedBy, cmd.AccountID) {
 		return nil, errors.New("insufficient permissions to create events for this account")
+	}
+
+	// Get event type to validate and get the type name
+	eventType, err := s.repo.GetEventTypeByID(ctx, cmd.EventTypeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get event type: %w", err)
+	}
+	if eventType == nil {
+		return nil, domain.ErrEventTypeNotFound
 	}
 
 	// Create domain entity
@@ -86,25 +98,34 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 // CREATE EVENT WITH IMAGE
 // ============================================================
 
+// internal/modules/events/service/service.go
+
 func (s *eventService) CreateEventWithImage(ctx context.Context, cmd CreateEventWithImageCommand) (*domain.Event, error) {
+	// First create the event
 	event, err := s.CreateEvent(ctx, cmd.CreateEventCommand)
 	if err != nil {
 		return nil, err
 	}
 
-	if cmd.ImageFile != nil {
+	// If image is provided, upload it
+	if cmd.ImageFile != nil && cmd.ImageHeader != nil {
 		media, err := s.mediaSvc.UploadFile(ctx, domain.UploadMediaCommand{
 			File:          cmd.ImageFile,
 			FileHeader:    cmd.ImageHeader,
-			MediaTypeName: "event",
+			MediaTypeName: "Event",
 			EntityID:      event.ID,
 			UploadedBy:    cmd.CreatedBy,
 		})
 		if err != nil {
+			// Log error but return event without image
+			log.Printf("Failed to upload image for event %s: %v", event.ID, err)
 			return event, nil
 		}
+
+		// Update event with image URL
 		event.ImageURL = media.URL
 		if err := s.repo.UpdateEvent(ctx, event); err != nil {
+			log.Printf("Failed to update event %s with image URL: %v", event.ID, err)
 			return event, nil
 		}
 	}
@@ -159,6 +180,14 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
 		event.Description = cmd.Description
 	}
 	if cmd.EventTypeID != "" {
+		// Validate event type exists
+		eventType, err := s.repo.GetEventTypeByID(ctx, cmd.EventTypeID)
+		if err != nil {
+			return nil, err
+		}
+		if eventType == nil {
+			return nil, domain.ErrEventTypeNotFound
+		}
 		event.EventTypeID = cmd.EventTypeID
 	}
 	if cmd.EventStatusID != "" {

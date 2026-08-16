@@ -565,6 +565,7 @@ func (h *EventHandler) CreateEventWithImage(c fiber.Ctx) error {
 	if err == nil && file != nil {
 		fileContent, err := file.Open()
 		if err != nil {
+			
 			return response.InternalError(c, "Failed to open image file", nil)
 		}
 		defer fileContent.Close()

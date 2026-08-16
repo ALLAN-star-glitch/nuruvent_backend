@@ -350,36 +350,73 @@ func getDomainFromRequest(c fiber.Ctx) string {
 
 	path := c.Path()
 
-	// Check account routes FIRST
-	if strings.Contains(path, "/accounts/me") ||
-		strings.Contains(path, "/account/me") ||
-		strings.Contains(path, "/accounts/my") ||
-		strings.Contains(path, "/account/my") {
-		return authdomain.DomainPlatform
-	}
-
-	// Check for account ID in path
+	// ============================================================
+	// 1. CHECK FOR ACCOUNT ID IN PATH (MOST SPECIFIC)
+	// ============================================================
+	
+	// Try to get accountId from path parameters
 	accountID := c.Params("accountId")
-	if accountID == "" {
-		accountID = c.Params("id")
-	}
 	if accountID != "" {
 		return authdomain.AccountDomain(accountID)
 	}
 
-	// Check if account ID is in query
+	// Try to get id from path parameters (for routes like /accounts/:id)
+	id := c.Params("id")
+	if id != "" {
+		// Check if this is an account route
+		if strings.Contains(path, "/accounts/") || strings.Contains(path, "/account/") {
+			return authdomain.AccountDomain(id)
+		}
+	}
+
+	// ============================================================
+	// 2. PARSE ACCOUNT ID FROM URL PATH
+	// ============================================================
+	
+	// For routes like /api/v1/accounts/{accountId}/events
+	// Remove API prefix
+	cleanPath := strings.TrimPrefix(path, "/api/v1/")
+	cleanPath = strings.TrimPrefix(cleanPath, "/api/v1")
+
+	segments := strings.Split(cleanPath, "/")
+	for i, segment := range segments {
+		if segment == "accounts" || segment == "account" {
+			if i+1 < len(segments) && segments[i+1] != "" {
+				candidate := segments[i+1]
+				// Check if it looks like a UUID (36 chars with 4 hyphens)
+				if len(candidate) == 36 && strings.Count(candidate, "-") == 4 {
+					return authdomain.AccountDomain(candidate)
+				}
+			}
+		}
+	}
+
+	// ============================================================
+	// 3. CHECK FOR ME/MY ENDPOINTS
+	// ============================================================
+	
+	if strings.Contains(path, "/me") || strings.Contains(path, "/my") {
+		// These are user-specific endpoints that should use the user's account
+		if userID := c.Locals(authdomain.ContextKeyUserID); userID != nil {
+			if userIDStr, ok := userID.(string); ok && userIDStr != "" {
+				return authdomain.AccountDomain(userIDStr)
+			}
+		}
+	}
+
+	// ============================================================
+	// 4. CHECK QUERY PARAMETERS
+	// ============================================================
+	
 	accountID = c.Query("accountId")
 	if accountID != "" {
 		return authdomain.AccountDomain(accountID)
 	}
 
-	// Check if it's a user-specific request (backward compatibility)
-	userID := c.Params("userId")
-	if userID != "" {
-		return authdomain.AccountDomain(userID)
-	}
-
-	// Check if it's the current user profile
+	// ============================================================
+	// 5. CHECK USER PROFILE ROUTES
+	// ============================================================
+	
 	if strings.Contains(path, "/profile") && !strings.Contains(path, "/accounts/") {
 		if userID := c.Locals(authdomain.ContextKeyUserID); userID != nil {
 			if userIDStr, ok := userID.(string); ok {
@@ -388,16 +425,27 @@ func getDomainFromRequest(c fiber.Ctx) string {
 		}
 	}
 
-	// Check if it's a me endpoint (but NOT account me - already handled above)
-	if strings.Contains(path, "/me") && !strings.Contains(path, "/accounts/") {
-		if userID := c.Locals(authdomain.ContextKeyUserID); userID != nil {
-			if userIDStr, ok := userID.(string); ok {
-				return authdomain.AccountDomain(userIDStr)
-			}
+	// ============================================================
+	// 6. CHECK PLATFORM ROUTES
+	// ============================================================
+	
+	if strings.HasPrefix(path, "/api/v1/admin") ||
+		strings.HasPrefix(path, "/api/v1/platform") ||
+		strings.HasPrefix(path, "/api/v1/system") {
+		return authdomain.DomainPlatform
+	}
+
+	// ============================================================
+	// 7. DEFAULT - Use user's account if available
+	// ============================================================
+	
+	if userID := c.Locals(authdomain.ContextKeyUserID); userID != nil {
+		if userIDStr, ok := userID.(string); ok && userIDStr != "" {
+			return authdomain.AccountDomain(userIDStr)
 		}
 	}
 
-	// Default to platform domain
+	// Fallback to platform domain
 	return authdomain.DomainPlatform
 }
 
@@ -406,58 +454,68 @@ func getResourceFromRequest(c fiber.Ctx) string {
 	path := c.Path()
 
 	// Remove API prefix
-	path = strings.TrimPrefix(path, "/api/v1/")
-	path = strings.TrimPrefix(path, "/api/v1/account/")
+	cleanPath := strings.TrimPrefix(path, "/api/v1/")
+	cleanPath = strings.TrimPrefix(cleanPath, "/api/v1")
 
-	// Get the first segment
-	segments := strings.Split(path, "/")
-	if len(segments) > 0 && segments[0] != "" {
-		resource := segments[0]
-
-		// Handle account "me" endpoints
-		if resource == "accounts" || resource == "account" {
-			if len(segments) > 1 && (segments[1] == "me" || segments[1] == "my") {
-				return authdomain.ResourceAccount.String()
-			}
-			for _, segment := range segments {
-				if segment == "members" {
-					return authdomain.ResourceMember.String()
-				}
-			}
+	segments := strings.Split(cleanPath, "/")
+	
+	// Find the resource segment (skip account ID if present)
+	for i, segment := range segments {
+		if segment == "" {
+			continue
 		}
-
-		// Map common URL patterns to resources
-		switch resource {
-		case "profile", "me":
-			return authdomain.ResourceProfile.String()
-		case "accounts", "account":
-			return authdomain.ResourceAccount.String()
-		case "institutions":
-			return authdomain.ResourceInstitution.String()
-		case "events":
-			return authdomain.ResourceEvent.String()
-		case "certificates":
-			return authdomain.ResourceCertificate.String()
-		case "attendees":
-			return authdomain.ResourceAttendee.String()
-		case "payments":
-			return authdomain.ResourcePayment.String()
-		case "payouts":
-			return authdomain.ResourcePayout.String()
-		case "dashboard":
-			return authdomain.ResourceDashboard.String()
-		case "analytics":
-			return authdomain.ResourceAnalytics.String()
-		case "notifications":
-			return authdomain.ResourceNotification.String()
-		case "media":
-			return authdomain.ResourceMedia.String()
-		default:
+		
+		// Skip account ID if we're in an accounts route
+		if i > 0 && segments[i-1] == "accounts" {
+			// The resource comes after the account ID
+			if i+1 < len(segments) && segments[i+1] != "" {
+				// Map the resource
+				return mapResource(segments[i+1])
+			}
+			continue
+		}
+		
+		// Check if this segment is a resource
+		if resource := mapResource(segment); resource != "" {
 			return resource
 		}
 	}
 
 	return ""
+}
+
+// mapResource maps URL segment to resource constant
+func mapResource(segment string) string {
+	switch segment {
+	case "profile", "me":
+		return authdomain.ResourceProfile.String()
+	case "accounts", "account":
+		return authdomain.ResourceAccount.String()
+	case "institutions", "institution":
+		return authdomain.ResourceInstitution.String()
+	case "events", "event":
+		return authdomain.ResourceEvent.String()
+	case "certificates", "certificate":
+		return authdomain.ResourceCertificate.String()
+	case "attendees", "attendee":
+		return authdomain.ResourceAttendee.String()
+	case "payments", "payment":
+		return authdomain.ResourcePayment.String()
+	case "payouts", "payout":
+		return authdomain.ResourcePayout.String()
+	case "dashboard":
+		return authdomain.ResourceDashboard.String()
+	case "analytics":
+		return authdomain.ResourceAnalytics.String()
+	case "notifications", "notification":
+		return authdomain.ResourceNotification.String()
+	case "media":
+		return authdomain.ResourceMedia.String()
+	case "members", "member":
+		return authdomain.ResourceMember.String()
+	default:
+		return ""
+	}
 }
 
 // getActionFromRequest maps HTTP method to action

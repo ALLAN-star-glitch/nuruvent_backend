@@ -1,6 +1,7 @@
 package service
 
 import (
+	"slices"
 	"bytes"
 	"context"
 	"fmt"
@@ -36,6 +37,7 @@ func NewService(
 // ============================================================
 // UPLOAD
 // ============================================================
+
 
 func (s *mediaService) UploadFile(ctx context.Context, cmd UploadCommand) (*domain.Media, error) {
 	// 1. Get media type
@@ -80,17 +82,17 @@ func (s *mediaService) UploadFile(ctx context.Context, cmd UploadCommand) (*doma
 		return nil, fmt.Errorf("failed to upload file: %w", err)
 	}
 
-	// 8. Create domain entity
+	// 8. Create domain entity - match table columns
 	media, err := domain.NewMedia(
-		cmd.FileHeader.Filename,
-		mediaType.Bucket,
-		filePath,
-		publicURL,
-		mediaType.ID,
-		cmd.EntityID,
-		cmd.UploadedBy,
-		contentType,
-		cmd.FileHeader.Size,
+		cmd.FileHeader.Filename, // FileName
+		mediaType.Bucket,        // Bucket
+		filePath,                // Path
+		publicURL,               // URL
+		mediaType.ID,            // MediaTypeID
+		cmd.EntityID,            // EntityID
+		cmd.UploadedBy,          // UploadedBy
+		contentType,             // MimeType
+		cmd.FileHeader.Size,     // FileSize
 	)
 	if err != nil {
 		_ = s.storage.DeleteFile(ctx, mediaType.Bucket, filePath)
@@ -259,15 +261,12 @@ func (s *mediaService) isAllowedMimeType(mimeType string, mediaType *domain.Medi
 		"recording":   {"video/mp4", "video/webm", "video/ogg"},
 	}
 
-	allowed, ok := allowedTypes[mediaType.Name]
+	// Convert to lowercase to match map keys
+	key := strings.ToLower(mediaType.Name)
+	allowed, ok := allowedTypes[key]
 	if !ok {
 		return false
 	}
 
-	for _, t := range allowed {
-		if mimeType == t {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(allowed, mimeType)
 }

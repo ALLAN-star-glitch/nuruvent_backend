@@ -19,7 +19,7 @@ type Repository interface {
 	DeleteMedia(ctx context.Context, id string) error
 	DeleteMediaByEntity(ctx context.Context, entityID string) error
 
-	// Media Type
+	// Media Types
 	GetMediaTypeByID(ctx context.Context, id string) (*MediaType, error)
 	GetMediaTypeByName(ctx context.Context, name string) (*MediaType, error)
 	GetAllMediaTypes(ctx context.Context) ([]*MediaType, error)

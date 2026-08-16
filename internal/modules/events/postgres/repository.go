@@ -31,7 +31,10 @@ func (r *PostgresRepository) CreateEvent(ctx context.Context, event *domain.Even
 
 func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*domain.Event, error) {
 	var model EventModel
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&model).Error
+	err := r.db.WithContext(ctx).
+		Preload("EventType"). // ✅ Preload the event type
+		Where("id = ? AND deleted_at IS NULL", id).
+		First(&model).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -70,7 +73,7 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 	var models []EventModel
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&EventModel{})
+	query := r.db.WithContext(ctx).Model(&EventModel{}).Preload("EventType")
 
 	if filters.AccountID != "" {
 		query = query.Where("account_id = ?", filters.AccountID)
@@ -105,12 +108,14 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 	return events, total, nil
 }
 
+
 func (r *PostgresRepository) GetEventsByType(ctx context.Context, eventTypeID string, limit, offset int) ([]*domain.Event, int64, error) {
 	var models []EventModel
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&EventModel{}).
-		Where("event_type_id = ?", eventTypeID)
+		Where("event_type_id = ?", eventTypeID).
+		Preload("EventType")
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -123,14 +128,13 @@ func (r *PostgresRepository) GetEventsByType(ctx context.Context, eventTypeID st
 		query = query.Offset(offset)
 	}
 
-	err := query.Order("date DESC").Find(&models).Error
-	if err != nil {
+	if err := query.Order("date DESC").Find(&models).Error; err != nil {
 		return nil, 0, err
 	}
 
 	events := make([]*domain.Event, len(models))
-	for i, m := range models {
-		events[i] = ToDomainEvent(&m)
+	for i, model := range models {
+		events[i] = ToDomainEvent(&model)
 	}
 	return events, total, nil
 }

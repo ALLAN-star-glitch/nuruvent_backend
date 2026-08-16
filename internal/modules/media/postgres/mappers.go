@@ -14,23 +14,17 @@ func ToModelMedia(media *domain.Media) *MediaModel {
 		return nil
 	}
 
-	mediaTypeID := uuid.MustParse(media.MediaTypeID)
-	entityID := uuid.MustParse(media.EntityID)
-	uploadedBy := uuid.MustParse(media.UploadedBy)
-
 	return &MediaModel{
-		ID:          uuid.MustParse(media.ID),
-		Slug:        media.Slug,
-		Name:        media.Name,
-		DisplayName: media.DisplayName,
+		ID:          media.ID,
+		FileName:    media.FileName,
+		FileSize:    media.FileSize,
+		MimeType:    media.MimeType,
 		Bucket:      media.Bucket,
 		Path:        media.Path,
 		URL:         media.URL,
-		MediaTypeID: mediaTypeID,
-		EntityID:    entityID,
-		UploadedBy:  uploadedBy,
-		FileSize:    media.FileSize,
-		MimeType:    media.MimeType,
+		MediaTypeID: media.MediaTypeID,
+		EntityID:    media.EntityID,
+		UploadedBy:  media.UploadedBy,
 		IsActive:    media.IsActive,
 		CreatedAt:   media.CreatedAt,
 		UpdatedAt:   media.UpdatedAt,
@@ -66,18 +60,16 @@ func ToDomainMedia(model *MediaModel) *domain.Media {
 	}
 
 	return &domain.Media{
-		ID:          model.ID.String(),
-		Slug:        model.Slug,
-		Name:        model.Name,
-		DisplayName: model.DisplayName,
+		ID:          model.ID,
+		FileName:    model.FileName,
+		FileSize:    model.FileSize,
+		MimeType:    model.MimeType,
 		Bucket:      model.Bucket,
 		Path:        model.Path,
 		URL:         model.URL,
-		MediaTypeID: model.MediaTypeID.String(),
-		EntityID:    model.EntityID.String(),
-		UploadedBy:  model.UploadedBy.String(),
-		FileSize:    model.FileSize,
-		MimeType:    model.MimeType,
+		MediaTypeID: model.MediaTypeID,
+		EntityID:    model.EntityID,
+		UploadedBy:  model.UploadedBy,
 		IsActive:    model.IsActive,
 		CreatedAt:   model.CreatedAt,
 		UpdatedAt:   model.UpdatedAt,

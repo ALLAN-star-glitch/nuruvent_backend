@@ -13,25 +13,20 @@ import (
 
 // MediaModel represents a file stored in the system
 type MediaModel struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	Slug        string         `gorm:"type:varchar(50);unique;not null" json:"slug"`
-	Name        string         `gorm:"type:varchar(100);not null" json:"name"`
-	DisplayName string         `gorm:"type:varchar(150)" json:"display_name,omitempty"`
-	Bucket      string         `gorm:"type:varchar(50);not null" json:"bucket"`
-	Path        string         `gorm:"type:varchar(500);not null" json:"path"`
-	URL         string         `gorm:"type:varchar(500);not null" json:"url"`
-	MediaTypeID uuid.UUID      `gorm:"type:uuid;index;not null" json:"media_type_id"`
-	EntityID    uuid.UUID      `gorm:"type:uuid;index;not null" json:"entity_id"`
-	UploadedBy  uuid.UUID      `gorm:"type:uuid;index;not null" json:"uploaded_by"`
-	FileSize    int64          `gorm:"not null" json:"file_size"`
-	MimeType    string         `gorm:"type:varchar(100);not null" json:"mime_type"`
-	IsActive    bool           `gorm:"default:true" json:"is_active"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
-
-	// Relationship
-	MediaType MediaTypeModel `gorm:"foreignKey:MediaTypeID" json:"media_type,omitempty"`
+	ID          string         `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
+	FileName    string         `gorm:"not null;size:255"`
+	FileSize    int64          `gorm:"not null"`
+	MimeType    string         `gorm:"not null;size:100"`
+	Bucket      string         `gorm:"not null;size:50;index:idx_media_bucket"`
+	Path        string         `gorm:"not null;size:500"`
+	URL         string         `gorm:"not null;size:500"`
+	MediaTypeID string         `gorm:"type:uuid;not null;index:idx_media_media_type_id"`
+	EntityID    string         `gorm:"type:uuid;not null;index:idx_media_entity"`
+	UploadedBy  string         `gorm:"type:uuid;not null;index:idx_media_uploaded_by"`
+	IsActive    bool           `gorm:"default:true;index:idx_media_is_active"`
+	CreatedAt   time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt   time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
 func (MediaModel) TableName() string {
