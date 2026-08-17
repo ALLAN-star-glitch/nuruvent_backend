@@ -53,11 +53,22 @@ func provideFiberAppWithMiddleware() *fiber.App {
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: []string{
+			// Development
 			"http://localhost:3000",
 			"http://localhost:3001",
 			"http://localhost:3002",
 			"http://localhost:8080",
+			
+			// ✅ Production - Your custom domain
+			"https://nuruvent.com",
+			"https://www.nuruvent.com",
+			
+			// ✅ Vercel preview deployments
 			"https://nuruvent.vercel.app",
+			"https://*.vercel.app",
+			
+			// ✅ If you have staging
+			"https://staging.nuruvent.com",
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With"},
