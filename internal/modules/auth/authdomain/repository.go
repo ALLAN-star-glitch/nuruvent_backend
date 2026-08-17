@@ -16,6 +16,7 @@ type Repository interface {
 	GetAccountByID(id string) (*Account, error)
 	CreateAccount(account *Account) error
 	UpdateAccount(account *Account) error
+	UpdateAccountInstitutionID(accountID string, institutionID string) error // ✅ NEW
 	GetAccountTypeByID(id string) (*AccountType, error)
 	GetAccountTypeBySlug(slug string) (*AccountType, error)
 

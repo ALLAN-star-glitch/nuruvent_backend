@@ -1,3 +1,5 @@
+// notificationdomain/service.go
+
 package notificationdomain
 
 import "context"
@@ -30,67 +32,129 @@ func (p VerificationPurpose) IsValid() bool {
 }
 
 // ============================================================
+// OTP CONFIG - Different purposes have different requirements
+// ============================================================
+
+type OTPConfig struct {
+	Length          int
+	ExpirySeconds   int64
+	MaxAttempts     int
+	RateLimitMax    int
+	RateLimitWindow int64 // seconds
+}
+
+var OTPConfigs = map[VerificationPurpose]OTPConfig{
+	PurposeRegistration: {
+		Length:          6,
+		ExpirySeconds:   3600, // 1 hour
+		MaxAttempts:     5,
+		RateLimitMax:    5,
+		RateLimitWindow: 300, // 5 minutes
+	},
+	PurposeTwoFactor: {
+		Length:          6,
+		ExpirySeconds:   300, // 5 minutes
+		MaxAttempts:     3,
+		RateLimitMax:    3,
+		RateLimitWindow: 300, // 5 minutes
+	},
+	PurposePasswordReset: {
+		Length:          6,
+		ExpirySeconds:   900, // 15 minutes
+		MaxAttempts:     3,
+		RateLimitMax:    3,
+		RateLimitWindow: 3600, // 1 hour (stricter)
+	},
+	PurposeEmailChange: {
+		Length:          6,
+		ExpirySeconds:   3600, // 1 hour
+		MaxAttempts:     3,
+		RateLimitMax:    3,
+		RateLimitWindow: 600, // 10 minutes
+	},
+	PurposePhoneChange: {
+		Length:          6,
+		ExpirySeconds:   600, // 10 minutes
+		MaxAttempts:     3,
+		RateLimitMax:    3,
+		RateLimitWindow: 600, // 10 minutes
+	},
+}
+
+// ============================================================
 // INBOUND PORT: NotificationService Interface
 // ============================================================
 
 type NotificationService interface {
-	// Verification OTP
-	SendVerificationOTP(ctx context.Context, req SendOTPRequest) error
+	// ============================================================
+	// VERIFICATION OTP - Unified method with explicit purpose
+	// ============================================================
+	
+	// SendOTP sends a verification OTP for any purpose.
+	// The purpose determines the OTP configuration (length, expiry, etc.)
+	SendOTP(ctx context.Context, req SendOTPRequest) error
+	
+	// VerifyOTP verifies an OTP for a specific purpose.
+	// This ensures OTPs cannot be reused across different purposes.
+	VerifyOTP(ctx context.Context, req VerifyOTPRequest) error
 
-	// Welcome emails
+	// ============================================================
+	// WELCOME EMAILS
+	// ============================================================
+	
 	SendIndividualWelcome(ctx context.Context, req SendWelcomeRequest) error
 	SendInstitutionWelcome(ctx context.Context, req SendInstitutionWelcomeRequest) error
-	SendWelcome(ctx context.Context, req SendWelcomeRequest) error
-
-	// Two Factor Authentication
-	SendTwoFactorOTP(ctx context.Context, req SendTwoFactorRequest) error
-
-	// Password Reset
-	SendPasswordResetOTP(ctx context.Context, req SendOTPRequest) error
-	SendPasswordResetConfirm(ctx context.Context, req SendPasswordResetConfirmRequest) error
-
-	// Security Notifications
+	
+	// ============================================================
+	// SECURITY NOTIFICATIONS
+	// ============================================================
+	
 	SendLoginNotification(ctx context.Context, req SendLoginNotificationRequest) error
+	SendPasswordResetConfirm(ctx context.Context, req SendPasswordResetConfirmRequest) error
 }
 
 // ============================================================
-// COMMANDS
+// DOMAIN COMMANDS (no JSON tags)
 // ============================================================
 
+// SendOTPRequest - Unified request for all OTP purposes
 type SendOTPRequest struct {
-	To      string
-	Name    string
-	OTP     string
-	Expires string
-	Purpose VerificationPurpose
-	Meta    map[string]string
+	To      string              // email or phone
+	Name    string              // recipient name
+	OTP     string              // generated OTP
+	Expires string              // human-readable expiry (e.g., "5 minutes")
+	Purpose VerificationPurpose // EXPLICIT PURPOSE - CRITICAL!
+	Meta    map[string]string   // additional context (IP, user agent, etc.)
 }
 
+// VerifyOTPRequest - Unified verification request
+type VerifyOTPRequest struct {
+	To      string              // email or phone
+	OTP     string              // OTP to verify
+	Purpose VerificationPurpose // Must match the purpose used when sending
+	Meta    map[string]string   // additional context
+}
+
+// SendWelcomeRequest - Welcome email for individual users
 type SendWelcomeRequest struct {
 	To   string
 	Name string
 }
 
+// SendInstitutionWelcomeRequest - Welcome email for institution admins
 type SendInstitutionWelcomeRequest struct {
 	To              string
 	AdminName       string
 	InstitutionName string
 }
 
-type SendTwoFactorRequest struct {
-	To        string
-	Name      string
-	OTP       string
-	Expires   string
-	IPAddress string
-	UserAgent string
-}
-
+// SendPasswordResetConfirmRequest - Password reset confirmation email
 type SendPasswordResetConfirmRequest struct {
 	To   string
 	Name string
 }
 
+// SendLoginNotificationRequest - Login notification email
 type SendLoginNotificationRequest struct {
 	To        string
 	Name      string

@@ -15,19 +15,21 @@ import (
 // OTP METHODS (implements Service interface)
 // ============================================================
 
+// GenerateOTP generates a 6-digit OTP
 func (s *service) GenerateOTP() string {
 	return fmt.Sprintf("%06d", rand.Intn(1000000))
 }
 
-func (s *service) StoreOTP(email, otp string) error {
-	ctx := context.Background()
-	key := "otp:" + email
-	return s.redisClient.Set(ctx, key, otp, 5*time.Minute)
+// StoreOTP stores an OTP with purpose
+func (s *service) StoreOTP(ctx context.Context, email, otp, purpose string) error {
+	key := s.getOTPKey(email, purpose)
+	expiry := s.getOTPExpiry(purpose)
+	return s.redisClient.Set(ctx, key, otp, expiry)
 }
 
-func (s *service) GetOTP(email string) (string, error) {
-	ctx := context.Background()
-	key := "otp:" + email
+// GetOTP retrieves an OTP by email and purpose
+func (s *service) GetOTP(ctx context.Context, email, purpose string) (string, error) {
+	key := s.getOTPKey(email, purpose)
 	otp, exists, err := s.redisClient.Get(ctx, key)
 	if err != nil {
 		return "", err
@@ -38,68 +40,97 @@ func (s *service) GetOTP(email string) (string, error) {
 	return otp, nil
 }
 
-func (s *service) DeleteOTP(email string) error {
-	ctx := context.Background()
-	key := "otp:" + email
+// DeleteOTP deletes an OTP by email and purpose
+func (s *service) DeleteOTP(ctx context.Context, email, purpose string) error {
+	key := s.getOTPKey(email, purpose)
 	return s.redisClient.Delete(ctx, key)
 }
 
-func (s *service) SendOTPEmail(to, name, otp string) error {
-	// Delegate to notification service
-	return s.notifSvc.SendVerificationOTP(context.Background(), authdomain.SendOTPRequest{
+// VerifyOTP verifies an OTP for a specific purpose
+func (s *service) VerifyOTP(ctx context.Context, email, otp, purpose string) error {
+	storedOTP, err := s.GetOTP(ctx, email, purpose)
+	if err != nil {
+		return err
+	}
+	if storedOTP != otp {
+		return authdomain.ErrInvalidOTP
+	}
+	return nil
+}
+
+// SendOTPEmail is a convenience method that generates, stores, and sends an OTP
+func (s *service) SendOTPEmail(ctx context.Context, to, name, purpose string, meta map[string]string) error {
+	// 1. Generate OTP
+	otp := s.GenerateOTP()
+
+	// 2. Store OTP
+	if err := s.StoreOTP(ctx, to, otp, purpose); err != nil {
+		return err
+	}
+
+	// 3. Send OTP via notification service
+	return s.notifSvc.SendOTP(ctx, authdomain.SendOTPRequest{
 		To:      to,
 		Name:    name,
 		OTP:     otp,
-		Expires: "5 minutes",
-		Purpose: "registration",
-		Meta:    nil,
+		Expires: s.getOTPExpiryString(purpose),
+		Purpose: purpose,
+		Meta:    meta,
 	})
 }
 
 // ============================================================
-// TWO-FACTOR OTP METHODS
+// HELPER METHODS
 // ============================================================
 
-func (s *service) StoreTwoFactorOTP(email, otp string) error {
-	ctx := context.Background()
-	key := "2fa:" + email
-	return s.redisClient.Set(ctx, key, otp, 5*time.Minute)
+// getOTPKey returns the Redis key for OTP storage
+func (s *service) getOTPKey(email, purpose string) string {
+	return fmt.Sprintf("otp:%s:%s", purpose, email)
 }
 
-func (s *service) GetTwoFactorOTP(email string) (string, error) {
-	ctx := context.Background()
-	key := "2fa:" + email
-	otp, exists, err := s.redisClient.Get(ctx, key)
-	if err != nil {
-		return "", err
+// getOTPExpiry returns the expiry duration based on purpose
+func (s *service) getOTPExpiry(purpose string) time.Duration {
+	switch purpose {
+	case "registration", "email_change", "phone_change":
+		return 1 * time.Hour
+	case "two_factor":
+		return 5 * time.Minute
+	case "password_reset":
+		return 15 * time.Minute
+	default:
+		return 5 * time.Minute
 	}
-	if !exists {
-		return "", fmt.Errorf("2FA OTP not found or expired")
-	}
-	return otp, nil
 }
 
-func (s *service) DeleteTwoFactorOTP(email string) error {
-	ctx := context.Background()
-	key := "2fa:" + email
-	return s.redisClient.Delete(ctx, key)
+// getOTPExpiryString returns a human-readable expiry string
+func (s *service) getOTPExpiryString(purpose string) string {
+	switch purpose {
+	case "registration", "email_change", "phone_change":
+		return "1 hour"
+	case "two_factor":
+		return "5 minutes"
+	case "password_reset":
+		return "15 minutes"
+	default:
+		return "5 minutes"
+	}
 }
 
 // ============================================================
 // USER DATA METHODS
 // ============================================================
 
-func (s *service) StoreUserData(email string, data map[string]interface{}) error {
-	ctx := context.Background()
+// StoreUserData stores temporary user data during registration
+func (s *service) StoreUserData(ctx context.Context, email string, data map[string]interface{}) error {
 	key := "user:data:" + email
 	if err := s.redisClient.HSet(ctx, key, data); err != nil {
 		return err
 	}
-	return s.redisClient.Expire(ctx, key, 5*time.Minute)
+	return s.redisClient.Expire(ctx, key, 1*time.Hour)
 }
 
-func (s *service) GetUserData(email string) (map[string]string, error) {
-	ctx := context.Background()
+// GetUserData retrieves temporary user data during registration
+func (s *service) GetUserData(ctx context.Context, email string) (map[string]string, error) {
 	key := "user:data:" + email
 	result, exists, err := s.redisClient.HGetAll(ctx, key)
 	if err != nil {
@@ -111,8 +142,8 @@ func (s *service) GetUserData(email string) (map[string]string, error) {
 	return result, nil
 }
 
-func (s *service) DeleteUserData(email string) error {
-	ctx := context.Background()
+// DeleteUserData deletes temporary user data during registration
+func (s *service) DeleteUserData(ctx context.Context, email string) error {
 	key := "user:data:" + email
 	return s.redisClient.Delete(ctx, key)
 }
@@ -121,8 +152,8 @@ func (s *service) DeleteUserData(email string) error {
 // PASSWORD RESET DATA METHODS
 // ============================================================
 
-func (s *service) StoreResetData(email, otp, newPassword string) error {
-	ctx := context.Background()
+// StoreResetData stores password reset data
+func (s *service) StoreResetData(ctx context.Context, email, otp, newPassword string) error {
 	key := "reset:" + email
 	data := map[string]interface{}{
 		"otp":          otp,
@@ -131,11 +162,11 @@ func (s *service) StoreResetData(email, otp, newPassword string) error {
 	if err := s.redisClient.HSet(ctx, key, data); err != nil {
 		return err
 	}
-	return s.redisClient.Expire(ctx, key, 5*time.Minute)
+	return s.redisClient.Expire(ctx, key, 15*time.Minute)
 }
 
-func (s *service) GetResetData(email string) (map[string]string, error) {
-	ctx := context.Background()
+// GetResetData retrieves password reset data
+func (s *service) GetResetData(ctx context.Context, email string) (map[string]string, error) {
 	key := "reset:" + email
 	result, exists, err := s.redisClient.HGetAll(ctx, key)
 	if err != nil {
@@ -147,8 +178,54 @@ func (s *service) GetResetData(email string) (map[string]string, error) {
 	return result, nil
 }
 
-func (s *service) DeleteResetData(email string) error {
-	ctx := context.Background()
+
+
+// ResendOTP resends an OTP for any purpose
+// Purpose can be: "registration", "two_factor", "password_reset", "email_change", "phone_change"
+func (s *service) ResendOTP(ctx context.Context, email, name, purpose string) error {
+	// 1. Validate purpose
+	switch purpose {
+	case "registration", "two_factor", "password_reset", "email_change", "phone_change":
+		// Valid purpose
+	default:
+		return fmt.Errorf("invalid purpose: %s", purpose)
+	}
+
+	// 2. For certain purposes, try to get the user's name from the repository
+	if name == "User" && (purpose == "two_factor" || purpose == "password_reset") {
+		account, err := s.repo.GetAccountByEmail(email)
+		if err == nil && account != nil {
+			name = account.Name
+		}
+		// Don't return error if account not found - just use default name
+		// This prevents email enumeration attacks
+	}
+
+	// 3. Generate new OTP
+	otp := s.GenerateOTP()
+
+	// 4. Store OTP with purpose (overwrites existing)
+	if err := s.StoreOTP(ctx, email, otp, purpose); err != nil {
+		return fmt.Errorf("failed to store OTP: %w", err)
+	}
+
+	// 5. Send OTP via unified SendOTP
+	if err := s.notifSvc.SendOTP(ctx, authdomain.SendOTPRequest{
+		To:      email,
+		Name:    name,
+		OTP:     otp,
+		Expires: s.getOTPExpiryString(purpose),
+		Purpose: purpose,
+		Meta:    nil,
+	}); err != nil {
+		return fmt.Errorf("failed to send OTP: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteResetData deletes password reset data
+func (s *service) DeleteResetData(ctx context.Context, email string) error {
 	key := "reset:" + email
 	return s.redisClient.Delete(ctx, key)
 }

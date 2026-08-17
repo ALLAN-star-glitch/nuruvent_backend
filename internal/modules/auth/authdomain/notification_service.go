@@ -1,3 +1,5 @@
+// internal/modules/auth/authdomain/notification_service.go
+
 package authdomain
 
 import "context"
@@ -9,21 +11,31 @@ import "context"
 
 // NotificationService defines the notification operations that auth module requires
 type NotificationService interface {
-	// Verification OTP
-	SendVerificationOTP(ctx context.Context, req SendOTPRequest) error
+	// ============================================================
+	// UNIFIED OTP - Use this for all OTP purposes
+	// ============================================================
+	
+	// SendOTP sends a verification OTP for any purpose
+	// Purpose can be: "registration", "two_factor", "password_reset", "email_change", "phone_change"
+	SendOTP(ctx context.Context, req SendOTPRequest) error
 
-	// Welcome emails
+	// ============================================================
+	// WELCOME EMAILS
+	// ============================================================
+	
 	SendIndividualWelcome(ctx context.Context, req SendWelcomeRequest) error
 	SendInstitutionWelcome(ctx context.Context, req SendInstitutionWelcomeRequest) error
 
-	// Two Factor Authentication
-	SendTwoFactorOTP(ctx context.Context, req SendTwoFactorRequest) error
-
-	// Password Reset
-	SendPasswordResetOTP(ctx context.Context, req SendOTPRequest) error
+	// ============================================================
+	// PASSWORD RESET CONFIRM
+	// ============================================================
+	
 	SendPasswordResetConfirm(ctx context.Context, req SendPasswordResetConfirmRequest) error
 
-	// Security Notifications
+	// ============================================================
+	// SECURITY NOTIFICATIONS
+	// ============================================================
+	
 	SendLoginNotification(ctx context.Context, req SendLoginNotificationRequest) error
 }
 
@@ -31,14 +43,14 @@ type NotificationService interface {
 // COMMANDS
 // ============================================================
 
-// SendOTPRequest - Generic OTP request
+// SendOTPRequest - Unified OTP request for all purposes
 type SendOTPRequest struct {
-	To      string
-	Name    string
-	OTP     string
-	Expires string
-	Purpose string
-	Meta    map[string]string
+	To      string            // email or phone
+	Name    string            // recipient name
+	OTP     string            // generated OTP
+	Expires string            // human-readable expiry (e.g., "5 minutes")
+	Purpose string            // "registration", "two_factor", "password_reset", "email_change", "phone_change"
+	Meta    map[string]string // additional context (IP, user agent, new_email, new_phone, etc.)
 }
 
 // SendWelcomeRequest - Individual welcome
@@ -52,16 +64,6 @@ type SendInstitutionWelcomeRequest struct {
 	To              string
 	AdminName       string
 	InstitutionName string
-}
-
-// SendTwoFactorRequest - 2FA OTP
-type SendTwoFactorRequest struct {
-	To        string
-	Name      string
-	OTP       string
-	Expires   string
-	IPAddress string
-	UserAgent string
 }
 
 // SendPasswordResetConfirmRequest - Password reset confirmation

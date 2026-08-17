@@ -92,20 +92,31 @@ func main() {
 	log.Println("✅ Asynq server created")
 
 	// ================================================
-	// Register Task Handlers
+	// Register Task Handlers (Unified - No Deprecated Tasks)
 	// ================================================
 	mux := asynq.NewServeMux()
 
 	// Register all handlers
+	// ✅ Unified OTP handler - handles ALL OTP purposes
 	mux.HandleFunc(notificationdomain.TaskVerificationOTP, notificationWorker.HandleVerificationOTP)
+	
+	// Welcome handlers
 	mux.HandleFunc(notificationdomain.TaskWelcomeIndividual, notificationWorker.HandleWelcomeIndividual)
 	mux.HandleFunc(notificationdomain.TaskWelcomeInstitution, notificationWorker.HandleWelcomeInstitution)
-	mux.HandleFunc(notificationdomain.TaskTwoFactorOTP, notificationWorker.HandleTwoFactorOTP)
-	mux.HandleFunc(notificationdomain.TaskPasswordResetOTP, notificationWorker.HandlePasswordResetOTP)
+	
+	// Password reset confirm
 	mux.HandleFunc(notificationdomain.TaskPasswordResetConfirm, notificationWorker.HandlePasswordResetConfirm)
+	
+	// Login notification
 	mux.HandleFunc(notificationdomain.TaskLoginNotification, notificationWorker.HandleLoginNotification)
 
 	log.Println("✅ All task handlers registered")
+	log.Println("📋 Registered tasks:")
+	log.Printf("   - %s (unified for all OTP purposes)", notificationdomain.TaskVerificationOTP)
+	log.Printf("   - %s", notificationdomain.TaskWelcomeIndividual)
+	log.Printf("   - %s", notificationdomain.TaskWelcomeInstitution)
+	log.Printf("   - %s", notificationdomain.TaskPasswordResetConfirm)
+	log.Printf("   - %s", notificationdomain.TaskLoginNotification)
 
 	// ================================================
 	// Start Worker

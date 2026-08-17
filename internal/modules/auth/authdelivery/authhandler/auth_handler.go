@@ -1,9 +1,10 @@
+// internal/modules/auth/authdelivery/authhandler/authhandler.go
+
 package authhandler
 
 import (
 	"errors"
 	"log"
-
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
@@ -97,7 +98,7 @@ func (h *AuthHandler) getRefreshTokenFromCookie(c fiber.Ctx) (string, error) {
 
 // Register handles user registration
 // @Summary Register a new account
-// @Description Register a new account (personal or institution)
+// @Description Register a new account (personal or institution). An OTP will be sent to the provided email.
 // @Tags Authentication
 // @Accept json
 // @Produce json
@@ -144,8 +145,7 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 }
 
 func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
-
-	//Verify  and validate email
+	// Verify and validate email
 	if req.Email == "" {
 		return errors.New("email is required")
 	}
@@ -153,17 +153,17 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 		return errors.New("invalid email format")
 	}
 
-	//validadte password
+	// Validate password
 	if valid, msg := validator.Password.Validate(req.Password); !valid {
 		return errors.New(msg)
 	}
 
-	//validate name
+	// Validate name
 	if req.Name == "" {
 		return errors.New("name is required")
 	}
 
-	//validate phone
+	// Validate phone
 	if req.Phone == "" {
 		return errors.New("phone is required")
 	}
@@ -172,8 +172,7 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 	}
 	req.Phone = validator.Phone.Normalize(req.Phone)
 
-
-	//  Account type is optional - default to "personal"
+	// Account type is optional - default to "personal"
 	if req.AccountType == "" {
 		req.AccountType = "personal"
 	}
@@ -261,19 +260,20 @@ func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 }
 
 // ============================================================
-// RESEND OTP HANDLER
+// RESEND OTP HANDLER - UNIFIED
 // ============================================================
 
-// ResendOTP resends OTP to the user's email
+// internal/modules/auth/authdelivery/authhandler/authhandler.go
+
+// ResendOTP resends OTP for any purpose
 // @Summary Resend OTP
-// @Description Resend the verification OTP to the user's email
+// @Description Resend OTP for registration, 2FA, password reset, email change, or phone change
 // @Tags Authentication
 // @Accept json
 // @Produce json
-// @Param request body ResendOTPRequest true "Email for OTP resend"
+// @Param request body ResendOTPRequest true "Resend OTP request"
 // @Success 200 {object} response.BaseResponse{data=OTPResponse}
 // @Failure 400 {object} response.BaseResponse
-// @Failure 409 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/auth/resend-otp [post]
 func (h *AuthHandler) ResendOTP(c fiber.Ctx) error {
@@ -282,19 +282,51 @@ func (h *AuthHandler) ResendOTP(c fiber.Ctx) error {
 		return response.BadRequest(c, "Invalid request", fiber.Map{"error": err.Error()})
 	}
 
-	otp := h.service.GenerateOTP()
-	if err := h.service.StoreOTP(req.Email, otp); err != nil {
+	if req.Email == "" {
+		return response.BadRequest(c, "Email is required", nil)
+	}
+	if !validator.Email.Validate(req.Email) {
+		return response.BadRequest(c, "Invalid email format", nil)
+	}
+
+	// Validate purpose
+	validPurposes := map[string]bool{
+		"registration":   true,
+		"two_factor":     true,
+		"password_reset": true,
+		"email_change":   true,
+		"phone_change":   true,
+	}
+	if req.Purpose == "" {
+		req.Purpose = "registration" // Default to registration
+	}
+	if !validPurposes[req.Purpose] {
+		return response.BadRequest(c, "Invalid purpose. Must be: registration, two_factor, password_reset, email_change, or phone_change", nil)
+	}
+
+	// Resend OTP using unified method
+	// The service will handle name lookup if needed
+	if err := h.service.ResendOTP(c.Context(), req.Email, "User", req.Purpose); err != nil {
 		return response.InternalError(c, "Failed to resend OTP", fiber.Map{"error": err.Error()})
 	}
 
-	if err := h.service.SendOTPEmail(req.Email, "User", otp); err != nil {
-		log.Printf("Failed to send OTP email: %v", err)
+	// Get expiry based on purpose
+	expiryMinutes := 5
+	if req.Purpose == "registration" || req.Purpose == "email_change" || req.Purpose == "phone_change" {
+		expiryMinutes = 60
 	}
 
-	return response.Success(c, "OTP resent successfully", OTPResponse{
+	message := "OTP resent to your email"
+	if req.Purpose == "two_factor" {
+		message = "2FA OTP resent to your email"
+	} else if req.Purpose == "password_reset" {
+		message = "Password reset OTP resent to your email"
+	}
+
+	return response.Success(c, message, OTPResponse{
 		Email:     req.Email,
-		ExpiresAt: time.Now().Add(5 * time.Minute),
-		Message:   "OTP resent to your email",
+		ExpiresAt: time.Now().Add(time.Duration(expiryMinutes) * time.Minute),
+		Message:   message,
 	})
 }
 
@@ -304,7 +336,7 @@ func (h *AuthHandler) ResendOTP(c fiber.Ctx) error {
 
 // Login authenticates a user
 // @Summary Login user
-// @Description Authenticate a user with email and password, initiates 2FA
+// @Description Authenticate a user with email and password. If 2FA is enabled, an OTP will be sent.
 // @Tags Authentication
 // @Accept json
 // @Produce json
@@ -515,6 +547,13 @@ func (h *AuthHandler) ForgotPassword(c fiber.Ctx) error {
 	var req ForgotPasswordRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{"error": err.Error()})
+	}
+
+	if req.Email == "" {
+		return response.BadRequest(c, "Email is required", nil)
+	}
+	if !validator.Email.Validate(req.Email) {
+		return response.BadRequest(c, "Invalid email format", nil)
 	}
 
 	if valid, msg := validator.Password.Validate(req.NewPassword); !valid {

@@ -27,9 +27,15 @@ func NewTaskEnqueuer(queue notificationdomain.TaskQueue) notificationdomain.Task
 // ENQUEUE METHODS
 // ============================================================
 
-// EnqueueVerificationOTP enqueues a verification OTP task
+// EnqueueVerificationOTP enqueues a verification OTP task for any purpose
+// The purpose field determines the OTP type:
+//   - PurposeRegistration: New user registration
+//   - PurposeTwoFactor: Login 2FA
+//   - PurposePasswordReset: Password reset
+//   - PurposeEmailChange: Email change verification
+//   - PurposePhoneChange: Phone change verification
 func (e *taskEnqueuer) EnqueueVerificationOTP(ctx context.Context, task notificationdomain.VerificationOTPTask) error {
-	log.Printf("📧 [TaskEnqueuer] Enqueuing verification OTP for %s", task.To)
+	log.Printf("📧 [TaskEnqueuer] Enqueuing verification OTP for %s (purpose: %s)", task.To, task.Purpose)
 
 	payload, err := json.Marshal(task)
 	if err != nil {
@@ -41,7 +47,7 @@ func (e *taskEnqueuer) EnqueueVerificationOTP(ctx context.Context, task notifica
 		return err
 	}
 
-	log.Printf("✅ [TaskEnqueuer] Verification OTP enqueued for %s", task.To)
+	log.Printf("✅ [TaskEnqueuer] Verification OTP enqueued for %s (purpose: %s)", task.To, task.Purpose)
 	return nil
 }
 
@@ -78,42 +84,6 @@ func (e *taskEnqueuer) EnqueueWelcomeInstitution(ctx context.Context, task notif
 	}
 
 	log.Printf("✅ [TaskEnqueuer] Institution welcome enqueued for %s", task.To)
-	return nil
-}
-
-// EnqueueTwoFactorOTP enqueues a 2FA OTP task
-func (e *taskEnqueuer) EnqueueTwoFactorOTP(ctx context.Context, task notificationdomain.TwoFactorOTPTask) error {
-	log.Printf("📧 [TaskEnqueuer] Enqueuing 2FA OTP for %s", task.To)
-
-	payload, err := json.Marshal(task)
-	if err != nil {
-		return fmt.Errorf("failed to marshal task: %w", err)
-	}
-
-	if err := e.queue.Enqueue(ctx, notificationdomain.TaskTwoFactorOTP, payload); err != nil {
-		log.Printf("❌ [TaskEnqueuer] Failed to enqueue 2FA OTP: %v", err)
-		return err
-	}
-
-	log.Printf("✅ [TaskEnqueuer] 2FA OTP enqueued for %s", task.To)
-	return nil
-}
-
-// EnqueuePasswordResetOTP enqueues a password reset OTP task
-func (e *taskEnqueuer) EnqueuePasswordResetOTP(ctx context.Context, task notificationdomain.PasswordResetOTPTask) error {
-	log.Printf("📧 [TaskEnqueuer] Enqueuing password reset OTP for %s", task.To)
-
-	payload, err := json.Marshal(task)
-	if err != nil {
-		return fmt.Errorf("failed to marshal task: %w", err)
-	}
-
-	if err := e.queue.Enqueue(ctx, notificationdomain.TaskPasswordResetOTP, payload); err != nil {
-		log.Printf("❌ [TaskEnqueuer] Failed to enqueue password reset OTP: %v", err)
-		return err
-	}
-
-	log.Printf("✅ [TaskEnqueuer] Password reset OTP enqueued for %s", task.To)
 	return nil
 }
 

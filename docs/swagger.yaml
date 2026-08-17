@@ -183,6 +183,17 @@ definitions:
     properties:
       email:
         type: string
+      purpose:
+        enum:
+        - registration
+        - two_factor
+        - password_reset
+        - email_change
+        - phone_change
+        type: string
+    required:
+    - email
+    - purpose
     type: object
   authhandler.TokenResponse:
     properties:
@@ -1169,7 +1180,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Authenticate a user with email and password, initiates 2FA
+      description: Authenticate a user with email and password. If 2FA is enabled,
+        an OTP will be sent.
       parameters:
       - description: Login credentials
         in: body
@@ -1283,7 +1295,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Register a new account (personal or institution)
+      description: Register a new account (personal or institution). An OTP will be
+        sent to the provided email.
       parameters:
       - description: Registration details
         in: body
@@ -1322,9 +1335,10 @@ paths:
     post:
       consumes:
       - application/json
-      description: Resend the verification OTP to the user's email
+      description: Resend OTP for registration, 2FA, password reset, email change,
+        or phone change
       parameters:
-      - description: Email for OTP resend
+      - description: Resend OTP request
         in: body
         name: request
         required: true
@@ -1344,10 +1358,6 @@ paths:
               type: object
         "400":
           description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "409":
-          description: Conflict
           schema:
             $ref: '#/definitions/response.BaseResponse'
         "500":

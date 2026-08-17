@@ -14,7 +14,7 @@ import (
 // notificationService implements notificationdomain.NotificationService
 type notificationService struct {
 	channels     map[notificationdomain.NotificationChannel]notificationdomain.Channel
-	taskEnqueuer notificationdomain.TaskEnqueuer // ← Inbound port (interface)
+	taskEnqueuer notificationdomain.TaskEnqueuer
 	async        bool
 }
 
@@ -31,9 +31,8 @@ func NewNotificationService(channels ...notificationdomain.Channel) notification
 }
 
 // NewNotificationServiceWithQueue creates a notification service with queue support
-// ✅ Depends on notificationdomain.TaskEnqueuer (inbound port)
 func NewNotificationServiceWithQueue(
-	taskEnqueuer notificationdomain.TaskEnqueuer, // ← Interface, not concrete
+	taskEnqueuer notificationdomain.TaskEnqueuer,
 	channels ...notificationdomain.Channel,
 ) notificationdomain.NotificationService {
 	channelMap := make(map[notificationdomain.NotificationChannel]notificationdomain.Channel)
@@ -57,10 +56,16 @@ func (s *notificationService) getChannel(channel notificationdomain.Notification
 }
 
 // ============================================================
-// VERIFICATION OTP
+// UNIFIED VERIFICATION OTP - PRIMARY METHOD
 // ============================================================
 
-func (s *notificationService) SendVerificationOTP(ctx context.Context, req notificationdomain.SendOTPRequest) error {
+// SendOTP - Unified method for all OTP purposes
+func (s *notificationService) SendOTP(ctx context.Context, req notificationdomain.SendOTPRequest) error {
+	// Validate purpose
+	if !req.Purpose.IsValid() {
+		return notificationdomain.ErrInvalidPurpose
+	}
+
 	// Validate channel exists
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
@@ -78,14 +83,14 @@ func (s *notificationService) SendVerificationOTP(ctx context.Context, req notif
 		}
 		if err := s.taskEnqueuer.EnqueueVerificationOTP(ctx, task); err != nil {
 			log.Printf("[NotificationService] Failed to enqueue OTP task: %v, falling back to sync", err)
-			return s.sendVerificationOTPSync(ctx, req)
+			return s.sendOTPSync(ctx, req)
 		}
 		return nil
 	}
-	return s.sendVerificationOTPSync(ctx, req)
+	return s.sendOTPSync(ctx, req)
 }
 
-func (s *notificationService) sendVerificationOTPSync(ctx context.Context, req notificationdomain.SendOTPRequest) error {
+func (s *notificationService) sendOTPSync(ctx context.Context, req notificationdomain.SendOTPRequest) error {
 	ch, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
 		return err
@@ -107,11 +112,39 @@ func (s *notificationService) sendVerificationOTPSync(ctx context.Context, req n
 			"otp":         req.OTP,
 			"expires":     req.Expires,
 			"name":        req.Name,
+			"purpose":     string(req.Purpose),
 		},
 	}
 
 	return ch.Send(ctx, channelReq)
 }
+
+// ============================================================
+// UNIFIED VERIFICATION - VERIFY METHOD
+// ============================================================
+
+// VerifyOTP - Unified verification method
+func (s *notificationService) VerifyOTP(ctx context.Context, req notificationdomain.VerifyOTPRequest) error {
+	// Validate purpose
+	if !req.Purpose.IsValid() {
+		return notificationdomain.ErrInvalidPurpose
+	}
+
+	// For notification service, verification just means we log it
+	// The actual verification happens in the auth service with the OTP repository
+	log.Printf("[NotificationService] OTP verification requested for %s with purpose: %s", req.To, req.Purpose)
+	
+	// Optionally send a confirmation notification
+	if req.Meta != nil && req.Meta["send_confirmation"] == "true" {
+		// Could send a "Your OTP was verified" email here
+	}
+	
+	return nil
+}
+
+// ============================================================
+// VERIFICATION CONTENT
+// ============================================================
 
 func (s *notificationService) getVerificationContent(req notificationdomain.SendOTPRequest) (title, subtitle, description, message, extraInfo, warning string) {
 	switch req.Purpose {
@@ -159,6 +192,34 @@ func (s *notificationService) getVerificationContent(req notificationdomain.Send
 		message = "Please use the verification code below to complete your verification."
 	}
 	return
+}
+
+// ============================================================
+// DEPRECATED METHODS - Keep for backward compatibility
+// These now delegate to the unified SendOTP method
+// ============================================================
+
+// Deprecated: Use SendOTP with PurposeRegistration instead
+func (s *notificationService) SendVerificationOTP(ctx context.Context, req notificationdomain.SendOTPRequest) error {
+	// If purpose is not set, default to registration for backward compatibility
+	if req.Purpose == "" {
+		req.Purpose = notificationdomain.PurposeRegistration
+	}
+	return s.SendOTP(ctx, req)
+}
+
+// Deprecated: Use SendOTP with PurposeTwoFactor instead
+// SendTwoFactorOTP has been removed. Use SendOTP with PurposeTwoFactor.
+// This method is kept for backward compatibility but will be removed in future.
+func (s *notificationService) SendTwoFactorOTP(ctx context.Context, req notificationdomain.SendOTPRequest) error {
+	req.Purpose = notificationdomain.PurposeTwoFactor
+	return s.SendOTP(ctx, req)
+}
+
+// Deprecated: Use SendOTP with PurposePasswordReset instead
+func (s *notificationService) SendPasswordResetOTP(ctx context.Context, req notificationdomain.SendOTPRequest) error {
+	req.Purpose = notificationdomain.PurposePasswordReset
+	return s.SendOTP(ctx, req)
 }
 
 // ============================================================
@@ -236,9 +297,9 @@ func (s *notificationService) sendInstitutionWelcomeSync(ctx context.Context, re
 		Subject: "Welcome to Nuruvent - Your Institution is Live!",
 		Type:    notificationdomain.TypeWelcome,
 		Meta: map[string]string{
-			"admin_name":        req.AdminName,
-			"institution_name":  req.InstitutionName,
-			"account_type":      "institution",
+			"admin_name":       req.AdminName,
+			"institution_name": req.InstitutionName,
+			"account_type":     "institution",
 		},
 	}
 
@@ -250,63 +311,8 @@ func (s *notificationService) SendWelcome(ctx context.Context, req notificationd
 }
 
 // ============================================================
-// TWO FACTOR AUTHENTICATION
+// PASSWORD RESET CONFIRM
 // ============================================================
-
-func (s *notificationService) SendTwoFactorOTP(ctx context.Context, req notificationdomain.SendTwoFactorRequest) error {
-	_, err := s.getChannel(notificationdomain.ChannelEmail)
-	if err != nil {
-		return err
-	}
-
-	if s.async && s.taskEnqueuer != nil {
-		task := notificationdomain.TwoFactorOTPTask{
-			To:        req.To,
-			Name:      req.Name,
-			OTP:       req.OTP,
-			Expires:   req.Expires,
-			IPAddress: req.IPAddress,
-			UserAgent: req.UserAgent,
-		}
-		if err := s.taskEnqueuer.EnqueueTwoFactorOTP(ctx, task); err != nil {
-			log.Printf("[NotificationService] Failed to enqueue 2FA OTP task: %v, falling back to sync", err)
-			return s.sendTwoFactorOTPSync(ctx, req)
-		}
-		return nil
-	}
-	return s.sendTwoFactorOTPSync(ctx, req)
-}
-
-func (s *notificationService) sendTwoFactorOTPSync(ctx context.Context, req notificationdomain.SendTwoFactorRequest) error {
-	ch, err := s.getChannel(notificationdomain.ChannelEmail)
-	if err != nil {
-		return err
-	}
-
-	channelReq := notificationdomain.ChannelRequest{
-		To:      req.To,
-		Subject: "Two-Factor Authentication - Nuruvent",
-		Type:    notificationdomain.TypeTwoFactor,
-		Meta: map[string]string{
-			"name":       req.Name,
-			"otp":        req.OTP,
-			"expires":    req.Expires,
-			"ip_address": req.IPAddress,
-			"user_agent": req.UserAgent,
-		},
-	}
-
-	return ch.Send(ctx, channelReq)
-}
-
-// ============================================================
-// PASSWORD RESET
-// ============================================================
-
-func (s *notificationService) SendPasswordResetOTP(ctx context.Context, req notificationdomain.SendOTPRequest) error {
-	req.Purpose = notificationdomain.PurposePasswordReset
-	return s.SendVerificationOTP(ctx, req)
-}
 
 func (s *notificationService) SendPasswordResetConfirm(ctx context.Context, req notificationdomain.SendPasswordResetConfirmRequest) error {
 	_, err := s.getChannel(notificationdomain.ChannelEmail)

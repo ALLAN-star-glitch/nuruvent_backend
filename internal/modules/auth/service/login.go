@@ -4,7 +4,6 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -33,14 +32,26 @@ func (s *service) LoginAccount(ctx context.Context, email, password, ipAddress, 
 		return nil, "", authdomain.ErrAccountInactive
 	}
 
-	// Generate and store 2FA OTP
+	// Generate OTP
 	otp := s.GenerateOTP()
-	if err := s.StoreTwoFactorOTP(account.Email, otp); err != nil {
-		return nil, "", fmt.Errorf("failed to store 2FA OTP: %w", err)
+
+	// Store 2FA OTP with purpose
+	if err := s.StoreOTP(ctx, account.Email, otp, "two_factor"); err != nil {
+		return nil, "", err
 	}
 
-	// Send 2FA OTP via notification service
-	if err := s.sendTwoFactorOTP(account.Email, account.Name, otp, ipAddress, userAgent); err != nil {
+	// Send 2FA OTP via unified SendOTP
+	if err := s.notifSvc.SendOTP(ctx, authdomain.SendOTPRequest{
+		To:      account.Email,
+		Name:    account.Name,
+		OTP:     otp,
+		Expires: "5 minutes",
+		Purpose: "two_factor",
+		Meta: map[string]string{
+			"ip_address": ipAddress,
+			"user_agent": userAgent,
+		},
+	}); err != nil {
 		log.Printf("Failed to send 2FA OTP: %v", err)
 	}
 
@@ -48,12 +59,9 @@ func (s *service) LoginAccount(ctx context.Context, email, password, ipAddress, 
 }
 
 func (s *service) VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAddress, userAgent string) (*authdomain.Account, string, string, error) {
-	storedOTP, err := s.GetTwoFactorOTP(email)
-	if err != nil {
-		return nil, "", "", authdomain.ErrInvalidOTP
-	}
-	if otp != storedOTP {
-		return nil, "", "", authdomain.ErrInvalidOTP
+	// Verify 2FA OTP using unified VerifyOTP
+	if err := s.VerifyOTP(ctx, email, otp, "two_factor"); err != nil {
+		return nil, "", "", err
 	}
 
 	account, err := s.repo.GetAccountByEmail(email)
@@ -65,7 +73,7 @@ func (s *service) VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAdd
 	}
 
 	// Delete used 2FA OTP
-	if err := s.DeleteTwoFactorOTP(email); err != nil {
+	if err := s.DeleteOTP(ctx, email, "two_factor"); err != nil {
 		log.Printf("Failed to delete 2FA OTP: %v", err)
 	}
 
@@ -77,36 +85,15 @@ func (s *service) VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAdd
 
 	// Send login notification
 	now := time.Now().Format("January 2, 2006 at 3:04 PM")
-	if err := s.sendLoginNotification(account.Email, account.Name, now, ipAddress, userAgent); err != nil {
+	if err := s.notifSvc.SendLoginNotification(ctx, authdomain.SendLoginNotificationRequest{
+		To:        account.Email,
+		Name:      account.Name,
+		Time:      now,
+		IPAddress: ipAddress,
+		UserAgent: userAgent,
+	}); err != nil {
 		log.Printf("Failed to send login notification: %v", err)
 	}
 
 	return account, accessToken, refreshToken, nil
-}
-
-// ============================================================
-// PRIVATE HELPERS
-// ============================================================
-
-// sendTwoFactorOTP sends 2FA OTP via notification service
-func (s *service) sendTwoFactorOTP(to, name, otp, ipAddress, userAgent string) error {
-	return s.notifSvc.SendTwoFactorOTP(context.Background(), authdomain.SendTwoFactorRequest{
-		To:        to,
-		Name:      name,
-		OTP:       otp,
-		Expires:   "5 minutes",
-		IPAddress: ipAddress,
-		UserAgent: userAgent,
-	})
-}
-
-// sendLoginNotification sends login notification via notification service
-func (s *service) sendLoginNotification(to, name, timeStr, ipAddress, userAgent string) error {
-	return s.notifSvc.SendLoginNotification(context.Background(), authdomain.SendLoginNotificationRequest{
-		To:        to,
-		Name:      name,
-		Time:      timeStr,
-		IPAddress: ipAddress,
-		UserAgent: userAgent,
-	})
 }

@@ -85,6 +85,21 @@ func (r *PostgresRepository) UpdateAccount(account *authdomain.Account) error {
 	return r.db.Save(model).Error
 }
 
+// UpdateAccountInstitutionID updates the institution_id for an account
+func (r *PostgresRepository) UpdateAccountInstitutionID(accountID string, institutionID string) error {
+	accountUUID, err := uuid.Parse(accountID)
+	if err != nil {
+		return err
+	}
+	institutionUUID, err := uuid.Parse(institutionID)
+	if err != nil {
+		return err
+	}
+	return r.db.Model(&AccountModel{}).
+		Where("id = ?", accountUUID).
+		Update("institution_id", institutionUUID).Error
+}
+
 func (r *PostgresRepository) GetAccountTypeByID(id string) (*authdomain.AccountType, error) {
 	var model AccountTypeModel
 	err := r.db.Where("id = ? AND is_active = ?", id, true).First(&model).Error

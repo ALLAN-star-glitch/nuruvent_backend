@@ -1195,7 +1195,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/login": {
             "post": {
-                "description": "Authenticate a user with email and password, initiates 2FA",
+                "description": "Authenticate a user with email and password. If 2FA is enabled, an OTP will be sent.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1380,7 +1380,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/register": {
             "post": {
-                "description": "Register a new account (personal or institution)",
+                "description": "Register a new account (personal or institution). An OTP will be sent to the provided email.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1444,7 +1444,7 @@ const docTemplate = `{
         },
         "/api/v1/auth/resend-otp": {
             "post": {
-                "description": "Resend the verification OTP to the user's email",
+                "description": "Resend OTP for registration, 2FA, password reset, email change, or phone change",
                 "consumes": [
                     "application/json"
                 ],
@@ -1457,7 +1457,7 @@ const docTemplate = `{
                 "summary": "Resend OTP",
                 "parameters": [
                     {
-                        "description": "Email for OTP resend",
+                        "description": "Resend OTP request",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -1487,12 +1487,6 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/response.BaseResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "Conflict",
                         "schema": {
                             "$ref": "#/definitions/response.BaseResponse"
                         }
@@ -2873,9 +2867,23 @@ const docTemplate = `{
         },
         "authhandler.ResendOTPRequest": {
             "type": "object",
+            "required": [
+                "email",
+                "purpose"
+            ],
             "properties": {
                 "email": {
                     "type": "string"
+                },
+                "purpose": {
+                    "type": "string",
+                    "enum": [
+                        "registration",
+                        "two_factor",
+                        "password_reset",
+                        "email_change",
+                        "phone_change"
+                    ]
                 }
             }
         },

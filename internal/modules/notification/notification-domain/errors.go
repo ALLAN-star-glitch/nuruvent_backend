@@ -21,4 +21,5 @@ var (
 	ErrInvalidPhone    = errors.New("invalid phone number")
 	ErrEmailSendFailed = errors.New("failed to send email")
 	ErrSMSSendFailed   = errors.New("failed to send SMS")
+	ErrInvalidPurpose  = errors.New("invalid otp purpose")
 )

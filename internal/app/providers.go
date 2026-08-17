@@ -58,15 +58,15 @@ func provideFiberAppWithMiddleware() *fiber.App {
 			"http://localhost:3001",
 			"http://localhost:3002",
 			"http://localhost:8080",
-			
+
 			// ✅ Production - Your custom domain
 			"https://nuruvent.com",
 			"https://www.nuruvent.com",
-			
+
 			// ✅ Vercel preview deployments
 			"https://nuruvent.vercel.app",
 			"https://*.vercel.app",
-			
+
 			// ✅ If you have staging
 			"https://staging.nuruvent.com",
 		},
@@ -273,7 +273,7 @@ func (a *EventsMediaAdapter) DeleteMediaByEntity(ctx context.Context, entityID s
 }
 
 // ============================================================
-// AUTH NOTIFICATION ADAPTER
+// AUTH NOTIFICATION ADAPTER - UNIFIED
 // ============================================================
 
 // AuthNotificationAdapter adapts notificationdomain.NotificationService 
@@ -286,7 +286,12 @@ func NewAuthNotificationAdapter(notifSvc notificationdomain.NotificationService)
 	return &AuthNotificationAdapter{notifSvc: notifSvc}
 }
 
-func (a *AuthNotificationAdapter) SendVerificationOTP(ctx context.Context, req authDomain.SendOTPRequest) error {
+// ============================================================
+// UNIFIED OTP METHOD
+// ============================================================
+
+// SendOTP - Unified method for all OTP purposes
+func (a *AuthNotificationAdapter) SendOTP(ctx context.Context, req authDomain.SendOTPRequest) error {
 	notifReq := notificationdomain.SendOTPRequest{
 		To:      req.To,
 		Name:    req.Name,
@@ -295,8 +300,12 @@ func (a *AuthNotificationAdapter) SendVerificationOTP(ctx context.Context, req a
 		Purpose: notificationdomain.VerificationPurpose(req.Purpose),
 		Meta:    req.Meta,
 	}
-	return a.notifSvc.SendVerificationOTP(ctx, notifReq)
+	return a.notifSvc.SendOTP(ctx, notifReq)
 }
+
+// ============================================================
+// WELCOME EMAILS
+// ============================================================
 
 func (a *AuthNotificationAdapter) SendIndividualWelcome(ctx context.Context, req authDomain.SendWelcomeRequest) error {
 	notifReq := notificationdomain.SendWelcomeRequest{
@@ -315,37 +324,11 @@ func (a *AuthNotificationAdapter) SendInstitutionWelcome(ctx context.Context, re
 	return a.notifSvc.SendInstitutionWelcome(ctx, notifReq)
 }
 
-func (a *AuthNotificationAdapter) SendWelcome(ctx context.Context, req authDomain.SendWelcomeRequest) error {
-	notifReq := notificationdomain.SendWelcomeRequest{
-		To:   req.To,
-		Name: req.Name,
-	}
-	return a.notifSvc.SendWelcome(ctx, notifReq)
-}
 
-func (a *AuthNotificationAdapter) SendTwoFactorOTP(ctx context.Context, req authDomain.SendTwoFactorRequest) error {
-	notifReq := notificationdomain.SendTwoFactorRequest{
-		To:        req.To,
-		Name:      req.Name,
-		OTP:       req.OTP,
-		Expires:   req.Expires,
-		IPAddress: req.IPAddress,
-		UserAgent: req.UserAgent,
-	}
-	return a.notifSvc.SendTwoFactorOTP(ctx, notifReq)
-}
 
-func (a *AuthNotificationAdapter) SendPasswordResetOTP(ctx context.Context, req authDomain.SendOTPRequest) error {
-	notifReq := notificationdomain.SendOTPRequest{
-		To:      req.To,
-		Name:    req.Name,
-		OTP:     req.OTP,
-		Expires: req.Expires,
-		Purpose: notificationdomain.PurposePasswordReset,
-		Meta:    req.Meta,
-	}
-	return a.notifSvc.SendPasswordResetOTP(ctx, notifReq)
-}
+// ============================================================
+// PASSWORD RESET CONFIRM
+// ============================================================
 
 func (a *AuthNotificationAdapter) SendPasswordResetConfirm(ctx context.Context, req authDomain.SendPasswordResetConfirmRequest) error {
 	notifReq := notificationdomain.SendPasswordResetConfirmRequest{
@@ -354,6 +337,10 @@ func (a *AuthNotificationAdapter) SendPasswordResetConfirm(ctx context.Context, 
 	}
 	return a.notifSvc.SendPasswordResetConfirm(ctx, notifReq)
 }
+
+// ============================================================
+// LOGIN NOTIFICATION
+// ============================================================
 
 func (a *AuthNotificationAdapter) SendLoginNotification(ctx context.Context, req authDomain.SendLoginNotificationRequest) error {
 	notifReq := notificationdomain.SendLoginNotificationRequest{

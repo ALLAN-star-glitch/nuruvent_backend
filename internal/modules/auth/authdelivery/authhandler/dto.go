@@ -33,7 +33,8 @@ type VerifyOTPRequest struct {
 
 // ResendOTPRequest represents the resend OTP request
 type ResendOTPRequest struct {
-	Email string `json:"email"`
+	Email   string `json:"email" validate:"required,email"`
+	Purpose string `json:"purpose" validate:"required,oneof=registration two_factor password_reset email_change phone_change"`
 }
 
 // LoginRequest represents the login request

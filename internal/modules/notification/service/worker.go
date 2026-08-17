@@ -28,27 +28,54 @@ func NewNotificationWorker(emailChannel notificationdomain.Channel) *Notificatio
 }
 
 // ============================================================
-// VERIFICATION OTP HANDLER
+// UNIFIED VERIFICATION OTP HANDLER
 // ============================================================
 
 // ProcessVerificationOTP implements notificationdomain.TaskProcessor
+// Handles ALL OTP purposes: registration, two_factor, password_reset, email_change, phone_change
 func (w *NotificationWorker) ProcessVerificationOTP(ctx context.Context, data notificationdomain.VerificationOTPTask) error {
-	log.Printf("[NotificationWorker] Processing verification OTP for %s", data.To)
+	log.Printf("[NotificationWorker] Processing verification OTP for %s (purpose: %s)", data.To, data.Purpose)
+
+	// Get content based on purpose
+	title, subtitle, description, message, warning := w.getVerificationContent(data)
 
 	channelReq := notificationdomain.ChannelRequest{
 		To:      data.To,
-		Subject: "Verify Your Account - Nuruvent",
+		Subject: title + " " + subtitle + " - Nuruvent",
 		Type:    notificationdomain.TypeVerificationOTP,
 		Meta: map[string]string{
+			"title":       title,
+			"subtitle":    subtitle,
+			"description": description,
+			"message":     message,
+			"warning":     warning,
 			"name":        data.Name,
 			"otp":         data.OTP,
 			"expires":     data.Expires,
-			"title":       "Verify Your",
-			"subtitle":    "Account",
-			"description": "Complete your Nuruvent registration",
-			"message":     "Thank you for joining Nuruvent. Please use the verification code below to complete your account setup.",
-			"warning":     "If you did not create an account on Nuruvent, please ignore this email.",
+			"purpose":     string(data.Purpose),
 		},
+	}
+
+	// Add extra meta for specific purposes
+	if data.Purpose == notificationdomain.PurposeTwoFactor {
+		if ip, ok := data.Meta["ip_address"]; ok {
+			channelReq.Meta["ip_address"] = ip
+		}
+		if ua, ok := data.Meta["user_agent"]; ok {
+			channelReq.Meta["user_agent"] = ua
+		}
+	}
+
+	if data.Purpose == notificationdomain.PurposeEmailChange {
+		if newEmail, ok := data.Meta["new_email"]; ok {
+			channelReq.Meta["new_email"] = newEmail
+		}
+	}
+
+	if data.Purpose == notificationdomain.PurposePhoneChange {
+		if newPhone, ok := data.Meta["new_phone"]; ok {
+			channelReq.Meta["new_phone"] = newPhone
+		}
 	}
 
 	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
@@ -56,8 +83,57 @@ func (w *NotificationWorker) ProcessVerificationOTP(ctx context.Context, data no
 		return err
 	}
 
-	log.Printf("[NotificationWorker] Verification OTP sent to %s", data.To)
+	log.Printf("[NotificationWorker] Verification OTP sent to %s (purpose: %s)", data.To, data.Purpose)
 	return nil
+}
+
+// getVerificationContent returns content based on the purpose
+func (w *NotificationWorker) getVerificationContent(data notificationdomain.VerificationOTPTask) (title, subtitle, description, message, warning string) {
+	switch data.Purpose {
+	case notificationdomain.PurposeRegistration:
+		title = "Verify Your"
+		subtitle = "Account"
+		description = "Complete your Nuruvent registration"
+		message = "Thank you for joining Nuruvent. Please use the verification code below to complete your account setup."
+		warning = "If you did not create an account on Nuruvent, please ignore this email."
+
+	case notificationdomain.PurposeEmailChange:
+		title = "Verify Your"
+		subtitle = "Email Change"
+		description = "Confirm your new email address"
+		newEmail := data.Meta["new_email"]
+		message = "You requested to change your email address to " + newEmail + ". Please use the verification code below to confirm this change."
+		warning = "If you did not request this change, please contact support immediately."
+
+	case notificationdomain.PurposePhoneChange:
+		title = "Verify Your"
+		subtitle = "Phone Change"
+		description = "Confirm your new phone number"
+		newPhone := data.Meta["new_phone"]
+		message = "You requested to change your phone number to " + newPhone + ". Please use the verification code below to confirm this change."
+		warning = "If you did not request this change, please contact support immediately."
+
+	case notificationdomain.PurposePasswordReset:
+		title = "Reset Your"
+		subtitle = "Password"
+		description = "Secure access to your account"
+		message = "We received a request to reset your password for your Nuruvent account. Use the verification code below to continue."
+		warning = "If you did not request a password reset, please ignore this email. Your account remains secure."
+
+	case notificationdomain.PurposeTwoFactor:
+		title = "Two-Factor"
+		subtitle = "Authentication"
+		description = "Secure your account access"
+		message = "You requested a two-factor authentication code for your Nuruvent account. Please use the verification code below to complete your login."
+		warning = "If you did not attempt to log in, please reset your password immediately."
+
+	default:
+		title = "Verify Your"
+		subtitle = "Account"
+		description = "Complete your verification"
+		message = "Please use the verification code below to complete your verification."
+	}
+	return
 }
 
 // HandleVerificationOTP is the asynq task handler
@@ -116,9 +192,9 @@ func (w *NotificationWorker) ProcessWelcomeInstitution(ctx context.Context, data
 		Subject: "Welcome to Nuruvent - Your Institution is Live!",
 		Type:    notificationdomain.TypeWelcome,
 		Meta: map[string]string{
-			"admin_name":        data.AdminName,
-			"institution_name":  data.InstitutionName,
-			"account_type":      "institution",
+			"admin_name":       data.AdminName,
+			"institution_name": data.InstitutionName,
+			"account_type":     "institution",
 		},
 	}
 
@@ -142,87 +218,8 @@ func (w *NotificationWorker) HandleWelcomeInstitution(ctx context.Context, task 
 }
 
 // ============================================================
-// TWO FACTOR OTP HANDLER
+// PASSWORD RESET CONFIRM HANDLER
 // ============================================================
-
-// ProcessTwoFactorOTP implements notificationdomain.TaskProcessor
-func (w *NotificationWorker) ProcessTwoFactorOTP(ctx context.Context, data notificationdomain.TwoFactorOTPTask) error {
-	log.Printf("[NotificationWorker] Processing 2FA OTP for %s", data.To)
-
-	channelReq := notificationdomain.ChannelRequest{
-		To:      data.To,
-		Subject: "Two-Factor Authentication - Nuruvent",
-		Type:    notificationdomain.TypeTwoFactor,
-		Meta: map[string]string{
-			"name":       data.Name,
-			"otp":        data.OTP,
-			"expires":    data.Expires,
-			"ip_address": data.IPAddress,
-			"user_agent": data.UserAgent,
-		},
-	}
-
-	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
-		log.Printf("[NotificationWorker] Failed to send 2FA OTP to %s: %v", data.To, err)
-		return err
-	}
-
-	log.Printf("[NotificationWorker] 2FA OTP sent to %s", data.To)
-	return nil
-}
-
-// HandleTwoFactorOTP is the asynq task handler
-func (w *NotificationWorker) HandleTwoFactorOTP(ctx context.Context, task *asynq.Task) error {
-	var data notificationdomain.TwoFactorOTPTask
-	if err := json.Unmarshal(task.Payload(), &data); err != nil {
-		log.Printf("[NotificationWorker] Failed to parse 2FA OTP task: %v", err)
-		return err
-	}
-	return w.ProcessTwoFactorOTP(ctx, data)
-}
-
-// ============================================================
-// PASSWORD RESET HANDLERS
-// ============================================================
-
-// ProcessPasswordResetOTP implements notificationdomain.TaskProcessor
-func (w *NotificationWorker) ProcessPasswordResetOTP(ctx context.Context, data notificationdomain.PasswordResetOTPTask) error {
-	log.Printf("[NotificationWorker] Processing password reset OTP for %s", data.To)
-
-	channelReq := notificationdomain.ChannelRequest{
-		To:      data.To,
-		Subject: "Reset Your Password - Nuruvent",
-		Type:    notificationdomain.TypeVerificationOTP,
-		Meta: map[string]string{
-			"name":        data.Name,
-			"otp":         data.OTP,
-			"expires":     data.Expires,
-			"title":       "Reset Your",
-			"subtitle":    "Password",
-			"description": "Secure access to your account",
-			"message":     "We received a request to reset your password for your Nuruvent account. Use the verification code below to continue.",
-			"warning":     "If you did not request a password reset, please ignore this email. Your account remains secure.",
-		},
-	}
-
-	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
-		log.Printf("[NotificationWorker] Failed to send password reset OTP to %s: %v", data.To, err)
-		return err
-	}
-
-	log.Printf("[NotificationWorker] Password reset OTP sent to %s", data.To)
-	return nil
-}
-
-// HandlePasswordResetOTP is the asynq task handler
-func (w *NotificationWorker) HandlePasswordResetOTP(ctx context.Context, task *asynq.Task) error {
-	var data notificationdomain.PasswordResetOTPTask
-	if err := json.Unmarshal(task.Payload(), &data); err != nil {
-		log.Printf("[NotificationWorker] Failed to parse password reset OTP task: %v", err)
-		return err
-	}
-	return w.ProcessPasswordResetOTP(ctx, data)
-}
 
 // ProcessPasswordResetConfirm implements notificationdomain.TaskProcessor
 func (w *NotificationWorker) ProcessPasswordResetConfirm(ctx context.Context, data notificationdomain.PasswordResetConfirmTask) error {
