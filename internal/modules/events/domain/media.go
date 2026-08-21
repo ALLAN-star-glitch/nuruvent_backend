@@ -19,7 +19,7 @@ type MediaService interface {
 
     // Delete
     DeleteFile(ctx context.Context, id string) error
-    DeleteMediaByEntity(ctx context.Context, entityID string) error
+    DeleteFilesByEntity(ctx context.Context, entityID string) error  // ✅ Changed from DeleteMediaByEntity
     DeleteFilesByEntityAndMediaType(ctx context.Context, entityID, mediaTypeID string) error
 }
 
@@ -28,9 +28,9 @@ type MediaService interface {
 // ============================================================
 
 type UploadMediaCommand struct {
-    File          []byte // ✅ Raw file data
-    FileName      string // ✅ Original filename
-    ContentType   string // ✅ MIME type
+    File          []byte
+    FileName      string
+    ContentType   string
     MediaTypeName string
     EntityID      string
     UploadedBy    string

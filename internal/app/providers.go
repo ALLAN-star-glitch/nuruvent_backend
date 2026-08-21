@@ -334,8 +334,8 @@ func (a *EventsMediaAdapter) DeleteFile(ctx context.Context, id string) error {
 }
 
 // ✅ DELETE MEDIA BY ENTITY
-func (a *EventsMediaAdapter) DeleteMediaByEntity(ctx context.Context, entityID string) error {
-	return a.mediaSvc.DeleteFilesByEntity(ctx, entityID)
+func (a *EventsMediaAdapter) DeleteFilesByEntity(ctx context.Context, entityID string) error {
+    return a.mediaSvc.DeleteFilesByEntity(ctx, entityID)
 }
 
 // ✅ DELETE FILES BY ENTITY AND MEDIA TYPE

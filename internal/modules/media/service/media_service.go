@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log"
 	"mime/multipart"
 	"net/textproto"
 	"path/filepath"
@@ -137,47 +138,123 @@ func (s *mediaService) UploadFile(ctx context.Context, cmd UploadCommand) (*doma
 	return media, nil
 }
 
+
 // ============================================================
-// DELETE
+// DELETE - FIXED with proper error handling
 // ============================================================
 
 func (s *mediaService) DeleteFile(ctx context.Context, id string) error {
-	media, err := s.repo.GetMediaByID(ctx, id)
-	if err != nil {
-		return err
-	}
-	if media == nil {
-		return domain.ErrMediaNotFound
-	}
+    // 1. Get media metadata
+    media, err := s.repo.GetMediaByID(ctx, id)
+    if err != nil {
+        return fmt.Errorf("failed to get media record: %w", err)
+    }
+    if media == nil {
+        return domain.ErrMediaNotFound
+    }
 
-	_ = s.storage.DeleteFile(ctx, media.Bucket, media.Path)
-	return s.repo.DeleteMedia(ctx, id)
+    // 2. Delete from Supabase Storage first
+    log.Printf("🗑️ Deleting file from storage: bucket=%s, path=%s", media.Bucket, media.Path)
+    if err := s.storage.DeleteFile(ctx, media.Bucket, media.Path); err != nil {
+        log.Printf("⚠️ Failed to delete file from storage: %v", err)
+        // Continue to delete metadata even if storage deletion fails
+        // This prevents orphaned metadata records
+    } else {
+        log.Printf("✅ File deleted from storage: %s", media.Path)
+    }
+
+    // 3. Delete metadata from PostgreSQL
+    log.Printf("🗑️ Deleting media record from database: %s", id)
+    if err := s.repo.DeleteMedia(ctx, id); err != nil {
+        return fmt.Errorf("failed to delete media record: %w", err)
+    }
+    log.Printf("✅ Media record deleted: %s", id)
+
+    return nil
 }
 
 func (s *mediaService) DeleteFilesByEntity(ctx context.Context, entityID string) error {
-	mediaList, _, err := s.repo.GetMediaByEntity(ctx, entityID, 0, 0)
-	if err != nil {
-		return err
-	}
-
-	for _, media := range mediaList {
-		_ = s.DeleteFile(ctx, media.ID)
-	}
-
-	return nil
+    log.Printf("🗑️ Deleting all media for entity: %s", entityID)
+    
+    // 1. Get all media for this entity
+    mediaList, _, err := s.repo.GetMediaByEntity(ctx, entityID, 0, 0)
+    if err != nil {
+        return fmt.Errorf("failed to get media list: %w", err)
+    }
+    
+    if len(mediaList) == 0 {
+        log.Printf("ℹ️ No media found for entity: %s", entityID)
+        return nil
+    }
+    
+    log.Printf("📦 Found %d media items to delete", len(mediaList))
+    
+    var deleteErrors []string
+    var successCount int
+    
+    // 2. Delete each file
+    for _, media := range mediaList {
+        log.Printf("🗑️ Deleting media: %s (path: %s)", media.ID, media.Path)
+        
+        if err := s.DeleteFile(ctx, media.ID); err != nil {
+            errMsg := fmt.Sprintf("failed to delete media %s: %v", media.ID, err)
+            log.Printf("⚠️ %s", errMsg)
+            deleteErrors = append(deleteErrors, errMsg)
+        } else {
+            successCount++
+        }
+    }
+    
+    // 3. Report results
+    if len(deleteErrors) > 0 {
+        log.Printf("⚠️ Deleted %d/%d media files with errors", successCount, len(mediaList))
+        return fmt.Errorf("errors during deletion: %s", strings.Join(deleteErrors, "; "))
+    }
+    
+    log.Printf("✅ All %d media files deleted successfully for entity: %s", len(mediaList), entityID)
+    return nil
 }
 
 func (s *mediaService) DeleteFilesByEntityAndMediaType(ctx context.Context, entityID, mediaTypeID string) error {
-	mediaList, err := s.repo.GetMediaByEntityAndType(ctx, entityID, mediaTypeID)
-	if err != nil {
-		return err
-	}
-
-	for _, media := range mediaList {
-		_ = s.DeleteFile(ctx, media.ID)
-	}
-
-	return nil
+    log.Printf("🗑️ Deleting media for entity %s with media type: %s", entityID, mediaTypeID)
+    
+    // 1. Get media for this entity and media type
+    mediaList, err := s.repo.GetMediaByEntityAndType(ctx, entityID, mediaTypeID)
+    if err != nil {
+        return fmt.Errorf("failed to get media list: %w", err)
+    }
+    
+    if len(mediaList) == 0 {
+        log.Printf("ℹ️ No media found for entity %s with type %s", entityID, mediaTypeID)
+        return nil
+    }
+    
+    log.Printf("📦 Found %d media items to delete", len(mediaList))
+    
+    var deleteErrors []string
+    var successCount int
+    
+    // 2. Delete each file
+    for _, media := range mediaList {
+        log.Printf("🗑️ Deleting media: %s (path: %s)", media.ID, media.Path)
+        
+        if err := s.DeleteFile(ctx, media.ID); err != nil {
+            errMsg := fmt.Sprintf("failed to delete media %s: %v", media.ID, err)
+            log.Printf("⚠️ %s", errMsg)
+            deleteErrors = append(deleteErrors, errMsg)
+        } else {
+            successCount++
+        }
+    }
+    
+    // 3. Report results
+    if len(deleteErrors) > 0 {
+        log.Printf("⚠️ Deleted %d/%d media files with errors", successCount, len(mediaList))
+        return fmt.Errorf("errors during deletion: %s", strings.Join(deleteErrors, "; "))
+    }
+    
+    log.Printf("✅ All %d media files deleted successfully for entity %s with type %s", len(mediaList), entityID, mediaTypeID)
+    return nil
 }
 
 // ============================================================

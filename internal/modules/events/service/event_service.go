@@ -611,15 +611,12 @@ func (s *eventService) DeleteEvent(ctx context.Context, id, deletedBy string) er
 	return nil
 }
 
-// internal/modules/events/service/service_impl.go
-
 // Hard delete - permanently removes from database
 func (s *eventService) PermanentlyDeleteEvent(ctx context.Context, id, deletedBy string) error {
     if id == "" {
         return errors.New("event ID is required")
     }
 
-    // ✅ Use GetEventByIDIncludingDeleted to find soft-deleted events
     event, err := s.repo.GetEventByIDIncludingDeleted(ctx, id)
     if err != nil {
         return err
@@ -632,13 +629,32 @@ func (s *eventService) PermanentlyDeleteEvent(ctx context.Context, id, deletedBy
         return errors.New("insufficient permissions to delete this event")
     }
 
-    // Delete media files
-    if err := s.mediaSvc.DeleteMediaByEntity(ctx, id); err != nil {
-        log.Printf("⚠️ Failed to delete media for event %s: %v", id, err)
-        // Continue with deletion
+    // ✅ STEP 1: Delete media files
+    if s.mediaSvc != nil {
+        log.Printf("🗑️ Attempting to delete media for event: %s", id)
+        
+        // Get all media for this event
+        mediaList, err := s.mediaSvc.GetMediaByEntity(ctx, id)
+        if err != nil {
+            log.Printf("⚠️ Failed to get media list for event %s: %v", id, err)
+        } else if len(mediaList) > 0 {
+            log.Printf("📦 Found %d media items for event %s", len(mediaList), id)
+            
+            // ✅ Changed from DeleteMediaByEntity to DeleteFilesByEntity
+            if err := s.mediaSvc.DeleteFilesByEntity(ctx, id); err != nil {
+                log.Printf("⚠️ Failed to delete media for event %s: %v", id, err)
+            } else {
+                log.Printf("✅ Media deleted successfully for event: %s", id)
+            }
+        } else {
+            log.Printf("ℹ️ No media found for event: %s", id)
+        }
+    } else {
+        log.Printf("⚠️ Media service is nil, skipping media deletion for event: %s", id)
     }
 
-    // Hard delete - remove from database
+    // ✅ STEP 2: Hard delete - remove from database
+    log.Printf("🗑️ Permanently deleting event from database: %s", id)
     if err := s.repo.PermanentlyDeleteEvent(ctx, id); err != nil {
         return fmt.Errorf("failed to permanently delete event: %w", err)
     }
@@ -1190,69 +1206,89 @@ func (s *eventService) DeleteEventCertificate(ctx context.Context, eventID strin
 
 // DeleteAllEventMedia - Delete all media for an event
 func (s *eventService) DeleteAllEventMedia(ctx context.Context, eventID string, deletedBy string) error {
-	if eventID == "" {
-		return errors.New("event ID is required")
-	}
+    if eventID == "" {
+        return errors.New("event ID is required")
+    }
 
-	event, err := s.repo.GetEventByID(ctx, eventID)
-	if err != nil {
-		return err
-	}
-	if event == nil {
-		return domain.ErrEventNotFound
-	}
+    event, err := s.repo.GetEventByID(ctx, eventID)
+    if err != nil {
+        return err
+    }
+    if event == nil {
+        return domain.ErrEventNotFound
+    }
 
-	if !s.permChecker.CanUpdateEvent(ctx, deletedBy, event.AccountID) {
-		return errors.New("insufficient permissions to delete media for this event")
-	}
+    if !s.permChecker.CanUpdateEvent(ctx, deletedBy, event.AccountID) {
+        return errors.New("insufficient permissions to delete media for this event")
+    }
 
-	// Use DeleteMediaByEntity
-	if err := s.mediaSvc.DeleteMediaByEntity(ctx, eventID); err != nil {
-		return fmt.Errorf("failed to delete all media: %w", err)
-	}
+    // ✅ Changed from DeleteMediaByEntity to DeleteFilesByEntity
+    if err := s.mediaSvc.DeleteFilesByEntity(ctx, eventID); err != nil {
+        return fmt.Errorf("failed to delete all media: %w", err)
+    }
 
-	// Clear image URL from event
-	event.ImageURL = ""
-	if err := s.repo.UpdateEvent(ctx, event); err != nil {
-		log.Printf("⚠️ Failed to update event %s after media deletion: %v", eventID, err)
-		// Continue - media is already deleted
-	}
+    // Clear image URL from event
+    event.ImageURL = ""
+    if err := s.repo.UpdateEvent(ctx, event); err != nil {
+        log.Printf("⚠️ Failed to update event %s after media deletion: %v", eventID, err)
+    }
 
-	log.Printf("✅ All media deleted for event: %s", eventID)
-	return nil
+    log.Printf("✅ All media deleted for event: %s", eventID)
+    return nil
 }
+
 
 // DeleteEventImage - Delete only Event media type for an event
 func (s *eventService) DeleteEventImage(ctx context.Context, eventID string, deletedBy string) error {
-	if eventID == "" {
-		return errors.New("event ID is required")
-	}
+    if eventID == "" {
+        return errors.New("event ID is required")
+    }
 
-	event, err := s.repo.GetEventByID(ctx, eventID)
-	if err != nil {
-		return err
-	}
-	if event == nil {
-		return domain.ErrEventNotFound
-	}
+    event, err := s.repo.GetEventByID(ctx, eventID)
+    if err != nil {
+        return err
+    }
+    if event == nil {
+        return domain.ErrEventNotFound
+    }
 
-	if !s.permChecker.CanUpdateEvent(ctx, deletedBy, event.AccountID) {
-		return errors.New("insufficient permissions to delete image for this event")
-	}
+    if !s.permChecker.CanUpdateEvent(ctx, deletedBy, event.AccountID) {
+        return errors.New("insufficient permissions to delete image for this event")
+    }
 
-	// Use DeleteMediaByEntity - this deletes ALL media for the event
-	if err := s.mediaSvc.DeleteMediaByEntity(ctx, eventID); err != nil {
-		return fmt.Errorf("failed to delete event image: %w", err)
-	}
+    // ✅ Get media type for Event
+    mediaType, err := s.mediaSvc.GetMediaTypeByName(ctx, "Event")
+    if err != nil {
+        log.Printf("⚠️ Failed to get media type: %v", err)
+        // If we can't get the media type, try deleting all media
+        log.Printf("⚠️ Media type 'Event' not found, deleting all media for event %s", eventID)
+        if err := s.mediaSvc.DeleteFilesByEntity(ctx, eventID); err != nil {
+            return fmt.Errorf("failed to delete media: %w", err)
+        }
+        // Clear image URL
+        event.ImageURL = ""
+        if err := s.repo.UpdateEvent(ctx, event); err != nil {
+            log.Printf("⚠️ Failed to update event %s after media deletion: %v", eventID, err)
+        }
+        log.Printf("✅ All media deleted for event: %s", eventID)
+        return nil
+    }
 
-	// Clear image URL from event
-	event.ImageURL = ""
-	if err := s.repo.UpdateEvent(ctx, event); err != nil {
-		log.Printf("⚠️ Failed to update event %s after image deletion: %v", eventID, err)
-	}
+    // ✅ Delete only Event media for this event
+    if err := s.mediaSvc.DeleteFilesByEntityAndMediaType(ctx, eventID, mediaType.ID); err != nil {
+        log.Printf("⚠️ Failed to delete event image: %v", err)
+        return fmt.Errorf("failed to delete event image: %w", err)
+    }
+    log.Printf("✅ Event image deleted for event: %s", eventID)
 
-	log.Printf("✅ Event image deleted for event: %s", eventID)
-	return nil
+    // ✅ Clear image URL from event
+    event.ImageURL = ""
+    if err := s.repo.UpdateEvent(ctx, event); err != nil {
+        log.Printf("⚠️ Failed to update event %s after image deletion: %v", eventID, err)
+        // Continue - media is already deleted
+    }
+
+    return nil
 }
 
 // ============================================================

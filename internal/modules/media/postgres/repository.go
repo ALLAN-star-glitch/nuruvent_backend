@@ -46,12 +46,19 @@ func (r *PostgresRepository) GetMediaByID(ctx context.Context, id string) (*doma
 	return ToDomainMedia(&model), nil
 }
 
+
+// GetMediaByEntity - Get all media for an entity
+// When called for deletion (permanent delete), we need to include ALL media
 func (r *PostgresRepository) GetMediaByEntity(ctx context.Context, entityID string, limit, offset int) ([]*domain.Media, int64, error) {
 	var models []MediaModel
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&MediaModel{}).
-		Where("entity_id = ? AND is_active = ?", entityID, true)
+	// ✅ For deletion, we need to get ALL media regardless of is_active
+	// Use Unscoped() to include soft-deleted records
+	query := r.db.WithContext(ctx).
+		Unscoped().
+		Model(&MediaModel{}).
+		Where("entity_id = ?", entityID)  // ✅ Remove is_active filter
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -165,11 +172,18 @@ func (r *PostgresRepository) UpdateMedia(ctx context.Context, media *domain.Medi
 }
 
 func (r *PostgresRepository) DeleteMedia(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Delete(&MediaModel{}, "id = ?", id).Error
+	// ✅ Use Unscoped() to permanently delete even if soft-deleted
+	return r.db.WithContext(ctx).
+		Unscoped().
+		Delete(&MediaModel{}, "id = ?", id).Error
 }
 
 func (r *PostgresRepository) DeleteMediaByEntity(ctx context.Context, entityID string) error {
-	return r.db.WithContext(ctx).Where("entity_id = ?", entityID).Delete(&MediaModel{}).Error
+	// ✅ Use Unscoped() to permanently delete even if soft-deleted
+	return r.db.WithContext(ctx).
+		Unscoped().
+		Where("entity_id = ?", entityID).
+		Delete(&MediaModel{}).Error
 }
 
 // ============================================================
