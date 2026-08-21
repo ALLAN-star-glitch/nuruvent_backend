@@ -3,10 +3,11 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"mime/multipart"
+	"io/fs"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -210,7 +211,12 @@ func (a *EventsPermissionAdapter) CanDeleteEvent(ctx context.Context, userID, ev
 	return a.permSvc.HasPermission(ctx, userID, domain, authDomain.ResourceEvent.String(), authDomain.ActionDelete.String())
 }
 
-// EventsMediaAdapter adapts media.Service to events domain.MediaService
+
+
+// ============================================================
+// EVENTS MEDIA ADAPTER - Using pure domain types
+// ============================================================
+
 type EventsMediaAdapter struct {
 	mediaSvc mediaService.Service
 }
@@ -219,25 +225,12 @@ func NewEventsMediaAdapter(mediaSvc mediaService.Service) eventsDomain.MediaServ
 	return &EventsMediaAdapter{mediaSvc: mediaSvc}
 }
 
+// ✅ UPLOAD - Pure domain types pass-through
 func (a *EventsMediaAdapter) UploadFile(ctx context.Context, cmd eventsDomain.UploadMediaCommand) (*eventsDomain.MediaInfo, error) {
-	var file multipart.File
-	var fileHeader *multipart.FileHeader
-
-	if cmd.File != nil {
-		if f, ok := cmd.File.(multipart.File); ok {
-			file = f
-		}
-	}
-
-	if cmd.FileHeader != nil {
-		if fh, ok := cmd.FileHeader.(*multipart.FileHeader); ok {
-			fileHeader = fh
-		}
-	}
-
 	mediaCmd := mediaService.UploadCommand{
-		File:          file,
-		FileHeader:    fileHeader,
+		File:          cmd.File,
+		FileName:      cmd.FileName,
+		ContentType:   cmd.ContentType,
 		MediaTypeName: cmd.MediaTypeName,
 		EntityID:      cmd.EntityID,
 		UploadedBy:    cmd.UploadedBy,
@@ -247,13 +240,21 @@ func (a *EventsMediaAdapter) UploadFile(ctx context.Context, cmd eventsDomain.Up
 	if err != nil {
 		return nil, err
 	}
+	if media == nil {
+		return nil, nil
+	}
 
 	return &eventsDomain.MediaInfo{
-		ID:  media.ID,
-		URL: media.URL,
+		ID:         media.ID,
+		URL:        media.URL,
+		MediaType:  cmd.MediaTypeName,
+		EntityID:   media.EntityID,
+		UploadedBy: media.UploadedBy,
+		CreatedAt:  media.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
 
+// ✅ GET BY ID
 func (a *EventsMediaAdapter) GetMediaByID(ctx context.Context, id string) (*eventsDomain.MediaInfo, error) {
 	media, err := a.mediaSvc.GetMediaByID(ctx, id)
 	if err != nil {
@@ -262,16 +263,106 @@ func (a *EventsMediaAdapter) GetMediaByID(ctx context.Context, id string) (*even
 	if media == nil {
 		return nil, nil
 	}
+
+	// Get media type name
+	mediaTypeName := ""
+	mediaType, err := a.mediaSvc.GetMediaTypeByID(ctx, media.MediaTypeID)
+	if err == nil && mediaType != nil {
+		mediaTypeName = mediaType.Name
+	}
+
 	return &eventsDomain.MediaInfo{
-		ID:  media.ID,
-		URL: media.URL,
+		ID:         media.ID,
+		URL:        media.URL,
+		MediaType:  mediaTypeName,
+		EntityID:   media.EntityID,
+		UploadedBy: media.UploadedBy,
+		CreatedAt:  media.CreatedAt.Format(time.RFC3339),
 	}, nil
 }
 
+// ✅ GET MEDIA BY ENTITY
+func (a *EventsMediaAdapter) GetMediaByEntity(ctx context.Context, entityID string) ([]*eventsDomain.MediaInfo, error) {
+	mediaList, _, err := a.mediaSvc.GetMediaByEntity(ctx, entityID, 1, 100)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(mediaList) == 0 {
+		return []*eventsDomain.MediaInfo{}, nil
+	}
+
+	result := make([]*eventsDomain.MediaInfo, len(mediaList))
+	for i, media := range mediaList {
+		mediaTypeName := ""
+		mediaType, err := a.mediaSvc.GetMediaTypeByID(ctx, media.MediaTypeID)
+		if err == nil && mediaType != nil {
+			mediaTypeName = mediaType.Name
+		}
+
+		result[i] = &eventsDomain.MediaInfo{
+			ID:         media.ID,
+			URL:        media.URL,
+			MediaType:  mediaTypeName,
+			EntityID:   media.EntityID,
+			UploadedBy: media.UploadedBy,
+			CreatedAt:  media.CreatedAt.Format(time.RFC3339),
+		}
+	}
+	return result, nil
+}
+
+// ✅ GET MEDIA TYPE BY NAME
+func (a *EventsMediaAdapter) GetMediaTypeByName(ctx context.Context, name string) (*eventsDomain.MediaTypeInfo, error) {
+	mediaType, err := a.mediaSvc.GetMediaTypeByName(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if mediaType == nil {
+		return nil, nil
+	}
+	return &eventsDomain.MediaTypeInfo{
+		ID:   mediaType.ID,
+		Name: mediaType.Name,
+		Slug: mediaType.Slug,
+	}, nil
+}
+
+// ✅ DELETE FILE
+func (a *EventsMediaAdapter) DeleteFile(ctx context.Context, id string) error {
+	return a.mediaSvc.DeleteFile(ctx, id)
+}
+
+// ✅ DELETE MEDIA BY ENTITY
 func (a *EventsMediaAdapter) DeleteMediaByEntity(ctx context.Context, entityID string) error {
 	return a.mediaSvc.DeleteFilesByEntity(ctx, entityID)
 }
 
+// ✅ DELETE FILES BY ENTITY AND MEDIA TYPE
+func (a *EventsMediaAdapter) DeleteFilesByEntityAndMediaType(ctx context.Context, entityID, mediaTypeID string) error {
+	return a.mediaSvc.DeleteFilesByEntityAndMediaType(ctx, entityID, mediaTypeID)
+}
+
+// ============================================================
+// BYTES READER WRAPPER - Implements multipart.File
+// ============================================================
+
+// bytesReaderWrapper wraps a bytes.Reader to implement multipart.File interface
+type bytesReaderWrapper struct {
+	*bytes.Reader
+}
+
+func (b *bytesReaderWrapper) Close() error {
+	return nil
+}
+
+func (b *bytesReaderWrapper) Readdir(count int) ([]fs.FileInfo, error) {
+	return nil, nil
+}
+
+func (b *bytesReaderWrapper) Stat() (fs.FileInfo, error) {
+	return nil, nil
+}
 // ============================================================
 // AUTH NOTIFICATION ADAPTER - UNIFIED
 // ============================================================
@@ -352,3 +443,6 @@ func (a *AuthNotificationAdapter) SendLoginNotification(ctx context.Context, req
 	}
 	return a.notifSvc.SendLoginNotification(ctx, notifReq)
 }
+
+
+

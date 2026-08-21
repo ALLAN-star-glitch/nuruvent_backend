@@ -30,9 +30,16 @@ func (s *service) InitiatePasswordReset(ctx context.Context, email, newPassword 
 
 	log.Printf("✅ [Auth] Account found: %s (ID: %s)", account.Email, account.ID)
 
-	// Generate OTP
+	// ✅ Generate OTP
 	otp := s.GenerateOTP()
-	log.Printf("🔑 [Auth] Generated OTP for %s", email)
+	log.Printf("🔑 [Auth] Generated OTP: %s for %s", otp, email)
+
+	// ✅ Store OTP with purpose - THIS IS THE KEY FIX
+	if err := s.StoreOTP(ctx, email, otp, "password_reset"); err != nil {
+		log.Printf("❌ [Auth] Failed to store OTP: %v", err)
+		return fmt.Errorf("failed to store OTP: %w", err)
+	}
+	log.Printf("✅ [Auth] OTP stored in Redis for: %s", email)
 
 	// Store reset data with OTP and new password
 	if err := s.StoreResetData(ctx, email, otp, newPassword); err != nil {
@@ -67,11 +74,12 @@ func (s *service) InitiatePasswordReset(ctx context.Context, email, newPassword 
 func (s *service) VerifyResetOTPAndResetPassword(ctx context.Context, email, otp string) error {
 	log.Printf("🔐 [Auth] VerifyResetOTPAndResetPassword called for: %s", email)
 
-	// Verify OTP using unified VerifyOTP
+	// ✅ Verify OTP using unified VerifyOTP
 	if err := s.VerifyOTP(ctx, email, otp, "password_reset"); err != nil {
 		log.Printf("❌ [Auth] Invalid OTP for %s: %v", email, err)
 		return err
 	}
+	log.Printf("✅ [Auth] OTP verified successfully for: %s", email)
 
 	// Get reset data
 	resetData, err := s.GetResetData(ctx, email)

@@ -1,16 +1,22 @@
+// internal/modules/media/service/service_impl.go
+
 package service
 
 import (
-	"slices"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
-	"io"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/domain"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
+	"io/fs"
+	"mime/multipart"
+	"net/textproto"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
 
 	"github.com/google/uuid"
 )
@@ -20,8 +26,8 @@ import (
 // ============================================================
 
 type mediaService struct {
-	repo      domain.Repository
-	storage   *storage.Client
+	repo    domain.Repository
+	storage *storage.Client
 }
 
 func NewService(
@@ -35,12 +41,28 @@ func NewService(
 }
 
 // ============================================================
-// UPLOAD
+// UPLOAD - Updated to use pure domain types
 // ============================================================
 
-
 func (s *mediaService) UploadFile(ctx context.Context, cmd UploadCommand) (*domain.Media, error) {
-	// 1. Get media type
+	// 1. Validate input
+	if len(cmd.File) == 0 {
+		return nil, errors.New("file data is required")
+	}
+	if cmd.FileName == "" {
+		return nil, errors.New("file name is required")
+	}
+	if cmd.MediaTypeName == "" {
+		return nil, errors.New("media type is required")
+	}
+	if cmd.EntityID == "" {
+		return nil, errors.New("entity ID is required")
+	}
+	if cmd.UploadedBy == "" {
+		return nil, errors.New("uploaded by is required")
+	}
+
+	// 2. Get media type
 	mediaType, err := s.repo.GetMediaTypeByName(ctx, cmd.MediaTypeName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get media type: %w", err)
@@ -49,57 +71,64 @@ func (s *mediaService) UploadFile(ctx context.Context, cmd UploadCommand) (*doma
 		return nil, domain.ErrMediaTypeNotFound
 	}
 
-	// 2. Validate file size
-	if cmd.FileHeader.Size > mediaType.MaxFileSize {
-		return nil, fmt.Errorf("file size exceeds maximum allowed size of %d bytes", mediaType.MaxFileSize)
+	// 3. Validate file size
+	if int64(len(cmd.File)) > mediaType.MaxFileSize {
+		return nil, fmt.Errorf("file size %d exceeds maximum allowed size of %d bytes", len(cmd.File), mediaType.MaxFileSize)
 	}
 
-	// 3. Validate mime type
-	contentType := cmd.FileHeader.Header.Get("Content-Type")
-	if !s.isAllowedMimeType(contentType, mediaType) {
-		return nil, fmt.Errorf("file type %s is not allowed for %s", contentType, cmd.MediaTypeName)
+	// 4. Validate mime type
+	if !s.isAllowedMimeType(cmd.ContentType, mediaType) {
+		return nil, fmt.Errorf("file type %s is not allowed for %s", cmd.ContentType, cmd.MediaTypeName)
 	}
 
-	// 4. Parse entity ID
+	// 5. Parse entity ID
 	entityID, err := uuid.Parse(cmd.EntityID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid entity ID: %w", err)
 	}
 
-	// 5. Generate file path
-	filePath := s.generateFilePath(cmd.MediaTypeName, entityID, cmd.FileHeader.Filename)
+	// 6. Generate file path
+	filePath := s.generateFilePath(cmd.MediaTypeName, entityID, cmd.FileName)
 
-	// 6. Read file
-	fileContent, err := io.ReadAll(cmd.File)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+	// 7. Create reader from bytes
+	fileReader := bytes.NewReader(cmd.File)
+
+	// 8. ✅ Convert domain types to infrastructure types for storage
+	// Create a multipart.File from the reader
+	file := &bytesReaderWrapper{Reader: fileReader}
+
+	// Create a file header with metadata
+	fileHeader := &multipart.FileHeader{
+		Filename: cmd.FileName,
+		Header:   make(textproto.MIMEHeader),
+		Size:     int64(len(cmd.File)),
 	}
-	fileReader := bytes.NewReader(fileContent)
+	fileHeader.Header.Set("Content-Type", cmd.ContentType)
 
-	// 7. Upload to storage
-	publicURL, err := s.storage.UploadFile(ctx, mediaType.Bucket, filePath, fileReader, contentType)
+	// 9. Upload to storage
+	publicURL, err := s.storage.UploadFile(ctx, mediaType.Bucket, filePath, file, cmd.ContentType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to upload file: %w", err)
 	}
 
-	// 8. Create domain entity - match table columns
+	// 10. Create domain entity
 	media, err := domain.NewMedia(
-		cmd.FileHeader.Filename, // FileName
-		mediaType.Bucket,        // Bucket
-		filePath,                // Path
-		publicURL,               // URL
-		mediaType.ID,            // MediaTypeID
-		cmd.EntityID,            // EntityID
-		cmd.UploadedBy,          // UploadedBy
-		contentType,             // MimeType
-		cmd.FileHeader.Size,     // FileSize
+		cmd.FileName,    // FileName
+		mediaType.Bucket, // Bucket
+		filePath,        // Path
+		publicURL,       // URL
+		mediaType.ID,    // MediaTypeID
+		cmd.EntityID,    // EntityID
+		cmd.UploadedBy,  // UploadedBy
+		cmd.ContentType, // MimeType
+		int64(len(cmd.File)), // FileSize
 	)
 	if err != nil {
 		_ = s.storage.DeleteFile(ctx, mediaType.Bucket, filePath)
 		return nil, err
 	}
 
-	// 9. Save to database
+	// 11. Save to database
 	if err := s.repo.CreateMedia(ctx, media); err != nil {
 		_ = s.storage.DeleteFile(ctx, mediaType.Bucket, filePath)
 		return nil, fmt.Errorf("failed to create media record: %w", err)
@@ -214,6 +243,13 @@ func (s *mediaService) GetMediaTypes(ctx context.Context) ([]*domain.MediaType, 
 	return s.repo.GetAllMediaTypes(ctx)
 }
 
+func (s *mediaService) GetMediaTypeByID(ctx context.Context, id string) (*domain.MediaType, error) {
+	if id == "" {
+		return nil, errors.New("media type ID is required")
+	}
+	return s.repo.GetMediaTypeByID(ctx, id)
+}
+
 func (s *mediaService) GetMediaTypeByName(ctx context.Context, name string) (*domain.MediaType, error) {
 	return s.repo.GetMediaTypeByName(ctx, name)
 }
@@ -261,7 +297,6 @@ func (s *mediaService) isAllowedMimeType(mimeType string, mediaType *domain.Medi
 		"recording":   {"video/mp4", "video/webm", "video/ogg"},
 	}
 
-	// Convert to lowercase to match map keys
 	key := strings.ToLower(mediaType.Name)
 	allowed, ok := allowedTypes[key]
 	if !ok {
@@ -269,4 +304,25 @@ func (s *mediaService) isAllowedMimeType(mimeType string, mediaType *domain.Medi
 	}
 
 	return slices.Contains(allowed, mimeType)
+}
+
+// ============================================================
+// BYTES READER WRAPPER - Implements multipart.File
+// ============================================================
+
+// bytesReaderWrapper wraps a bytes.Reader to implement multipart.File interface
+type bytesReaderWrapper struct {
+	*bytes.Reader
+}
+
+func (b *bytesReaderWrapper) Close() error {
+	return nil
+}
+
+func (b *bytesReaderWrapper) Readdir(count int) ([]fs.FileInfo, error) {
+	return nil, nil
+}
+
+func (b *bytesReaderWrapper) Stat() (fs.FileInfo, error) {
+	return nil, nil
 }

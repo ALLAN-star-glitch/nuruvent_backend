@@ -1,7 +1,12 @@
+// internal/modules/events/infrastructure/postgres/mappers.go
+
 package postgres
 
 import (
+	"time"
+
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
+	"gorm.io/gorm"
 )
 
 // ============================================================
@@ -13,6 +18,23 @@ func ToModelEvent(event *domain.Event) *EventModel {
 	if event == nil {
 		return nil
 	}
+
+	var deletedAt gorm.DeletedAt
+	if event.DeletedAt != nil {
+		deletedAt = gorm.DeletedAt{Time: *event.DeletedAt, Valid: true}
+	}
+
+	// ✅ Convert empty string to nil for UUID fields
+	var deletedBy *string
+	if event.DeletedBy != "" {
+		deletedBy = &event.DeletedBy
+	}
+
+	var restoredBy *string
+	if event.RestoredBy != "" {
+		restoredBy = &event.RestoredBy
+	}
+
 	return &EventModel{
 		ID:               event.ID,
 		Slug:             event.Slug,
@@ -39,68 +61,37 @@ func ToModelEvent(event *domain.Event) *EventModel {
 		IsActive:         event.IsActive,
 		CreatedAt:        event.CreatedAt,
 		UpdatedAt:        event.UpdatedAt,
+		DeletedAt:        deletedAt,
+		DeletedBy:        deletedBy,
+		RestoredAt:       event.RestoredAt,
+		RestoredBy:       restoredBy,
+		IsFeatured:       event.IsFeatured,
+		IsPrivate:        event.IsPrivate,
 	}
 }
-
-// ToModelEventTypeFromValue converts domain.EventTypeValue to EventTypeModel
-func ToModelEventTypeFromValue(value domain.EventTypeValue) *EventTypeModel {
-	info, ok := value.Info()
-	if !ok {
-		return nil
-	}
-	return ToModelEventTypeFromInfo(info)
-}
-
-// ToModelEventStatusFromValue converts domain.EventStatusValue to EventStatusModel
-func ToModelEventStatusFromValue(value domain.EventStatusValue) *EventStatusModel {
-	info, ok := value.Info()
-	if !ok {
-		return nil
-	}
-	return ToModelEventStatusFromInfo(info)
-}
-
-// ToModelEventTypeFromInfo converts domain.EventTypeInfo to EventTypeModel
-func ToModelEventTypeFromInfo(info domain.EventTypeInfo) *EventTypeModel {
-	return &EventTypeModel{
-		Slug:                info.Slug.String(),
-		Name:                info.Name,
-		DisplayName:         info.DisplayName,
-		Description:         info.Description,
-		Icon:                info.Icon,
-		Color:               info.Color,
-		SortOrder:           info.SortOrder,
-		SupportsCertificate: info.SupportsCertificate,
-		MinDuration:         info.MinDuration,
-		MaxDuration:         info.MaxDuration,
-		IsActive:            info.IsActive,
-	}
-}
-
-// ToModelEventStatusFromInfo converts domain.EventStatusInfo to EventStatusModel
-func ToModelEventStatusFromInfo(info domain.EventStatusInfo) *EventStatusModel {
-	return &EventStatusModel{
-		Slug:        info.Slug.String(),
-		Name:        info.Name,
-		DisplayName: info.DisplayName,
-		Description: info.Description,
-		Color:       info.Color,
-		Icon:        info.Icon,
-		SortOrder:   info.SortOrder,
-		IsFinal:     info.IsFinal,
-		IsActive:    info.IsActive,
-	}
-}
-
-// ============================================================
-// DATABASE MODEL → DOMAIN VALUE MAPPERS
-// ============================================================
 
 // ToDomainEvent converts EventModel to domain.Event
 func ToDomainEvent(model *EventModel) *domain.Event {
 	if model == nil {
 		return nil
 	}
+
+	var deletedAt *time.Time
+	if model.DeletedAt.Valid {
+		deletedAt = &model.DeletedAt.Time
+	}
+
+	// ✅ Convert *string to string (empty string if nil)
+	deletedBy := ""
+	if model.DeletedBy != nil {
+		deletedBy = *model.DeletedBy
+	}
+
+	restoredBy := ""
+	if model.RestoredBy != nil {
+		restoredBy = *model.RestoredBy
+	}
+
 	return &domain.Event{
 		ID:               model.ID,
 		Slug:             model.Slug,
@@ -127,6 +118,42 @@ func ToDomainEvent(model *EventModel) *domain.Event {
 		IsActive:         model.IsActive,
 		CreatedAt:        model.CreatedAt,
 		UpdatedAt:        model.UpdatedAt,
+		DeletedAt:        deletedAt,
+		DeletedBy:        deletedBy,
+		RestoredAt:       model.RestoredAt,
+		RestoredBy:       restoredBy,
+		IsFeatured:       model.IsFeatured,
+		IsPrivate:        model.IsPrivate,
+	}
+}
+
+// ============================================================
+// EVENT TYPE - DOMAIN VALUE MAPPERS
+// ============================================================
+
+// ToModelEventTypeFromValue converts domain.EventTypeValue to EventTypeModel
+func ToModelEventTypeFromValue(value domain.EventTypeValue) *EventTypeModel {
+	info, ok := value.Info()
+	if !ok {
+		return nil
+	}
+	return ToModelEventTypeFromInfo(info)
+}
+
+// ToModelEventTypeFromInfo converts domain.EventTypeInfo to EventTypeModel
+func ToModelEventTypeFromInfo(info domain.EventTypeInfo) *EventTypeModel {
+	return &EventTypeModel{
+		Slug:                info.Slug.String(),
+		Name:                info.Name,
+		DisplayName:         info.DisplayName,
+		Description:         info.Description,
+		Icon:                info.Icon,
+		Color:               info.Color,
+		SortOrder:           info.SortOrder,
+		SupportsCertificate: info.SupportsCertificate,
+		MinDuration:         info.MinDuration,
+		MaxDuration:         info.MaxDuration,
+		IsActive:            info.IsActive,
 	}
 }
 
@@ -159,6 +186,34 @@ func ToDomainEventTypeInfo(model *EventTypeModel) (*domain.EventTypeInfo, error)
 	info.IsActive = model.IsActive
 
 	return &info, nil
+}
+
+// ============================================================
+// EVENT STATUS - DOMAIN VALUE MAPPERS
+// ============================================================
+
+// ToModelEventStatusFromValue converts domain.EventStatusValue to EventStatusModel
+func ToModelEventStatusFromValue(value domain.EventStatusValue) *EventStatusModel {
+	info, ok := value.Info()
+	if !ok {
+		return nil
+	}
+	return ToModelEventStatusFromInfo(info)
+}
+
+// ToModelEventStatusFromInfo converts domain.EventStatusInfo to EventStatusModel
+func ToModelEventStatusFromInfo(info domain.EventStatusInfo) *EventStatusModel {
+	return &EventStatusModel{
+		Slug:        info.Slug.String(),
+		Name:        info.Name,
+		DisplayName: info.DisplayName,
+		Description: info.Description,
+		Color:       info.Color,
+		Icon:        info.Icon,
+		SortOrder:   info.SortOrder,
+		IsFinal:     info.IsFinal,
+		IsActive:    info.IsActive,
+	}
 }
 
 // ToDomainEventStatusInfo converts EventStatusModel to domain.EventStatusInfo

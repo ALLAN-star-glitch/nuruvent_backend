@@ -1,3 +1,5 @@
+// internal/modules/events/service/service.go
+
 package service
 
 import (
@@ -15,8 +17,18 @@ type Service interface {
 	// CREATE
 	// ============================================================
 
+	// Create draft event (with optional image data)
+	CreateDraft(ctx context.Context, cmd CreateDraftCommand) (*domain.Event, error)
+	
+	// Create published event (with optional image data)
 	CreateEvent(ctx context.Context, cmd CreateEventCommand) (*domain.Event, error)
-	CreateEventWithImage(ctx context.Context, cmd CreateEventWithImageCommand) (*domain.Event, error)
+
+	// ============================================================
+	// DUPLICATE
+	// ============================================================
+
+	DuplicateEvent(ctx context.Context, id string, cmd DuplicateEventCommand) (*domain.Event, error)
+	BulkDuplicateEvents(ctx context.Context, ids []string, cmd BulkDuplicateCommand) (*BulkDuplicateResult, error)
 
 	// ============================================================
 	// READ
@@ -38,13 +50,25 @@ type Service interface {
 	UpdateEvent(ctx context.Context, cmd UpdateEventCommand) (*domain.Event, error)
 
 	// ============================================================
-	// DELETE
+	// DELETE - Single
 	// ============================================================
 
 	DeleteEvent(ctx context.Context, id, deletedBy string) error
+	PermanentlyDeleteEvent(ctx context.Context, id, deletedBy string) error
+	RestoreEvent(ctx context.Context, id, restoredBy string) (*domain.Event, error)
 
 	// ============================================================
-	// STATUS
+	// DELETE - Bulk
+	// ============================================================
+
+	DeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error)
+	PermanentlyDeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error)
+	RestoreEvents(ctx context.Context, ids []string, restoredBy string) (*BulkRestoreResult, error)
+	DeleteEventsByAccount(ctx context.Context, accountID string, deletedBy string) (*BulkDeleteResult, error)
+	PermanentlyDeleteEventsByAccount(ctx context.Context, accountID string, deletedBy string) (*BulkDeleteResult, error)
+
+	// ============================================================
+	// STATUS - Single
 	// ============================================================
 
 	PublishEvent(ctx context.Context, id, publishedBy string) (*domain.Event, error)
@@ -52,31 +76,55 @@ type Service interface {
 	CompleteEvent(ctx context.Context, id string) (*domain.Event, error)
 
 	// ============================================================
-	// MEDIA
+	// STATUS - Bulk
+	// ============================================================
+
+	BulkPublishEvents(ctx context.Context, ids []string, publishedBy string) (*BulkStatusResult, error)
+	BulkCancelEvents(ctx context.Context, ids []string, cancelledBy string) (*BulkStatusResult, error)
+	BulkCompleteEvents(ctx context.Context, ids []string) (*BulkStatusResult, error)
+
+	// ============================================================
+	// MEDIA - Upload
 	// ============================================================
 
 	UploadEventImage(ctx context.Context, cmd UploadEventImageCommand) (*domain.MediaInfo, error)
 	UploadCertificateTemplate(ctx context.Context, cmd UploadCertificateCommand) (*domain.MediaInfo, error)
 
 	// ============================================================
-	// EVENT TYPES & STATUSES (Value objects)
+	// MEDIA - Delete Single
+	// ============================================================
+
+	DeleteEventImage(ctx context.Context, eventID string, deletedBy string) error
+	DeleteEventCertificate(ctx context.Context, eventID string, deletedBy string) error
+	DeleteAllEventMedia(ctx context.Context, eventID string, deletedBy string) error
+
+	// ============================================================
+	// MEDIA - Delete Bulk
+	// ============================================================
+
+	BulkDeleteEventMedia(ctx context.Context, eventIDs []string, deletedBy string) (*BulkDeleteResult, error)
+
+	// ============================================================
+	// EVENT TYPES & STATUSES
 	// ============================================================
 
 	GetEventTypes(ctx context.Context) ([]*domain.EventType, error)
 	GetEventStatuses(ctx context.Context) ([]*domain.EventStatus, error)
-
 }
 
 // ============================================================
-// COMMANDS
+// COMMANDS - CREATE DRAFT (Pure Domain Types - NO JSON TAGS)
 // ============================================================
 
-type CreateEventCommand struct {
+type CreateDraftCommand struct {
+	// Required
+	AccountID string
+	CreatedBy string
+
+	// Optional
 	Name             string
 	Description      string
 	EventTypeID      string
-	AccountID        string
-	CreatedBy        string
 	Date             string
 	Time             string
 	Duration         int
@@ -87,16 +135,60 @@ type CreateEventCommand struct {
 	ZoomLink         string
 	MeetLink         string
 	MaxAttendees     int
+
+	// ✅ NEW: Feature flags (default to false)
+	IsFeatured bool
+	IsPrivate  bool
+
+	// Image - Pure Go types
+	ImageData   []byte
+	ImageName   string
+	ContentType string
 }
 
-type CreateEventWithImageCommand struct {
-	CreateEventCommand
-	ImageFile   interface{}
-	ImageHeader interface{}
+// ============================================================
+// COMMANDS - CREATE PUBLISHED EVENT (Pure Domain Types - NO JSON TAGS)
+// ============================================================
+
+type CreateEventCommand struct {
+	// Required
+	Name        string
+	EventTypeID string
+	AccountID   string
+	CreatedBy   string
+	Date        string
+	Time        string
+	Duration    int
+
+	// Optional
+	Description      string
+	Price            float64
+	CertificatePrice float64
+	Location         string
+	IsVirtual        bool
+	ZoomLink         string
+	MeetLink         string
+	MaxAttendees     int
+
+	// ✅ NEW: Feature flags (default to false)
+	IsFeatured bool
+	IsPrivate  bool
+
+	// Image - Pure Go types
+	ImageData   []byte
+	ImageName   string
+	ContentType string
 }
+
+// ============================================================
+// COMMANDS - UPDATE EVENT (Pure Domain Types - NO JSON TAGS)
+// ============================================================
 
 type UpdateEventCommand struct {
-	ID               string
+	ID       string // Required
+	UpdatedBy string // Required
+
+	// Optional fields
 	Name             string
 	Description      string
 	EventTypeID      string
@@ -111,38 +203,102 @@ type UpdateEventCommand struct {
 	ZoomLink         string
 	MeetLink         string
 	MaxAttendees     int
-	UpdatedBy        string
+
+	// ✅ NEW: Feature flags
+	IsFeatured bool
+	IsPrivate  bool
 }
+
+// ============================================================
+// COMMANDS - DUPLICATE (Pure Domain Types - NO JSON TAGS)
+// ============================================================
+
+type DuplicateEventCommand struct {
+	Name    string
+	Date    string
+	IsDraft bool
+}
+
+type BulkDuplicateCommand struct {
+	NamePrefix     string
+	DateOffsetDays int
+	IsDraft        bool
+}
+
+// ============================================================
+// COMMANDS - MEDIA (Pure Domain Types - NO JSON TAGS)
+// ============================================================
 
 type UploadEventImageCommand struct {
 	EventID     string
-	ImageFile   interface{}
-	ImageHeader interface{}
+	ImageData   []byte
+	ImageName   string
+	ContentType string
 	UploadedBy  string
 }
 
 type UploadCertificateCommand struct {
 	EventID         string
-	CertificateFile   interface{}
-	CertificateHeader interface{}
+	CertificateData []byte
+	CertificateName string
+	ContentType     string
 	UploadedBy      string
 }
 
 // ============================================================
-// FILTERS
+// FILTERS (Pure Domain Types - NO JSON TAGS)
 // ============================================================
 
 type ListEventsFilters struct {
-	AccountID     string
-	EventTypeID   string
-	EventStatusID string
-	Limit         int
-	Offset        int
+	AccountID      string
+	EventTypeID    string
+	EventStatusID  string
+	IncludeDeleted bool
+	OnlyDeleted    bool
+	Limit          int
+	Offset         int
 }
 
 type SearchFilters struct {
-	AccountID   string
-	EventTypeID string
-	Limit       int
-	Offset      int
+	AccountID      string
+	EventTypeID    string
+	IncludeDeleted bool
+	OnlyDeleted    bool
+	Limit          int
+	Offset         int
+}
+
+// ============================================================
+// BULK RESULT TYPES (NO JSON TAGS - These are for internal use)
+// ============================================================
+
+type BulkDeleteResult struct {
+	DeletedCount int
+	FailedIDs    []string
+	Errors       []string
+}
+
+type BulkRestoreResult struct {
+	RestoredCount int
+	FailedIDs     []string
+	Errors        []string
+}
+
+type BulkStatusResult struct {
+	ProcessedCount int
+	FailedIDs      []string
+	Errors         []string
+}
+
+type BulkDuplicateResult struct {
+	DuplicatedCount int
+	CreatedEvents   []DuplicatedEvent
+	FailedIDs       []string
+	Errors          []string
+}
+
+type DuplicatedEvent struct {
+	ID   string
+	Name string
+	Slug string
 }

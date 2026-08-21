@@ -1,8 +1,11 @@
+// internal/modules/events/infrastructure/postgres/repository.go
+
 package postgres
 
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	"gorm.io/gorm"
@@ -29,19 +32,36 @@ func (r *PostgresRepository) CreateEvent(ctx context.Context, event *domain.Even
 	return r.db.WithContext(ctx).Create(model).Error
 }
 
+
+// ✅ For public/regular access - excludes deleted events
 func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*domain.Event, error) {
-	var model EventModel
-	err := r.db.WithContext(ctx).
-		Preload("EventType"). // ✅ Preload the event type
-		Where("id = ? AND deleted_at IS NULL", id).
-		First(&model).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	return ToDomainEvent(&model), nil
+    var model EventModel
+    err := r.db.WithContext(ctx).
+        Where("id = ? AND deleted_at IS NULL", id).
+        First(&model).Error
+    if err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            return nil, nil
+        }
+        return nil, err
+    }
+    return ToDomainEvent(&model), nil
+}
+
+// ✅ For restore operations - includes deleted events
+func (r *PostgresRepository) GetEventByIDIncludingDeleted(ctx context.Context, id string) (*domain.Event, error) {
+    var model EventModel
+    err := r.db.WithContext(ctx).
+        Unscoped().
+        Where("id = ?", id).
+        First(&model).Error
+    if err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            return nil, nil
+        }
+        return nil, err
+    }
+    return ToDomainEvent(&model), nil
 }
 
 func (r *PostgresRepository) GetEventBySlug(ctx context.Context, slug string) (*domain.Event, error) {
@@ -62,60 +82,79 @@ func (r *PostgresRepository) UpdateEvent(ctx context.Context, event *domain.Even
 }
 
 func (r *PostgresRepository) DeleteEvent(ctx context.Context, id string) error {
-	return r.db.WithContext(ctx).Delete(&EventModel{}, "id = ?", id).Error
+	// ✅ Soft delete - sets deleted_at timestamp
+	return r.db.WithContext(ctx).Model(&EventModel{}).
+		Where("id = ?", id).
+		Update("deleted_at", time.Now()).Error
+}
+
+// ✅ NEW: Hard delete - permanently removes from database
+func (r *PostgresRepository) PermanentlyDeleteEvent(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Unscoped().Delete(&EventModel{}, "id = ?", id).Error
 }
 
 // ============================================================
 // EVENT QUERIES
 // ============================================================
 
+
 func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.ListEventsFilters) ([]*domain.Event, int64, error) {
-	var models []EventModel
-	var total int64
+    var models []EventModel
+    var total int64
 
-	query := r.db.WithContext(ctx).Model(&EventModel{}).Preload("EventType")
+    // ✅ Start with Unscoped() to include soft-deleted records
+    // This prevents GORM from automatically adding "deleted_at IS NULL"
+    query := r.db.WithContext(ctx).Unscoped().Model(&EventModel{})
 
-	if filters.AccountID != "" {
-		query = query.Where("account_id = ?", filters.AccountID)
-	}
-	if filters.EventTypeID != "" {
-		query = query.Where("event_type_id = ?", filters.EventTypeID)
-	}
-	if filters.EventStatusID != "" {
-		query = query.Where("event_status_id = ?", filters.EventStatusID)
-	}
+    // ✅ Handle deleted filter logic
+    if filters.OnlyDeleted {
+        // Show ONLY deleted events
+        query = query.Where("deleted_at IS NOT NULL")
+    } else if !filters.IncludeDeleted {
+        // Show ONLY non-deleted events (default)
+        query = query.Where("deleted_at IS NULL")
+    }
+    // If IncludeDeleted=true and OnlyDeleted=false, show ALL events (no deleted_at filter)
 
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
+    if filters.AccountID != "" {
+        query = query.Where("account_id = ?", filters.AccountID)
+    }
+    if filters.EventTypeID != "" {
+        query = query.Where("event_type_id = ?", filters.EventTypeID)
+    }
+    if filters.EventStatusID != "" {
+        query = query.Where("event_status_id = ?", filters.EventStatusID)
+    }
 
-	if filters.Limit > 0 {
-		query = query.Limit(filters.Limit)
-	}
-	if filters.Offset > 0 {
-		query = query.Offset(filters.Offset)
-	}
+    if err := query.Count(&total).Error; err != nil {
+        return nil, 0, err
+    }
 
-	err := query.Order("date DESC").Find(&models).Error
-	if err != nil {
-		return nil, 0, err
-	}
+    if filters.Limit > 0 {
+        query = query.Limit(filters.Limit)
+    }
+    if filters.Offset > 0 {
+        query = query.Offset(filters.Offset)
+    }
 
-	events := make([]*domain.Event, len(models))
-	for i, m := range models {
-		events[i] = ToDomainEvent(&m)
-	}
-	return events, total, nil
+    err := query.Order("date DESC").Find(&models).Error
+    if err != nil {
+        return nil, 0, err
+    }
+
+    events := make([]*domain.Event, len(models))
+    for i, m := range models {
+        events[i] = ToDomainEvent(&m)
+    }
+    return events, total, nil
 }
-
 
 func (r *PostgresRepository) GetEventsByType(ctx context.Context, eventTypeID string, limit, offset int) ([]*domain.Event, int64, error) {
 	var models []EventModel
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&EventModel{}).
-		Where("event_type_id = ?", eventTypeID).
-		Preload("EventType")
+		Where("event_type_id = ? AND deleted_at IS NULL", eventTypeID)
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -144,7 +183,7 @@ func (r *PostgresRepository) GetEventsByAccount(ctx context.Context, accountID s
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&EventModel{}).
-		Where("account_id = ?", accountID)
+		Where("account_id = ? AND deleted_at IS NULL", accountID)
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -173,7 +212,7 @@ func (r *PostgresRepository) GetUpcomingEvents(ctx context.Context, limit int) (
 	var models []EventModel
 
 	query := r.db.WithContext(ctx).Model(&EventModel{}).
-		Where("date >= CURRENT_DATE")
+		Where("date >= CURRENT_DATE AND deleted_at IS NULL")
 
 	if limit > 0 {
 		query = query.Limit(limit)
@@ -195,7 +234,7 @@ func (r *PostgresRepository) GetPastEvents(ctx context.Context, limit int) ([]*d
 	var models []EventModel
 
 	query := r.db.WithContext(ctx).Model(&EventModel{}).
-		Where("date < CURRENT_DATE")
+		Where("date < CURRENT_DATE AND deleted_at IS NULL")
 
 	if limit > 0 {
 		query = query.Limit(limit)
@@ -213,44 +252,57 @@ func (r *PostgresRepository) GetPastEvents(ctx context.Context, limit int) ([]*d
 	return events, nil
 }
 
+
+
 func (r *PostgresRepository) SearchEvents(ctx context.Context, query string, filters domain.SearchFilters) ([]*domain.Event, int64, error) {
-	var models []EventModel
-	var total int64
+    var models []EventModel
+    var total int64
 
-	dbQuery := r.db.WithContext(ctx).Model(&EventModel{})
+    // ✅ Start with Unscoped() to include soft-deleted records
+    dbQuery := r.db.WithContext(ctx).Unscoped().Model(&EventModel{})
 
-	if query != "" {
-		searchTerm := "%" + query + "%"
-		dbQuery = dbQuery.Where("name ILIKE ? OR description ILIKE ?", searchTerm, searchTerm)
-	}
-	if filters.AccountID != "" {
-		dbQuery = dbQuery.Where("account_id = ?", filters.AccountID)
-	}
-	if filters.EventTypeID != "" {
-		dbQuery = dbQuery.Where("event_type_id = ?", filters.EventTypeID)
-	}
+    // ✅ Handle deleted filter logic
+    if filters.OnlyDeleted {
+        // Show ONLY deleted events
+        dbQuery = dbQuery.Where("deleted_at IS NOT NULL")
+    } else if !filters.IncludeDeleted {
+        // Show ONLY non-deleted events (default)
+        dbQuery = dbQuery.Where("deleted_at IS NULL")
+    }
+    // If IncludeDeleted=true and OnlyDeleted=false, show ALL events
 
-	if err := dbQuery.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
+    if query != "" {
+        searchTerm := "%" + query + "%"
+        dbQuery = dbQuery.Where("name ILIKE ? OR description ILIKE ?", searchTerm, searchTerm)
+    }
+    if filters.AccountID != "" {
+        dbQuery = dbQuery.Where("account_id = ?", filters.AccountID)
+    }
+    if filters.EventTypeID != "" {
+        dbQuery = dbQuery.Where("event_type_id = ?", filters.EventTypeID)
+    }
 
-	if filters.Limit > 0 {
-		dbQuery = dbQuery.Limit(filters.Limit)
-	}
-	if filters.Offset > 0 {
-		dbQuery = dbQuery.Offset(filters.Offset)
-	}
+    if err := dbQuery.Count(&total).Error; err != nil {
+        return nil, 0, err
+    }
 
-	err := dbQuery.Order("date DESC").Find(&models).Error
-	if err != nil {
-		return nil, 0, err
-	}
+    if filters.Limit > 0 {
+        dbQuery = dbQuery.Limit(filters.Limit)
+    }
+    if filters.Offset > 0 {
+        dbQuery = dbQuery.Offset(filters.Offset)
+    }
 
-	events := make([]*domain.Event, len(models))
-	for i, m := range models {
-		events[i] = ToDomainEvent(&m)
-	}
-	return events, total, nil
+    err := dbQuery.Order("date DESC").Find(&models).Error
+    if err != nil {
+        return nil, 0, err
+    }
+
+    events := make([]*domain.Event, len(models))
+    for i, m := range models {
+        events[i] = ToDomainEvent(&m)
+    }
+    return events, total, nil
 }
 
 // ============================================================

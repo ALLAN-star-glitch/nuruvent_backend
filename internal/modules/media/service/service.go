@@ -1,8 +1,9 @@
+// internal/modules/media/service/service.go
+
 package service
 
 import (
 	"context"
-	"mime/multipart"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/domain"
 )
 
@@ -11,7 +12,7 @@ import (
 // ============================================================
 
 type Service interface {
-	// Upload
+	// Upload - Uses pure domain types ([]byte, string)
 	UploadFile(ctx context.Context, cmd UploadCommand) (*domain.Media, error)
 
 	// Delete
@@ -30,17 +31,20 @@ type Service interface {
 
 	// Media Types
 	GetMediaTypes(ctx context.Context) ([]*domain.MediaType, error)
+	GetMediaTypeByID(ctx context.Context, id string) (*domain.MediaType, error)
 	GetMediaTypeByName(ctx context.Context, name string) (*domain.MediaType, error)
 }
 
 // ============================================================
-// COMMANDS
+// COMMANDS - Pure Domain Types (NO external dependencies)
 // ============================================================
 
 type UploadCommand struct {
-	File          multipart.File
-	FileHeader    *multipart.FileHeader
-	MediaTypeName string
-	EntityID      string
-	UploadedBy    string
+	// ✅ Pure Go types - NO multipart.File or *multipart.FileHeader
+	File          []byte // Raw file data
+	FileName      string // Original filename
+	ContentType   string // MIME type (e.g., "image/jpeg")
+	MediaTypeName string // "Event" or "Certificate"
+	EntityID      string // Event ID
+	UploadedBy    string // User ID
 }

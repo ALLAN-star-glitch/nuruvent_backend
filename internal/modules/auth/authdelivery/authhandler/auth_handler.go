@@ -4,6 +4,7 @@ package authhandler
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -144,6 +145,8 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 	})
 }
 
+
+
 func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 	// Verify and validate email
 	if req.Email == "" {
@@ -177,7 +180,7 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 		req.AccountType = "personal"
 	}
 
-	// Only validate institution fields if account_type is "institution"
+	// ✅ Only validate institution fields if account_type is "institution"
 	if req.AccountType == "institution" {
 		if req.InstitutionName == "" {
 			return errors.New("institution_name is required for institution accounts")
@@ -198,6 +201,18 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 		if req.InstitutionType == "" {
 			return errors.New("institution_type is required for institution accounts")
 		}
+
+		validTypes := map[string]bool{
+			"company": true,
+			"institute": true,
+			"association": true,
+			"school": true,
+			"university": true,
+		}
+		if !validTypes[req.InstitutionType] {
+			return fmt.Errorf("invalid institution_type: %s. Valid types: company, institute, association, school, university", req.InstitutionType)
+		}
+		
 	} else if req.AccountType != "personal" {
 		return errors.New("account_type must be 'personal' or 'institution'")
 	}
@@ -221,6 +236,8 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 // @Failure 401 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/auth/verify-otp [post]
+
+
 func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 	var req VerifyOTPRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -235,17 +252,28 @@ func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 		return response.BadRequest(c, err.Error(), nil)
 	}
 
-	if accessToken, ok := result["access_token"].(string); ok && accessToken != "" {
+	// ✅ SAFELY extract tokens with nil checks
+	var accessToken, refreshToken string
+	if val, ok := result["access_token"].(string); ok {
+		accessToken = val
+	}
+	if val, ok := result["refresh_token"].(string); ok {
+		refreshToken = val
+	}
+
+	// ✅ Only set cookies if tokens exist
+	if accessToken != "" {
 		h.setAccessTokenCookie(c, accessToken)
 	}
-	if refreshToken, ok := result["refresh_token"].(string); ok && refreshToken != "" {
+	if refreshToken != "" {
 		h.setRefreshTokenCookie(c, refreshToken)
 	}
 
+	// ✅ Build response safely
 	authResp := AuthResponse{
 		TokenResponse: TokenResponse{
-			AccessToken:  result["access_token"].(string),
-			RefreshToken: result["refresh_token"].(string),
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
 			TokenType:    "Bearer",
 			ExpiresIn:    int64(h.config.JWT.AccessExpiration.Seconds()),
 		},

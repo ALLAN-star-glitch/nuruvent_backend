@@ -215,13 +215,6 @@ definitions:
       requires_2fa:
         type: boolean
     type: object
-  authhandler.VerifyOTPRequest:
-    properties:
-      email:
-        type: string
-      otp:
-        type: string
-    type: object
   authhandler.VerifyResetOTPRequest:
     properties:
       email:
@@ -239,7 +232,6 @@ definitions:
   domain.Event:
     properties:
       accountID:
-        description: ← Changed from InstitutionID
         type: string
       certificatePrice:
         format: float64
@@ -251,8 +243,12 @@ definitions:
       currentAttendees:
         type: integer
       date:
+        description: Event details
         type: string
       deletedAt:
+        description: Soft delete fields
+        type: string
+      deletedBy:
         type: string
       description:
         type: string
@@ -263,12 +259,21 @@ definitions:
       eventStatusID:
         type: string
       eventTypeID:
+        description: Relations
         type: string
       id:
+        description: Core fields
         type: string
       imageURL:
+        description: Media
         type: string
       isActive:
+        description: Audit fields
+        type: boolean
+      isFeatured:
+        description: '✅ NEW: Feature flags'
+        type: boolean
+      isPrivate:
         type: boolean
       isVirtual:
         type: boolean
@@ -283,6 +288,10 @@ definitions:
       price:
         format: float64
         type: number
+      restoredAt:
+        type: string
+      restoredBy:
+        type: string
       slug:
         type: string
       thumbnailURL:
@@ -358,47 +367,55 @@ definitions:
     type: object
   domain.MediaInfo:
     properties:
+      createdAt:
+        type: string
+      entityID:
+        type: string
       id:
+        type: string
+      mediaType:
+        type: string
+      uploadedBy:
         type: string
       url:
         type: string
     type: object
-  eventhandler.CreateEventRequest:
+  eventhandler.BulkDuplicateRequest:
     properties:
-      certificate_price:
-        type: number
+      date_offset_days:
+        type: integer
+      ids:
+        items:
+          type: string
+        minItems: 1
+        type: array
+      is_draft:
+        type: boolean
+      name_prefix:
+        type: string
+    required:
+    - ids
+    type: object
+  eventhandler.BulkIDsRequest:
+    properties:
+      ids:
+        items:
+          type: string
+        minItems: 1
+        type: array
+    required:
+    - ids
+    type: object
+  eventhandler.DuplicateEventRequest:
+    properties:
       date:
         description: YYYY-MM-DD
         type: string
-      description:
-        type: string
-      duration:
-        type: integer
-      event_type_id:
-        type: string
-      is_virtual:
+      is_draft:
+        description: 'Default: true'
         type: boolean
-      location:
-        type: string
-      max_attendees:
-        type: integer
-      meet_link:
-        type: string
       name:
         type: string
-      price:
-        type: number
-      time:
-        description: HH:MM
-        type: string
-      zoom_link:
-        type: string
-    required:
-    - date
-    - duration
-    - event_type_id
-    - name
-    - time
     type: object
   eventhandler.UpdateEventRequest:
     properties:
@@ -415,6 +432,11 @@ definitions:
         type: string
       event_type_id:
         type: string
+      is_featured:
+        description: '✅ NEW: Feature flags'
+        type: boolean
+      is_private:
+        type: boolean
       is_virtual:
         type: boolean
       location:
@@ -441,6 +463,71 @@ definitions:
         type: string
       success:
         type: boolean
+    type: object
+  service.BulkDeleteResult:
+    properties:
+      deletedCount:
+        type: integer
+      errors:
+        items:
+          type: string
+        type: array
+      failedIDs:
+        items:
+          type: string
+        type: array
+    type: object
+  service.BulkDuplicateResult:
+    properties:
+      createdEvents:
+        items:
+          $ref: '#/definitions/service.DuplicatedEvent'
+        type: array
+      duplicatedCount:
+        type: integer
+      errors:
+        items:
+          type: string
+        type: array
+      failedIDs:
+        items:
+          type: string
+        type: array
+    type: object
+  service.BulkRestoreResult:
+    properties:
+      errors:
+        items:
+          type: string
+        type: array
+      failedIDs:
+        items:
+          type: string
+        type: array
+      restoredCount:
+        type: integer
+    type: object
+  service.BulkStatusResult:
+    properties:
+      errors:
+        items:
+          type: string
+        type: array
+      failedIDs:
+        items:
+          type: string
+        type: array
+      processedCount:
+        type: integer
+    type: object
+  service.DuplicatedEvent:
+    properties:
+      id:
+        type: string
+      name:
+        type: string
+      slug:
+        type: string
     type: object
 host: localhost:8080
 info:
@@ -513,20 +600,84 @@ paths:
       - Events
     post:
       consumes:
-      - application/json
-      description: Create a new event for an account
+      - multipart/form-data
+      description: Create a published event with full validation (all fields required)
       parameters:
       - description: Account ID
         in: path
         name: accountId
         required: true
         type: string
-      - description: Event details
-        in: body
-        name: request
+      - description: Event name
+        in: formData
+        name: name
         required: true
-        schema:
-          $ref: '#/definitions/eventhandler.CreateEventRequest'
+        type: string
+      - description: Event description
+        in: formData
+        name: description
+        type: string
+      - description: Event Type ID
+        in: formData
+        name: event_type_id
+        required: true
+        type: string
+      - description: Event date (YYYY-MM-DD)
+        in: formData
+        name: date
+        required: true
+        type: string
+      - description: Event time (HH:MM)
+        in: formData
+        name: time
+        required: true
+        type: string
+      - description: Event duration in minutes
+        in: formData
+        name: duration
+        required: true
+        type: integer
+      - description: Event price
+        in: formData
+        name: price
+        type: number
+      - description: Certificate price
+        in: formData
+        name: certificate_price
+        type: number
+      - description: Event location (required for in-person)
+        in: formData
+        name: location
+        type: string
+      - default: true
+        description: Is virtual event
+        in: formData
+        name: is_virtual
+        type: boolean
+      - description: Is featured event
+        in: formData
+        name: is_featured
+        type: boolean
+      - description: Is private event
+        in: formData
+        name: is_private
+        type: boolean
+      - description: Zoom link (required for virtual)
+        in: formData
+        name: zoom_link
+        type: string
+      - description: Meet link (required for virtual)
+        in: formData
+        name: meet_link
+        type: string
+      - description: Maximum attendees
+        in: formData
+        name: max_attendees
+        type: integer
+      - description: Event image
+        in: formData
+        name: image
+        type: file
       produces:
       - application/json
       responses:
@@ -557,10 +708,55 @@ paths:
             $ref: '#/definitions/response.BaseResponse'
       security:
       - BearerAuth: []
-      summary: Create a new event
+      summary: Create a published event
       tags:
       - Events
   /api/v1/accounts/{accountId}/events/{eventId}/certificate:
+    delete:
+      description: Delete the certificate template for an event
+      parameters:
+      - description: Account ID
+        in: path
+        name: accountId
+        required: true
+        type: string
+      - description: Event ID
+        in: path
+        name: eventId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete certificate template
+      tags:
+      - Events
     post:
       consumes:
       - multipart/form-data
@@ -619,6 +815,51 @@ paths:
       tags:
       - Events
   /api/v1/accounts/{accountId}/events/{eventId}/image:
+    delete:
+      description: Delete the image for an event
+      parameters:
+      - description: Account ID
+        in: path
+        name: accountId
+        required: true
+        type: string
+      - description: Event ID
+        in: path
+        name: eventId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete event image
+      tags:
+      - Events
     post:
       consumes:
       - multipart/form-data
@@ -676,21 +917,117 @@ paths:
       summary: Upload event image
       tags:
       - Events
-  /api/v1/accounts/{accountId}/events/with-image:
-    post:
-      consumes:
-      - multipart/form-data
-      description: Create a new event for an account with an image upload
+  /api/v1/accounts/{accountId}/events/{eventId}/media:
+    delete:
+      description: Delete all media (images, certificates) for an event
       parameters:
       - description: Account ID
         in: path
         name: accountId
         required: true
         type: string
-      - description: Event name
+      - description: Event ID
+        in: path
+        name: eventId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete all media for an event
+      tags:
+      - Events
+  /api/v1/accounts/{accountId}/events/bulk/media:
+    delete:
+      consumes:
+      - application/json
+      description: Delete all media for multiple events
+      parameters:
+      - description: Account ID
+        in: path
+        name: accountId
+        required: true
+        type: string
+      - description: Event IDs to delete media for
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.BulkIDsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.BulkDeleteResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete media for multiple events
+      tags:
+      - Events
+  /api/v1/accounts/{accountId}/events/draft:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Create a draft event with minimal validation (all fields optional)
+      parameters:
+      - description: Account ID
+        in: path
+        name: accountId
+        required: true
+        type: string
+      - default: Untitled Event
+        description: Event name
         in: formData
         name: name
-        required: true
         type: string
       - description: Event description
         in: formData
@@ -699,22 +1036,19 @@ paths:
       - description: Event Type ID
         in: formData
         name: event_type_id
-        required: true
         type: string
       - description: Event date (YYYY-MM-DD)
         in: formData
         name: date
-        required: true
         type: string
       - description: Event time (HH:MM)
         in: formData
         name: time
-        required: true
         type: string
-      - description: Event duration in minutes
+      - default: 60
+        description: Event duration in minutes
         in: formData
         name: duration
-        required: true
         type: integer
       - description: Event price
         in: formData
@@ -728,7 +1062,8 @@ paths:
         in: formData
         name: location
         type: string
-      - description: Is virtual event
+      - default: true
+        description: Is virtual event
         in: formData
         name: is_virtual
         type: boolean
@@ -778,7 +1113,7 @@ paths:
             $ref: '#/definitions/response.BaseResponse'
       security:
       - BearerAuth: []
-      summary: Create a new event with image
+      summary: Create a draft event
       tags:
       - Events
   /api/v1/accounts/{id}:
@@ -1407,45 +1742,6 @@ paths:
       summary: Verify 2FA OTP and complete login
       tags:
       - Authentication
-  /api/v1/auth/verify-otp:
-    post:
-      consumes:
-      - application/json
-      description: Verify the OTP sent to your email and complete account creation
-      parameters:
-      - description: OTP verification details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/authhandler.VerifyOTPRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/authhandler.AuthResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      summary: Verify OTP and complete registration
-      tags:
-      - Authentication
   /api/v1/auth/verify-reset-otp:
     post:
       consumes:
@@ -1496,6 +1792,14 @@ paths:
         in: query
         name: event_status_id
         type: string
+      - description: Include soft-deleted events
+        in: query
+        name: include_deleted
+        type: boolean
+      - description: Show ONLY soft-deleted events
+        in: query
+        name: only_deleted
+        type: boolean
       - default: 20
         description: Limit
         in: query
@@ -1532,7 +1836,7 @@ paths:
       - Events
   /api/v1/events/{id}:
     delete:
-      description: Delete an event
+      description: Soft delete an event (sets deleted_at timestamp)
       parameters:
       - description: Event ID
         in: path
@@ -1568,7 +1872,7 @@ paths:
             $ref: '#/definitions/response.BaseResponse'
       security:
       - BearerAuth: []
-      summary: Delete an event
+      summary: Soft delete an event
       tags:
       - Events
     get:
@@ -1751,6 +2055,100 @@ paths:
       summary: Complete an event
       tags:
       - Events
+  /api/v1/events/{id}/duplicate:
+    post:
+      consumes:
+      - application/json
+      description: Create a copy of an existing event (always creates as draft)
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Duplicate options
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/eventhandler.DuplicateEventRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Duplicate an event
+      tags:
+      - Events
+  /api/v1/events/{id}/permanent:
+    delete:
+      description: Permanently delete an event (hard delete - removes from database)
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Permanently delete an event
+      tags:
+      - Events
   /api/v1/events/{id}/publish:
     post:
       description: Publish an event to make it public
@@ -1795,6 +2193,367 @@ paths:
       security:
       - BearerAuth: []
       summary: Publish an event
+      tags:
+      - Events
+  /api/v1/events/{id}/restore:
+    post:
+      description: Restore an event that was soft-deleted
+      parameters:
+      - description: Event ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/domain.Event'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Restore a soft-deleted event
+      tags:
+      - Events
+  /api/v1/events/bulk:
+    delete:
+      consumes:
+      - application/json
+      description: Soft delete multiple events by IDs
+      parameters:
+      - description: Event IDs to delete
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.BulkIDsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.BulkDeleteResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Soft delete multiple events
+      tags:
+      - Events
+  /api/v1/events/bulk/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel multiple events by IDs
+      parameters:
+      - description: Event IDs to cancel
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.BulkIDsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.BulkStatusResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Cancel multiple events
+      tags:
+      - Events
+  /api/v1/events/bulk/complete:
+    post:
+      consumes:
+      - application/json
+      description: Complete multiple events by IDs
+      parameters:
+      - description: Event IDs to complete
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.BulkIDsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.BulkStatusResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Complete multiple events
+      tags:
+      - Events
+  /api/v1/events/bulk/duplicate:
+    post:
+      consumes:
+      - application/json
+      description: Create copies of multiple existing events
+      parameters:
+      - description: Events to duplicate
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.BulkDuplicateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.BulkDuplicateResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Duplicate multiple events
+      tags:
+      - Events
+  /api/v1/events/bulk/permanent:
+    delete:
+      consumes:
+      - application/json
+      description: Hard delete multiple events by IDs
+      parameters:
+      - description: Event IDs to permanently delete
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.BulkIDsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.BulkDeleteResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Permanently delete multiple events
+      tags:
+      - Events
+  /api/v1/events/bulk/publish:
+    post:
+      consumes:
+      - application/json
+      description: Publish multiple events by IDs
+      parameters:
+      - description: Event IDs to publish
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.BulkIDsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.BulkStatusResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Publish multiple events
+      tags:
+      - Events
+  /api/v1/events/bulk/restore:
+    post:
+      consumes:
+      - application/json
+      description: Restore multiple events by IDs
+      parameters:
+      - description: Event IDs to restore
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.BulkIDsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/service.BulkRestoreResult'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Restore multiple soft-deleted events
       tags:
       - Events
   /api/v1/events/past:
@@ -1843,6 +2602,14 @@ paths:
         in: query
         name: event_type_id
         type: string
+      - description: Include soft-deleted events
+        in: query
+        name: include_deleted
+        type: boolean
+      - description: Show ONLY soft-deleted events
+        in: query
+        name: only_deleted
+        type: boolean
       - default: 1
         description: Page number
         in: query

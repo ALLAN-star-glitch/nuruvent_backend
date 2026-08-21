@@ -37,6 +37,13 @@ type EventModel struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	DeletedAt        gorm.DeletedAt `gorm:"index"`
+
+	// ✅ NEW FIELDS - Add these for soft delete tracking
+	DeletedBy  *string        `gorm:"index"`  // ✅ Use *string to allow NULL
+	RestoredAt *time.Time `gorm:"index"`
+	RestoredBy *string        `gorm:"index"`  // ✅ Use *string to allow NULL
+	IsFeatured bool       `gorm:"default:false;index"`
+	IsPrivate  bool       `gorm:"default:false;index"`
 }
 
 func (EventModel) TableName() string {
