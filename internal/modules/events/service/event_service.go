@@ -343,163 +343,202 @@ func (s *eventService) GetEventBySlug(ctx context.Context, slug string) (*domain
 
 
 
+// internal/modules/events/service/service_impl.go
+
 func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) (*domain.Event, error) {
-	if cmd.ID == "" {
-		return nil, errors.New("event ID is required")
-	}
+    if cmd.ID == "" {
+        return nil, errors.New("event ID is required")
+    }
 
-	event, err := s.repo.GetEventByID(ctx, cmd.ID)
-	if err != nil {
-		return nil, err
-	}
-	if event == nil {
-		return nil, domain.ErrEventNotFound
-	}
+    // ✅ Use GetEventByIDIncludingDeleted to find even soft-deleted events
+    event, err := s.repo.GetEventByID(ctx, cmd.ID)
+    if err != nil {
+        return nil, err
+    }
+    if event == nil {
+        return nil, domain.ErrEventNotFound
+    }
 
-	if !s.permChecker.CanUpdateEvent(ctx, cmd.UpdatedBy, event.AccountID) {
-		return nil, errors.New("insufficient permissions to update this event")
-	}
+    if !s.permChecker.CanUpdateEvent(ctx, cmd.UpdatedBy, event.AccountID) {
+        return nil, errors.New("insufficient permissions to update this event")
+    }
 
-	// ✅ Build updated values for validation
-	name := cmd.Name
-	if name == "" {
-		name = event.Name
-	}
-	eventTypeID := cmd.EventTypeID
-	if eventTypeID == "" {
-		eventTypeID = event.EventTypeID
-	}
-	date := cmd.Date
-	if date == "" {
-		date = event.Date.Format("2006-01-02")
-	}
-	eventTime := cmd.Time
-	if eventTime == "" {
-		eventTime = event.Time
-	}
-	duration := cmd.Duration
-	if duration == 0 {
-		duration = event.Duration
-	}
-	isVirtual := cmd.IsVirtual
-	location := cmd.Location
-	if location == "" {
-		location = event.Location
-	}
-	zoomLink := cmd.ZoomLink
-	if zoomLink == "" {
-		zoomLink = event.ZoomLink
-	}
-	meetLink := cmd.MeetLink
-	if meetLink == "" {
-		meetLink = event.MeetLink
-	}
+    // ✅ Build updated values for validation
+    name := cmd.Name
+    if name == "" {
+        name = event.Name
+    }
+    eventTypeID := cmd.EventTypeID
+    if eventTypeID == "" {
+        eventTypeID = event.EventTypeID
+    }
+    date := cmd.Date
+    if date == "" {
+        date = event.Date.Format("2006-01-02")
+    }
+    eventTime := cmd.Time
+    if eventTime == "" {
+        eventTime = event.Time
+    }
+    duration := cmd.Duration
+    if duration == 0 {
+        duration = event.Duration
+    }
+    isVirtual := cmd.IsVirtual
+    location := cmd.Location
+    if location == "" {
+        location = event.Location
+    }
+    zoomLink := cmd.ZoomLink
+    if zoomLink == "" {
+        zoomLink = event.ZoomLink
+    }
+    meetLink := cmd.MeetLink
+    if meetLink == "" {
+        meetLink = event.MeetLink
+    }
 
-	// ✅ Validate updates (same as published event validation)
-	if name == "" {
-		return nil, errors.New("event name is required")
-	}
-	if eventTypeID == "" {
-		return nil, errors.New("event type is required")
-	}
-	if date == "" {
-		return nil, errors.New("event date is required")
-	}
-	if eventTime == "" {
-		return nil, errors.New("event time is required")
-	}
-	if duration <= 0 {
-		return nil, errors.New("event duration must be greater than 0")
-	}
-	if duration < 15 {
-		return nil, errors.New("duration must be at least 15 minutes")
-	}
-	if duration > 1440 {
-		return nil, errors.New("duration cannot exceed 1440 minutes (24 hours)")
-	}
-	if !isVirtual && location == "" {
-		return nil, errors.New("location is required for in-person events")
-	}
-	if isVirtual && zoomLink == "" && meetLink == "" {
-		return nil, errors.New("at least one meeting link is required for virtual events")
-	}
+    // ✅ Check if the event is a draft
+    isDraft := event.EventStatusID != "" && s.isDraftStatus(ctx, event.EventStatusID)
 
-	// ✅ If event type is being updated, validate it exists
-	if cmd.EventTypeID != "" && cmd.EventTypeID != event.EventTypeID {
-		eventType, err := s.repo.GetEventTypeByID(ctx, cmd.EventTypeID)
-		if err != nil {
-			return nil, err
-		}
-		if eventType == nil {
-			return nil, domain.ErrEventTypeNotFound
-		}
-		event.EventTypeID = cmd.EventTypeID
-	}
+    // ✅ Relax validation for drafts
+    if !isDraft {
+        // Strict validation for published events
+        if name == "" {
+            return nil, errors.New("event name is required")
+        }
+        if eventTypeID == "" {
+            return nil, errors.New("event type is required")
+        }
+        if date == "" {
+            return nil, errors.New("event date is required")
+        }
+        if eventTime == "" {
+            return nil, errors.New("event time is required")
+        }
+        if duration <= 0 {
+            return nil, errors.New("event duration must be greater than 0")
+        }
+        if duration < 15 {
+            return nil, errors.New("duration must be at least 15 minutes")
+        }
+        if duration > 1440 {
+            return nil, errors.New("duration cannot exceed 1440 minutes (24 hours)")
+        }
+        if !isVirtual && location == "" {
+            return nil, errors.New("location is required for in-person events")
+        }
+        if isVirtual && zoomLink == "" && meetLink == "" {
+            return nil, errors.New("at least one meeting link is required for virtual events")
+        }
+    } else {
+        // ✅ Relaxed validation for drafts
+        // Only validate if fields are provided
+        if name == "" {
+            // For drafts, default name is fine
+            name = "Untitled Event"
+        }
+        // Don't require event type, date, time, duration, location, or links for drafts
+        // But if they are provided, validate them
+        if eventTypeID != "" {
+            eventType, err := s.repo.GetEventTypeByID(ctx, eventTypeID)
+            if err != nil {
+                return nil, err
+            }
+            if eventType == nil {
+                return nil, domain.ErrEventTypeNotFound
+            }
+        }
+        if duration > 1440 {
+            return nil, errors.New("duration cannot exceed 1440 minutes (24 hours)")
+        }
+    }
 
-	// ✅ Apply updates
-	if cmd.Name != "" {
-		event.Name = cmd.Name
-	}
-	if cmd.Description != "" {
-		event.Description = cmd.Description
-	}
-	if cmd.Date != "" {
-		event.Date = parseDate(cmd.Date)
-	}
-	if cmd.Time != "" {
-		event.Time = cmd.Time
-	}
-	if cmd.Duration > 0 {
-		event.Duration = cmd.Duration
-	}
-	if cmd.Price >= 0 {
-		event.Price = cmd.Price
-	}
-	if cmd.CertificatePrice >= 0 {
-		event.CertificatePrice = cmd.CertificatePrice
-	}
-	if cmd.Location != "" {
-		event.Location = cmd.Location
-	}
-	if cmd.IsVirtual {
-		event.IsVirtual = cmd.IsVirtual
-	}
-	if cmd.ZoomLink != "" {
-		event.ZoomLink = cmd.ZoomLink
-	}
-	if cmd.MeetLink != "" {
-		event.MeetLink = cmd.MeetLink
-	}
-	if cmd.MaxAttendees > 0 {
-		event.MaxAttendees = cmd.MaxAttendees
-	}
+    // ✅ If event type is being updated, validate it exists
+    if cmd.EventTypeID != "" && cmd.EventTypeID != event.EventTypeID {
+        eventType, err := s.repo.GetEventTypeByID(ctx, cmd.EventTypeID)
+        if err != nil {
+            return nil, err
+        }
+        if eventType == nil {
+            return nil, domain.ErrEventTypeNotFound
+        }
+        event.EventTypeID = cmd.EventTypeID
+    }
 
-	// ✅ Apply feature flags
-	event.IsFeatured = cmd.IsFeatured
-	event.IsPrivate = cmd.IsPrivate
+    // ✅ Apply updates
+    if cmd.Name != "" {
+        event.Name = cmd.Name
+    }
+    if cmd.Description != "" {
+        event.Description = cmd.Description
+    }
+    if cmd.Date != "" {
+        event.Date = parseDate(cmd.Date)
+    }
+    if cmd.Time != "" {
+        event.Time = cmd.Time
+    }
+    if cmd.Duration > 0 {
+        event.Duration = cmd.Duration
+    }
+    if cmd.Price >= 0 {
+        event.Price = cmd.Price
+    }
+    if cmd.CertificatePrice >= 0 {
+        event.CertificatePrice = cmd.CertificatePrice
+    }
+    if cmd.Location != "" {
+        event.Location = cmd.Location
+    }
+    if cmd.IsVirtual {
+        event.IsVirtual = cmd.IsVirtual
+    }
+    if cmd.ZoomLink != "" {
+        event.ZoomLink = cmd.ZoomLink
+    }
+    if cmd.MeetLink != "" {
+        event.MeetLink = cmd.MeetLink
+    }
+    if cmd.MaxAttendees > 0 {
+        event.MaxAttendees = cmd.MaxAttendees
+    }
 
-	// ✅ If status is being updated, validate it
-	if cmd.EventStatusID != "" {
-		status, err := s.repo.GetEventStatusByID(ctx, cmd.EventStatusID)
-		if err != nil {
-			return nil, err
-		}
-		if status == nil {
-			return nil, domain.ErrEventStatusNotFound
-		}
-		event.EventStatusID = cmd.EventStatusID
-	}
+    // ✅ Apply feature flags
+    event.IsFeatured = cmd.IsFeatured
+    event.IsPrivate = cmd.IsPrivate
 
-	// ✅ Update timestamp
-	currentTime := time.Now()
-	event.UpdatedAt = currentTime
+    // ✅ If status is being updated, validate it
+    if cmd.EventStatusID != "" {
+        status, err := s.repo.GetEventStatusByID(ctx, cmd.EventStatusID)
+        if err != nil {
+            return nil, err
+        }
+        if status == nil {
+            return nil, domain.ErrEventStatusNotFound
+        }
+        event.EventStatusID = cmd.EventStatusID
+    }
 
-	if err := s.repo.UpdateEvent(ctx, event); err != nil {
-		return nil, fmt.Errorf("failed to update event: %w", err)
-	}
+    // ✅ Update timestamp
+    currentTime := time.Now()
+    event.UpdatedAt = currentTime
 
-	log.Printf("✅ Event updated: %s by %s", event.ID, cmd.UpdatedBy)
-	return event, nil
+    if err := s.repo.UpdateEvent(ctx, event); err != nil {
+        return nil, fmt.Errorf("failed to update event: %w", err)
+    }
+
+    log.Printf("✅ Event updated: %s by %s", event.ID, cmd.UpdatedBy)
+    return event, nil
+}
+
+// Helper function to check if a status ID is a draft
+func (s *eventService) isDraftStatus(ctx context.Context, statusID string) bool {
+    status, err := s.repo.GetEventStatusByID(ctx, statusID)
+    if err != nil || status == nil {
+        return false
+    }
+    return status.Slug == "draft"
 }
 
 // ============================================================
