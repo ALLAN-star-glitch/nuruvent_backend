@@ -130,9 +130,9 @@ services:
         value: production
 
   # ============================================
-  # POSTGRESQL DATABASE ✅ FIXED: type is "postgresql"
+  # POSTGRESQL DATABASE ✅ Use "postgres"
   # ============================================
-  - type: postgresql
+  - type: postgres
     name: nuruvent-db
     databaseName: nuruvent
     user: nuruvent_user
@@ -140,7 +140,7 @@ services:
     ipAllowList: []  # Internal only
 
   # ============================================
-  # REDIS CACHE ✅ FIXED: type is "redis"
+  # REDIS CACHE ✅ Use "redis"
   # ============================================
   - type: redis
     name: nuruvent-redis
