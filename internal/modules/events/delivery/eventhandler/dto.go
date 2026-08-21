@@ -65,23 +65,22 @@ type CreateEventWithImageRequest struct {
 
 // ✅ UpdateEventRequest - All fields optional for updates (application/json)
 type UpdateEventRequest struct {
-	Name             string  `json:"name"`
-	Description      string  `json:"description"`
-	EventTypeID      string  `json:"event_type_id"`
-	EventStatusID    string  `json:"event_status_id"`
-	Date             string  `json:"date"` // YYYY-MM-DD
-	Time             string  `json:"time"` // HH:MM
-	Duration         int     `json:"duration"`
-	Price            float64 `json:"price"`
-	CertificatePrice float64 `json:"certificate_price"`
-	Location         string  `json:"location"`
-	IsVirtual        bool    `json:"is_virtual"`
-	ZoomLink         string  `json:"zoom_link"`
-	MeetLink         string  `json:"meet_link"`
-	MaxAttendees     int     `json:"max_attendees"`
-	// ✅ NEW: Feature flags
-	IsFeatured bool `form:"is_featured"`
-	IsPrivate  bool `form:"is_private"`
+    Name             *string  `json:"name,omitempty"`
+    Description      *string  `json:"description,omitempty"`
+    EventTypeID      *string  `json:"event_type_id,omitempty"`
+    EventStatusID    *string  `json:"event_status_id,omitempty"`
+    Date             *string  `json:"date,omitempty"`
+    Time             *string  `json:"time,omitempty"`
+    Duration         *int     `json:"duration,omitempty"`
+    Price            *float64 `json:"price,omitempty"`
+    CertificatePrice *float64 `json:"certificate_price,omitempty"`
+    Location         *string  `json:"location,omitempty"`
+    IsVirtual        *bool    `json:"is_virtual,omitempty"`
+    ZoomLink         *string  `json:"zoom_link,omitempty"`
+    MeetLink         *string  `json:"meet_link,omitempty"`
+    MaxAttendees     *int     `json:"max_attendees,omitempty"`
+    IsFeatured       *bool    `json:"is_featured,omitempty"`  // ✅ Pointer
+    IsPrivate        *bool    `json:"is_private,omitempty"`   // ✅ Pointer
 }
 
 // ✅ BulkIDsRequest - For bulk operations (delete, publish, cancel, complete, restore)

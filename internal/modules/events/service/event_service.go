@@ -342,15 +342,13 @@ func (s *eventService) GetEventBySlug(ctx context.Context, slug string) (*domain
 // ============================================================
 
 
-
-// internal/modules/events/service/service_impl.go
-
 func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) (*domain.Event, error) {
+	
     if cmd.ID == "" {
         return nil, errors.New("event ID is required")
     }
 
-    // ✅ Use GetEventByIDIncludingDeleted to find even soft-deleted events
+    // ✅ Use GetEventByID to find event
     event, err := s.repo.GetEventByID(ctx, cmd.ID)
     if err != nil {
         return nil, err
@@ -363,37 +361,74 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
         return nil, errors.New("insufficient permissions to update this event")
     }
 
-    // ✅ Build updated values for validation
-    name := cmd.Name
+    // ✅ Build updated values for validation - using pointers
+    var name string
+    if cmd.Name != nil {
+        name = *cmd.Name
+    }
     if name == "" {
         name = event.Name
     }
-    eventTypeID := cmd.EventTypeID
+
+    var eventTypeID string
+    if cmd.EventTypeID != nil {
+        eventTypeID = *cmd.EventTypeID
+    }
     if eventTypeID == "" {
         eventTypeID = event.EventTypeID
     }
-    date := cmd.Date
+
+    var date string
+    if cmd.Date != nil {
+        date = *cmd.Date
+    }
     if date == "" {
         date = event.Date.Format("2006-01-02")
     }
-    eventTime := cmd.Time
+
+    var eventTime string
+    if cmd.Time != nil {
+        eventTime = *cmd.Time
+    }
     if eventTime == "" {
         eventTime = event.Time
     }
-    duration := cmd.Duration
+
+    var duration int
+    if cmd.Duration != nil {
+        duration = *cmd.Duration
+    }
     if duration == 0 {
         duration = event.Duration
     }
-    isVirtual := cmd.IsVirtual
-    location := cmd.Location
+
+    var isVirtual bool
+    if cmd.IsVirtual != nil {
+        isVirtual = *cmd.IsVirtual
+    } else {
+        isVirtual = event.IsVirtual
+    }
+
+    var location string
+    if cmd.Location != nil {
+        location = *cmd.Location
+    }
     if location == "" {
         location = event.Location
     }
-    zoomLink := cmd.ZoomLink
+
+    var zoomLink string
+    if cmd.ZoomLink != nil {
+        zoomLink = *cmd.ZoomLink
+    }
     if zoomLink == "" {
         zoomLink = event.ZoomLink
     }
-    meetLink := cmd.MeetLink
+
+    var meetLink string
+    if cmd.MeetLink != nil {
+        meetLink = *cmd.MeetLink
+    }
     if meetLink == "" {
         meetLink = event.MeetLink
     }
@@ -433,13 +468,9 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
         }
     } else {
         // ✅ Relaxed validation for drafts
-        // Only validate if fields are provided
         if name == "" {
-            // For drafts, default name is fine
             name = "Untitled Event"
         }
-        // Don't require event type, date, time, duration, location, or links for drafts
-        // But if they are provided, validate them
         if eventTypeID != "" {
             eventType, err := s.repo.GetEventTypeByID(ctx, eventTypeID)
             if err != nil {
@@ -455,69 +486,73 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
     }
 
     // ✅ If event type is being updated, validate it exists
-    if cmd.EventTypeID != "" && cmd.EventTypeID != event.EventTypeID {
-        eventType, err := s.repo.GetEventTypeByID(ctx, cmd.EventTypeID)
+    if cmd.EventTypeID != nil && *cmd.EventTypeID != "" && *cmd.EventTypeID != event.EventTypeID {
+        eventType, err := s.repo.GetEventTypeByID(ctx, *cmd.EventTypeID)
         if err != nil {
             return nil, err
         }
         if eventType == nil {
             return nil, domain.ErrEventTypeNotFound
         }
-        event.EventTypeID = cmd.EventTypeID
+        event.EventTypeID = *cmd.EventTypeID
     }
 
-    // ✅ Apply updates
-    if cmd.Name != "" {
-        event.Name = cmd.Name
+    // ✅ Apply updates - only if provided
+    if cmd.Name != nil && *cmd.Name != "" {
+        event.Name = *cmd.Name
     }
-    if cmd.Description != "" {
-        event.Description = cmd.Description
+    if cmd.Description != nil && *cmd.Description != "" {
+        event.Description = *cmd.Description
     }
-    if cmd.Date != "" {
-        event.Date = parseDate(cmd.Date)
+    if cmd.Date != nil && *cmd.Date != "" {
+        event.Date = parseDate(*cmd.Date)
     }
-    if cmd.Time != "" {
-        event.Time = cmd.Time
+    if cmd.Time != nil && *cmd.Time != "" {
+        event.Time = *cmd.Time
     }
-    if cmd.Duration > 0 {
-        event.Duration = cmd.Duration
+    if cmd.Duration != nil && *cmd.Duration > 0 {
+        event.Duration = *cmd.Duration
     }
-    if cmd.Price >= 0 {
-        event.Price = cmd.Price
+    if cmd.Price != nil && *cmd.Price >= 0 {
+        event.Price = *cmd.Price
     }
-    if cmd.CertificatePrice >= 0 {
-        event.CertificatePrice = cmd.CertificatePrice
+    if cmd.CertificatePrice != nil && *cmd.CertificatePrice >= 0 {
+        event.CertificatePrice = *cmd.CertificatePrice
     }
-    if cmd.Location != "" {
-        event.Location = cmd.Location
+    if cmd.Location != nil && *cmd.Location != "" {
+        event.Location = *cmd.Location
     }
-    if cmd.IsVirtual {
-        event.IsVirtual = cmd.IsVirtual
+    if cmd.IsVirtual != nil {
+        event.IsVirtual = *cmd.IsVirtual
     }
-    if cmd.ZoomLink != "" {
-        event.ZoomLink = cmd.ZoomLink
+    if cmd.ZoomLink != nil && *cmd.ZoomLink != "" {
+        event.ZoomLink = *cmd.ZoomLink
     }
-    if cmd.MeetLink != "" {
-        event.MeetLink = cmd.MeetLink
+    if cmd.MeetLink != nil && *cmd.MeetLink != "" {
+        event.MeetLink = *cmd.MeetLink
     }
-    if cmd.MaxAttendees > 0 {
-        event.MaxAttendees = cmd.MaxAttendees
+    if cmd.MaxAttendees != nil && *cmd.MaxAttendees > 0 {
+        event.MaxAttendees = *cmd.MaxAttendees
     }
 
-    // ✅ Apply feature flags
-    event.IsFeatured = cmd.IsFeatured
-    event.IsPrivate = cmd.IsPrivate
+    // ✅ FIX: Only update feature flags if they were provided
+    if cmd.IsFeatured != nil {
+        event.IsFeatured = *cmd.IsFeatured
+    }
+    if cmd.IsPrivate != nil {
+        event.IsPrivate = *cmd.IsPrivate
+    }
 
     // ✅ If status is being updated, validate it
-    if cmd.EventStatusID != "" {
-        status, err := s.repo.GetEventStatusByID(ctx, cmd.EventStatusID)
+    if cmd.EventStatusID != nil && *cmd.EventStatusID != "" {
+        status, err := s.repo.GetEventStatusByID(ctx, *cmd.EventStatusID)
         if err != nil {
             return nil, err
         }
         if status == nil {
             return nil, domain.ErrEventStatusNotFound
         }
-        event.EventStatusID = cmd.EventStatusID
+        event.EventStatusID = *cmd.EventStatusID
     }
 
     // ✅ Update timestamp

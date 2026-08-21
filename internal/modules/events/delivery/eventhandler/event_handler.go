@@ -692,56 +692,55 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/{id} [put]
 func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
-	id := c.Params("id")
-	if id == "" {
-		return response.BadRequest(c, "Event ID is required", nil)
-	}
+    id := c.Params("id")
+    if id == "" {
+        return response.BadRequest(c, "Event ID is required", nil)
+    }
 
-	userID, err := getUserID(c)
-	if err != nil {
-		return response.Unauthorized(c, "User not authenticated", nil)
-	}
+    userID, err := getUserID(c)
+    if err != nil {
+        return response.Unauthorized(c, "User not authenticated", nil)
+    }
 
-	var req UpdateEventRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return response.BadRequest(c, "Invalid request", fiber.Map{
-			"error": err.Error(),
-		})
-	}
+    var req UpdateEventRequest
+    if err := c.Bind().Body(&req); err != nil {
+        return response.BadRequest(c, "Invalid request", fiber.Map{
+            "error": err.Error(),
+        })
+    }
 
-	cmd := service.UpdateEventCommand{
-		ID:               id,
-		Name:             req.Name,
-		Description:      req.Description,
-		EventTypeID:      req.EventTypeID,
-		EventStatusID:    req.EventStatusID,
-		Date:             req.Date,
-		Time:             req.Time,
-		Duration:         req.Duration,
-		Price:            req.Price,
-		CertificatePrice: req.CertificatePrice,
-		Location:         req.Location,
-		IsVirtual:        req.IsVirtual,
-		ZoomLink:         req.ZoomLink,
-		MeetLink:         req.MeetLink,
-		MaxAttendees:     req.MaxAttendees,
-		UpdatedBy:        userID,
-		// ✅ NEW: Feature flags
-		IsFeatured: req.IsFeatured,
-		IsPrivate:  req.IsPrivate,
-	}
+    cmd := service.UpdateEventCommand{
+        ID:               id,
+        UpdatedBy:        userID,
+        Name:             req.Name,
+        Description:      req.Description,
+        EventTypeID:      req.EventTypeID,
+        EventStatusID:    req.EventStatusID,
+        Date:             req.Date,
+        Time:             req.Time,
+        Duration:         req.Duration,
+        Price:            req.Price,
+        CertificatePrice: req.CertificatePrice,
+        Location:         req.Location,
+        IsVirtual:        req.IsVirtual,
+        ZoomLink:         req.ZoomLink,
+        MeetLink:         req.MeetLink,
+        MaxAttendees:     req.MaxAttendees,
+        IsFeatured:       req.IsFeatured,  // ✅ Pass pointer
+        IsPrivate:        req.IsPrivate,   // ✅ Pass pointer
+    }
 
-	event, err := h.svc.UpdateEvent(c.Context(), cmd)
-	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		return response.InternalError(c, "Failed to update event", fiber.Map{
-			"error": err.Error(),
-		})
-	}
+    event, err := h.svc.UpdateEvent(c.Context(), cmd)
+    if err != nil {
+        if errors.Is(err, domain.ErrEventNotFound) {
+            return response.NotFound(c, "Event not found", nil)
+        }
+        return response.InternalError(c, "Failed to update event", fiber.Map{
+            "error": err.Error(),
+        })
+    }
 
-	return response.Success(c, "Event updated successfully", event)
+    return response.Success(c, "Event updated successfully", event)
 }
 
 // ============================================================

@@ -185,28 +185,26 @@ type CreateEventCommand struct {
 // ============================================================
 
 type UpdateEventCommand struct {
-	ID       string // Required
-	UpdatedBy string // Required
+    ID       string
+    UpdatedBy string
 
-	// Optional fields
-	Name             string
-	Description      string
-	EventTypeID      string
-	EventStatusID    string
-	Date             string
-	Time             string
-	Duration         int
-	Price            float64
-	CertificatePrice float64
-	Location         string
-	IsVirtual        bool
-	ZoomLink         string
-	MeetLink         string
-	MaxAttendees     int
-
-	// ✅ NEW: Feature flags
-	IsFeatured bool
-	IsPrivate  bool
+    // ✅ Use pointers for optional fields
+    Name             *string
+    Description      *string
+    EventTypeID      *string
+    EventStatusID    *string
+    Date             *string
+    Time             *string
+    Duration         *int
+    Price            *float64
+    CertificatePrice *float64
+    Location         *string
+    IsVirtual        *bool
+    ZoomLink         *string
+    MeetLink         *string
+    MaxAttendees     *int
+    IsFeatured       *bool  // ✅ Pointer
+    IsPrivate        *bool  // ✅ Pointer
 }
 
 // ============================================================
