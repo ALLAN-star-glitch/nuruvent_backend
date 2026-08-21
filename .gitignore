@@ -1,6 +1,13 @@
+# Environment files
 .env
+.env.*
+!.env.example
 .env.local
-.env.*.local
+.env.production
+.env.staging
+.env.test
+
+# Build artifacts
 *.exe
 *.exe~
 *.dll
@@ -11,14 +18,29 @@
 /nuruvent
 /bin/
 /dist/
+/tmp/
+
+# IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Logs
 *.log
 logs/
+
+# Databases
 *.db
 *.sqlite
 *.sqlite3
 
+# Go
+vendor/
+coverage.out
+coverage.html
+*.coverprofile

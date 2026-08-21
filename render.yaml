@@ -1,0 +1,175 @@
+services:
+  # ============================================
+  # API SERVICE
+  # ============================================
+  - type: web
+    name: nuruvent-api
+    runtime: docker
+    repo: https://github.com/yourusername/your-repo
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter  # Optional: use "starter" for free tier
+    
+    # ✅ Build and run migrations
+    preDeployCommand: |
+      echo "🔄 Installing goose..."
+      go install github.com/pressly/goose/v3/cmd/goose@latest
+      echo "🔄 Running database migrations..."
+      goose -dir internal/shared/database/migrations postgres "postgres://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}?sslmode=${DB_SSL_MODE}" up
+      echo "✅ Migrations completed!"
+    
+    envVars:
+      # Server
+      - key: ENVIRONMENT
+        value: production
+      - key: SERVER_PORT
+        value: 8080
+      
+      # Database
+      - key: DB_HOST
+        value: postgres
+      - key: DB_PORT
+        value: 5432
+      - key: DB_USER
+        value: nuruvent_user
+      - key: DB_PASSWORD
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: DB_NAME
+        value: nuruvent
+      - key: DB_SSL_MODE
+        value: disable
+      
+      # Redis
+      - key: REDIS_URL
+        value: redis:6379
+      
+      # JWT
+      - key: JWT_SECRET
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: JWT_ACCESS_EXPIRATION
+        value: 24h
+      - key: JWT_REFRESH_EXPIRATION
+        value: 168h
+      
+      # Email
+      - key: EMAIL_API_KEY
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: EMAIL_FROM
+        value: noreply-nuruvent@nuruvent.com
+      
+      # Casbin
+      - key: CASBIN_MODEL
+        value: /root/configs/casbin/model.conf
+      - key: CASBIN_AUTO_LOAD
+        value: true
+      - key: CASBIN_AUTO_LOAD_INTERVAL
+        value: 10s
+      
+      # Supabase
+      - key: SUPABASE_URL
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: SUPABASE_SECRET_KEY
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: SUPABASE_BUCKET_EVENTS
+        value: events
+      - key: SUPABASE_BUCKET_BUSINESSES
+        value: businesses
+      - key: SUPABASE_BUCKET_PROFILES
+        value: profiles
+      - key: SUPABASE_BUCKET_CERTIFICATES
+        value: certificates
+      - key: SUPABASE_BUCKET_RECORDINGS
+        value: recordings
+      
+      # M-PESA
+      - key: MPESA_CONSUMER_KEY
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: MPESA_CONSUMER_SECRET
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: MPESA_PASSKEY
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: MPESA_SHORTCODE
+        value: 174379
+      - key: MPESA_ENVIRONMENT
+        value: production
+
+  # ============================================
+  # WORKER SERVICE (Background Jobs)
+  # ============================================
+  - type: worker
+    name: nuruvent-worker
+    runtime: docker
+    repo: https://github.com/yourusername/your-repo
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    command: go run cmd/worker/main.go
+    
+    envVars:
+      # Server
+      - key: ENVIRONMENT
+        value: production
+      
+      # Database
+      - key: DB_HOST
+        value: postgres
+      - key: DB_PORT
+        value: 5432
+      - key: DB_USER
+        value: nuruvent_user
+      - key: DB_PASSWORD
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: DB_NAME
+        value: nuruvent
+      - key: DB_SSL_MODE
+        value: disable
+      
+      # Redis
+      - key: REDIS_URL
+        value: redis:6379
+      
+      # Email
+      - key: EMAIL_API_KEY
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: EMAIL_FROM
+        value: noreply-nuruvent@nuruvent.com
+      
+      # Supabase
+      - key: SUPABASE_URL
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: SUPABASE_SECRET_KEY
+        sync: false  # ⚠️ Set in Render dashboard
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false  # ⚠️ Set in Render dashboard
+      
+      # M-PESA
+      - key: MPESA_CONSUMER_KEY
+        sync: false
+      - key: MPESA_CONSUMER_SECRET
+        sync: false
+      - key: MPESA_PASSKEY
+        sync: false
+      - key: MPESA_SHORTCODE
+        value: 174379
+      - key: MPESA_ENVIRONMENT
+        value: production
+
+  # ============================================
+  # POSTGRESQL DATABASE
+  # ============================================
+  - type: postgres
+    name: nuruvent-db
+    databaseName: nuruvent
+    user: nuruvent_user
+    password: ${DB_PASSWORD}  # ⚠️ Set in Render dashboard
+    ipAllowList: []  # Only allow internal connections
+
+  # ============================================
+  # REDIS CACHE
+  # ============================================
+  - type: redis
+    name: nuruvent-redis
+    maxmemoryPolicy: allkeys-lru
+    redisVersion: 7

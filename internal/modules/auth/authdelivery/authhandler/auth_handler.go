@@ -236,8 +236,6 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 // @Failure 401 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/auth/verify-otp [post]
-
-
 func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 	var req VerifyOTPRequest
 	if err := c.Bind().Body(&req); err != nil {

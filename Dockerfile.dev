@@ -1,0 +1,27 @@
+FROM golang:1.23-alpine
+
+WORKDIR /app
+
+ENV GOTOOLCHAIN=auto
+
+# Install tools
+RUN apk add --no-cache make git
+
+# Install goose
+RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+
+# Install Air for hot reload
+RUN go install github.com/air-verse/air@latest
+
+RUN go install github.com/swaggo/swag/cmd/swag@latest
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+COPY configs /root/configs
+
+EXPOSE 8080
+
+CMD ["air", "-c", ".air.toml"]

@@ -1,19 +1,31 @@
 .PHONY: help migrate-up migrate-down migrate-status migrate-create migrate-reset dev build test lint worker worker-build seed seed-only seed-dry seed-reset db-shell db-list db-tables db-desc db-query db-count db-psql db-drop db-reset cache-clear cache-clear-go cache-clear-all
 
+# ================================================
+# MIGRATION & DATABASE CONFIGURATION
+# ================================================
+
 # Migration directory
 MIGRATION_DIR=internal/shared/database/migrations
 
-# Database URL - Using nuruvent_user (port 54582)
-DB_HOST=localhost
-DB_PORT=54582
-DB_USER=nuruvent_user
-DB_PASSWORD=nuruvent_user
-DB_NAME=nuruvent
-DB_SSL=disable
+# Database URL - Docker (uses postgres service name)
+DB_HOST?=postgres
+DB_PORT?=5432
+DB_USER?=nuruvent_user
+DB_PASSWORD?=nuruvent_user
+DB_NAME?=nuruvent
+DB_SSL?=disable
 DB_URL=postgres://$(DB_USER):$(DB_PASSWORD)@$(DB_HOST):$(DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSL)
+
+# For local development (override)
+LOCAL_DB_HOST?=localhost
+LOCAL_DB_PORT?=54582
+LOCAL_DB_URL=postgres://$(DB_USER):$(DB_PASSWORD)@$(LOCAL_DB_HOST):$(LOCAL_DB_PORT)/$(DB_NAME)?sslmode=$(DB_SSL)
 
 # Docker container name
 DB_CONTAINER=nuruvent-postgres
+
+# Go flags to ignore vendor directory
+GOFLAGS=-mod=mod
 
 # ================================================
 # HELP
@@ -37,10 +49,12 @@ help:
 	@echo ""
 	@echo "  🗄️  Migrations:"
 	@echo "  make migrate-create NAME=<name>  - Create a new migration"
-	@echo "  make migrate-up                  - Apply all pending migrations"
-	@echo "  make migrate-down                - Rollback the last migration"
-	@echo "  make migrate-status              - Check migration status"
-	@echo "  make migrate-reset               - Reset all migrations (dangerous!)"
+	@echo "  make migrate-up                  - Apply all pending migrations (Docker)"
+	@echo "  make migrate-down                - Rollback the last migration (Docker)"
+	@echo "  make migrate-status              - Check migration status (Docker)"
+	@echo "  make migrate-up-local            - Apply migrations locally (localhost)"
+	@echo "  make migrate-down-local          - Rollback migrations locally (localhost)"
+	@echo "  make migrate-reset               - Reset ALL migrations (dangerous!)"
 	@echo ""
 	@echo "  🌱 Seeders:"
 	@echo "  make seed                     - Run all seeders"
@@ -116,13 +130,24 @@ migrate-create:
 	goose -dir $(MIGRATION_DIR) create $$NEXT"_$(NAME)" sql
 
 migrate-up:
+	@echo "🔄 Running migrations on Docker database..."
 	goose -dir $(MIGRATION_DIR) postgres "$(DB_URL)" up
 
 migrate-down:
+	@echo "⬇️ Rolling back last migration on Docker database..."
 	goose -dir $(MIGRATION_DIR) postgres "$(DB_URL)" down
 
 migrate-status:
+	@echo "📊 Migration status on Docker database..."
 	goose -dir $(MIGRATION_DIR) postgres "$(DB_URL)" status
+
+migrate-up-local:
+	@echo "🔄 Running migrations on LOCAL database..."
+	DB_HOST=localhost DB_PORT=54582 goose -dir $(MIGRATION_DIR) postgres "$(LOCAL_DB_URL)" up
+
+migrate-down-local:
+	@echo "⬇️ Rolling back last migration on LOCAL database..."
+	DB_HOST=localhost DB_PORT=54582 goose -dir $(MIGRATION_DIR) postgres "$(LOCAL_DB_URL)" down
 
 migrate-reset:
 	@echo "⚠️  This will reset ALL migrations!"
@@ -134,11 +159,12 @@ migrate-reset:
 	goose -dir $(MIGRATION_DIR) postgres "$(DB_URL)" reset
 
 # ================================================
-# SEEDERS
+# SEEDERS (with -mod=mod to ignore vendor)
 # ================================================
 
 seed:
-	go run cmd/seed/main.go
+	@echo "🌱 Running seeders..."
+	go run $(GOFLAGS) cmd/seed/main.go
 
 seed-only:
 	@if [ -z "$(NAME)" ]; then \
@@ -147,13 +173,16 @@ seed-only:
 		echo "Example: make seed-only NAME=permissions"; \
 		exit 1; \
 	fi
-	go run cmd/seed/main.go -only=$(NAME)
+	@echo "🌱 Running seeder: $(NAME)"
+	go run $(GOFLAGS) cmd/seed/main.go -only=$(NAME)
 
 seed-dry:
-	go run cmd/seed/main.go -dry-run
+	@echo "🌱 Previewing seeders (dry run)..."
+	go run $(GOFLAGS) cmd/seed/main.go -dry-run
 
 seed-force:
-	go run cmd/seed/main.go -force
+	@echo "🌱 Running seeders (force)..."
+	go run $(GOFLAGS) cmd/seed/main.go -force
 
 seed-reset:
 	@echo "⚠️  This will remove all seeder logs, allowing seeders to run again."
@@ -162,23 +191,25 @@ seed-reset:
 		echo "Cancelled"; \
 		exit 1; \
 	fi
-	go run cmd/seed/main.go -force
+	go run $(GOFLAGS) cmd/seed/main.go -force
 
 seed-prod:
-	go run cmd/seed/main.go -env=production
+	@echo "🌱 Running seeders in production mode..."
+	go run $(GOFLAGS) cmd/seed/main.go -env=production
 
 seed-prod-ci:
-	go run cmd/seed/main.go -env=production -skip-confirm
+	@echo "🌱 Running seeders in production mode (CI)..."
+	go run $(GOFLAGS) cmd/seed/main.go -env=production -skip-confirm
 
 # ================================================
 # DEVELOPMENT
 # ================================================
 
 dev:
-	go run cmd/api/main.go
+	go run $(GOFLAGS) cmd/api/main.go
 
 worker:
-	go run cmd/worker/main.go
+	go run $(GOFLAGS) cmd/worker/main.go
 
 dev-all:
 	@echo "Starting API server and worker..."
@@ -387,20 +418,6 @@ db-drop:
 	@echo "Terminating all connections to $(DB_NAME)..."
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$(DB_NAME)' AND pid <> pg_backend_pid();"
 	@echo "Dropping database $(DB_NAME)..."
-	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "DROP DATABASE IF EXISTS $(DB_NAME);"
-	@echo "✅ Database $(DB_NAME) dropped"
-	@echo "⚠️  ⚠️  ⚠️  DANGEROUS COMMAND  ⚠️  ⚠️  ⚠️"
-	@echo "This will DROP the ENTIRE database: $(DB_NAME)"
-	@read -p "Are you ABSOLUTELY sure? Type the database name to confirm: " confirm; \
-	if [ "$$confirm" != "$(DB_NAME)" ]; then \
-		echo "Cancelled"; \
-		exit 1; \
-	fi
-	@read -p "Type YES to confirm: " confirm2; \
-	if [ "$$confirm2" != "YES" ]; then \
-		echo "Cancelled"; \
-		exit 1; \
-	fi
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "DROP DATABASE IF EXISTS $(DB_NAME);"
 	@echo "✅ Database $(DB_NAME) dropped"
 

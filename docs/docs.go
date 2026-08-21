@@ -1946,6 +1946,70 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/auth/verify-otp": {
+            "post": {
+                "description": "Verify the OTP sent to your email and complete account creation",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Verify OTP and complete registration",
+                "parameters": [
+                    {
+                        "description": "OTP verification details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/authhandler.VerifyOTPRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/authhandler.AuthResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/auth/verify-reset-otp": {
             "post": {
                 "description": "Verify the OTP and complete password reset",
@@ -4012,6 +4076,17 @@ const docTemplate = `{
                 }
             }
         },
+        "authhandler.VerifyOTPRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "otp": {
+                    "type": "string"
+                }
+            }
+        },
         "authhandler.VerifyResetOTPRequest": {
             "type": "object",
             "properties": {
@@ -4320,7 +4395,6 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "date": {
-                    "description": "YYYY-MM-DD",
                     "type": "string"
                 },
                 "description": {
@@ -4336,10 +4410,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "is_featured": {
-                    "description": "✅ NEW: Feature flags",
+                    "description": "✅ Pointer",
                     "type": "boolean"
                 },
                 "is_private": {
+                    "description": "✅ Pointer",
                     "type": "boolean"
                 },
                 "is_virtual": {
@@ -4361,7 +4436,6 @@ const docTemplate = `{
                     "type": "number"
                 },
                 "time": {
-                    "description": "HH:MM",
                     "type": "string"
                 },
                 "zoom_link": {

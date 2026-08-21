@@ -215,6 +215,13 @@ definitions:
       requires_2fa:
         type: boolean
     type: object
+  authhandler.VerifyOTPRequest:
+    properties:
+      email:
+        type: string
+      otp:
+        type: string
+    type: object
   authhandler.VerifyResetOTPRequest:
     properties:
       email:
@@ -422,7 +429,6 @@ definitions:
       certificate_price:
         type: number
       date:
-        description: YYYY-MM-DD
         type: string
       description:
         type: string
@@ -433,9 +439,10 @@ definitions:
       event_type_id:
         type: string
       is_featured:
-        description: '✅ NEW: Feature flags'
+        description: ✅ Pointer
         type: boolean
       is_private:
+        description: ✅ Pointer
         type: boolean
       is_virtual:
         type: boolean
@@ -450,7 +457,6 @@ definitions:
       price:
         type: number
       time:
-        description: HH:MM
         type: string
       zoom_link:
         type: string
@@ -1740,6 +1746,45 @@ paths:
           schema:
             $ref: '#/definitions/response.BaseResponse'
       summary: Verify 2FA OTP and complete login
+      tags:
+      - Authentication
+  /api/v1/auth/verify-otp:
+    post:
+      consumes:
+      - application/json
+      description: Verify the OTP sent to your email and complete account creation
+      parameters:
+      - description: OTP verification details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/authhandler.VerifyOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/authhandler.AuthResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      summary: Verify OTP and complete registration
       tags:
       - Authentication
   /api/v1/auth/verify-reset-otp:
