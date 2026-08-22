@@ -9,6 +9,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/hibiken/asynq"
 )
 
@@ -34,9 +35,26 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
 	emailChannel := service.NewEmailChannel(emailConfig)
 	notificationWorker := service.NewNotificationWorker(emailChannel)
 
-	// 2. Configure Asynq Server
+	// ✅ Parse Redis URL correctly for Asynq
+	redisURL := cfg.GetRedisURL()
+	redisOpts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		log.Printf("⚠️ Failed to parse Redis URL for Asynq, using as host:port: %v", err)
+		redisOpts = &asynq.RedisClientOpt{
+			Addr: redisURL,
+		}
+	} else {
+		// Convert redis.Options to asynq.RedisClientOpt
+		redisOpts = &asynq.RedisClientOpt{
+			Addr:     redisOpts.Addr,
+			Password: redisOpts.Password,
+			DB:       redisOpts.DB,
+		}
+	}
+
+	// 2. Configure Asynq Server with parsed Redis options
 	srv := asynq.NewServer(
-		asynq.RedisClientOpt{Addr: cfg.Redis.URL},
+		*redisOpts,
 		asynq.Config{
 			Concurrency: 10,
 			Queues: map[string]int{
