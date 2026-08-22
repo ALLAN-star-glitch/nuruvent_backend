@@ -41,26 +41,34 @@ func NewAuthHandler(
 // COOKIE HELPERS
 // ============================================================
 
+
 func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
-    // ✅ Check if request is secure (HTTPS)
-    isSecure := c.Secure()
-    
-    // ✅ Use SameSite=None only on HTTPS (cross-origin)
-    sameSite := "Lax"
-    if isSecure {
-        sameSite = "None"
+    isSecure := true
+    if h.config.Environment != "production" {
+        isSecure = false
     }
     
+    sameSite := "None"
     
-    c.Cookie(&fiber.Cookie{
+    cookie := &fiber.Cookie{
         Name:     "access_token",
         Value:    token,
         Expires:  time.Now().Add(h.config.JWT.AccessExpiration),
         HTTPOnly: true,
-        Secure:   isSecure, // ✅ true on HTTPS, false on HTTP
-        SameSite: sameSite, // ✅ None on HTTPS, Lax on HTTP
+        Secure:   isSecure,
+        SameSite: sameSite,
         Path:     "/",
-    })
+    }
+    
+    // ✅ Log that we're setting the cookie
+    log.Printf("🔐 Setting access_token cookie: Secure=%v, SameSite=%v, Expires=%v", 
+        isSecure, sameSite, cookie.Expires)
+    
+    c.Cookie(cookie)
+    
+    // ✅ Verify cookie was set by trying to read it back
+    // (This won't work for HTTP-only cookies, but we can log it)
+    log.Printf("✅ Access token cookie set for path: /")
 }
 
 func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
@@ -449,40 +457,48 @@ func (h *AuthHandler) Login(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/auth/verify-2fa [post]
 func (h *AuthHandler) VerifyTwoFactorOTP(c fiber.Ctx) error {
-	var req VerifyTwoFactorOTPRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return response.BadRequest(c, "Invalid request", fiber.Map{"error": err.Error()})
-	}
+    var req VerifyTwoFactorOTPRequest
+    if err := c.Bind().Body(&req); err != nil {
+        return response.BadRequest(c, "Invalid request", fiber.Map{"error": err.Error()})
+    }
 
-	ipAddress := c.IP()
-	userAgent := c.Get("User-Agent")
+    ipAddress := c.IP()
+    userAgent := c.Get("User-Agent")
 
-	account, accessToken, refreshToken, err := h.service.VerifyTwoFactorAndLogin(
-		c.Context(),
-		req.Email,
-		req.OTP,
-		ipAddress,
-		userAgent,
-	)
-	if err != nil {
-		if errors.Is(err, authdomain.ErrInvalidOTP) {
-			return response.Unauthorized(c, "Invalid or expired OTP", nil)
-		}
-		return response.Unauthorized(c, err.Error(), nil)
-	}
+    account, accessToken, refreshToken, err := h.service.VerifyTwoFactorAndLogin(
+        c.Context(),
+        req.Email,
+        req.OTP,
+        ipAddress,
+        userAgent,
+    )
+    if err != nil {
+        if errors.Is(err, authdomain.ErrInvalidOTP) {
+            return response.Unauthorized(c, "Invalid or expired OTP", nil)
+        }
+        return response.Unauthorized(c, err.Error(), nil)
+    }
 
-	h.setAccessTokenCookie(c, accessToken)
-	h.setRefreshTokenCookie(c, refreshToken)
+    // ✅ Log that tokens were received
+    log.Printf("✅ Tokens received - Access: %s..., Refresh: %s...", 
+        accessToken[:20], refreshToken[:20])
 
-	return response.Success(c, "Login successful", AuthResponse{
-		TokenResponse: TokenResponse{
-			AccessToken:  accessToken,
-			RefreshToken: refreshToken,
-			TokenType:    "Bearer",
-			ExpiresIn:    int64(h.config.JWT.AccessExpiration.Seconds()),
-		},
-		Account: NewAccountResponse(account),
-	})
+    // ✅ Set cookies
+    h.setAccessTokenCookie(c, accessToken)
+    h.setRefreshTokenCookie(c, refreshToken)
+    
+    // ✅ Log that cookies were set
+    log.Println("✅ Cookies set in response")
+
+    return response.Success(c, "Login successful", AuthResponse{
+        TokenResponse: TokenResponse{
+            AccessToken:  accessToken,
+            RefreshToken: refreshToken,
+            TokenType:    "Bearer",
+            ExpiresIn:    int64(h.config.JWT.AccessExpiration.Seconds()),
+        },
+        Account: NewAccountResponse(account),
+    })
 }
 
 // ============================================================

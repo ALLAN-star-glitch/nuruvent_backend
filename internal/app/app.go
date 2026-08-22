@@ -48,7 +48,7 @@ func NewApp() (*App, error) {
 			"Set-Cookie",
 		},
 		AllowCredentials: true, // ✅ Required for cookies
-		ExposeHeaders:    []string{"Set-Cookie"},
+		ExposeHeaders:    []string{"Set-Cookie", "Content-Length", "Content-Type"}, // ✅ Add Content-Length
 		MaxAge:           86400,
 	}))
 
