@@ -5,7 +5,7 @@ WORKDIR /app
 
 ENV GOTOOLCHAIN=auto
 
-# Install make and goose for migrations
+# Install make and git
 RUN apk add --no-cache make git
 RUN go install github.com/pressly/goose/v3/cmd/goose@latest
 
@@ -14,10 +14,14 @@ RUN go mod download
 
 COPY . .
 
-# Build the application
+# Build both API and Worker binaries
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-w -s" \
-    -o main ./cmd/api
+    -o api ./cmd/api
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-w -s" \
+    -o worker ./cmd/worker
 
 # Stage 2: Runtime
 FROM alpine:latest
@@ -26,8 +30,9 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-# Copy binary
-COPY --from=builder /app/main .
+# Copy binaries
+COPY --from=builder /app/api .
+COPY --from=builder /app/worker .
 
 # Copy configs
 COPY --from=builder /app/configs ./configs
@@ -43,4 +48,4 @@ COPY --from=builder /go/bin/goose /usr/local/bin/goose
 
 EXPOSE 8080
 
-CMD ["./main"]
+CMD ["./api"]

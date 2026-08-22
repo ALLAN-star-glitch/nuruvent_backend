@@ -10,12 +10,7 @@ services:
     dockerContext: .
     plan: starter
     
-    preDeployCommand: |
-      echo "🔄 Installing goose..."
-      go install github.com/pressly/goose/v3/cmd/goose@latest
-      echo "🔄 Running database migrations..."
-      goose -dir internal/shared/database/migrations postgres "${DATABASE_URL}" up
-      echo "✅ Migrations completed!"
+    preDeployCommand: goose -dir ./migrations postgres "${DATABASE_URL}" up
     
     envVars:
       - key: ENVIRONMENT
@@ -27,7 +22,8 @@ services:
           name: nuruvent-db
           property: connectionString
       - key: REDIS_URL
-        fromRedis:
+        fromService:
+          type: keyvalue
           name: nuruvent-redis
           property: connectionString
       - key: JWT_SECRET
@@ -43,7 +39,7 @@ services:
       - key: CASBIN_MODEL
         value: /root/configs/casbin/model.conf
       - key: CASBIN_AUTO_LOAD
-        value: true
+        value: "true"
       - key: CASBIN_AUTO_LOAD_INTERVAL
         value: 10s
       - key: SUPABASE_URL
@@ -69,7 +65,7 @@ services:
       - key: MPESA_PASSKEY
         sync: false
       - key: MPESA_SHORTCODE
-        value: 174379
+        value: "174379"
       - key: MPESA_ENVIRONMENT
         value: production
 
@@ -83,7 +79,7 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: starter
-    command: go run cmd/worker/main.go
+    dockerCommand: ./worker
     
     envVars:
       - key: ENVIRONMENT
@@ -93,7 +89,8 @@ services:
           name: nuruvent-db
           property: connectionString
       - key: REDIS_URL
-        fromRedis:
+        fromService:
+          type: keyvalue
           name: nuruvent-redis
           property: connectionString
       - key: EMAIL_API_KEY
@@ -113,17 +110,18 @@ services:
       - key: MPESA_PASSKEY
         sync: false
       - key: MPESA_SHORTCODE
-        value: 174379
+        value: "174379"
       - key: MPESA_ENVIRONMENT
         value: production
 
   # ============================================
   # MANAGED REDIS INSTANCE
   # ============================================
-  - type: redis
+  - type: keyvalue
     name: nuruvent-redis
     plan: starter
-    ipAllowList: [] # Allows internal access from services
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
 
 # ============================================
 # MANAGED POSTGRESQL DATABASE
