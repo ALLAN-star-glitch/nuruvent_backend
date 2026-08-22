@@ -43,29 +43,26 @@ func NewAuthHandler(
 
 
 func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
+    // ✅ Determine environment
     isProduction := h.config.Environment == "production"
+    
+    // ✅ Secure: true in production, false in development
     isSecure := isProduction
     
+    // ✅ SameSite: None in production (cross-origin), Lax in development
     sameSite := "Lax"
     if isProduction {
         sameSite = "None"
     }
     
-    c.Cookie(&fiber.Cookie{
-        Name:     "access_token",
-        Value:    token,
-        Expires:  time.Now().Add(h.config.JWT.AccessExpiration),
-        HTTPOnly: true,
-        Secure:   isSecure,
-        SameSite: sameSite,
-        Path:     "/",
-        // Domain intentionally empty
-    })
-    
-    // ✅ Log the configuration for debugging
-    log.Printf("🍪 Access cookie set: Secure=%v, SameSite=%v, Env=%s", 
-        isSecure, sameSite, h.config.Environment)
-}
+    // ✅ Domain: Only set in production, and only if using custom domain
+    domain := ""
+    if isProduction {
+        // For Render.com, DON'T set domain
+        // For custom domain (nuruvent.com), set it
+        // domain = ".nuruvent.com" // Only if using custom domain
+        // Otherwise leave empty
+    }
     
     c.Cookie(&fiber.Cookie{
         Name:     "access_token",
