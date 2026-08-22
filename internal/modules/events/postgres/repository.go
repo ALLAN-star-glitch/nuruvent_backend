@@ -79,7 +79,25 @@ func (r *PostgresRepository) GetEventBySlug(ctx context.Context, slug string) (*
 
 func (r *PostgresRepository) UpdateEvent(ctx context.Context, event *domain.Event) error {
 	model := ToModelEvent(event)
-	return r.db.WithContext(ctx).Updates(model).Error
+	
+	// ✅ Debug: Log the DeletedAt value
+	log.Printf("🔍 Updating event %s: DeletedAt.Valid=%v, DeletedAt.Time=%v", 
+		event.ID, model.DeletedAt.Valid, model.DeletedAt.Time)
+	
+	// ✅ Use Unscoped() to allow updating soft-deleted records
+	// ✅ Use Select("*") to update all fields including zero values (like deleted_at = NULL)
+	result := r.db.WithContext(ctx).Unscoped().
+		Model(&EventModel{}).
+		Where("id = ?", event.ID).
+		Select("*").
+		Updates(model)
+	
+	if result.Error != nil {
+		return result.Error
+	}
+	
+	log.Printf("✅ Event updated: %s, Rows affected: %d", event.ID, result.RowsAffected)
+	return nil
 }
 
 func (r *PostgresRepository) DeleteEvent(ctx context.Context, id string) error {

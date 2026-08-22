@@ -13,15 +13,20 @@ import (
 // DOMAIN ENTITY → DATABASE MODEL MAPPERS
 // ============================================================
 
+
 // ToModelEvent converts domain.Event to EventModel
 func ToModelEvent(event *domain.Event) *EventModel {
 	if event == nil {
 		return nil
 	}
 
+	// ✅ Handle DeletedAt properly for restore operations
 	var deletedAt gorm.DeletedAt
-	if event.DeletedAt != nil {
+	if event.DeletedAt != nil && !event.DeletedAt.IsZero() {
 		deletedAt = gorm.DeletedAt{Time: *event.DeletedAt, Valid: true}
+	} else {
+		// ✅ IMPORTANT: Set Valid: false to clear the deleted_at column
+		deletedAt = gorm.DeletedAt{Valid: false}
 	}
 
 	// ✅ Convert empty string to nil for UUID fields
@@ -33,6 +38,12 @@ func ToModelEvent(event *domain.Event) *EventModel {
 	var restoredBy *string
 	if event.RestoredBy != "" {
 		restoredBy = &event.RestoredBy
+	}
+
+	// ✅ Handle RestoredAt
+	var restoredAt *time.Time
+	if event.RestoredAt != nil && !event.RestoredAt.IsZero() {
+		restoredAt = event.RestoredAt
 	}
 
 	return &EventModel{
@@ -63,7 +74,7 @@ func ToModelEvent(event *domain.Event) *EventModel {
 		UpdatedAt:        event.UpdatedAt,
 		DeletedAt:        deletedAt,
 		DeletedBy:        deletedBy,
-		RestoredAt:       event.RestoredAt,
+		RestoredAt:       restoredAt,
 		RestoredBy:       restoredBy,
 		IsFeatured:       event.IsFeatured,
 		IsPrivate:        event.IsPrivate,
@@ -90,6 +101,12 @@ func ToDomainEvent(model *EventModel) *domain.Event {
 	restoredBy := ""
 	if model.RestoredBy != nil {
 		restoredBy = *model.RestoredBy
+	}
+
+	// ✅ Handle RestoredAt
+	var restoredAt *time.Time
+	if model.RestoredAt != nil && !model.RestoredAt.IsZero() {
+		restoredAt = model.RestoredAt
 	}
 
 	return &domain.Event{
@@ -120,7 +137,7 @@ func ToDomainEvent(model *EventModel) *domain.Event {
 		UpdatedAt:        model.UpdatedAt,
 		DeletedAt:        deletedAt,
 		DeletedBy:        deletedBy,
-		RestoredAt:       model.RestoredAt,
+		RestoredAt:       restoredAt,
 		RestoredBy:       restoredBy,
 		IsFeatured:       model.IsFeatured,
 		IsPrivate:        model.IsPrivate,
