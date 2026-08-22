@@ -35,76 +35,100 @@ func NewAuthHandler(
 		config:  cfg,
 	}
 }
+
+
 // ============================================================
 // COOKIE HELPERS
 // ============================================================
 
 func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
-	// ✅ Check if request is secure (HTTPS)
-	isSecure := c.Secure()
-	
-	// ✅ Use SameSite=None only on HTTPS (cross-origin)
-	sameSite := "Lax"
-	if isSecure {
-		sameSite = "None"
-	}
-	
-	c.Cookie(&fiber.Cookie{
-		Name:     "access_token",
-		Value:    token,
-		Expires:  time.Now().Add(h.config.JWT.AccessExpiration),
-		HTTPOnly: true,
-		Secure:   isSecure, // ✅ true on HTTPS, false on HTTP
-		SameSite: sameSite, // ✅ None on HTTPS, Lax on HTTP
-		Path:     "/",
-	})
+    // ✅ Check if request is secure (HTTPS)
+    isSecure := c.Secure()
+    
+    // ✅ Use SameSite=None only on HTTPS (cross-origin)
+    sameSite := "Lax"
+    if isSecure {
+        sameSite = "None"
+    }
+    
+    // ✅ Set the domain for cross-origin cookies
+    // For Render, the domain should be empty or set to the parent domain
+    // For production with custom domain, set to .nuruvent.com
+    domain := ""
+    if h.config.Environment == "production" {
+        domain = ".nuruvent.com"  // ✅ Allows cookies across subdomains
+    }
+    
+    c.Cookie(&fiber.Cookie{
+        Name:     "access_token",
+        Value:    token,
+        Expires:  time.Now().Add(h.config.JWT.AccessExpiration),
+        HTTPOnly: true,
+        Secure:   isSecure, // ✅ true on HTTPS, false on HTTP
+        SameSite: sameSite, // ✅ None on HTTPS, Lax on HTTP
+        Path:     "/",
+        Domain:   domain,   // ✅ Set domain for cross-origin
+    })
 }
 
 func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
-	isSecure := c.Secure()
-	
-	sameSite := "Lax"
-	if isSecure {
-		sameSite = "None"
-	}
-	
-	c.Cookie(&fiber.Cookie{
-		Name:     "refresh_token",
-		Value:    token,
-		Expires:  time.Now().Add(h.config.JWT.RefreshExpiration),
-		HTTPOnly: true,
-		Secure:   isSecure,
-		SameSite: sameSite,
-		Path:     "/auth/refresh",
-	})
+    isSecure := c.Secure()
+    
+    sameSite := "Lax"
+    if isSecure {
+        sameSite = "None"
+    }
+    
+    domain := ""
+    if h.config.Environment == "production" {
+        domain = ".nuruvent.com"
+    }
+    
+    c.Cookie(&fiber.Cookie{
+        Name:     "refresh_token",
+        Value:    token,
+        Expires:  time.Now().Add(h.config.JWT.RefreshExpiration),
+        HTTPOnly: true,
+        Secure:   isSecure,
+        SameSite: sameSite,
+        Path:     "/auth/refresh",
+        Domain:   domain,
+    })
 }
 
 func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
-	isSecure := c.Secure()
-	
-	sameSite := "Lax"
-	if isSecure {
-		sameSite = "None"
-	}
-	
-	c.Cookie(&fiber.Cookie{
-		Name:     "access_token",
-		Value:    "",
-		Expires:  time.Now().Add(-time.Hour),
-		HTTPOnly: true,
-		Secure:   isSecure,
-		SameSite: sameSite,
-		Path:     "/",
-	})
-	c.Cookie(&fiber.Cookie{
-		Name:     "refresh_token",
-		Value:    "",
-		Expires:  time.Now().Add(-time.Hour),
-		HTTPOnly: true,
-		Secure:   isSecure,
-		SameSite: sameSite,
-		Path:     "/auth/refresh",
-	})
+    isSecure := c.Secure()
+    
+    sameSite := "Lax"
+    if isSecure {
+        sameSite = "None"
+    }
+    
+    domain := ""
+    if h.config.Environment == "production" {
+        domain = ".nuruvent.com"
+    }
+    
+    c.Cookie(&fiber.Cookie{
+        Name:     "access_token",
+        Value:    "",
+        Expires:  time.Now().Add(-time.Hour),
+        HTTPOnly: true,
+        Secure:   isSecure,
+        SameSite: sameSite,
+        Path:     "/",
+        Domain:   domain,
+    })
+    c.Cookie(&fiber.Cookie{
+        Name:     "refresh_token",
+        Value:    "",
+        Expires:  time.Now().Add(-time.Hour),
+        HTTPOnly: true,
+        Secure:   isSecure,
+        SameSite: sameSite,
+        Path:     "/auth/refresh",
+        Domain:   domain,
+    })
 }
 
 
