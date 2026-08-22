@@ -37,11 +37,55 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
 
 	// ✅ Parse Redis URL correctly for Asynq
 	redisURL := cfg.GetRedisURL()
+	
+	// Parse the URL using go-redis's ParseURL
 	redisOpts, err := redis.ParseURL(redisURL)
 	if err != nil {
 		log.Printf("⚠️ Failed to parse Redis URL for Asynq, using as host:port: %v", err)
-		redisOpts = &redis.Options{
-			Addr: redisURL,
+		// Use direct address if parsing fails
+		srv := asynq.NewServer(
+			asynq.RedisClientOpt{Addr: redisURL},
+			asynq.Config{
+				Concurrency: 10,
+				Queues: map[string]int{
+					"critical": 6,
+					"default":  3,
+					"low":      1,
+				},
+				RetryDelayFunc: func(n int, err error, task *asynq.Task) time.Duration {
+					return time.Duration(n) * 30 * time.Second
+				},
+			},
+		)
+		
+		// Register handlers and start
+		mux := asynq.NewServeMux()
+		mux.HandleFunc(notificationdomain.TaskVerificationOTP, notificationWorker.HandleVerificationOTP)
+		mux.HandleFunc(notificationdomain.TaskWelcomeIndividual, notificationWorker.HandleWelcomeIndividual)
+		mux.HandleFunc(notificationdomain.TaskWelcomeInstitution, notificationWorker.HandleWelcomeInstitution)
+		mux.HandleFunc(notificationdomain.TaskPasswordResetConfirm, notificationWorker.HandlePasswordResetConfirm)
+		mux.HandleFunc(notificationdomain.TaskLoginNotification, notificationWorker.HandleLoginNotification)
+
+		log.Println("✅ All task handlers registered")
+		log.Println("📋 Registered tasks:")
+		log.Printf("   - %s (unified for all OTP purposes)", notificationdomain.TaskVerificationOTP)
+		log.Printf("   - %s", notificationdomain.TaskWelcomeIndividual)
+		log.Printf("   - %s", notificationdomain.TaskWelcomeInstitution)
+		log.Printf("   - %s", notificationdomain.TaskPasswordResetConfirm)
+		log.Printf("   - %s", notificationdomain.TaskLoginNotification)
+
+		go func() {
+			log.Println("🚀 Asynq notification worker active. Listening for tasks...")
+			log.Printf("📊 Queue priorities: critical=6, default=3, low=1")
+			if err := srv.Run(mux); err != nil {
+				log.Printf("❌ Asynq worker execution stopped: %v", err)
+			}
+		}()
+
+		return func() {
+			log.Println("🛑 Shutting down embedded Asynq worker...")
+			srv.Shutdown()
+			log.Println("✅ Embedded worker stopped")
 		}
 	}
 
