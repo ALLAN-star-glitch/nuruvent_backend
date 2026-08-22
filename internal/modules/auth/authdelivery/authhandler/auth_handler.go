@@ -35,22 +35,27 @@ func NewAuthHandler(
 		config:  cfg,
 	}
 }
-
 // ============================================================
 // COOKIE HELPERS
 // ============================================================
 
 func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
-	// ✅ Use c.Secure() to check if the request is actually HTTPS
+	// ✅ Check if request is secure (HTTPS)
 	isSecure := c.Secure()
+	
+	// ✅ Use SameSite=None only on HTTPS (cross-origin)
+	sameSite := "Lax"
+	if isSecure {
+		sameSite = "None"
+	}
 	
 	c.Cookie(&fiber.Cookie{
 		Name:     "access_token",
 		Value:    token,
 		Expires:  time.Now().Add(h.config.JWT.AccessExpiration),
 		HTTPOnly: true,
-		Secure:   isSecure, // ✅ Dynamically set based on request protocol
-		SameSite: "Lax",
+		Secure:   isSecure, // ✅ true on HTTPS, false on HTTP
+		SameSite: sameSite, // ✅ None on HTTPS, Lax on HTTP
 		Path:     "/",
 	})
 }
@@ -58,13 +63,46 @@ func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
 func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
 	isSecure := c.Secure()
 	
+	sameSite := "Lax"
+	if isSecure {
+		sameSite = "None"
+	}
+	
 	c.Cookie(&fiber.Cookie{
 		Name:     "refresh_token",
 		Value:    token,
 		Expires:  time.Now().Add(h.config.JWT.RefreshExpiration),
 		HTTPOnly: true,
-		Secure:   isSecure, // ✅ Dynamically set based on request protocol
-		SameSite: "Lax",
+		Secure:   isSecure,
+		SameSite: sameSite,
+		Path:     "/auth/refresh",
+	})
+}
+
+func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
+	isSecure := c.Secure()
+	
+	sameSite := "Lax"
+	if isSecure {
+		sameSite = "None"
+	}
+	
+	c.Cookie(&fiber.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		HTTPOnly: true,
+		Secure:   isSecure,
+		SameSite: sameSite,
+		Path:     "/",
+	})
+	c.Cookie(&fiber.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		HTTPOnly: true,
+		Secure:   isSecure,
+		SameSite: sameSite,
 		Path:     "/auth/refresh",
 	})
 }

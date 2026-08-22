@@ -10,6 +10,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/server"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
+	"github.com/gofiber/fiber/v3/middleware/cors" // ✅ Import CORS
 )
 
 // App wraps the application dependencies
@@ -25,6 +26,30 @@ func NewApp() (*App, error) {
 		return nil, err
 	}
 	log.Println("✅ Application dependencies initialized successfully")
+
+	// ✅ Add CORS middleware to the Fiber app
+	app := deps.App
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: []string{
+			"https://www.nuruvent.com",
+			"https://nuruvent.com",
+			"http://localhost:3000",
+			"http://localhost:5173",
+			"http://localhost:8080",
+		},
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
+		AllowHeaders: []string{
+			"Origin",
+			"Content-Type",
+			"Accept",
+			"Authorization",
+			"X-Requested-With",
+			"Cookie",
+		},
+		AllowCredentials: true, // ✅ Required for cookies
+		ExposeHeaders:    []string{"Set-Cookie"},
+		MaxAge:           86400,
+	}))
 
 	return &App{AppDependencies: deps}, nil
 }
