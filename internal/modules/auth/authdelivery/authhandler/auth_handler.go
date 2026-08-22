@@ -107,28 +107,6 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
 	})
 }
 
-func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
-	isSecure := c.Secure()
-	
-	c.Cookie(&fiber.Cookie{
-		Name:     "access_token",
-		Value:    "",
-		Expires:  time.Now().Add(-time.Hour),
-		HTTPOnly: true,
-		Secure:   isSecure,
-		SameSite: "Lax",
-		Path:     "/",
-	})
-	c.Cookie(&fiber.Cookie{
-		Name:     "refresh_token",
-		Value:    "",
-		Expires:  time.Now().Add(-time.Hour),
-		HTTPOnly: true,
-		Secure:   isSecure,
-		SameSite: "Lax",
-		Path:     "/auth/refresh",
-	})
-}
 
 func (h *AuthHandler) getRefreshTokenFromCookie(c fiber.Ctx) (string, error) {
 	token := c.Cookies("refresh_token")
