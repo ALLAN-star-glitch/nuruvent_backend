@@ -118,18 +118,18 @@ services:
         value: production
 
   # ============================================
-  # MANAGED POSTGRESQL DATABASE
-  # ============================================
-  - type: postgres
-    name: nuruvent-db
-    databaseName: nuruvent
-    user: nuruvent_user
-    plan: starter
-
-  # ============================================
   # MANAGED REDIS INSTANCE
   # ============================================
   - type: redis
     name: nuruvent-redis
     plan: starter
-    maxmemoryPolicy: allkeys-lru
+    ipAllowList: [] # Allows internal access from services
+
+# ============================================
+# MANAGED POSTGRESQL DATABASE
+# ============================================
+databases:
+  - name: nuruvent-db
+    databaseName: nuruvent
+    user: nuruvent_user
+    plan: starter
