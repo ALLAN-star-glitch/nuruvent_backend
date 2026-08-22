@@ -34,7 +34,7 @@ type DatabaseConfig struct {
 	Password string
 	Name     string
 	SSLMode  string
-	URL      string // ✅ ADD THIS - for Render's DATABASE_URL
+	URL      string
 }
 
 type SupabaseConfig struct {
@@ -78,10 +78,15 @@ type MPesaConfig struct {
 }
 
 func Load() *Config {
-	// Load .env file (ignore if not found)
+	// Load .env file
 	if err := godotenv.Load(); err != nil {
 		log.Println("Warning: .env file not found, using environment variables")
+	} else {
+		log.Println("✅ .env file loaded successfully")
 	}
+
+	// In Load() inside config.go:
+	redisURL := getEnv("REDIS_URL", "redis://nuruvent-redis:6379")
 
 	cfg := &Config{
 		Environment: getEnv("ENVIRONMENT", "development"),
@@ -89,7 +94,7 @@ func Load() *Config {
 			Port: getEnv("SERVER_PORT", "8080"),
 		},
 		Redis: RedisConfig{
-			URL: getEnv("REDIS_URL", "localhost:6379"),
+			URL: redisURL, // ✅ Use the variable
 		},
 		JWT: JWTConfig{
 			Secret:            getEnv("JWT_SECRET", "change-this-in-production"),
@@ -124,14 +129,12 @@ func Load() *Config {
 		},
 	}
 
-	// ✅ Handle Database: Support both DATABASE_URL and individual fields
+	// Handle Database: Support both DATABASE_URL and individual fields
 	dbURL := getEnv("DATABASE_URL", "")
 	if dbURL != "" {
-		// ✅ Render mode: Use the full connection string
 		cfg.Database.URL = dbURL
 		log.Println("✅ Using DATABASE_URL for database connection")
 	} else {
-		// ✅ Local mode: Use individual fields
 		cfg.Database.Host = getEnv("DB_HOST", "localhost")
 		cfg.Database.Port = getEnv("DB_PORT", "54582")
 		cfg.Database.User = getEnv("DB_USER", "postgres")
@@ -146,12 +149,9 @@ func Load() *Config {
 
 // GetDSN returns the database connection string
 func (c *Config) GetDSN() string {
-	// If URL is set (Render mode), use it directly
 	if c.Database.URL != "" {
 		return c.Database.URL
 	}
-
-	// Otherwise build from individual fields
 	return "postgres://" + c.Database.User + ":" + c.Database.Password +
 		"@" + c.Database.Host + ":" + c.Database.Port +
 		"/" + c.Database.Name + "?sslmode=" + c.Database.SSLMode

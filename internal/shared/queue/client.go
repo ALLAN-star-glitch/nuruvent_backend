@@ -1,5 +1,3 @@
-// internal/shared/queue/client.go
-
 package queue
 
 import (
@@ -8,8 +6,8 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
 type client struct {
@@ -17,7 +15,15 @@ type client struct {
 }
 
 func NewClient(cfg *config.Config) notificationdomain.TaskQueue {
-	c := asynq.NewClient(asynq.RedisClientOpt{Addr: cfg.Redis.URL})
+	redisURL := cfg.GetRedisURL()
+
+	// Parse URI cleanly to handle both host:port and full redis:// URLs
+	opt, err := asynq.ParseRedisURI(redisURL)
+	if err != nil {
+		log.Fatalf("❌ Failed to parse Redis URL for Asynq: %v", err)
+	}
+
+	c := asynq.NewClient(opt)
 	return &client{client: c}
 }
 

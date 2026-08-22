@@ -12,7 +12,7 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      REDIS_URL: redis:6379
+      REDIS_URL: redis://nuruvent-redis:6379
       CASBIN_MODEL: /root/configs/casbin/model.conf
     ports:
       - "8080:8080"
@@ -27,7 +27,9 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    command: air -c .air.toml  # API with hot reload (worker embedded)
+    command: air -c .air.toml
+    networks:
+      - nuruvent-network
 
   # ============================================
   # DATABASE (PostgreSQL)
@@ -49,6 +51,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - nuruvent-network
 
   # ============================================
   # REDIS (Cache + Queue)
@@ -67,7 +71,13 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    networks:
+      - nuruvent-network
 
 volumes:
   postgres-data:
   redis-data:
+
+networks:
+  nuruvent-network:
+    driver: bridge
