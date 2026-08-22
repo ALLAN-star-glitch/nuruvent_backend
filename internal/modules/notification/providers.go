@@ -32,8 +32,8 @@ var ProviderSet = wire.NewSet(
 
 func NewEmailConfig(cfg *config.Config) service.EmailChannelConfig {
 	return service.EmailChannelConfig{
-		EMAIL_API_KEY: cfg.Email.EMAIL_API_KEY,
-		EMAIL_FROM:    cfg.Email.EMAIL_FROM,
+		EMAIL_API_KEY: cfg.Email.APIKey,
+		EMAIL_FROM:    cfg.Email.From,
 	}
 }
 

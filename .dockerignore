@@ -1,0 +1,47 @@
+# Git
+.git/
+.gitignore
+
+# Vendor directory (critical!)
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+bin/
+tmp/
+*.test
+*.out
+coverage.out
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Docker files
+Dockerfile
+Dockerfile.dev
+docker-compose*.yml
+.dockerignore
+
+# Node modules
+node_modules/
+
+# Documentation
+docs/
+*.md
+

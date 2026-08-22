@@ -43,4 +43,4 @@ logs/
 vendor/
 coverage.out
 coverage.html
-*.coverprofile
+*.coverprofilevendor/

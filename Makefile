@@ -220,13 +220,13 @@ dev-all:
 # ================================================
 
 build:
-	go build -o bin/nuruvent cmd/api/main.go
+	go build -mod=mod -o bin/nuruvent cmd/api/main.go
 
 worker-build:
-	go build -o bin/worker cmd/worker/main.go
+	go build -mod=mod -o bin/worker cmd/worker/main.go
 
 seed-build:
-	go build -o bin/seed cmd/seed/main.go
+	go build -mod=mod -o bin/seed cmd/seed/main.go
 
 build-all: build worker-build seed-build
 	@echo "Built API, worker, and seed binaries"
@@ -294,9 +294,11 @@ clean-all: cache-clear clean wire-clean
 # WIRE - Dependency Injection
 # ================================================
 
+
 wire:
 	@echo "Generating wire_gen.go..."
-	wire gen ./internal/app
+	GOFLAGS="-mod=mod" wire gen ./internal/app
+	@echo "✅ wire_gen.go generated successfully!"
 
 wire-install:
 	go install github.com/google/wire/cmd/wire@latest
@@ -494,7 +496,7 @@ setup-force:
 
 swagger:
 	@echo "Generating Swagger documentation..."
-	swag init -g cmd/api/main.go -o docs
+	go run $(GOFLAGS) github.com/swaggo/swag/cmd/swag@latest init -g cmd/api/main.go -o docs
 
 swagger-fmt:
 	swag fmt

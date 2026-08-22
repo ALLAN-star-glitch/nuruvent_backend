@@ -15,15 +15,26 @@ var DB *gorm.DB
 
 // Connect initializes the database connection
 func Connect(cfg *config.Config) (*gorm.DB, error) {
-	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=UTC",
-		cfg.Database.Host,
-		cfg.Database.User,
-		cfg.Database.Password,
-		cfg.Database.Name,
-		cfg.Database.Port,
-		cfg.Database.SSLMode,
-	)
+	var dsn string
+
+	// ✅ Check if DATABASE_URL is provided (Render mode)
+	if cfg.Database.URL != "" {
+		// ✅ Render mode: Use the full connection string
+		dsn = cfg.Database.URL
+		log.Println("✅ Connecting to database using DATABASE_URL")
+	} else {
+		// ✅ Local mode: Build from individual fields
+		dsn = fmt.Sprintf(
+			"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=UTC",
+			cfg.Database.Host,
+			cfg.Database.User,
+			cfg.Database.Password,
+			cfg.Database.Name,
+			cfg.Database.Port,
+			cfg.Database.SSLMode,
+		)
+		log.Println("✅ Connecting to database using individual fields")
+	}
 
 	var err error
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
@@ -42,11 +53,12 @@ func Connect(cfg *config.Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to get database instance: %w", err)
 	}
 
-	sqlDB.SetMaxIdleConns(5)
-	sqlDB.SetMaxOpenConns(10)
+	// ✅ Increase connection pool for production
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(50)
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
-	log.Println("Database connected successfully")
+	log.Println("✅ Database connected successfully")
 	return DB, nil
 }
 

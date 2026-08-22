@@ -27,13 +27,13 @@ func main() {
 	// Debug: Log email configuration
 	// ================================================
 	log.Printf("📧 Email Configuration:")
-	log.Printf("   API Key: %s", maskString(cfg.Email.EMAIL_API_KEY))
-	log.Printf("   From: %s", cfg.Email.EMAIL_FROM)
+	log.Printf("   API Key: %s", maskString(cfg.Email.APIKey))
+	log.Printf("   From: %s", cfg.Email.From)
 
-	if cfg.Email.EMAIL_API_KEY == "" {
+	if cfg.Email.APIKey == "" {
 		log.Printf("⚠️ WARNING: EMAIL_API_KEY is empty! Check your .env file")
 	}
-	if cfg.Email.EMAIL_FROM == "" {
+	if cfg.Email.From == "" {
 		log.Printf("⚠️ WARNING: EMAIL_FROM is empty! Check your .env file")
 	}
 
@@ -50,9 +50,10 @@ func main() {
 	// Create Email Channel (Implements Outbound Port)
 	// ================================================
 	emailConfig := service.EmailChannelConfig{
-		EMAIL_API_KEY: cfg.Email.EMAIL_API_KEY,
-		EMAIL_FROM:    cfg.Email.EMAIL_FROM,
+		EMAIL_API_KEY: cfg.Email.APIKey,
+		EMAIL_FROM:    cfg.Email.From,
 	}
+	
 
 	// ✅ EmailChannel implements notificationdomain.Channel (outbound port)
 	emailChannel := service.NewEmailChannel(emailConfig)

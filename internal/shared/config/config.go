@@ -20,7 +20,7 @@ type Config struct {
 	Email       EmailConfig
 	Casbin      CasbinConfig
 	MPesa       MPesaConfig
-	Supabase	SupabaseConfig
+	Supabase    SupabaseConfig
 }
 
 type ServerConfig struct {
@@ -34,17 +34,18 @@ type DatabaseConfig struct {
 	Password string
 	Name     string
 	SSLMode  string
+	URL      string // ✅ ADD THIS - for Render's DATABASE_URL
 }
 
 type SupabaseConfig struct {
-	URL              string
-	SecretKey        string
-	PublishableKey   string  // Add this
-	BucketEvent      string
-	BucketBusiness   string
-	BucketProfile    string
+	URL               string
+	SecretKey         string
+	PublishableKey    string
+	BucketEvent       string
+	BucketBusiness    string
+	BucketProfile     string
 	BucketCertificate string
-	BucketRecording  string
+	BucketRecording   string
 }
 
 type RedisConfig struct {
@@ -58,8 +59,8 @@ type JWTConfig struct {
 }
 
 type EmailConfig struct {
-	EMAIL_API_KEY string
-	EMAIL_FROM   string
+	APIKey string
+	From   string
 }
 
 type CasbinConfig struct {
@@ -77,23 +78,15 @@ type MPesaConfig struct {
 }
 
 func Load() *Config {
-	// Load .env file
+	// Load .env file (ignore if not found)
 	if err := godotenv.Load(); err != nil {
 		log.Println("Warning: .env file not found, using environment variables")
 	}
 
-	return &Config{
+	cfg := &Config{
 		Environment: getEnv("ENVIRONMENT", "development"),
 		Server: ServerConfig{
 			Port: getEnv("SERVER_PORT", "8080"),
-		},
-		Database: DatabaseConfig{
-			Host:     getEnv("DB_HOST", "localhost"),
-			Port:     getEnv("DB_PORT", "54582"),
-			User:     getEnv("DB_USER", "postgres"),
-			Password: getEnv("DB_PASSWORD", ""),
-			Name:     getEnv("DB_NAME", "nuruvent"),
-			SSLMode:  getEnv("DB_SSL_MODE", "disable"),
 		},
 		Redis: RedisConfig{
 			URL: getEnv("REDIS_URL", "localhost:6379"),
@@ -104,8 +97,8 @@ func Load() *Config {
 			RefreshExpiration: getEnvDuration("JWT_REFRESH_EXPIRATION", 168*time.Hour),
 		},
 		Email: EmailConfig{
-			EMAIL_API_KEY: getEnv("EMAIL_API_KEY", ""),
-			EMAIL_FROM:   getEnv("EMAIL_FROM", "noreply@nuruvent.com"),
+			APIKey: getEnv("EMAIL_API_KEY", ""),
+			From:   getEnv("EMAIL_FROM", "noreply@nuruvent.com"),
 		},
 		Casbin: CasbinConfig{
 			ModelPath:        getEnv("CASBIN_MODEL", "configs/casbin/model.conf"),
@@ -120,16 +113,53 @@ func Load() *Config {
 			Environment:    getEnv("MPESA_ENVIRONMENT", "sandbox"),
 		},
 		Supabase: SupabaseConfig{
-			URL:              getEnv("SUPABASE_URL", ""),
-			SecretKey:        getEnv("SUPABASE_SECRET_KEY", ""),
-			PublishableKey:   getEnv("SUPABASE_PUBLISHABLE_KEY", ""), 
-			BucketEvent:      getEnv("SUPABASE_BUCKET_EVENTS", "events"),
-			BucketBusiness:   getEnv("SUPABASE_BUCKET_BUSINESSES", "businesses"),
-			BucketProfile:    getEnv("SUPABASE_BUCKET_PROFILES", "profiles"),
+			URL:               getEnv("SUPABASE_URL", ""),
+			SecretKey:         getEnv("SUPABASE_SECRET_KEY", ""),
+			PublishableKey:    getEnv("SUPABASE_PUBLISHABLE_KEY", ""),
+			BucketEvent:       getEnv("SUPABASE_BUCKET_EVENTS", "events"),
+			BucketBusiness:    getEnv("SUPABASE_BUCKET_BUSINESSES", "businesses"),
+			BucketProfile:     getEnv("SUPABASE_BUCKET_PROFILES", "profiles"),
 			BucketCertificate: getEnv("SUPABASE_BUCKET_CERTIFICATES", "certificates"),
-			BucketRecording:  getEnv("SUPABASE_BUCKET_RECORDINGS", "recordings"),
+			BucketRecording:   getEnv("SUPABASE_BUCKET_RECORDINGS", "recordings"),
 		},
 	}
+
+	// ✅ Handle Database: Support both DATABASE_URL and individual fields
+	dbURL := getEnv("DATABASE_URL", "")
+	if dbURL != "" {
+		// ✅ Render mode: Use the full connection string
+		cfg.Database.URL = dbURL
+		log.Println("✅ Using DATABASE_URL for database connection")
+	} else {
+		// ✅ Local mode: Use individual fields
+		cfg.Database.Host = getEnv("DB_HOST", "localhost")
+		cfg.Database.Port = getEnv("DB_PORT", "54582")
+		cfg.Database.User = getEnv("DB_USER", "postgres")
+		cfg.Database.Password = getEnv("DB_PASSWORD", "")
+		cfg.Database.Name = getEnv("DB_NAME", "nuruvent")
+		cfg.Database.SSLMode = getEnv("DB_SSL_MODE", "disable")
+		log.Println("✅ Using individual DB fields for database connection")
+	}
+
+	return cfg
+}
+
+// GetDSN returns the database connection string
+func (c *Config) GetDSN() string {
+	// If URL is set (Render mode), use it directly
+	if c.Database.URL != "" {
+		return c.Database.URL
+	}
+
+	// Otherwise build from individual fields
+	return "postgres://" + c.Database.User + ":" + c.Database.Password +
+		"@" + c.Database.Host + ":" + c.Database.Port +
+		"/" + c.Database.Name + "?sslmode=" + c.Database.SSLMode
+}
+
+// GetRedisURL returns the Redis connection string
+func (c *Config) GetRedisURL() string {
+	return c.Redis.URL
 }
 
 func getEnv(key, defaultValue string) string {
