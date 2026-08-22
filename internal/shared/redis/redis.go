@@ -18,9 +18,19 @@ type Client struct {
 
 // NewClient creates a new Redis client
 func NewClient(cfg *config.Config) (*Client, error) {
-	client := redis.NewClient(&redis.Options{
-		Addr: cfg.Redis.URL,
-	})
+	redisURL := cfg.GetRedisURL()
+	
+	// Try to parse as URL first (for Render's redis://... format)
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		// If parsing fails, treat it as host:port (local development)
+		log.Printf("⚠️ Failed to parse Redis URL, using as host:port: %v", err)
+		opts = &redis.Options{
+			Addr: redisURL,
+		}
+	}
+
+	client := redis.NewClient(opts)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
