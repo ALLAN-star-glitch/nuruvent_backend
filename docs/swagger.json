@@ -770,6 +770,91 @@
                 }
             }
         },
+        "/api/v1/accounts/{accountId}/events/with-creator": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all events for an account with full creator information",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Events"
+                ],
+                "summary": "Get events by account with creator details",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Account ID",
+                        "name": "accountId",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.BaseResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "object",
+                                            "additionalProperties": true
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/response.BaseResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/accounts/{accountId}/events/{eventId}/certificate": {
             "post": {
                 "security": [
@@ -2815,14 +2900,14 @@
         },
         "/api/v1/events/slug/{slug}": {
             "get": {
-                "description": "Get event details by slug (public)",
+                "description": "Get event details by slug with full creator information",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Events"
                 ],
-                "summary": "Get event by slug",
+                "summary": "Get event by slug with creator details",
                 "parameters": [
                     {
                         "type": "string",
@@ -2844,7 +2929,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/domain.Event"
+                                            "$ref": "#/definitions/eventhandler.EventResponse"
                                         }
                                     }
                                 }
@@ -3030,14 +3115,14 @@
         },
         "/api/v1/events/upcoming": {
             "get": {
-                "description": "Get all upcoming published events",
+                "description": "Get all upcoming published events with full creator information",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Events"
                 ],
-                "summary": "Get upcoming events",
+                "summary": "Get upcoming events with creator details",
                 "parameters": [
                     {
                         "type": "integer",
@@ -3061,7 +3146,7 @@
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/domain.Event"
+                                                "$ref": "#/definitions/eventhandler.EventResponse"
                                             }
                                         }
                                     }
@@ -3080,14 +3165,14 @@
         },
         "/api/v1/events/{id}": {
             "get": {
-                "description": "Get event details by ID (public)",
+                "description": "Get event details by ID with full creator information",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Events"
                 ],
-                "summary": "Get event by ID",
+                "summary": "Get event by ID with creator details",
                 "parameters": [
                     {
                         "type": "string",
@@ -3109,7 +3194,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/domain.Event"
+                                            "$ref": "#/definitions/eventhandler.EventResponse"
                                         }
                                     }
                                 }
@@ -4103,6 +4188,47 @@
                 }
             }
         },
+        "domain.AccountInfo": {
+            "type": "object",
+            "properties": {
+                "accountType": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "displayName": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "institutionID": {
+                    "type": "string"
+                },
+                "institutionName": {
+                    "type": "string"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
         "domain.Event": {
             "type": "object",
             "properties": {
@@ -4118,6 +4244,9 @@
                 },
                 "createdBy": {
                     "type": "string"
+                },
+                "creator": {
+                    "$ref": "#/definitions/domain.AccountInfo"
                 },
                 "currentAttendees": {
                     "type": "integer"
@@ -4366,6 +4495,32 @@
                 }
             }
         },
+        "eventhandler.CreatorDTO": {
+            "type": "object",
+            "properties": {
+                "account_type": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "institution_name": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                }
+            }
+        },
         "eventhandler.DuplicateEventRequest": {
             "type": "object",
             "properties": {
@@ -4378,6 +4533,109 @@
                     "type": "boolean"
                 },
                 "name": {
+                    "type": "string"
+                }
+            }
+        },
+        "eventhandler.EventResponse": {
+            "type": "object",
+            "properties": {
+                "account_id": {
+                    "type": "string"
+                },
+                "certificate_price": {
+                    "type": "number"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "creator": {
+                    "description": "✅ NEW: Creator information (replaces created_by)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/eventhandler.CreatorDTO"
+                        }
+                    ]
+                },
+                "current_attendees": {
+                    "type": "integer"
+                },
+                "date": {
+                    "type": "string"
+                },
+                "deleted_at": {
+                    "type": "string"
+                },
+                "deleted_by": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "duration": {
+                    "type": "integer"
+                },
+                "event_status_id": {
+                    "type": "string"
+                },
+                "event_type_id": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "string"
+                },
+                "image_url": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "is_featured": {
+                    "type": "boolean"
+                },
+                "is_private": {
+                    "type": "boolean"
+                },
+                "is_virtual": {
+                    "type": "boolean"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "max_attendees": {
+                    "type": "integer"
+                },
+                "meet_link": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price": {
+                    "type": "number"
+                },
+                "restored_at": {
+                    "type": "string"
+                },
+                "restored_by": {
+                    "type": "string"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "thumbnail_url": {
+                    "type": "string"
+                },
+                "time": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "zoom_link": {
                     "type": "string"
                 }
             }

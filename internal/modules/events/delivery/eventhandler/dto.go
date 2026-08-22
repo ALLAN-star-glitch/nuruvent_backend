@@ -107,37 +107,51 @@ type BulkDuplicateRequest struct {
 // RESPONSE DTOS
 // ============================================================
 
-// ✅ EventResponse - API response for event data
+// ✅ CreatorDTO - Creator information in API responses
+type CreatorDTO struct {
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	DisplayName     string `json:"display_name,omitempty"`
+	Email           string `json:"email"`
+	Phone           string `json:"phone,omitempty"`
+	AccountType     string `json:"account_type"`
+	InstitutionName string `json:"institution_name,omitempty"`
+}
+
+// ✅ EventResponse - API response for event data (with creator info)
 type EventResponse struct {
-	ID               string  `json:"id"`
-	Slug             string  `json:"slug"`
-	Name             string  `json:"name"`
-	DisplayName      string  `json:"display_name,omitempty"`
-	Description      string  `json:"description,omitempty"`
-	EventTypeID      string  `json:"event_type_id"`
-	EventStatusID    string  `json:"event_status_id"`
-	ImageURL         string  `json:"image_url,omitempty"`
-	ThumbnailURL     string  `json:"thumbnail_url,omitempty"`
-	Date             string  `json:"date"`
-	Time             string  `json:"time"`
-	Duration         int     `json:"duration"`
-	Price            float64 `json:"price"`
-	CertificatePrice float64 `json:"certificate_price"`
-	Location         string  `json:"location,omitempty"`
-	IsVirtual        bool    `json:"is_virtual"`
-	ZoomLink         string  `json:"zoom_link,omitempty"`
-	MeetLink         string  `json:"meet_link,omitempty"`
-	MaxAttendees     int     `json:"max_attendees"`
-	CurrentAttendees int     `json:"current_attendees"`
-	AccountID        string  `json:"account_id"`
-	CreatedBy        string  `json:"created_by"`
-	IsActive         bool    `json:"is_active"`
-	DeletedAt        *string `json:"deleted_at,omitempty"`
-	DeletedBy        string  `json:"deleted_by,omitempty"`
-	RestoredAt       *string `json:"restored_at,omitempty"`
-	RestoredBy       string  `json:"restored_by,omitempty"`
-	CreatedAt        string  `json:"created_at"`
-	UpdatedAt        string  `json:"updated_at"`
+	ID               string     `json:"id"`
+	Slug             string     `json:"slug"`
+	Name             string     `json:"name"`
+	DisplayName      string     `json:"display_name,omitempty"`
+	Description      string     `json:"description,omitempty"`
+	EventTypeID      string     `json:"event_type_id"`
+	EventStatusID    string     `json:"event_status_id"`
+	ImageURL         string     `json:"image_url,omitempty"`
+	ThumbnailURL     string     `json:"thumbnail_url,omitempty"`
+	Date             string     `json:"date"`
+	Time             string     `json:"time"`
+	Duration         int        `json:"duration"`
+	Price            float64    `json:"price"`
+	CertificatePrice float64    `json:"certificate_price"`
+	Location         string     `json:"location,omitempty"`
+	IsVirtual        bool       `json:"is_virtual"`
+	ZoomLink         string     `json:"zoom_link,omitempty"`
+	MeetLink         string     `json:"meet_link,omitempty"`
+	MaxAttendees     int        `json:"max_attendees"`
+	CurrentAttendees int        `json:"current_attendees"`
+	AccountID        string     `json:"account_id"`
+	IsActive         bool       `json:"is_active"`
+	IsFeatured       bool       `json:"is_featured"`
+	IsPrivate        bool       `json:"is_private"`
+	DeletedAt        *string    `json:"deleted_at,omitempty"`
+	DeletedBy        string     `json:"deleted_by,omitempty"`
+	RestoredAt       *string    `json:"restored_at,omitempty"`
+	RestoredBy       string     `json:"restored_by,omitempty"`
+	CreatedAt        string     `json:"created_at"`
+	UpdatedAt        string     `json:"updated_at"`
+	// ✅ NEW: Creator information (replaces created_by)
+	Creator          CreatorDTO `json:"creator"`
 }
 
 // ✅ MediaInfoResponse - API response for media data

@@ -16,17 +16,16 @@ func (h *EventHandler) RegisterRoutes(
 	// ============================================================
 	public := router.Group("/events")
 	{
-		public.Get("/upcoming", h.GetUpcomingEvents)
+		// ✅ All public endpoints now include creator info
+		public.Get("/upcoming", h.GetUpcomingEventsWithCreator)
 		public.Get("/past", h.GetPastEvents)
 		public.Get("/types", h.GetEventTypes)
 		public.Get("/statuses", h.GetEventStatuses)
 		public.Get("/search", h.SearchEvents)
 		public.Get("/", h.ListEvents)
-		// ⚠️ Move these specific routes before the wildcard
-		public.Get("/slug/:slug", h.GetEventBySlug)
+		public.Get("/slug/:slug", h.GetEventBySlugWithCreator)
 		public.Get("/type/:type", h.GetEventsByType)
-		// ⚠️ Wildcard route should be LAST
-		public.Get("/:id", h.GetEvent)
+		public.Get("/:id", h.GetEventByIDWithCreator)
 	}
 
 	// ============================================================
@@ -36,7 +35,8 @@ func (h *EventHandler) RegisterRoutes(
 	protected.Use(authMiddleware)
 	protected.Use(authzMiddleware)
 	{
-		protected.Get("/", h.GetEventsByAccount)
+		// ✅ All account endpoints now include creator info
+		protected.Get("/", h.GetEventsByAccountWithCreator)
 		protected.Post("/draft", h.CreateDraft)
 		protected.Post("/", h.CreateEvent)
 		protected.Post("/:eventId/image", h.UploadEventImage)
@@ -54,7 +54,7 @@ func (h *EventHandler) RegisterRoutes(
 	bulkRoutes.Use(authMiddleware)
 	bulkRoutes.Use(authzMiddleware)
 	{
-		bulkRoutes.Delete("/", h.BulkDeleteEvents)              // DELETE /events/bulk/
+		bulkRoutes.Delete("/", h.BulkDeleteEvents)
 		bulkRoutes.Delete("/permanent", h.BulkPermanentlyDeleteEvents)
 		bulkRoutes.Post("/restore", h.BulkRestoreEvents)
 		bulkRoutes.Post("/publish", h.BulkPublishEvents)
@@ -71,7 +71,7 @@ func (h *EventHandler) RegisterRoutes(
 	eventRoutes.Use(authzMiddleware)
 	{
 		eventRoutes.Put("/:id", h.UpdateEvent)
-		eventRoutes.Delete("/:id", h.DeleteEvent)               // DELETE /events/{id}
+		eventRoutes.Delete("/:id", h.DeleteEvent)
 		eventRoutes.Delete("/:id/permanent", h.PermanentlyDeleteEvent)
 		eventRoutes.Post("/:id/restore", h.RestoreEvent)
 		eventRoutes.Post("/:id/publish", h.PublishEvent)

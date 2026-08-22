@@ -20,7 +20,7 @@ type Repository interface {
 	UpdateEvent(ctx context.Context, event *Event) error
 	DeleteEvent(ctx context.Context, id string) error
 
-	// ✅ NEW: Hard delete - permanently removes from database
+	// Hard delete - permanently removes from database
 	PermanentlyDeleteEvent(ctx context.Context, id string) error
 
 	// ============================================================
@@ -33,6 +33,22 @@ type Repository interface {
 	GetUpcomingEvents(ctx context.Context, limit int) ([]*Event, error)
 	GetPastEvents(ctx context.Context, limit int) ([]*Event, error)
 	SearchEvents(ctx context.Context, query string, filters SearchFilters) ([]*Event, int64, error)
+
+	// ============================================================
+	// EVENT QUERIES WITH CREATOR INFO
+	// ============================================================
+
+	// GetUpcomingEventsWithCreator returns upcoming events with creator info populated
+	GetUpcomingEventsWithCreator(ctx context.Context, limit int) ([]*Event, error)
+
+	// GetEventBySlugWithCreator returns an event by slug with creator info populated
+	GetEventBySlugWithCreator(ctx context.Context, slug string) (*Event, error)
+
+	// GetEventByIDWithCreator returns an event by ID with creator info populated
+	GetEventByIDWithCreator(ctx context.Context, id string) (*Event, error)
+
+	// GetEventsByAccountWithCreator returns events for an account with creator info populated
+	GetEventsByAccountWithCreator(ctx context.Context, accountID string, limit, offset int) ([]*Event, int64, error)
 
 	// ============================================================
 	// EVENT TYPES (Value Objects)
@@ -59,8 +75,8 @@ type ListEventsFilters struct {
 	AccountID      string
 	EventTypeID    string
 	EventStatusID  string
-	IncludeDeleted bool // ✅ NEW: Include soft-deleted events
-	OnlyDeleted    bool   // ✅ NEW: Show ONLY deleted events
+	IncludeDeleted bool
+	OnlyDeleted    bool
 	Limit          int
 	Offset         int
 }
@@ -68,8 +84,8 @@ type ListEventsFilters struct {
 type SearchFilters struct {
 	AccountID      string
 	EventTypeID    string
-	IncludeDeleted bool // ✅ NEW: Include soft-deleted events
-	OnlyDeleted    bool   // ✅ NEW: Show ONLY deleted events
+	IncludeDeleted bool
+	OnlyDeleted    bool
 	Limit          int
 	Offset         int
 }

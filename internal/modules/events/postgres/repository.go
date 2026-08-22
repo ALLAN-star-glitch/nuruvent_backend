@@ -7,6 +7,7 @@ import (
 	"errors"
 	"time"
 
+	"log"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	"gorm.io/gorm"
 )
@@ -392,3 +393,153 @@ func (r *PostgresRepository) GetAllEventStatuses(ctx context.Context) ([]*domain
 	}
 	return statuses, nil
 }
+
+// GetUpcomingEventsWithCreator returns upcoming events with creator info populated
+
+
+func (r *PostgresRepository) GetUpcomingEventsWithCreator(ctx context.Context, limit int) ([]*domain.Event, error) {
+    var models []EventModel
+
+    query := r.db.WithContext(ctx).Table("events").
+        Select(`events.*,
+                accounts.name as creator_name,
+                accounts.display_name as creator_display_name,
+                accounts.email as creator_email,
+                accounts.phone as creator_phone,
+                COALESCE(institutions.name, '') as creator_institution_name,
+                COALESCE(account_types.slug, 'personal') as creator_account_type`).
+        Joins("LEFT JOIN accounts ON events.created_by = accounts.id").
+        Joins("LEFT JOIN institutions ON accounts.institution_id = institutions.id").
+        Joins("LEFT JOIN account_types ON accounts.account_type_id = account_types.id").
+        Where("events.date >= CURRENT_DATE AND events.deleted_at IS NULL").
+        Where("events.event_status_id IN (SELECT id FROM event_statuses WHERE slug IN ('published', 'upcoming', 'live'))").
+        Order("events.date ASC, events.time ASC").
+        Limit(limit)
+
+    // ✅ Debug: Print the SQL
+    sql := query.ToSQL(func(tx *gorm.DB) *gorm.DB {
+        return tx.Find(&models)
+    })
+    log.Printf("🔍 SQL Query: %s", sql)
+
+    err := query.Find(&models).Error
+    if err != nil {
+        log.Printf("❌ Query error: %v", err)
+        return nil, err
+    }
+
+    // ✅ Debug: Print the raw model data
+    for i, m := range models {
+        log.Printf("📊 Raw Model %d: ID=%s, CreatedBy=%s, CreatorName='%s', CreatorEmail='%s', CreatorAccountType='%s'", 
+            i, m.ID, m.CreatedBy, m.CreatorName, m.CreatorEmail, m.CreatorAccountType)
+    }
+
+    return toDomainEventsWithCreator(models), nil
+}
+
+// GetEventBySlugWithCreator returns an event by slug with creator info populated
+
+
+func (r *PostgresRepository) GetEventBySlugWithCreator(ctx context.Context, slug string) (*domain.Event, error) {
+    var model EventModel
+
+    err := r.db.WithContext(ctx).Table("events").
+        Select(`events.*,
+                accounts.name as creator_name,
+                accounts.display_name as creator_display_name,
+                accounts.email as creator_email,
+                accounts.phone as creator_phone,
+                COALESCE(institutions.name, '') as creator_institution_name,
+                COALESCE(account_types.slug, 'personal') as creator_account_type`).
+        Joins("LEFT JOIN accounts ON events.created_by = accounts.id").
+        Joins("LEFT JOIN institutions ON accounts.institution_id = institutions.id").
+        Joins("LEFT JOIN account_types ON accounts.account_type_id = account_types.id").
+        Where("events.slug = ? AND events.deleted_at IS NULL", slug).
+        First(&model).Error
+
+    if err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            return nil, nil
+        }
+        return nil, err
+    }
+
+    events := toDomainEventsWithCreator([]EventModel{model})
+    if len(events) == 0 {
+        return nil, nil
+    }
+    return events[0], nil
+}
+
+
+// GetEventByIDWithCreator returns an event by ID with creator info populated
+func (r *PostgresRepository) GetEventByIDWithCreator(ctx context.Context, id string) (*domain.Event, error) {
+    var model EventModel
+
+    err := r.db.WithContext(ctx).Table("events").
+        Select(`events.*,
+                accounts.name as creator_name,
+                accounts.display_name as creator_display_name,
+                accounts.email as creator_email,
+                accounts.phone as creator_phone,
+                COALESCE(institutions.name, '') as creator_institution_name,
+                COALESCE(account_types.slug, 'personal') as creator_account_type`).
+        Joins("LEFT JOIN accounts ON events.created_by = accounts.id").
+        Joins("LEFT JOIN institutions ON accounts.institution_id = institutions.id").
+        Joins("LEFT JOIN account_types ON accounts.account_type_id = account_types.id").
+        Where("events.id = ? AND events.deleted_at IS NULL", id).
+        First(&model).Error
+
+    if err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            return nil, nil
+        }
+        return nil, err
+    }
+
+    events := toDomainEventsWithCreator([]EventModel{model})
+    if len(events) == 0 {
+        return nil, nil
+    }
+    return events[0], nil
+}
+
+// GetEventsByAccountWithCreator returns events for an account with creator info populated
+func (r *PostgresRepository) GetEventsByAccountWithCreator(ctx context.Context, accountID string, limit, offset int) ([]*domain.Event, int64, error) {
+    var models []EventModel
+    var total int64
+
+    query := r.db.WithContext(ctx).Table("events").
+        Select(`events.*,
+                accounts.name as creator_name,
+                accounts.display_name as creator_display_name,
+                accounts.email as creator_email,
+                accounts.phone as creator_phone,
+                COALESCE(institutions.name, '') as creator_institution_name,
+                COALESCE(account_types.slug, 'personal') as creator_account_type`).
+        Joins("LEFT JOIN accounts ON events.created_by = accounts.id").
+        Joins("LEFT JOIN institutions ON accounts.institution_id = institutions.id").
+        Joins("LEFT JOIN account_types ON accounts.account_type_id = account_types.id").
+        Where("events.account_id = ? AND events.deleted_at IS NULL", accountID)
+
+    // Get total count
+    if err := query.Count(&total).Error; err != nil {
+        return nil, 0, err
+    }
+
+    // Apply pagination
+    if limit > 0 {
+        query = query.Limit(limit)
+    }
+    if offset > 0 {
+        query = query.Offset(offset)
+    }
+
+    err := query.Order("events.date DESC").Find(&models).Error
+    if err != nil {
+        return nil, 0, err
+    }
+
+    return toDomainEventsWithCreator(models), total, nil
+}
+

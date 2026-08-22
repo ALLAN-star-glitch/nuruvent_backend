@@ -336,3 +336,39 @@ func ToModelEventStatusEntity(eventStatus *domain.EventStatus) *EventStatusModel
 		UpdatedAt:   eventStatus.UpdatedAt,
 	}
 }
+
+// ✅ NEW: Convert EventModel to domain.Event with creator info
+
+
+func toDomainEventWithCreator(model *EventModel) *domain.Event {
+    if model == nil {
+        return nil
+    }
+
+    event := ToDomainEvent(model)
+
+    // ✅ Populate creator info from join fields
+    if model.CreatorName != "" || model.CreatorEmail != "" {
+        creator := &domain.AccountInfo{
+            ID:              model.CreatedBy,
+            Name:            model.CreatorName,
+            DisplayName:     model.CreatorDisplayName,
+            Email:           model.CreatorEmail,
+            Phone:           model.CreatorPhone,
+            AccountType:     model.CreatorAccountType, // Now comes from account_types.slug
+            InstitutionName: model.CreatorInstitutionName,
+        }
+        event.WithCreator(creator)
+    }
+
+    return event
+}
+
+// ✅ NEW: Convert multiple EventModels to domain.Events with creator info
+func toDomainEventsWithCreator(models []EventModel) []*domain.Event {
+	events := make([]*domain.Event, len(models))
+	for i, model := range models {
+		events[i] = toDomainEventWithCreator(&model)
+	}
+	return events
+}

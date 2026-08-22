@@ -31,7 +31,7 @@ type Service interface {
 	BulkDuplicateEvents(ctx context.Context, ids []string, cmd BulkDuplicateCommand) (*BulkDuplicateResult, error)
 
 	// ============================================================
-	// READ
+	// READ - Basic (No Creator Info)
 	// ============================================================
 
 	GetEventByID(ctx context.Context, id string) (*domain.Event, error)
@@ -42,6 +42,22 @@ type Service interface {
 	GetUpcomingEvents(ctx context.Context, limit int) ([]*domain.Event, error)
 	GetPastEvents(ctx context.Context, limit int) ([]*domain.Event, error)
 	SearchEvents(ctx context.Context, query string, filters SearchFilters) ([]*domain.Event, int64, error)
+
+	// ============================================================
+	// READ - With Creator Info
+	// ============================================================
+
+	// GetUpcomingEventsWithCreator returns upcoming events with creator info populated
+	GetUpcomingEventsWithCreator(ctx context.Context, limit int) ([]*domain.Event, error)
+
+	// GetEventBySlugWithCreator returns an event by slug with creator info populated
+	GetEventBySlugWithCreator(ctx context.Context, slug string) (*domain.Event, error)
+
+	// GetEventByIDWithCreator returns an event by ID with creator info populated
+	GetEventByIDWithCreator(ctx context.Context, id string) (*domain.Event, error)
+
+	// GetEventsByAccountWithCreator returns events for an account with creator info populated
+	GetEventsByAccountWithCreator(ctx context.Context, accountID string, page, pageSize int) ([]*domain.Event, int64, error)
 
 	// ============================================================
 	// UPDATE

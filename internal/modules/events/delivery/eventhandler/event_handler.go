@@ -1655,3 +1655,159 @@ func (h *EventHandler) BulkDeleteEventMedia(c fiber.Ctx) error {
 
 	return response.Success(c, "Media deleted successfully", result)
 }
+
+// internal/modules/events/handler/eventhandler.go
+
+// ============================================================
+// PUBLIC HANDLERS WITH CREATOR INFO
+// ============================================================
+
+// GetUpcomingEventsWithCreator godoc
+// @Summary Get upcoming events with creator details
+// @Description Get all upcoming published events with full creator information
+// @Tags Events
+// @Produce json
+// @Param limit query int false "Number of events to return" default(10)
+// @Success 200 {object} response.BaseResponse{data=[]EventResponse}
+// @Failure 500 {object} response.BaseResponse
+// @Router /api/v1/events/upcoming [get]
+func (h *EventHandler) GetUpcomingEventsWithCreator(c fiber.Ctx) error {
+	limit := getQueryInt(c, "limit", 10)
+	if limit > 50 {
+		limit = 50
+	}
+
+	events, err := h.svc.GetUpcomingEventsWithCreator(c.Context(), limit)
+	if err != nil {
+		return response.InternalError(c, "Failed to get upcoming events", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	responses := make([]EventResponse, len(events))
+	for i, event := range events {
+		responses[i] = NewEventResponseFromEvent(event)
+	}
+
+	return response.Success(c, "Upcoming events retrieved successfully", responses)
+}
+
+// GetEventBySlugWithCreator godoc
+// @Summary Get event by slug with creator details
+// @Description Get event details by slug with full creator information
+// @Tags Events
+// @Produce json
+// @Param slug path string true "Event Slug"
+// @Success 200 {object} response.BaseResponse{data=EventResponse}
+// @Failure 400 {object} response.BaseResponse
+// @Failure 404 {object} response.BaseResponse
+// @Failure 500 {object} response.BaseResponse
+// @Router /api/v1/events/slug/{slug} [get]
+func (h *EventHandler) GetEventBySlugWithCreator(c fiber.Ctx) error {
+	slug := c.Params("slug")
+	if slug == "" {
+		return response.BadRequest(c, "Event slug is required", nil)
+	}
+
+	event, err := h.svc.GetEventBySlugWithCreator(c.Context(), slug)
+	if err != nil {
+		if errors.Is(err, domain.ErrEventNotFound) {
+			return response.NotFound(c, "Event not found", nil)
+		}
+		return response.InternalError(c, "Failed to get event", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	if event == nil {
+		return response.NotFound(c, "Event not found", nil)
+	}
+
+	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
+}
+
+// GetEventByIDWithCreator godoc
+// @Summary Get event by ID with creator details
+// @Description Get event details by ID with full creator information
+// @Tags Events
+// @Produce json
+// @Param id path string true "Event ID"
+// @Success 200 {object} response.BaseResponse{data=EventResponse}
+// @Failure 400 {object} response.BaseResponse
+// @Failure 404 {object} response.BaseResponse
+// @Failure 500 {object} response.BaseResponse
+// @Router /api/v1/events/{id} [get]
+func (h *EventHandler) GetEventByIDWithCreator(c fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c, "Event ID is required", nil)
+	}
+
+	event, err := h.svc.GetEventByIDWithCreator(c.Context(), id)
+	if err != nil {
+		if errors.Is(err, domain.ErrEventNotFound) {
+			return response.NotFound(c, "Event not found", nil)
+		}
+		return response.InternalError(c, "Failed to get event", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	if event == nil {
+		return response.NotFound(c, "Event not found", nil)
+	}
+
+	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
+}
+
+
+// internal/modules/events/delivery/eventhandler/event_handler.go
+
+// GetEventsByAccountWithCreator godoc
+// @Summary Get events by account with creator details
+// @Description Get all events for an account with full creator information
+// @Tags Events
+// @Produce json
+// @Security BearerAuth
+// @Param accountId path string true "Account ID"
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(20)
+// @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
+// @Failure 400 {object} response.BaseResponse
+// @Failure 401 {object} response.BaseResponse
+// @Failure 403 {object} response.BaseResponse
+// @Failure 500 {object} response.BaseResponse
+// @Router /api/v1/accounts/{accountId}/events/with-creator [get]
+func (h *EventHandler) GetEventsByAccountWithCreator(c fiber.Ctx) error {
+	accountID := c.Params("accountId")
+	if accountID == "" {
+		return response.BadRequest(c, "Account ID is required", nil)
+	}
+
+	page := getQueryInt(c, "page", 1)
+	pageSize := getQueryInt(c, "page_size", 20)
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	events, total, err := h.svc.GetEventsByAccountWithCreator(c.Context(), accountID, page, pageSize)
+	if err != nil {
+		return response.InternalError(c, "Failed to get events", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	// Convert to response DTOs with creator info
+	responses := make([]EventResponse, len(events))
+	for i, event := range events {
+		responses[i] = NewEventResponseFromEvent(event)
+	}
+
+	return response.Success(c, "Events retrieved successfully", fiber.Map{
+		"data":        responses,
+		"page":        page,
+		"page_size":   pageSize,
+		"total":       total,
+		"total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
+	})
+}

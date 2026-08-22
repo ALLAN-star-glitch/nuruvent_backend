@@ -37,6 +37,7 @@ type Event struct {
 	EventStatusID string
 	AccountID     string
 	CreatedBy     string
+	Creator       *AccountInfo
 
 	// Media
 	ImageURL     string
@@ -150,6 +151,11 @@ func (e *Event) Publish() error {
 	e.UpdatedAt = time.Now()
 
 	return nil
+}
+
+func (e *Event) WithCreator(creator *AccountInfo) *Event {
+    e.Creator = creator
+    return e
 }
 
 // Cancel - Cancel the event

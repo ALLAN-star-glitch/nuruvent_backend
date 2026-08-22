@@ -44,6 +44,13 @@ type EventModel struct {
 	RestoredBy *string        `gorm:"index"`  // ✅ Use *string to allow NULL
 	IsFeatured bool       `gorm:"default:false;index"`
 	IsPrivate  bool       `gorm:"default:false;index"`
+
+	CreatorName           string `gorm:"column:creator_name"`
+    CreatorDisplayName    string `gorm:"column:creator_display_name"`
+    CreatorEmail          string `gorm:"column:creator_email"`
+    CreatorPhone          string `gorm:"column:creator_phone"`
+    CreatorAccountType    string `gorm:"column:creator_account_type"`
+    CreatorInstitutionName string `gorm:"column:creator_institution_name"`
 }
 
 func (EventModel) TableName() string {
@@ -99,3 +106,5 @@ type EventStatusModel struct {
 func (EventStatusModel) TableName() string {
 	return "event_statuses"
 }
+
+

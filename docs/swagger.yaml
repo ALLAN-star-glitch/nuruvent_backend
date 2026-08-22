@@ -236,6 +236,33 @@ definitions:
       otp:
         type: string
     type: object
+  domain.AccountInfo:
+    properties:
+      accountType:
+        type: string
+      createdAt:
+        type: string
+      displayName:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      institutionID:
+        type: string
+      institutionName:
+        type: string
+      isActive:
+        type: boolean
+      name:
+        type: string
+      phone:
+        type: string
+      slug:
+        type: string
+      updatedAt:
+        type: string
+    type: object
   domain.Event:
     properties:
       accountID:
@@ -247,6 +274,8 @@ definitions:
         type: string
       createdBy:
         type: string
+      creator:
+        $ref: '#/definitions/domain.AccountInfo'
       currentAttendees:
         type: integer
       date:
@@ -413,6 +442,23 @@ definitions:
     required:
     - ids
     type: object
+  eventhandler.CreatorDTO:
+    properties:
+      account_type:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      institution_name:
+        type: string
+      name:
+        type: string
+      phone:
+        type: string
+    type: object
   eventhandler.DuplicateEventRequest:
     properties:
       date:
@@ -422,6 +468,73 @@ definitions:
         description: 'Default: true'
         type: boolean
       name:
+        type: string
+    type: object
+  eventhandler.EventResponse:
+    properties:
+      account_id:
+        type: string
+      certificate_price:
+        type: number
+      created_at:
+        type: string
+      creator:
+        allOf:
+        - $ref: '#/definitions/eventhandler.CreatorDTO'
+        description: '✅ NEW: Creator information (replaces created_by)'
+      current_attendees:
+        type: integer
+      date:
+        type: string
+      deleted_at:
+        type: string
+      deleted_by:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      duration:
+        type: integer
+      event_status_id:
+        type: string
+      event_type_id:
+        type: string
+      id:
+        type: string
+      image_url:
+        type: string
+      is_active:
+        type: boolean
+      is_featured:
+        type: boolean
+      is_private:
+        type: boolean
+      is_virtual:
+        type: boolean
+      location:
+        type: string
+      max_attendees:
+        type: integer
+      meet_link:
+        type: string
+      name:
+        type: string
+      price:
+        type: number
+      restored_at:
+        type: string
+      restored_by:
+        type: string
+      slug:
+        type: string
+      thumbnail_url:
+        type: string
+      time:
+        type: string
+      updated_at:
+        type: string
+      zoom_link:
         type: string
     type: object
   eventhandler.UpdateEventRequest:
@@ -1120,6 +1233,59 @@ paths:
       security:
       - BearerAuth: []
       summary: Create a draft event
+      tags:
+      - Events
+  /api/v1/accounts/{accountId}/events/with-creator:
+    get:
+      description: Get all events for an account with full creator information
+      parameters:
+      - description: Account ID
+        in: path
+        name: accountId
+        required: true
+        type: string
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.BaseResponse'
+            - properties:
+                data:
+                  additionalProperties: true
+                  type: object
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
+      summary: Get events by account with creator details
       tags:
       - Events
   /api/v1/accounts/{id}:
@@ -1921,7 +2087,7 @@ paths:
       tags:
       - Events
     get:
-      description: Get event details by ID (public)
+      description: Get event details by ID with full creator information
       parameters:
       - description: Event ID
         in: path
@@ -1938,7 +2104,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -1952,7 +2118,7 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.BaseResponse'
-      summary: Get event by ID
+      summary: Get event by ID with creator details
       tags:
       - Events
     put:
@@ -2691,7 +2857,7 @@ paths:
       - Events
   /api/v1/events/slug/{slug}:
     get:
-      description: Get event details by slug (public)
+      description: Get event details by slug with full creator information
       parameters:
       - description: Event Slug
         in: path
@@ -2708,7 +2874,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -2722,7 +2888,7 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.BaseResponse'
-      summary: Get event by slug
+      summary: Get event by slug with creator details
       tags:
       - Events
   /api/v1/events/statuses:
@@ -2823,7 +2989,7 @@ paths:
       - Events
   /api/v1/events/upcoming:
     get:
-      description: Get all upcoming published events
+      description: Get all upcoming published events with full creator information
       parameters:
       - default: 10
         description: Number of events to return
@@ -2841,14 +3007,14 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/domain.Event'
+                    $ref: '#/definitions/eventhandler.EventResponse'
                   type: array
               type: object
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.BaseResponse'
-      summary: Get upcoming events
+      summary: Get upcoming events with creator details
       tags:
       - Events
 securityDefinitions:

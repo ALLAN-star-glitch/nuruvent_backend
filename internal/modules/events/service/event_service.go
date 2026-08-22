@@ -1464,3 +1464,58 @@ func parseDate(dateStr string) time.Time {
 	}
 	return t
 }
+
+// internal/modules/events/service/service_impl.go
+
+// ============================================================
+// READ - With Creator Info Implementations
+// ============================================================
+
+// GetUpcomingEventsWithCreator returns upcoming events with creator info populated
+func (s *eventService) GetUpcomingEventsWithCreator(ctx context.Context, limit int) ([]*domain.Event, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	return s.repo.GetUpcomingEventsWithCreator(ctx, limit)
+}
+
+// GetEventBySlugWithCreator returns an event by slug with creator info populated
+func (s *eventService) GetEventBySlugWithCreator(ctx context.Context, slug string) (*domain.Event, error) {
+	if slug == "" {
+		return nil, errors.New("event slug is required")
+	}
+	return s.repo.GetEventBySlugWithCreator(ctx, slug)
+}
+
+// GetEventByIDWithCreator returns an event by ID with creator info populated
+func (s *eventService) GetEventByIDWithCreator(ctx context.Context, id string) (*domain.Event, error) {
+	if id == "" {
+		return nil, errors.New("event ID is required")
+	}
+	return s.repo.GetEventByIDWithCreator(ctx, id)
+}
+
+// GetEventsByAccountWithCreator returns events for an account with creator info populated
+func (s *eventService) GetEventsByAccountWithCreator(ctx context.Context, accountID string, page, pageSize int) ([]*domain.Event, int64, error) {
+	if accountID == "" {
+		return nil, 0, errors.New("account ID is required")
+	}
+	
+	limit := pageSize
+	if limit <= 0 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	
+	offset := (page - 1) * limit
+	if offset < 0 {
+		offset = 0
+	}
+	
+	return s.repo.GetEventsByAccountWithCreator(ctx, accountID, limit, offset)
+}
