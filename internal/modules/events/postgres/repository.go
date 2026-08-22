@@ -78,7 +78,7 @@ func (r *PostgresRepository) GetEventBySlug(ctx context.Context, slug string) (*
 
 func (r *PostgresRepository) UpdateEvent(ctx context.Context, event *domain.Event) error {
 	model := ToModelEvent(event)
-	return r.db.WithContext(ctx).Save(model).Error
+	return r.db.WithContext(ctx).Updates(model).Error
 }
 
 func (r *PostgresRepository) DeleteEvent(ctx context.Context, id string) error {

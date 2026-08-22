@@ -834,36 +834,55 @@ func (s *eventService) PermanentlyDeleteEventsByAccount(ctx context.Context, acc
 	return s.PermanentlyDeleteEvents(ctx, ids, deletedBy)
 }
 
+
 // ============================================================
 // STATUS - Single
 // ============================================================
 
 func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
-	log.Printf("📤 Publishing event: %s", id)
+    log.Printf("📤 Publishing event: %s", id)
 
-	event, err := s.repo.GetEventByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if event == nil {
-		return nil, domain.ErrEventNotFound
-	}
+    event, err := s.repo.GetEventByID(ctx, id)
+    if err != nil {
+        return nil, err
+    }
+    if event == nil {
+        return nil, domain.ErrEventNotFound
+    }
 
-	if !s.permChecker.CanUpdateEvent(ctx, publishedBy, event.AccountID) {
-		return nil, errors.New("insufficient permissions to publish this event")
-	}
+    if !s.permChecker.CanUpdateEvent(ctx, publishedBy, event.AccountID) {
+        return nil, errors.New("insufficient permissions to publish this event")
+    }
 
-	if err := event.Publish(); err != nil {
-		log.Printf("❌ Publish validation failed: %v", err)
-		return nil, err
-	}
+    // ✅ 1. Get the published status
+    status, err := s.repo.GetEventStatusBySlug(ctx, "published")
+    if err != nil {
+        log.Printf("❌ Failed to get published status: %v", err)
+        return nil, fmt.Errorf("failed to get published status: %w", err)
+    }
+    if status == nil {
+        log.Printf("❌ Published status not found")
+        return nil, errors.New("published status not found")
+    }
 
-	if err := s.repo.UpdateEvent(ctx, event); err != nil {
-		return nil, fmt.Errorf("failed to publish event: %w", err)
-	}
+    // ✅ 2. Validate the event FIRST (without changing status)
+    if err := event.Publish(); err != nil {
+        log.Printf("❌ Publish validation failed: %v", err)
+        return nil, err
+    }
 
-	log.Printf("✅ Event published successfully: %s", id)
-	return event, nil
+    // ✅ 3. Set the status AFTER validation (this prevents it from being overwritten)
+    event.EventStatusID = status.ID
+    log.Printf("✅ Setting status to: %s (%s)", status.Name, status.ID)
+
+    // ✅ 4. Update the event
+    if err := s.repo.UpdateEvent(ctx, event); err != nil {
+        log.Printf("❌ Failed to update event: %v", err)
+        return nil, fmt.Errorf("failed to publish event: %w", err)
+    }
+
+    log.Printf("✅ Event published successfully: %s", id)
+    return event, nil
 }
 
 func (s *eventService) CancelEvent(ctx context.Context, id, cancelledBy string) (*domain.Event, error) {
