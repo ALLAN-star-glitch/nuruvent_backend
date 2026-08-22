@@ -45,6 +45,7 @@ func NewApp() (*App, error) {
 			"Authorization",
 			"X-Requested-With",
 			"Cookie",
+			"Set-Cookie",
 		},
 		AllowCredentials: true, // ✅ Required for cookies
 		ExposeHeaders:    []string{"Set-Cookie"},

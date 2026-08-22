@@ -51,13 +51,6 @@ func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
         sameSite = "None"
     }
     
-    // ✅ Set the domain for cross-origin cookies
-    // For Render, the domain should be empty or set to the parent domain
-    // For production with custom domain, set to .nuruvent.com
-    domain := ""
-    if h.config.Environment == "production" {
-        domain = ".nuruvent.com"  // ✅ Allows cookies across subdomains
-    }
     
     c.Cookie(&fiber.Cookie{
         Name:     "access_token",
@@ -67,7 +60,6 @@ func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
         Secure:   isSecure, // ✅ true on HTTPS, false on HTTP
         SameSite: sameSite, // ✅ None on HTTPS, Lax on HTTP
         Path:     "/",
-        Domain:   domain,   // ✅ Set domain for cross-origin
     })
 }
 
@@ -79,10 +71,6 @@ func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
         sameSite = "None"
     }
     
-    domain := ""
-    if h.config.Environment == "production" {
-        domain = ".nuruvent.com"
-    }
     
     c.Cookie(&fiber.Cookie{
         Name:     "refresh_token",
@@ -92,7 +80,6 @@ func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
         Secure:   isSecure,
         SameSite: sameSite,
         Path:     "/auth/refresh",
-        Domain:   domain,
     })
 }
 
@@ -104,11 +91,6 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
         sameSite = "None"
     }
     
-    domain := ""
-    if h.config.Environment == "production" {
-        domain = ".nuruvent.com"
-    }
-    
     c.Cookie(&fiber.Cookie{
         Name:     "access_token",
         Value:    "",
@@ -117,7 +99,7 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
         Secure:   isSecure,
         SameSite: sameSite,
         Path:     "/",
-        Domain:   domain,
+
     })
     c.Cookie(&fiber.Cookie{
         Name:     "refresh_token",
@@ -127,7 +109,7 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
         Secure:   isSecure,
         SameSite: sameSite,
         Path:     "/auth/refresh",
-        Domain:   domain,
+   
     })
 }
 
