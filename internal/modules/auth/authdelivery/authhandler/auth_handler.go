@@ -41,36 +41,43 @@ func NewAuthHandler(
 // ============================================================
 
 func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
+	// ✅ Use c.Secure() to check if the request is actually HTTPS
+	isSecure := c.Secure()
+	
 	c.Cookie(&fiber.Cookie{
 		Name:     "access_token",
 		Value:    token,
 		Expires:  time.Now().Add(h.config.JWT.AccessExpiration),
 		HTTPOnly: true,
-		Secure:   h.config.Environment == "production",
+		Secure:   isSecure, // ✅ Dynamically set based on request protocol
 		SameSite: "Lax",
 		Path:     "/",
 	})
 }
 
 func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
+	isSecure := c.Secure()
+	
 	c.Cookie(&fiber.Cookie{
 		Name:     "refresh_token",
 		Value:    token,
 		Expires:  time.Now().Add(h.config.JWT.RefreshExpiration),
 		HTTPOnly: true,
-		Secure:   h.config.Environment == "production",
+		Secure:   isSecure, // ✅ Dynamically set based on request protocol
 		SameSite: "Lax",
 		Path:     "/auth/refresh",
 	})
 }
 
 func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
+	isSecure := c.Secure()
+	
 	c.Cookie(&fiber.Cookie{
 		Name:     "access_token",
 		Value:    "",
 		Expires:  time.Now().Add(-time.Hour),
 		HTTPOnly: true,
-		Secure:   h.config.Environment == "production",
+		Secure:   isSecure,
 		SameSite: "Lax",
 		Path:     "/",
 	})
@@ -79,7 +86,7 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
 		Value:    "",
 		Expires:  time.Now().Add(-time.Hour),
 		HTTPOnly: true,
-		Secure:   h.config.Environment == "production",
+		Secure:   isSecure,
 		SameSite: "Lax",
 		Path:     "/auth/refresh",
 	})
