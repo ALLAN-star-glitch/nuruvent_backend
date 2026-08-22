@@ -22,19 +22,14 @@ services:
         value: production
       - key: SERVER_PORT
         value: 8080
-      
-      # ✅ Render injects the full connection string automatically
       - key: DATABASE_URL
         fromDatabase:
           name: nuruvent-db
           property: connectionString
-      
-      # ✅ Render injects the full Redis connection string
       - key: REDIS_URL
         fromRedis:
           name: nuruvent-redis
           property: connectionString
-      
       - key: JWT_SECRET
         sync: false
       - key: JWT_ACCESS_EXPIRATION
@@ -93,17 +88,14 @@ services:
     envVars:
       - key: ENVIRONMENT
         value: production
-      
       - key: DATABASE_URL
         fromDatabase:
           name: nuruvent-db
           property: connectionString
-      
       - key: REDIS_URL
         fromRedis:
           name: nuruvent-redis
           property: connectionString
-      
       - key: EMAIL_API_KEY
         sync: false
       - key: EMAIL_FROM
@@ -125,19 +117,19 @@ services:
       - key: MPESA_ENVIRONMENT
         value: production
 
-# ============================================
-# MANAGED POSTGRESQL DATABASE
-# ============================================
-databases:
-  - name: nuruvent-db
+  # ============================================
+  # MANAGED POSTGRESQL DATABASE
+  # ============================================
+  - type: postgres
+    name: nuruvent-db
     databaseName: nuruvent
     user: nuruvent_user
     plan: starter
 
-# ============================================
-# MANAGED REDIS INSTANCE
-# ============================================
-redisInstances:
-  - name: nuruvent-redis
+  # ============================================
+  # MANAGED REDIS INSTANCE
+  # ============================================
+  - type: redis
+    name: nuruvent-redis
     plan: starter
     maxmemoryPolicy: allkeys-lru
