@@ -10,8 +10,6 @@ services:
     dockerContext: .
     plan: free
     
-    preDeployCommand: goose -dir ./migrations postgres "${DATABASE_URL}" up
-    
     envVars:
       - key: ENVIRONMENT
         value: production
