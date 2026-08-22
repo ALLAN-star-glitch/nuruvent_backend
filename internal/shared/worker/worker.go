@@ -40,21 +40,18 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
 	redisOpts, err := redis.ParseURL(redisURL)
 	if err != nil {
 		log.Printf("⚠️ Failed to parse Redis URL for Asynq, using as host:port: %v", err)
-		redisOpts = &asynq.RedisClientOpt{
+		redisOpts = &redis.Options{
 			Addr: redisURL,
-		}
-	} else {
-		// Convert redis.Options to asynq.RedisClientOpt
-		redisOpts = &asynq.RedisClientOpt{
-			Addr:     redisOpts.Addr,
-			Password: redisOpts.Password,
-			DB:       redisOpts.DB,
 		}
 	}
 
 	// 2. Configure Asynq Server with parsed Redis options
 	srv := asynq.NewServer(
-		*redisOpts,
+		asynq.RedisClientOpt{
+			Addr:     redisOpts.Addr,
+			Password: redisOpts.Password,
+			DB:       redisOpts.DB,
+		},
 		asynq.Config{
 			Concurrency: 10,
 			Queues: map[string]int{

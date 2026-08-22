@@ -11,6 +11,11 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
+// ParseURL is a wrapper around redis.ParseURL
+func ParseURL(url string) (*redis.Options, error) {
+	return redis.ParseURL(url)
+}
+
 // Client wraps the Redis client with context support
 type Client struct {
 	client *redis.Client
@@ -19,7 +24,7 @@ type Client struct {
 // NewClient creates a new Redis client
 func NewClient(cfg *config.Config) (*Client, error) {
 	redisURL := cfg.GetRedisURL()
-	
+
 	// Try to parse as URL first (for Render's redis://... format)
 	opts, err := redis.ParseURL(redisURL)
 	if err != nil {
