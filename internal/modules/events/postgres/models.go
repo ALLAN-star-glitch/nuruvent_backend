@@ -45,12 +45,12 @@ type EventModel struct {
 	IsFeatured bool       `gorm:"default:false;index"`
 	IsPrivate  bool       `gorm:"default:false;index"`
 
-	CreatorName           string `gorm:"column:creator_name"`
-    CreatorDisplayName    string `gorm:"column:creator_display_name"`
-    CreatorEmail          string `gorm:"column:creator_email"`
-    CreatorPhone          string `gorm:"column:creator_phone"`
-    CreatorAccountType    string `gorm:"column:creator_account_type"`
-    CreatorInstitutionName string `gorm:"column:creator_institution_name"`
+	CreatorName           string `gorm:"column:creator_name;<-:false"`
+    CreatorDisplayName    string `gorm:"column:creator_display_name;<-:false"`
+    CreatorEmail          string `gorm:"column:creator_email;<-:false"`
+    CreatorPhone          string `gorm:"column:creator_phone;<-:false"`
+    CreatorAccountType    string `gorm:"column:creator_account_type;<-:false"`
+    CreatorInstitutionName string `gorm:"column:creator_institution_name;<-:false"`
 }
 
 func (EventModel) TableName() string {
