@@ -1,9 +1,16 @@
+# .dockerignore
+
 # Git
 .git/
 .gitignore
 
-# Vendor directory (critical!)
+# Vendor
 vendor/
+
+# Environment
+.env
+.env.*
+!.env.example
 
 # IDE
 .idea/
@@ -26,12 +33,6 @@ tmp/
 *.out
 coverage.out
 
-# Environment files
-.env
-.env.local
-.env.*.local
-.env.production
-
 # Docker files
 Dockerfile
 Dockerfile.dev
@@ -44,4 +45,3 @@ node_modules/
 # Documentation
 docs/
 *.md
-

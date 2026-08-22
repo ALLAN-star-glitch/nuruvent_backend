@@ -1,6 +1,6 @@
 services:
   # ============================================
-  # API SERVICE
+  # COMBINED API & WORKER SERVICE (Free Tier)
   # ============================================
   - type: web
     name: nuruvent-api
@@ -8,7 +8,7 @@ services:
     repo: https://github.com/ALLAN-star-glitch/nuruvent_backend
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     
     preDeployCommand: goose -dir ./migrations postgres "${DATABASE_URL}" up
     
@@ -70,64 +70,19 @@ services:
         value: production
 
   # ============================================
-  # WORKER SERVICE
-  # ============================================
-  - type: worker
-    name: nuruvent-worker
-    runtime: docker
-    repo: https://github.com/ALLAN-star-glitch/nuruvent_backend
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
-    plan: starter
-    dockerCommand: ./worker
-    
-    envVars:
-      - key: ENVIRONMENT
-        value: production
-      - key: DATABASE_URL
-        fromDatabase:
-          name: nuruvent-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          type: keyvalue
-          name: nuruvent-redis
-          property: connectionString
-      - key: EMAIL_API_KEY
-        sync: false
-      - key: EMAIL_FROM
-        value: noreply-nuruvent@nuruvent.com
-      - key: SUPABASE_URL
-        sync: false
-      - key: SUPABASE_SECRET_KEY
-        sync: false
-      - key: SUPABASE_PUBLISHABLE_KEY
-        sync: false
-      - key: MPESA_CONSUMER_KEY
-        sync: false
-      - key: MPESA_CONSUMER_SECRET
-        sync: false
-      - key: MPESA_PASSKEY
-        sync: false
-      - key: MPESA_SHORTCODE
-        value: "174379"
-      - key: MPESA_ENVIRONMENT
-        value: production
-
-  # ============================================
-  # MANAGED REDIS INSTANCE
+  # MANAGED REDIS INSTANCE (Free Tier)
   # ============================================
   - type: keyvalue
     name: nuruvent-redis
-    plan: starter
+    plan: free
     maxmemoryPolicy: allkeys-lru
     ipAllowList: []
 
 # ============================================
-# MANAGED POSTGRESQL DATABASE
+# MANAGED POSTGRESQL DATABASE (Free Tier)
 # ============================================
 databases:
   - name: nuruvent-db
     databaseName: nuruvent
     user: nuruvent_user
-    plan: starter
+    plan: free

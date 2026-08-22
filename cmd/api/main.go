@@ -5,7 +5,10 @@ package main
 import (
 	"context"
 	"log"
+
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/worker"
 )
 
 // @title           Nuruvent API
@@ -30,23 +33,32 @@ import (
 // @description Type "Bearer" followed by a space and the JWT token.
 
 func main() {
-	// Create application
+	// 1. Load config
+	cfg := config.Load()
+	log.Printf("Starting Nuruvent API in %s mode", cfg.Environment)
+
+	// 2. Create application (API)
 	application, err := app.NewApp()
 	if err != nil {
 		log.Fatalf("Failed to create application: %v", err)
 	}
 	defer application.Close()
 
-	// Initialize modules
+	// 3. Initialize API modules
 	ctx := context.Background()
 	if err := application.Init(ctx); err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
 
-	// Setup routes
+	// 4. Setup routes
 	application.SetupRoutes()
 
-	// Start server
+	// 5. Start embedded Asynq worker
+	stopWorker := worker.StartEmbeddedWorker(cfg)
+	defer stopWorker()
+
+	// 6. Start server (blocking)
+	log.Println("🚀 Starting HTTP API server...")
 	if err := application.Run(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}

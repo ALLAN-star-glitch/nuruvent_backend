@@ -1,6 +1,7 @@
-
 services:
-  # API Server
+  # ============================================
+  # BACKEND API (with embedded worker)
+  # ============================================
   backend:
     build:
       context: .
@@ -26,35 +27,11 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    command: air -c .air.toml  # API with hot reload
+    command: air -c .air.toml  # API with hot reload (worker embedded)
 
-  #  Worker (Background Jobs)
-  worker:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    container_name: nuruvent-worker
-    env_file:
-      - .env
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      REDIS_URL: redis:6379
-      CASBIN_MODEL: /root/configs/casbin/model.conf
-    volumes:
-      - .:/app
-      - /app/bin
-      - /app/tmp
-      - /app/vendor
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
-    command: go run -mod=mod cmd/worker/main.go  # Worker
-
-  # Database
+  # ============================================
+  # DATABASE (PostgreSQL)
+  # ============================================
   postgres:
     image: postgres:16-alpine
     container_name: nuruvent-postgres
@@ -73,7 +50,9 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Redis (Cache + Queue)
+  # ============================================
+  # REDIS (Cache + Queue)
+  # ============================================
   redis:
     image: redis:7-alpine
     container_name: nuruvent-redis
