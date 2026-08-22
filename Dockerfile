@@ -5,23 +5,23 @@ WORKDIR /app
 
 ENV GOTOOLCHAIN=auto
 
-# Install make and git
+# Install tools
 RUN apk add --no-cache make git
 RUN go install github.com/pressly/goose/v3/cmd/goose@latest
+RUN go install github.com/swaggo/swag/cmd/swag@latest
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
 
-# Build both API and Worker binaries
+# Generate Swagger docs before building
+RUN swag init -g cmd/api/main.go -o docs
+
+# Build the API
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
     go build -ldflags="-w -s" \
     -o api ./cmd/api
-
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-w -s" \
-    -o worker ./cmd/worker
 
 # Stage 2: Runtime
 FROM alpine:latest
@@ -30,20 +30,10 @@ RUN apk --no-cache add ca-certificates
 
 WORKDIR /root/
 
-# Copy binaries
 COPY --from=builder /app/api .
-COPY --from=builder /app/worker .
-
-# Copy configs
 COPY --from=builder /app/configs ./configs
-
-# Copy migrations
 COPY --from=builder /app/internal/shared/database/migrations ./migrations
-
-# Copy Makefile (for migrations)
-COPY --from=builder /app/Makefile ./Makefile
-
-# Copy goose binary
+COPY --from=builder /app/docs ./docs  
 COPY --from=builder /go/bin/goose /usr/local/bin/goose
 
 EXPOSE 8080
