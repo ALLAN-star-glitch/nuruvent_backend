@@ -52,6 +52,8 @@ func NewApp() (*App, error) {
 		MaxAge:           86400,
 	}))
 
+	
+
 	return &App{AppDependencies: deps}, nil
 }
 

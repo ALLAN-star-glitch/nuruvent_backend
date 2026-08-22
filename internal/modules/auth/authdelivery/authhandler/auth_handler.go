@@ -43,14 +43,15 @@ func NewAuthHandler(
 
 
 func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
-    isSecure := true
-    if h.config.Environment != "production" {
-        isSecure = false
+    isProduction := h.config.Environment == "production"
+    isSecure := isProduction
+    
+    sameSite := "Lax"
+    if isProduction {
+        sameSite = "None"
     }
     
-    sameSite := "None"
-    
-    cookie := &fiber.Cookie{
+    c.Cookie(&fiber.Cookie{
         Name:     "access_token",
         Value:    token,
         Expires:  time.Now().Add(h.config.JWT.AccessExpiration),
@@ -58,27 +59,42 @@ func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
         Secure:   isSecure,
         SameSite: sameSite,
         Path:     "/",
-    }
+        // Domain intentionally empty
+    })
     
-    // ✅ Log that we're setting the cookie
-    log.Printf("🔐 Setting access_token cookie: Secure=%v, SameSite=%v, Expires=%v", 
-        isSecure, sameSite, cookie.Expires)
+    // ✅ Log the configuration for debugging
+    log.Printf("🍪 Access cookie set: Secure=%v, SameSite=%v, Env=%s", 
+        isSecure, sameSite, h.config.Environment)
+}
     
-    c.Cookie(cookie)
+    c.Cookie(&fiber.Cookie{
+        Name:     "access_token",
+        Value:    token,
+        Expires:  time.Now().Add(h.config.JWT.AccessExpiration),
+        HTTPOnly: true,
+        Secure:   isSecure,      // ✅ true in prod, false in dev
+        SameSite: sameSite,      // ✅ None in prod, Lax in dev
+        Path:     "/",
+        Domain:   domain,        // ✅ Empty in dev, optional in prod
+    })
     
-    // ✅ Verify cookie was set by trying to read it back
-    // (This won't work for HTTP-only cookies, but we can log it)
-    log.Printf("✅ Access token cookie set for path: /")
+    log.Printf("🍪 Cookie set: Secure=%v, SameSite=%v, Domain='%s', Environment=%s", 
+        isSecure, sameSite, domain, h.config.Environment)
 }
 
 func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
-    isSecure := c.Secure()
+    isProduction := h.config.Environment == "production"
+    isSecure := isProduction
     
     sameSite := "Lax"
-    if isSecure {
+    if isProduction {
         sameSite = "None"
     }
     
+    domain := ""
+    if isProduction {
+        // domain = ".nuruvent.com" // Optional
+    }
     
     c.Cookie(&fiber.Cookie{
         Name:     "refresh_token",
@@ -88,15 +104,22 @@ func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
         Secure:   isSecure,
         SameSite: sameSite,
         Path:     "/auth/refresh",
+        Domain:   domain,
     })
 }
 
 func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
-    isSecure := c.Secure()
+    isProduction := h.config.Environment == "production"
+    isSecure := isProduction
     
     sameSite := "Lax"
-    if isSecure {
+    if isProduction {
         sameSite = "None"
+    }
+    
+    domain := ""
+    if isProduction {
+        // domain = ".nuruvent.com"
     }
     
     c.Cookie(&fiber.Cookie{
@@ -107,7 +130,7 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
         Secure:   isSecure,
         SameSite: sameSite,
         Path:     "/",
-
+        Domain:   domain,
     })
     c.Cookie(&fiber.Cookie{
         Name:     "refresh_token",
@@ -117,9 +140,10 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
         Secure:   isSecure,
         SameSite: sameSite,
         Path:     "/auth/refresh",
-   
+        Domain:   domain,
     })
 }
+
 
 
 func (h *AuthHandler) getRefreshTokenFromCookie(c fiber.Ctx) (string, error) {
