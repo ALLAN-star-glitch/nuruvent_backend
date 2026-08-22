@@ -8,14 +8,16 @@ package domain
 type EventTypeValue string
 
 const (
-	EventTypeWorkshop EventTypeValue = "workshop"
-	EventTypeWebinar  EventTypeValue = "webinar"
-	EventTypeMeetup   EventTypeValue = "meetup"
-	EventTypeBootcamp EventTypeValue = "bootcamp"
+	EventTypeUncategorized EventTypeValue = "uncategorized" // ✅ ADD THIS
+	EventTypeWorkshop      EventTypeValue = "workshop"
+	EventTypeWebinar       EventTypeValue = "webinar"
+	EventTypeMeetup        EventTypeValue = "meetup"
+	EventTypeBootcamp      EventTypeValue = "bootcamp"
 )
 
 // AllEventTypes lists all valid event types
 var AllEventTypes = []EventTypeValue{
+	EventTypeUncategorized, // ✅ ADD THIS
 	EventTypeWorkshop,
 	EventTypeWebinar,
 	EventTypeMeetup,
@@ -39,6 +41,19 @@ type EventTypeInfo struct {
 
 // Private registry (prevents external mutation)
 var eventTypeRegistry = map[EventTypeValue]EventTypeInfo{
+	EventTypeUncategorized: { // ✅ ADD THIS
+		Slug:                EventTypeUncategorized,
+		Name:                "Uncategorized",
+		DisplayName:         "Uncategorized",
+		Description:         "Default event type for events without a specific category",
+		Icon:                "file-text",
+		Color:               "#6B7280",
+		SortOrder:           0,
+		SupportsCertificate: false,
+		MinDuration:         0,
+		MaxDuration:         1440,
+		IsActive:            true,
+	},
 	EventTypeWorkshop: {
 		Slug:                EventTypeWorkshop,
 		Name:                "Workshop",

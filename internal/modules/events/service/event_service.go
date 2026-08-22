@@ -38,6 +38,9 @@ func NewService(
 // CREATE DRAFT (with optional image)
 // ============================================================
 
+
+// internal/modules/events/service/service_impl.go
+
 func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) (*domain.Event, error) {
 	log.Printf("🔄 CreateDraft called: Name='%s', TypeID='%s', AccountID='%s'",
 		cmd.Name, cmd.EventTypeID, cmd.AccountID)
@@ -54,22 +57,36 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 		log.Printf("📝 Generated default name: 'Untitled Event'")
 	}
 
-	// Event Type: Optional - only validate if provided
-	if cmd.EventTypeID != "" {
-		log.Printf("🔍 Validating event type: %s", cmd.EventTypeID)
-		eventType, err := s.repo.GetEventTypeByID(ctx, cmd.EventTypeID)
+	// ✅ FIX: If no event type provided, use "Uncategorized"
+	if cmd.EventTypeID == "" {
+		log.Printf("ℹ️ No event type provided - using default 'Uncategorized'")
+		
+		// Get the uncategorized event type
+		uncategorized, err := s.repo.GetEventTypeBySlug(ctx, "uncategorized")
 		if err != nil {
-			log.Printf("❌ Failed to get event type: %v", err)
-			return nil, fmt.Errorf("failed to get event type: %w", err)
+			log.Printf("❌ Failed to get uncategorized event type: %v", err)
+			return nil, fmt.Errorf("failed to get default event type: %w", err)
 		}
-		if eventType == nil {
-			log.Printf("❌ Event type not found: %s", cmd.EventTypeID)
-			return nil, domain.ErrEventTypeNotFound
+		if uncategorized == nil {
+			log.Printf("❌ Uncategorized event type not found - please run seeders")
+			return nil, errors.New("default event type 'uncategorized' not found. Please run seeders")
 		}
-		log.Printf("✅ Event type validated: %s", eventType.Name)
-	} else {
-		log.Printf("ℹ️ No event type provided - saving as empty")
+		cmd.EventTypeID = uncategorized.ID
+		log.Printf("✅ Using uncategorized event type: %s (%s)", uncategorized.Name, uncategorized.ID)
 	}
+
+	// Validate event type (now always set)
+	log.Printf("🔍 Validating event type: %s", cmd.EventTypeID)
+	eventType, err := s.repo.GetEventTypeByID(ctx, cmd.EventTypeID)
+	if err != nil {
+		log.Printf("❌ Failed to get event type: %v", err)
+		return nil, fmt.Errorf("failed to get event type: %w", err)
+	}
+	if eventType == nil {
+		log.Printf("❌ Event type not found: %s", cmd.EventTypeID)
+		return nil, domain.ErrEventTypeNotFound
+	}
+	log.Printf("✅ Event type validated: %s", eventType.Name)
 
 	// Create domain entity
 	log.Printf("🏗️ Creating domain entity...")
