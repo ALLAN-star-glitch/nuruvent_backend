@@ -384,3 +384,35 @@ func (r *PostgresRepository) IsSuperAdmin(ctx context.Context, accountID string)
 	}
 	return count > 0, nil
 }
+
+// internal/modules/auth/postgres/repository.go
+
+// Add after GetAccountTypeBySlug method
+
+// GetAccountTypeByName gets account type by NAME (with underscores) - for internal lookups
+func (r *PostgresRepository) GetAccountTypeByName(name string) (*authdomain.AccountType, error) {
+	var model AccountTypeModel
+	err := r.db.Where("name = ? AND is_active = ?", name, true).First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return ToauthdomainAccountType(&model), nil
+}
+
+// Add after GetInstitutionTypeBySlug method
+
+// GetInstitutionTypeByName gets institution type by NAME (with underscores) - for internal lookups
+func (r *PostgresRepository) GetInstitutionTypeByName(name string) (*authdomain.InstitutionType, error) {
+	var model InstitutionTypeModel
+	err := r.db.Where("name = ? AND is_active = ?", name, true).First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return ToauthdomainInstitutionType(&model), nil
+}

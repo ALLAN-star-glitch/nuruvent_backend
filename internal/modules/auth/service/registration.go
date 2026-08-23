@@ -9,6 +9,7 @@ import (
 	"log"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -52,7 +53,7 @@ func (s *service) RegisterAccount(ctx context.Context, req RegisterRequest) erro
 		"account_type": req.AccountType,
 	}
 
-	if req.AccountType == "institution" {
+	if req.AccountType == types.AccountTypeInstitutionName {
 		userData["institution_name"] = req.InstitutionName
 		userData["institution_email"] = req.InstitutionEmail
 		userData["institution_phone"] = req.InstitutionPhone
@@ -79,9 +80,6 @@ func (s *service) RegisterAccount(ctx context.Context, req RegisterRequest) erro
 	return nil
 }
 
-
-
-
 func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp string) (*authdomain.Account, map[string]interface{}, error) {
 	// 1. Verify OTP
 	if err := s.VerifyOTP(ctx, email, otp, "registration"); err != nil {
@@ -95,22 +93,27 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 	}
 
 	// ============================================================
-	// ✅ FIX: Validate institution type BEFORE creating account
+	// ✅ Validate institution type BEFORE creating account
 	// ============================================================
-	if userData["account_type"] == "institution" {
-		institutionTypeSlug := userData["institution_type"]
-		if institutionTypeSlug == "" {
+	if userData["account_type"] == types.AccountTypeInstitutionName {
+		institutionTypeName := userData["institution_type"]
+		if institutionTypeName == "" {
 			return nil, nil, errors.New("institution_type is required for institution accounts")
 		}
 		
-		// ✅ Check if institution type exists
-		institutionType, err := s.repo.GetInstitutionTypeBySlug(institutionTypeSlug)
+		// ✅ FIXED: Use GetInstitutionTypeByName (queries by NAME with underscores)
+		institutionType, err := s.repo.GetInstitutionTypeByName(institutionTypeName)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to validate institution type: %w", err)
 		}
 		if institutionType == nil {
-			return nil, nil, fmt.Errorf("invalid institution_type: %s. Valid types: company, institute, association, school, university", institutionTypeSlug)
+			return nil, nil, fmt.Errorf("invalid institution_type: %s. Valid types: %v", 
+				institutionTypeName, types.AllInstitutionTypeNames())
 		}
+		
+		// ✅ Store the validated ID for later use
+		validatedInstitutionTypeID := institutionType.ID
+		_ = validatedInstitutionTypeID // Used later in createInstitution
 	}
 
 	// 3. Hash password using bcrypt
@@ -119,13 +122,13 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 		return nil, nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	// 4. Get account type ID from database
-	accountTypeSlug := userData["account_type"]
-	if accountTypeSlug == "" {
-		accountTypeSlug = "personal"
+	// 4. Get account type ID from database - ✅ Uses NAME
+	accountTypeName := userData["account_type"]
+	if accountTypeName == "" {
+		accountTypeName = types.AccountTypePersonalName
 	}
 	
-	accountTypeID, err := s.getAccountTypeID(accountTypeSlug)
+	accountTypeID, err := s.getAccountTypeID(accountTypeName)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -147,7 +150,7 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 	}
 
 	// ============================================================
-	// ✅ FIX: Assign account_admin role to the account itself
+	// ✅ Assign account_admin role to the account itself
 	// ============================================================
 	if err := s.permService.AssignAccountAdminRole(ctx, account.ID, account.ID); err != nil {
 		log.Printf("⚠️ Failed to assign account_admin role: %v", err)
@@ -160,13 +163,16 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 	// ============================================================
 	// ✅ Create institution (now we know the type is valid)
 	// ============================================================
-	if userData["account_type"] == "institution" {
-		// Get the validated institution type
-		institutionTypeSlug := userData["institution_type"]
-		institutionType, err := s.repo.GetInstitutionTypeBySlug(institutionTypeSlug)
+	if userData["account_type"] == types.AccountTypeInstitutionName {
+		// ✅ FIXED: Get the validated institution type by NAME
+		institutionTypeName := userData["institution_type"]
+		institutionType, err := s.repo.GetInstitutionTypeByName(institutionTypeName)
 		if err != nil {
 			// This shouldn't happen since we validated above, but just in case
 			return nil, nil, fmt.Errorf("failed to get institution type: %w", err)
+		}
+		if institutionType == nil {
+			return nil, nil, fmt.Errorf("institution type not found: %s", institutionTypeName)
 		}
 
 		// ✅ Create institution record
@@ -200,7 +206,7 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 		"refresh_token":  refreshToken,
 	}
 
-	if userData["account_type"] == "institution" {
+	if userData["account_type"] == types.AccountTypeInstitutionName {
 		additionalData["institution_name"] = userData["institution_name"]
 		additionalData["institution_email"] = userData["institution_email"]
 		additionalData["institution_phone"] = userData["institution_phone"]
@@ -228,10 +234,10 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 // PRIVATE HELPERS
 // ============================================================
 
-// ✅ FIXED: getAccountTypeID queries the database for the account type UUID
+// getAccountTypeID queries the database by NAME (with underscores)
 func (s *service) getAccountTypeID(accountType string) (string, error) {
-	// Query the database for the account type by slug
-	accountTypeObj, err := s.repo.GetAccountTypeBySlug(accountType)
+	// Query the database for the account type by NAME (not slug)
+	accountTypeObj, err := s.repo.GetAccountTypeByName(accountType)
 	if err != nil {
 		return "", fmt.Errorf("failed to get account type: %w", err)
 	}
@@ -240,9 +246,6 @@ func (s *service) getAccountTypeID(accountType string) (string, error) {
 	}
 	return accountTypeObj.ID, nil
 }
-
-// createInstitution creates an institution record and links it to the account
-
 
 // createInstitution creates an institution record and links it to the account
 func (s *service) createInstitution(ctx context.Context, accountID string, userData map[string]string, institutionTypeID string) error {
@@ -269,7 +272,7 @@ func (s *service) createInstitution(ctx context.Context, accountID string, userD
 		institutionName,
 		institutionEmail,
 		institutionPhone,
-		institutionTypeID, // ✅ Pass the validated ID
+		institutionTypeID,
 	)
 	if err != nil {
 		return err
@@ -308,7 +311,7 @@ func (s *service) createInstitution(ctx context.Context, accountID string, userD
 
 // sendWelcomeEmail sends welcome email based on account type
 func (s *service) sendWelcomeEmail(ctx context.Context, account *authdomain.Account, userData map[string]string) error {
-	if userData["account_type"] == "institution" {
+	if userData["account_type"] == types.AccountTypeInstitutionName {
 		return s.notifSvc.SendInstitutionWelcome(ctx, authdomain.SendInstitutionWelcomeRequest{
 			To:              account.Email,
 			AdminName:       account.Name,

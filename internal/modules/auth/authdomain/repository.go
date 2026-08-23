@@ -16,9 +16,10 @@ type Repository interface {
 	GetAccountByID(id string) (*Account, error)
 	CreateAccount(account *Account) error
 	UpdateAccount(account *Account) error
-	UpdateAccountInstitutionID(accountID string, institutionID string) error // ✅ NEW
+	UpdateAccountInstitutionID(accountID string, institutionID string) error
 	GetAccountTypeByID(id string) (*AccountType, error)
 	GetAccountTypeBySlug(slug string) (*AccountType, error)
+	GetAccountTypeByName(name string) (*AccountType, error) // ✅ NEW
 
 	// ============================================================
 	// REFRESH TOKEN OPERATIONS
@@ -37,6 +38,7 @@ type Repository interface {
 	GetInstitutionByID(id string) (*Institution, error)
 	GetInstitutionByAccountID(accountID string) (*Institution, error)
 	GetInstitutionTypeBySlug(slug string) (*InstitutionType, error)
+	GetInstitutionTypeByName(name string) (*InstitutionType, error) // ✅ NEW
 	UpdateInstitution(institution *Institution) error
 	InstitutionExists(id string) (bool, error)
 	GetInstitutionsByType(institutionTypeID string) ([]*Institution, error)

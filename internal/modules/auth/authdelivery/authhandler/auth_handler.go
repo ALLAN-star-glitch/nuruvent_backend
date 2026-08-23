@@ -12,6 +12,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/validation"
 
 	"github.com/gofiber/fiber/v3"
@@ -36,11 +37,9 @@ func NewAuthHandler(
 	}
 }
 
-
 // ============================================================
 // COOKIE HELPERS
 // ============================================================
-
 
 func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
     // ✅ Determine environment
@@ -141,8 +140,6 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
     })
 }
 
-
-
 func (h *AuthHandler) getRefreshTokenFromCookie(c fiber.Ctx) (string, error) {
 	token := c.Cookies("refresh_token")
 	if token == "" {
@@ -185,7 +182,7 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 		AccountType: req.AccountType,
 	}
 
-	if req.AccountType == "institution" {
+	if req.AccountType == types.AccountTypeInstitutionName {
 		svcReq.InstitutionName = req.InstitutionName
 		svcReq.InstitutionEmail = req.InstitutionEmail
 		svcReq.InstitutionPhone = req.InstitutionPhone
@@ -203,8 +200,7 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 	})
 }
 
-
-
+// ✅ FIXED: validateRegisterRequest using shared types
 func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 	// Verify and validate email
 	if req.Email == "" {
@@ -235,11 +231,17 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 
 	// Account type is optional - default to "personal"
 	if req.AccountType == "" {
-		req.AccountType = "personal"
+		req.AccountType = types.AccountTypePersonalName
+	}
+
+	// ✅ Validate account type using shared types
+	if req.AccountType != types.AccountTypePersonalName && req.AccountType != types.AccountTypeInstitutionName {
+		return fmt.Errorf("account_type must be '%s' or '%s'", 
+			types.AccountTypePersonalName, types.AccountTypeInstitutionName)
 	}
 
 	// ✅ Only validate institution fields if account_type is "institution"
-	if req.AccountType == "institution" {
+	if req.AccountType == types.AccountTypeInstitutionName {
 		if req.InstitutionName == "" {
 			return errors.New("institution_name is required for institution accounts")
 		}
@@ -260,19 +262,19 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 			return errors.New("institution_type is required for institution accounts")
 		}
 
-		validTypes := map[string]bool{
-			"company": true,
-			"institute": true,
-			"association": true,
-			"school": true,
-			"university": true,
+		// ✅ FIXED: Check if institution type is valid using NAMES (with underscores)
+		validTypes := types.AllInstitutionTypeNames()
+		isValid := false
+		for _, validType := range validTypes {
+			if req.InstitutionType == validType {
+				isValid = true
+				break
+			}
 		}
-		if !validTypes[req.InstitutionType] {
-			return fmt.Errorf("invalid institution_type: %s. Valid types: company, institute, association, school, university", req.InstitutionType)
+		if !isValid {
+			return fmt.Errorf("invalid institution_type: %s. Valid types: %v", 
+				req.InstitutionType, validTypes)
 		}
-		
-	} else if req.AccountType != "personal" {
-		return errors.New("account_type must be 'personal' or 'institution'")
 	}
 
 	return nil
@@ -347,8 +349,6 @@ func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 // RESEND OTP HANDLER - UNIFIED
 // ============================================================
 
-// internal/modules/auth/authdelivery/authhandler/authhandler.go
-
 // ResendOTP resends OTP for any purpose
 // @Summary Resend OTP
 // @Description Resend OTP for registration, 2FA, password reset, email change, or phone change
@@ -401,9 +401,10 @@ func (h *AuthHandler) ResendOTP(c fiber.Ctx) error {
 	}
 
 	message := "OTP resent to your email"
-	if req.Purpose == "two_factor" {
+	switch req.Purpose {
+	case "two_factor":
 		message = "2FA OTP resent to your email"
-	} else if req.Purpose == "password_reset" {
+	case "password_reset":
 		message = "Password reset OTP resent to your email"
 	}
 
