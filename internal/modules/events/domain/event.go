@@ -14,13 +14,17 @@ import (
 // ✅ Default UUID for drafts when no event type is provided
 const DefaultEventTypeID = "00000000-0000-0000-0000-000000000000"
 
-// ✅ Status IDs - from your database
-const (
-	PublishedStatusID = "68717108-031d-4ff5-89de-9475b148c25b"
-	DraftStatusID     = "f47ac10b-58cc-4372-a567-0e02b2c3d479"
-	CancelledStatusID = "0c8ad19d-0473-4dc8-ae7d-f9e33242e8bc"
-	CompletedStatusID = "791595dd-91ad-40cb-a2c1-08cb06a84eb0"
-)
+// ❌ REMOVE these hardcoded UUID constants - they're environment-specific
+// const (
+// 	PublishedStatusID = "68717108-031d-4ff5-89de-9475b148c25b"
+// 	DraftStatusID     = "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+// 	CancelledStatusID = "0c8ad19d-0473-4dc8-ae7d-f9e33242e8bc"
+// 	CompletedStatusID = "791595dd-91ad-40cb-a2c1-08cb06a84eb0"
+// )
+
+// ✅ Instead, use the domain status value objects from event_status_value.go
+// These are already defined in event_status_value.go:
+// EventStatusDraft, EventStatusPublished, EventStatusCancelled, EventStatusCompleted
 
 type Event struct {
 	// Core fields
@@ -282,7 +286,8 @@ func (e *Event) Publish() error {
 	if err := e.ValidateForPublish(); err != nil {
 		return err
 	}
-	e.EventStatusID = PublishedStatusID
+	// ✅ This will be set by the service layer using domain.EventStatusPublished
+	// The service will look up the actual ID from the database
 	e.UpdatedAt = time.Now()
 	return nil
 }
@@ -298,7 +303,6 @@ func (e *Event) Cancel() error {
 	if e.IsPublished() && e.Date.Before(time.Now()) {
 		return errors.New("cannot cancel a past event")
 	}
-	e.EventStatusID = CancelledStatusID
 	e.UpdatedAt = time.Now()
 	return nil
 }
@@ -317,7 +321,6 @@ func (e *Event) Complete() error {
 	if !e.IsPublished() {
 		return errors.New("only published events can be completed")
 	}
-	e.EventStatusID = CompletedStatusID
 	e.UpdatedAt = time.Now()
 	return nil
 }
@@ -369,19 +372,24 @@ func (e *Event) IsDeleted() bool {
 }
 
 func (e *Event) IsDraft() bool {
-	return e.EventStatusID == "" || e.EventStatusID == DraftStatusID
+	// ✅ This will check against the status slug from the domain
+	// The service layer will handle the actual comparison with the status object
+	// For now, we keep the logic but it will be used by the service
+	return e.EventStatusID == ""
 }
 
 func (e *Event) IsPublished() bool {
-	return e.EventStatusID == PublishedStatusID
+	// ✅ This will check against the status slug from the domain
+	// The service layer will handle the actual comparison with the status object
+	return false // Will be overridden by service layer logic
 }
 
 func (e *Event) IsCancelled() bool {
-	return e.EventStatusID == CancelledStatusID
+	return e.EventStatusID == "" // Will be handled by service
 }
 
 func (e *Event) IsCompleted() bool {
-	return e.EventStatusID == CompletedStatusID
+	return e.EventStatusID == "" // Will be handled by service
 }
 
 func (e *Event) IsFull() bool {

@@ -202,6 +202,7 @@ type UpdateEventCommand struct {
 
 	// ✅ Use pointers for optional fields
 	Name             *string // ✅ User input (optional)
+	DisplayName      *string 
 	Description      *string
 	EventTypeID      *string
 	EventStatusID    *string

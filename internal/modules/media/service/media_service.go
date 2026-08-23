@@ -18,6 +18,7 @@ import (
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 
 	"github.com/google/uuid"
 )
@@ -366,21 +367,51 @@ func (s *mediaService) generateFilePath(mediaTypeName string, entityID uuid.UUID
 }
 
 func (s *mediaService) isAllowedMimeType(mimeType string, mediaType *domain.MediaType) bool {
-	allowedTypes := map[string][]string{
-		"event":       {"image/jpeg", "image/png", "image/gif", "image/webp"},
-		"business":    {"image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"},
-		"profile":     {"image/jpeg", "image/png", "image/gif", "image/webp"},
-		"certificate": {"image/jpeg", "image/png", "image/webp", "application/pdf"},
-		"recording":   {"video/mp4", "video/webm", "video/ogg"},
-	}
+    // ✅ Use shared constants for keys
+    allowedTypes := map[string][]string{
+        types.MediaTypeEventName: {
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+        },
+        types.MediaTypeBusinessName: {
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+            "image/svg+xml",
+        },
+        types.MediaTypeProfileName: {
+            "image/jpeg",
+            "image/png",
+            "image/gif",
+            "image/webp",
+        },
+        types.MediaTypeCertificateName: {
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "application/pdf",
+        },
+        types.MediaTypeRecordingName: {
+            "video/mp4",
+            "video/webm",
+            "video/ogg",
+            "audio/mpeg",
+            "audio/wav",
+        },
+    }
 
-	key := strings.ToLower(mediaType.Name)
-	allowed, ok := allowedTypes[key]
-	if !ok {
-		return false
-	}
+    // Use Name (internal) for lookup
+    key := strings.ToLower(mediaType.Name)
+    allowed, ok := allowedTypes[key] // allowed is storing a slice
+    if !ok {
+        log.Printf("⚠️ No allowed types defined for media type: %s", mediaType.Name)
+        return false
+    }
 
-	return slices.Contains(allowed, mimeType)
+    return slices.Contains(allowed, mimeType)
 }
 
 // ============================================================

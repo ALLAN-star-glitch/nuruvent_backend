@@ -16,7 +16,8 @@ type Repository interface {
 	CreateEvent(ctx context.Context, event *Event) error
 	GetEventByID(ctx context.Context, id string) (*Event, error)
 	GetEventByIDIncludingDeleted(ctx context.Context, id string) (*Event, error)
-	GetEventBySlug(ctx context.Context, slug string) (*Event, error)
+	GetEventByName(ctx context.Context, name string) (*Event, error)
+	GetEventBySlug(ctx context.Context, slug string) (*Event, error) // ✅ RESTORED
 	UpdateEvent(ctx context.Context, event *Event) error
 	DeleteEvent(ctx context.Context, id string) error
 
@@ -41,8 +42,11 @@ type Repository interface {
 	// GetUpcomingEventsWithCreator returns upcoming events with creator info populated
 	GetUpcomingEventsWithCreator(ctx context.Context, limit int) ([]*Event, error)
 
+	// GetEventByNameWithCreator returns an event by name with creator info populated
+	GetEventByNameWithCreator(ctx context.Context, name string) (*Event, error)
+
 	// GetEventBySlugWithCreator returns an event by slug with creator info populated
-	GetEventBySlugWithCreator(ctx context.Context, slug string) (*Event, error)
+	GetEventBySlugWithCreator(ctx context.Context, slug string) (*Event, error) // ✅ RESTORED
 
 	// GetEventByIDWithCreator returns an event by ID with creator info populated
 	GetEventByIDWithCreator(ctx context.Context, id string) (*Event, error)
@@ -55,7 +59,8 @@ type Repository interface {
 	// ============================================================
 
 	GetEventTypeByID(ctx context.Context, id string) (*EventType, error)
-	GetEventTypeBySlug(ctx context.Context, slug string) (*EventType, error)
+	GetEventTypeByName(ctx context.Context, name string) (*EventType, error)
+	GetEventTypeBySlug(ctx context.Context, slug string) (*EventType, error) // ✅ RESTORED
 	GetAllEventTypes(ctx context.Context) ([]*EventType, error)
 
 	// ============================================================
@@ -63,7 +68,8 @@ type Repository interface {
 	// ============================================================
 
 	GetEventStatusByID(ctx context.Context, id string) (*EventStatus, error)
-	GetEventStatusBySlug(ctx context.Context, slug string) (*EventStatus, error)
+	GetEventStatusByName(ctx context.Context, name string) (*EventStatus, error)
+	GetEventStatusBySlug(ctx context.Context, slug string) (*EventStatus, error) // ✅ RESTORED
 	GetAllEventStatuses(ctx context.Context) ([]*EventStatus, error)
 }
 

@@ -3,8 +3,10 @@
 package validation
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -88,7 +90,7 @@ func (s Sanitize) Description(description string) string {
 	return description
 }
 
-// ✅ ENHANCED: Slug generates a URL-friendly slug with hyphens
+// Slug generates a URL-friendly slug with hyphens
 // Examples: "Tertiary Green" -> "tertiary-green", "Event 2024" -> "event-2024"
 func (s Sanitize) Slug(text string) string {
 	if text == "" {
@@ -124,7 +126,7 @@ func (s Sanitize) Slug(text string) string {
 	return slug
 }
 
-// ✅ NEW: GenerateSlugFromName generates a slug from a name with proper hyphenation
+// GenerateSlugFromName generates a slug from a name with proper hyphenation
 // This is the recommended method for generating slugs for events, categories, etc.
 // Examples: 
 //   - "Tertiary Green" -> "tertiary-green"
@@ -177,8 +179,54 @@ func (s Sanitize) GenerateSlugFromName(name string) string {
 	return slug
 }
 
-// ✅ NEW: GenerateSlugWithID generates a unique slug with an ID suffix
-// Useful for ensuring uniqueness when the same name is used multiple times
+// ✅ NEW: GenerateUniqueSlug generates a unique slug with a counter suffix if needed
+// This should be used when creating or updating entities that require unique slugs
+// The checker function should return true if the slug already exists
+func (s Sanitize) GenerateUniqueSlug(baseSlug string, excludeID string, existsFunc func(slug string, excludeID string) bool) string {
+	if baseSlug == "" {
+		baseSlug = "untitled"
+	}
+
+	// Check if the base slug already exists
+	if !existsFunc(baseSlug, excludeID) {
+		return baseSlug
+	}
+
+	// Try with counter
+	maxAttempts := 100
+	for i := 1; i <= maxAttempts; i++ {
+		candidate := fmt.Sprintf("%s-%d", baseSlug, i)
+		if !existsFunc(candidate, excludeID) {
+			return candidate
+		}
+	}
+
+	// Fallback: use timestamp
+	timestamp := time.Now().UnixNano() % 100000
+	return fmt.Sprintf("%s-%d", baseSlug, timestamp)
+}
+
+// ✅ NEW: GenerateUniqueSlugWithTimestamp generates a unique slug with timestamp suffix
+// Simpler version that just adds a timestamp to ensure uniqueness
+func (s Sanitize) GenerateUniqueSlugWithTimestamp(baseSlug string) string {
+	if baseSlug == "" {
+		baseSlug = "untitled"
+	}
+	timestamp := time.Now().UnixNano() % 100000
+	return fmt.Sprintf("%s-%d", baseSlug, timestamp)
+}
+
+// ✅ NEW: GenerateUniqueSlugWithRandom generates a unique slug with random suffix
+func (s Sanitize) GenerateUniqueSlugWithRandom(baseSlug string) string {
+	if baseSlug == "" {
+		baseSlug = "untitled"
+	}
+	// Use a short random string
+	randStr := fmt.Sprintf("%d", time.Now().UnixNano()%10000)
+	return fmt.Sprintf("%s-%d", baseSlug, randStr)
+}
+
+// GenerateSlugWithID generates a slug with an ID suffix
 // Example: "tertiary-green-123"
 func (s Sanitize) GenerateSlugWithID(name string, id string) string {
 	baseSlug := s.GenerateSlugFromName(name)
@@ -188,7 +236,7 @@ func (s Sanitize) GenerateSlugWithID(name string, id string) string {
 	return baseSlug + "-" + id
 }
 
-// ✅ NEW: GenerateColorSlug generates a slug for color names
+// GenerateColorSlug generates a slug for color names
 // Specifically for color-based slugs like "tertiary-green", "primary-blue"
 // Examples: "Tertiary Green" -> "tertiary-green", "Primary Blue" -> "primary-blue"
 func (s Sanitize) GenerateColorSlug(colorName string) string {

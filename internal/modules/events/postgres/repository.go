@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"time"
+	"fmt"
 
 	"log"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
@@ -25,6 +26,23 @@ func NewPostgresRepository(db *gorm.DB) domain.Repository {
 }
 
 // ============================================================
+// HELPER - Get status ID by NAME (internal lookup)
+// ============================================================
+
+// ✅ Use NAME for internal database lookups (not slug or ID)
+func (r *PostgresRepository) getStatusIDByName(ctx context.Context, name string) (string, error) {
+	var model EventStatusModel
+	err := r.db.WithContext(ctx).Where("name = ?", name).First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", fmt.Errorf("status with name '%s' not found", name)
+		}
+		return "", err
+	}
+	return model.ID, nil
+}
+
+// ============================================================
 // EVENT CRUD
 // ============================================================
 
@@ -32,7 +50,6 @@ func (r *PostgresRepository) CreateEvent(ctx context.Context, event *domain.Even
 	model := ToModelEvent(event)
 	return r.db.WithContext(ctx).Create(model).Error
 }
-
 
 // ✅ For public/regular access - excludes deleted events
 func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*domain.Event, error) {
@@ -65,9 +82,9 @@ func (r *PostgresRepository) GetEventByIDIncludingDeleted(ctx context.Context, i
     return ToDomainEvent(&model), nil
 }
 
-func (r *PostgresRepository) GetEventBySlug(ctx context.Context, slug string) (*domain.Event, error) {
+func (r *PostgresRepository) GetEventByName(ctx context.Context, name string) (*domain.Event, error) {
 	var model EventModel
-	err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error
+	err := r.db.WithContext(ctx).Where("slug = ?", name).First(&model).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -107,15 +124,14 @@ func (r *PostgresRepository) DeleteEvent(ctx context.Context, id string) error {
 		Update("deleted_at", time.Now()).Error
 }
 
-// ✅ NEW: Hard delete - permanently removes from database
+// ✅ Hard delete - permanently removes from database
 func (r *PostgresRepository) PermanentlyDeleteEvent(ctx context.Context, id string) error {
 	return r.db.WithContext(ctx).Unscoped().Delete(&EventModel{}, "id = ?", id).Error
 }
 
 // ============================================================
-// EVENT QUERIES
+// EVENT QUERIES - ✅ UPDATED to use NAME for status lookup
 // ============================================================
-
 
 func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.ListEventsFilters) ([]*domain.Event, int64, error) {
     var models []EventModel
@@ -158,7 +174,7 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 
     err := query.Order("date DESC").Find(&models).Error
     if err != nil {
-        return nil, 0, err
+		return nil, 0, err
     }
 
     events := make([]*domain.Event, len(models))
@@ -227,51 +243,77 @@ func (r *PostgresRepository) GetEventsByAccount(ctx context.Context, accountID s
 	return events, total, nil
 }
 
+// ✅ FIXED: GetUpcomingEvents - Only returns PUBLISHED events using NAME lookup
 func (r *PostgresRepository) GetUpcomingEvents(ctx context.Context, limit int) ([]*domain.Event, error) {
 	var models []EventModel
 
+	// ✅ Get the published status ID using domain constant NAME
+	publishedStatusID, err := r.getStatusIDByName(ctx, domain.EventStatusPublished.GetName())
+	if err != nil {
+		log.Printf("❌ Failed to get published status: %v", err)
+		return nil, fmt.Errorf("failed to get published status: %w", err)
+	}
+
+	log.Printf("🔍 Published Status ID: %s", publishedStatusID)
+
 	query := r.db.WithContext(ctx).Model(&EventModel{}).
-		Where("date >= CURRENT_DATE AND deleted_at IS NULL")
+		Where("date >= CURRENT_DATE AND deleted_at IS NULL").
+		Where("event_status_id = ?", publishedStatusID)
 
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
 
-	err := query.Order("date ASC").Find(&models).Error
+	err = query.Order("date ASC").Find(&models).Error
 	if err != nil {
+		log.Printf("❌ Query error: %v", err)
 		return nil, err
 	}
+
+	log.Printf("✅ Found %d upcoming published events", len(models))
 
 	events := make([]*domain.Event, len(models))
 	for i, m := range models {
 		events[i] = ToDomainEvent(&m)
 	}
+	
 	return events, nil
 }
 
+// ✅ FIXED: GetPastEvents - Only returns PUBLISHED events using NAME lookup
 func (r *PostgresRepository) GetPastEvents(ctx context.Context, limit int) ([]*domain.Event, error) {
 	var models []EventModel
 
+	// ✅ Get the published status ID using domain constant NAME
+	publishedStatusID, err := r.getStatusIDByName(ctx, domain.EventStatusPublished.GetName())
+	if err != nil {
+		log.Printf("❌ Failed to get published status: %v", err)
+		return nil, fmt.Errorf("failed to get published status: %w", err)
+	}
+
 	query := r.db.WithContext(ctx).Model(&EventModel{}).
-		Where("date < CURRENT_DATE AND deleted_at IS NULL")
+		Where("date < CURRENT_DATE AND deleted_at IS NULL").
+		Where("event_status_id = ?", publishedStatusID)
 
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
 
-	err := query.Order("date DESC").Find(&models).Error
+	err = query.Order("date DESC").Find(&models).Error
 	if err != nil {
+		log.Printf("❌ Query error: %v", err)
 		return nil, err
 	}
+
+	log.Printf("✅ Found %d past published events", len(models))
 
 	events := make([]*domain.Event, len(models))
 	for i, m := range models {
 		events[i] = ToDomainEvent(&m)
 	}
+	
 	return events, nil
 }
-
-
 
 func (r *PostgresRepository) SearchEvents(ctx context.Context, query string, filters domain.SearchFilters) ([]*domain.Event, int64, error) {
     var models []EventModel
@@ -340,9 +382,9 @@ func (r *PostgresRepository) GetEventTypeByID(ctx context.Context, id string) (*
 	return ToDomainEventTypeEntity(&model), nil
 }
 
-func (r *PostgresRepository) GetEventTypeBySlug(ctx context.Context, slug string) (*domain.EventType, error) {
+func (r *PostgresRepository) GetEventTypeByName(ctx context.Context, slug string) (*domain.EventType, error) {
 	var model EventTypeModel
-	err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error
+	err := r.db.WithContext(ctx).Where("name = ?", slug).First(&model).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -384,9 +426,9 @@ func (r *PostgresRepository) GetEventStatusByID(ctx context.Context, id string) 
 	return ToDomainEventStatusEntity(&model), nil
 }
 
-func (r *PostgresRepository) GetEventStatusBySlug(ctx context.Context, slug string) (*domain.EventStatus, error) {
+func (r *PostgresRepository) GetEventStatusByName(ctx context.Context, name string) (*domain.EventStatus, error) {
 	var model EventStatusModel
-	err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error
+	err := r.db.WithContext(ctx).Where("name = ?", name).First(&model).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -412,11 +454,20 @@ func (r *PostgresRepository) GetAllEventStatuses(ctx context.Context) ([]*domain
 	return statuses, nil
 }
 
+// ============================================================
+// EVENTS WITH CREATOR INFO - ✅ UPDATED to use NAME for status lookup
+// ============================================================
+
 // GetUpcomingEventsWithCreator returns upcoming events with creator info populated
-
-
 func (r *PostgresRepository) GetUpcomingEventsWithCreator(ctx context.Context, limit int) ([]*domain.Event, error) {
     var models []EventModel
+
+    // ✅ Get the published status ID using domain constant NAME
+    publishedStatusID, err := r.getStatusIDByName(ctx, domain.EventStatusPublished.GetName())
+    if err != nil {
+        log.Printf("❌ Failed to get published status: %v", err)
+        return nil, fmt.Errorf("failed to get published status: %w", err)
+    }
 
     query := r.db.WithContext(ctx).Table("events").
         Select(`events.*,
@@ -430,35 +481,22 @@ func (r *PostgresRepository) GetUpcomingEventsWithCreator(ctx context.Context, l
         Joins("LEFT JOIN institutions ON accounts.institution_id = institutions.id").
         Joins("LEFT JOIN account_types ON accounts.account_type_id = account_types.id").
         Where("events.date >= CURRENT_DATE AND events.deleted_at IS NULL").
-        Where("events.event_status_id IN (SELECT id FROM event_statuses WHERE slug IN ('published', 'upcoming', 'live'))").
+        Where("events.event_status_id = ?", publishedStatusID).
         Order("events.date ASC, events.time ASC").
         Limit(limit)
 
-    // ✅ Debug: Print the SQL
-    sql := query.ToSQL(func(tx *gorm.DB) *gorm.DB {
-        return tx.Find(&models)
-    })
-    log.Printf("🔍 SQL Query: %s", sql)
-
-    err := query.Find(&models).Error
+    err = query.Find(&models).Error
     if err != nil {
         log.Printf("❌ Query error: %v", err)
         return nil, err
     }
 
-    // ✅ Debug: Print the raw model data
-    for i, m := range models {
-        log.Printf("📊 Raw Model %d: ID=%s, CreatedBy=%s, CreatorName='%s', CreatorEmail='%s', CreatorAccountType='%s'", 
-            i, m.ID, m.CreatedBy, m.CreatorName, m.CreatorEmail, m.CreatorAccountType)
-    }
-
+    log.Printf("✅ Found %d upcoming published events with creator info", len(models))
     return toDomainEventsWithCreator(models), nil
 }
 
 // GetEventBySlugWithCreator returns an event by slug with creator info populated
-
-
-func (r *PostgresRepository) GetEventBySlugWithCreator(ctx context.Context, slug string) (*domain.Event, error) {
+func (r *PostgresRepository) GetEventByNameWithCreator(ctx context.Context, name string) (*domain.Event, error) {
     var model EventModel
 
     err := r.db.WithContext(ctx).Table("events").
@@ -468,11 +506,11 @@ func (r *PostgresRepository) GetEventBySlugWithCreator(ctx context.Context, slug
                 accounts.email as creator_email,
                 accounts.phone as creator_phone,
                 COALESCE(institutions.name, '') as creator_institution_name,
-                COALESCE(account_types.slug, 'personal') as creator_account_type`).
+                COALESCE(account_types.name, 'personal') as creator_account_type`).
         Joins("LEFT JOIN accounts ON events.created_by = accounts.id").
         Joins("LEFT JOIN institutions ON accounts.institution_id = institutions.id").
         Joins("LEFT JOIN account_types ON accounts.account_type_id = account_types.id").
-        Where("events.slug = ? AND events.deleted_at IS NULL", slug).
+        Where("events.name = ? AND events.deleted_at IS NULL", name).
         First(&model).Error
 
     if err != nil {
@@ -488,7 +526,6 @@ func (r *PostgresRepository) GetEventBySlugWithCreator(ctx context.Context, slug
     }
     return events[0], nil
 }
-
 
 // GetEventByIDWithCreator returns an event by ID with creator info populated
 func (r *PostgresRepository) GetEventByIDWithCreator(ctx context.Context, id string) (*domain.Event, error) {
@@ -561,3 +598,76 @@ func (r *PostgresRepository) GetEventsByAccountWithCreator(ctx context.Context, 
     return toDomainEventsWithCreator(models), total, nil
 }
 
+
+// internal/modules/events/infrastructure/postgres/repository.go
+
+// ✅ GetEventBySlug - RESTORED
+func (r *PostgresRepository) GetEventBySlug(ctx context.Context, slug string) (*domain.Event, error) {
+	var model EventModel
+	err := r.db.WithContext(ctx).Where("slug = ? AND deleted_at IS NULL", slug).First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return ToDomainEvent(&model), nil
+}
+
+// ✅ GetEventBySlugWithCreator - RESTORED
+func (r *PostgresRepository) GetEventBySlugWithCreator(ctx context.Context, slug string) (*domain.Event, error) {
+	var model EventModel
+
+	err := r.db.WithContext(ctx).Table("events").
+		Select(`events.*,
+				accounts.name as creator_name,
+				accounts.display_name as creator_display_name,
+				accounts.email as creator_email,
+				accounts.phone as creator_phone,
+				COALESCE(institutions.name, '') as creator_institution_name,
+				COALESCE(account_types.slug, 'personal') as creator_account_type`).
+		Joins("LEFT JOIN accounts ON events.created_by = accounts.id").
+		Joins("LEFT JOIN institutions ON accounts.institution_id = institutions.id").
+		Joins("LEFT JOIN account_types ON accounts.account_type_id = account_types.id").
+		Where("events.slug = ? AND events.deleted_at IS NULL", slug).
+		First(&model).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	events := toDomainEventsWithCreator([]EventModel{model})
+	if len(events) == 0 {
+		return nil, nil
+	}
+	return events[0], nil
+}
+
+// ✅ GetEventTypeBySlug - RESTORED
+func (r *PostgresRepository) GetEventTypeBySlug(ctx context.Context, slug string) (*domain.EventType, error) {
+	var model EventTypeModel
+	err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return ToDomainEventTypeEntity(&model), nil
+}
+
+// ✅ GetEventStatusBySlug - RESTORED
+func (r *PostgresRepository) GetEventStatusBySlug(ctx context.Context, slug string) (*domain.EventStatus, error) {
+	var model EventStatusModel
+	err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return ToDomainEventStatusEntity(&model), nil
+}

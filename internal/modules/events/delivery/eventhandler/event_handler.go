@@ -716,6 +716,7 @@ func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
         ID:               id,
         UpdatedBy:        userID,
         Name:             req.Name,
+		DisplayName:      req.DisplayName, 
         Description:      req.Description,
         EventTypeID:      req.EventTypeID,
         EventStatusID:    req.EventStatusID,

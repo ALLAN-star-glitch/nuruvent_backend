@@ -81,11 +81,28 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 	log.Printf("📝 Internal name (sanitized): '%s'", name)
 
 	// 4. ✅ Slug - URL-friendly (lowercase, hyphens, no emojis)
-	slug := s.validator.Sanitize.Slug(name)
-	if slug == "" {
-		slug = "untitled-event"
+	// ✅ FIX: Generate base slug first using GenerateSlugFromName
+	baseSlug := s.validator.Sanitize.GenerateSlugFromName(name)
+	if baseSlug == "" {
+		baseSlug = "untitled"
 	}
-	log.Printf("📝 Slug: '%s'", slug)
+	log.Printf("📝 Base slug: '%s'", baseSlug)
+
+	// ✅ FIX: Check if slug already exists and generate unique one
+	slug := s.validator.Sanitize.GenerateUniqueSlug(
+		baseSlug,
+		"", // No exclude ID for new event
+		func(slug string, excludeID string) bool {
+			// Check if slug exists in database
+			existing, err := s.repo.GetEventBySlug(ctx, slug)
+			if err != nil {
+				log.Printf("⚠️ Error checking slug existence: %v", err)
+				return false
+			}
+			return existing != nil
+		},
+	)
+	log.Printf("📝 Unique slug: '%s'", slug)
 
 	// 5. Validate the name (log warnings for drafts)
 	if valid, msg := s.validator.Sanitize.ValidateName(name); !valid {
@@ -138,7 +155,7 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 	event, err := domain.NewEvent(
 		name,           // ✅ Internal name (sanitized)
 		displayName,    // ✅ Display name (preserved user input)
-		slug,           // ✅ Generated slug
+		slug,           // ✅ UNIQUE slug
 		cmd.Description,
 		cmd.EventTypeID,
 		cmd.AccountID,
@@ -265,11 +282,28 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 	log.Printf("📝 Internal name (sanitized): '%s'", name)
 
 	// 4. ✅ Slug - URL-friendly (lowercase, hyphens, no emojis)
-	slug := s.validator.Sanitize.Slug(name)
-	if slug == "" {
-		return nil, errors.New("failed to generate slug from event name")
+	// ✅ FIX: Generate base slug first
+	baseSlug := s.validator.Sanitize.GenerateSlugFromName(name)
+	if baseSlug == "" {
+		baseSlug = "untitled"
 	}
-	log.Printf("📝 Slug: '%s'", slug)
+	log.Printf("📝 Base slug: '%s'", baseSlug)
+
+	// ✅ FIX: Check if slug already exists and generate unique one
+	slug := s.validator.Sanitize.GenerateUniqueSlug(
+		baseSlug,
+		"", // No exclude ID for new event
+		func(slug string, excludeID string) bool {
+			// Check if slug exists in database
+			existing, err := s.repo.GetEventBySlug(ctx, slug)
+			if err != nil {
+				log.Printf("⚠️ Error checking slug existence: %v", err)
+				return false
+			}
+			return existing != nil
+		},
+	)
+	log.Printf("📝 Unique slug: '%s'", slug)
 
 	// 5. Validate the name (strict for published events)
 	if valid, msg := s.validator.Sanitize.ValidateName(name); !valid {
@@ -329,7 +363,7 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 	event, err := domain.NewEvent(
 		name,           // ✅ Internal name (sanitized)
 		displayName,    // ✅ Display name (preserved user input)
-		slug,           // ✅ Generated slug
+		slug,           // ✅ UNIQUE slug
 		cmd.Description,
 		cmd.EventTypeID,
 		cmd.AccountID,
@@ -435,6 +469,8 @@ func (s *eventService) GetEventBySlug(ctx context.Context, slug string) (*domain
 // ============================================================
 
 
+// internal/modules/events/service/event_service.go
+
 func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) (*domain.Event, error) {
 	
     if cmd.ID == "" {
@@ -455,7 +491,7 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
     }
 
     // ============================================================
-    // ✅ HANDLE NAME UPDATE (only field from user)
+    // ✅ HANDLE NAME UPDATE with unique slug generation
     // ============================================================
 
     var newName string
@@ -469,7 +505,7 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
             return nil, errors.New("event name cannot be empty")
         }
 
-        // ✅ Display name - preserve user input (with emojis)
+        // ✅ Display name - preserve user input
         newDisplayName = rawName
 
         // ✅ Sanitized name - internal use
@@ -478,15 +514,41 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
             return nil, errors.New("event name must contain valid characters after sanitization")
         }
 
-        // ✅ Generate slug
-        newSlug = s.validator.Sanitize.Slug(newName)
-        if newSlug == "" {
-            return nil, errors.New("failed to generate slug from event name")
+        // ✅ Generate base slug
+        baseSlug := s.validator.Sanitize.GenerateSlugFromName(newName)
+        if baseSlug == "" {
+            baseSlug = "untitled"
         }
+
+        // ✅ Generate unique slug - checking against existing events (excluding this one)
+        newSlug = s.validator.Sanitize.GenerateUniqueSlug(
+            baseSlug,
+            event.ID, // Exclude current event from check
+            func(slug string, excludeID string) bool {
+                // Check if slug exists in database (excluding the current event)
+                existing, err := s.repo.GetEventBySlug(ctx, slug)
+                if err != nil {
+                    log.Printf("⚠️ Error checking slug existence: %v", err)
+                    return false
+                }
+                return existing != nil && existing.ID != excludeID
+            },
+        )
 
         nameChanged = true
         log.Printf("📝 Name update: display='%s', internal='%s', slug='%s'",
             newDisplayName, newName, newSlug)
+    }
+
+    // ✅ Handle DisplayName update independently
+    if cmd.DisplayName != nil && *cmd.DisplayName != "" {
+        if !nameChanged {
+            newDisplayName = *cmd.DisplayName
+        } else {
+            newDisplayName = *cmd.DisplayName
+        }
+        nameChanged = true
+        log.Printf("📝 Display name explicitly updated: '%s'", newDisplayName)
     }
 
     // ============================================================
@@ -495,21 +557,21 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
 
     // ✅ Build updated values for validation - using pointers
     var name string
-    if nameChanged {
+    if nameChanged && newName != "" {
         name = newName
     } else {
         name = event.Name
     }
 
     var displayName string
-    if nameChanged {
+    if nameChanged && newDisplayName != "" {
         displayName = newDisplayName
     } else {
         displayName = event.DisplayName
     }
 
     var slug string
-    if nameChanged {
+    if nameChanged && newSlug != "" {
         slug = newSlug
     } else {
         slug = event.Slug
@@ -578,6 +640,27 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
         meetLink = event.MeetLink
     }
 
+    var price float64
+    if cmd.Price != nil {
+        price = *cmd.Price
+    } else {
+        price = event.Price
+    }
+
+    var certificatePrice float64
+    if cmd.CertificatePrice != nil {
+        certificatePrice = *cmd.CertificatePrice
+    } else {
+        certificatePrice = event.CertificatePrice
+    }
+
+    var maxAttendees int
+    if cmd.MaxAttendees != nil {
+        maxAttendees = *cmd.MaxAttendees
+    } else {
+        maxAttendees = event.MaxAttendees
+    }
+
     // ✅ Check if the event is a draft
     isDraft := event.EventStatusID != "" && s.isDraftStatus(ctx, event.EventStatusID)
 
@@ -617,6 +700,15 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
         if isVirtual && zoomLink == "" && meetLink == "" {
             return nil, errors.New("at least one meeting link is required for virtual events")
         }
+        if price < 0 {
+            return nil, errors.New("price cannot be negative")
+        }
+        if certificatePrice < 0 {
+            return nil, errors.New("certificate price cannot be negative")
+        }
+        if maxAttendees < 0 {
+            return nil, errors.New("maximum attendees cannot be negative")
+        }
     } else {
         // ✅ Relaxed validation for drafts
         if name == "" {
@@ -626,7 +718,7 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
             displayName = name
         }
         if slug == "" {
-            slug = s.validator.Sanitize.Slug(name)
+            slug = s.validator.Sanitize.GenerateSlugFromName(name)
             if slug == "" {
                 slug = "untitled-event"
             }
@@ -663,7 +755,11 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
         event.DisplayName = newDisplayName
         event.Slug = newSlug
     }
-    if cmd.Description != nil && *cmd.Description != "" {
+    // ✅ IMPORTANT: If display_name was explicitly provided but name wasn't
+    if cmd.DisplayName != nil && *cmd.DisplayName != "" && !nameChanged {
+        event.DisplayName = *cmd.DisplayName
+    }
+    if cmd.Description != nil {
         event.Description = *cmd.Description
     }
     if cmd.Date != nil && *cmd.Date != "" {
@@ -681,23 +777,23 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
     if cmd.CertificatePrice != nil && *cmd.CertificatePrice >= 0 {
         event.CertificatePrice = *cmd.CertificatePrice
     }
-    if cmd.Location != nil && *cmd.Location != "" {
+    if cmd.Location != nil {
         event.Location = *cmd.Location
     }
     if cmd.IsVirtual != nil {
         event.IsVirtual = *cmd.IsVirtual
     }
-    if cmd.ZoomLink != nil && *cmd.ZoomLink != "" {
+    if cmd.ZoomLink != nil {
         event.ZoomLink = *cmd.ZoomLink
     }
-    if cmd.MeetLink != nil && *cmd.MeetLink != "" {
+    if cmd.MeetLink != nil {
         event.MeetLink = *cmd.MeetLink
     }
-    if cmd.MaxAttendees != nil && *cmd.MaxAttendees > 0 {
+    if cmd.MaxAttendees != nil && *cmd.MaxAttendees >= 0 {
         event.MaxAttendees = *cmd.MaxAttendees
     }
 
-    // ✅ FIX: Only update feature flags if they were provided
+    // ✅ Only update feature flags if they were provided
     if cmd.IsFeatured != nil {
         event.IsFeatured = *cmd.IsFeatured
     }
@@ -721,7 +817,13 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
     currentTime := time.Now()
     event.UpdatedAt = currentTime
 
+    // ✅ Save to database
     if err := s.repo.UpdateEvent(ctx, event); err != nil {
+        // Check if it's a duplicate key error
+        if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "23505") {
+            log.Printf("❌ Duplicate slug detected: %s", event.Slug)
+            return nil, fmt.Errorf("an event with the name '%s' already exists. Please use a different name", event.DisplayName)
+        }
         return nil, fmt.Errorf("failed to update event: %w", err)
     }
 
@@ -999,7 +1101,7 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 	}
 
 	// ✅ 1. Get the published status
-	status, err := s.repo.GetEventStatusBySlug(ctx, domain.EventStatusPublished.GetSlug())
+	status, err := s.repo.GetEventStatusByName(ctx, domain.EventStatusDraft.GetName())
 	if err != nil {
 		log.Printf("❌ Failed to get published status: %v", err)
 		return nil, fmt.Errorf("failed to get published status: %w", err)

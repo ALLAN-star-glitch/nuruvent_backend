@@ -1,5 +1,4 @@
-.PHONY: help migrate-up migrate-down migrate-status migrate-create migrate-reset dev build test lint worker worker-build seed seed-only seed-dry seed-reset db-shell db-list db-tables db-desc db-query db-count db-psql db-drop db-reset cache-clear cache-clear-go cache-clear-all
-
+.PHONY: help migrate-up migrate-down migrate-status migrate-create migrate-reset dev build test lint worker worker-build seed seed-only seed-dry seed-reset db-shell db-list db-tables db-desc db-query db-count db-psql db-drop db-reset cache-clear cache-clear-go cache-clear-all dockerhub-login dockerhub-login-check dockerhub-build dockerhub-tag dockerhub-push dockerhub-build-push dockerhub-build-push-version dockerhub-push-latest dockerhub-list-tags dockerhub-inspect ghcr-login ghcr-build-push ecr-login ecr-build-push
 # ================================================
 # MIGRATION & DATABASE CONFIGURATION
 # ================================================
@@ -514,3 +513,125 @@ swagger-clean:
 c:
 	@echo "Clear Terminal"
 	clear
+
+# ============================================================
+# DOCKER HUB - Pure Makefile (No Shell Scripts)
+# ============================================================
+
+# Configuration
+DOCKER_USERNAME ?= yourusername
+TAG ?= latest
+VERSION ?= $(TAG)
+DOCKERHUB_COMPOSE ?= docker-compose.dockerhub.yml
+REGISTRY ?= docker.io
+
+# Derived variables
+IMAGE_NAME := $(REGISTRY)/$(DOCKER_USERNAME)/nuruvent-backend
+FULL_IMAGE := $(IMAGE_NAME):$(TAG)
+
+# ================================================
+# DOCKER HUB TARGETS
+# ================================================
+
+# Login to Docker Hub
+dockerhub-login:
+	@echo "🔐 Logging in to Docker Hub..."
+	docker login
+	@echo "✅ Login successful"
+
+# Check login status
+dockerhub-login-check:
+	@echo "🔐 Checking Docker Hub login status..."
+	@docker login 2>&1 | grep -q "Login Succeeded" && echo "✅ Logged in" || echo "❌ Not logged in. Run: make dockerhub-login"
+
+# Build image
+dockerhub-build:
+	@echo "🐳 Building image: $(FULL_IMAGE)"
+	@echo "Using compose file: $(DOCKERHUB_COMPOSE)"
+	@DOCKER_USERNAME=$(DOCKER_USERNAME) TAG=$(TAG) \
+		docker-compose -f $(DOCKERHUB_COMPOSE) build
+	@echo "✅ Image built successfully"
+
+# Tag image
+dockerhub-tag:
+	@echo "🏷️  Tagging image: $(FULL_IMAGE)"
+	docker tag nuruvent-backend:latest $(FULL_IMAGE)
+	@echo "✅ Image tagged successfully"
+
+# Push image
+dockerhub-push:
+	@echo "📤 Pushing image: $(FULL_IMAGE)"
+	docker push $(FULL_IMAGE)
+	@echo "✅ Image pushed successfully"
+ifeq ($(TAG), latest)
+	@echo "✅ Pushed latest tag"
+else
+	@echo "📤 Also pushing as latest..."
+	docker tag $(FULL_IMAGE) $(IMAGE_NAME):latest
+	docker push $(IMAGE_NAME):latest
+	@echo "✅ Also pushed as latest"
+endif
+
+# Build, tag, and push (all-in-one)
+dockerhub-build-push: dockerhub-login-check dockerhub-build dockerhub-tag dockerhub-push
+	@echo ""
+	@echo "┌─────────────────────────────────────────────────┐"
+	@echo "│  🎉 Build and push complete!                  │"
+	@echo "└─────────────────────────────────────────────────┘"
+	@echo ""
+	@echo "Image: $(FULL_IMAGE)"
+	@echo ""
+	@echo "To pull this image:"
+	@echo "  docker pull $(FULL_IMAGE)"
+	@echo ""
+	@echo "To run this image:"
+	@echo "  docker run -d -p 8080:8080 $(FULL_IMAGE)"
+
+# Build and push with version tag
+dockerhub-build-push-version:
+ifeq ($(VERSION), latest)
+	@echo "Error: VERSION cannot be 'latest'"
+	@exit 1
+endif
+	@$(MAKE) dockerhub-build-push TAG=$(VERSION)
+
+# Push latest tag only
+dockerhub-push-latest:
+	@echo "📤 Pushing latest tag..."
+	docker push $(IMAGE_NAME):latest
+	@echo "✅ Pushed latest"
+
+# List all tags on Docker Hub
+dockerhub-list-tags:
+	@echo "📋 Listing tags for $(IMAGE_NAME)..."
+	@curl -s "https://hub.docker.com/v2/repositories/$(DOCKER_USERNAME)/nuruvent-backend/tags" | jq '.results[].name' 2>/dev/null || echo "Could not fetch tags. Make sure jq is installed: brew install jq"
+
+# Inspect image
+dockerhub-inspect:
+	@echo "🔍 Inspecting image: $(FULL_IMAGE)"
+	docker inspect $(FULL_IMAGE) | jq '.[0].Config'
+
+# ============================================================
+# DOCKER HUB WITH DIFFERENT REGISTRIES
+# ============================================================
+
+# GitHub Container Registry
+ghcr-login:
+	@echo "🔐 Logging in to GitHub Container Registry..."
+	@echo "Please use your GitHub personal access token with 'write:packages' scope"
+	@echo $(GITHUB_TOKEN) | docker login ghcr.io -u $(DOCKER_USERNAME) --password-stdin
+	@echo "✅ Login successful"
+
+ghcr-build-push:
+	@echo "🐳 Building and pushing to GitHub Container Registry..."
+	@$(MAKE) dockerhub-build-push REGISTRY=ghcr.io
+
+# AWS ECR
+ecr-login:
+	@echo "🔐 Logging in to AWS ECR..."
+	aws ecr get-login-password --region $(AWS_REGION) | docker login --username AWS --password-stdin $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+	@echo "✅ Login successful"
+
+ecr-build-push:
+	@echo "🐳 Building and pushing to AWS ECR..."
+	@$(MAKE) dockerhub-build-push REGISTRY=$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com

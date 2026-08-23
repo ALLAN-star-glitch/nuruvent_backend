@@ -1,18 +1,25 @@
+# docker-compose.prod.yml
+version: '3.8'
+
 services:
+  # ============================================
+  # BACKEND API (Production)
+  # ============================================
   backend:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: nuruvent-backend-prod
     env_file:
-      - .env  # ← Load from .env file
+      - .env.production
     environment:
       # Override Docker-specific values
       DB_HOST: postgres
       DB_PORT: 5432
-      REDIS_URL: redis:6379
-      CASBIN_MODEL: /root/configs/casbin/model.conf
+      REDIS_URL: redis://redis:6379
+      CASBIN_MODEL: /app/configs/casbin/model.conf
       ENVIRONMENT: production
+      GIN_MODE: release
     ports:
       - "8080:8080"
     depends_on:
@@ -29,7 +36,17 @@ services:
         reservations:
           cpus: '0.5'
           memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - nuruvent-network-prod
 
+  # ============================================
+  # DATABASE (PostgreSQL) - Production
+  # ============================================
   postgres:
     image: postgres:16-alpine
     container_name: nuruvent-postgres-prod
@@ -37,6 +54,7 @@ services:
       POSTGRES_USER: nuruvent_user
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: nuruvent
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c max_connections=200"
     ports:
       - "5432:5432"
     volumes:
@@ -50,8 +68,22 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '2'
           memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - nuruvent-network-prod
 
+  # ============================================
+  # REDIS (Cache + Queue) - Production
+  # ============================================
   redis:
     image: redis:7-alpine
     container_name: nuruvent-redis-prod
@@ -69,8 +101,26 @@ services:
     deploy:
       resources:
         limits:
+          cpus: '0.5'
           memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - nuruvent-network-prod
 
 volumes:
   postgres-data:
+    name: nuruvent-postgres-data-prod
   redis-data:
+    name: nuruvent-redis-data-prod
+
+networks:
+  nuruvent-network-prod:
+    name: nuruvent-network-prod
+    driver: bridge

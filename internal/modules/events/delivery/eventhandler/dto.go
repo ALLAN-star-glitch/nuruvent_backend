@@ -66,6 +66,7 @@ type CreateEventWithImageRequest struct {
 // ✅ UpdateEventRequest - All fields optional for updates (application/json)
 type UpdateEventRequest struct {
     Name             *string  `json:"name,omitempty"`
+	DisplayName      *string  `json:"display_name,omitempty"` 
     Description      *string  `json:"description,omitempty"`
     EventTypeID      *string  `json:"event_type_id,omitempty"`
     EventStatusID    *string  `json:"event_status_id,omitempty"`
