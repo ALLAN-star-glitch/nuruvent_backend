@@ -18,7 +18,8 @@ func SeedAccountTypes(db *gorm.DB) error {
 
 	for _, info := range infos {
 		var existing postgres.AccountTypeModel
-		err := db.Where("slug = ?", info.Slug.String()).First(&existing).Error
+		// ✅ info.Slug is already a string - no need for .String()
+		err := db.Where("slug = ?", info.Slug).First(&existing).Error
 
 		if err == nil {
 			// Update existing
@@ -38,7 +39,7 @@ func SeedAccountTypes(db *gorm.DB) error {
 
 		// Create new
 		accountType := &postgres.AccountTypeModel{
-			Slug:        info.Slug.String(),
+			Slug:        info.Slug, // ✅ info.Slug is already a string
 			Name:        info.Name,
 			DisplayName: info.DisplayName,
 			Description: info.Description,

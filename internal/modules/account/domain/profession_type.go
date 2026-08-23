@@ -1,22 +1,32 @@
+// internal/modules/accounts/domain/professional_type.go
+
 package domain
 
+import (
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
+)
 
 // ============================================================
 // PROFESSIONAL TYPE - Value Object
 // ============================================================
 
-type ProfessionalTypeValue string
+// ProfessionalTypeValue is an alias for the shared ProfessionalType
+type ProfessionalTypeValue = types.ProfessionalType
 
+// Type constants - Re-exported from shared types for convenience
 const (
-	ProfessionalTypeTrainer   ProfessionalTypeValue = "trainer"
-	ProfessionalTypeCoach     ProfessionalTypeValue = "coach"
-	ProfessionalTypeConsultant ProfessionalTypeValue = "consultant"
-	ProfessionalTypeFreelancer ProfessionalTypeValue = "freelancer"
+	ProfessionalTypeTrainer    = types.ProfessionalTypeTrainer
+	ProfessionalTypeCoach      = types.ProfessionalTypeCoach
+	ProfessionalTypeConsultant = types.ProfessionalTypeConsultant
+	ProfessionalTypeFreelancer = types.ProfessionalTypeFreelancer
 )
+
+// AllProfessionalTypes re-exported from shared types
+var AllProfessionalTypes = types.AllProfessionalTypes
 
 // ProfessionalTypeInfo holds metadata for each professional type
 type ProfessionalTypeInfo struct {
-	Slug        ProfessionalTypeValue
+	Slug        string
 	Name        string
 	DisplayName string
 	Description string
@@ -27,100 +37,72 @@ type ProfessionalTypeInfo struct {
 	IsActive    bool
 }
 
-// Private registry (prevents external mutation)
-var professionalTypeRegistry = map[ProfessionalTypeValue]ProfessionalTypeInfo{
-	ProfessionalTypeTrainer: {
-		Slug:        ProfessionalTypeTrainer,
-		Name:        "Trainer",
-		DisplayName: "🎓 Trainer",
-		Description: "Professional trainer who conducts training sessions",
-		Icon:        "graduation-cap",
-		Color:       "#4F46E5",
-		SortOrder:   1,
+// ============================================================
+// PROFESSIONAL TYPE REGISTRY - Domain specific wrapper
+// ============================================================
+
+var professionalTypeRegistry = map[types.ProfessionalType]ProfessionalTypeInfo{
+	types.ProfessionalTypeTrainer: {
+		Slug:        types.ProfessionalTypeTrainerSlug,
+		Name:        types.ProfessionalTypeTrainerName,
+		DisplayName: types.ProfessionalTypeTrainerDisplayName,
+		Description: types.ProfessionalTypeTrainerDescription,
+		Icon:        types.ProfessionalTypeTrainerIcon,
+		Color:       types.ProfessionalTypeTrainerColor,
+		SortOrder:   types.ProfessionalTypeTrainerSortOrder,
 		CanHost:     true,
 		IsActive:    true,
 	},
-	ProfessionalTypeCoach: {
-		Slug:        ProfessionalTypeCoach,
-		Name:        "Coach",
-		DisplayName: "👨‍🏫 Coach",
-		Description: "Professional coach providing guidance and mentorship",
-		Icon:        "user-tie",
-		Color:       "#7C3AED",
-		SortOrder:   2,
+	types.ProfessionalTypeCoach: {
+		Slug:        types.ProfessionalTypeCoachSlug,
+		Name:        types.ProfessionalTypeCoachName,
+		DisplayName: types.ProfessionalTypeCoachDisplayName,
+		Description: types.ProfessionalTypeCoachDescription,
+		Icon:        types.ProfessionalTypeCoachIcon,
+		Color:       types.ProfessionalTypeCoachColor,
+		SortOrder:   types.ProfessionalTypeCoachSortOrder,
 		CanHost:     true,
 		IsActive:    true,
 	},
-	ProfessionalTypeConsultant: {
-		Slug:        ProfessionalTypeConsultant,
-		Name:        "Consultant",
-		DisplayName: "💼 Consultant",
-		Description: "Professional consultant providing expert advice",
-		Icon:        "briefcase",
-		Color:       "#0EA5E9",
-		SortOrder:   3,
+	types.ProfessionalTypeConsultant: {
+		Slug:        types.ProfessionalTypeConsultantSlug,
+		Name:        types.ProfessionalTypeConsultantName,
+		DisplayName: types.ProfessionalTypeConsultantDisplayName,
+		Description: types.ProfessionalTypeConsultantDescription,
+		Icon:        types.ProfessionalTypeConsultantIcon,
+		Color:       types.ProfessionalTypeConsultantColor,
+		SortOrder:   types.ProfessionalTypeConsultantSortOrder,
 		CanHost:     true,
 		IsActive:    true,
 	},
-	ProfessionalTypeFreelancer: {
-		Slug:        ProfessionalTypeFreelancer,
-		Name:        "Freelancer",
-		DisplayName: "🖥️ Freelancer",
-		Description: "Independent professional offering services",
-		Icon:        "laptop",
-		Color:       "#F59E0B",
-		SortOrder:   4,
+	types.ProfessionalTypeFreelancer: {
+		Slug:        types.ProfessionalTypeFreelancerSlug,
+		Name:        types.ProfessionalTypeFreelancerName,
+		DisplayName: types.ProfessionalTypeFreelancerDisplayName,
+		Description: types.ProfessionalTypeFreelancerDescription,
+		Icon:        types.ProfessionalTypeFreelancerIcon,
+		Color:       types.ProfessionalTypeFreelancerColor,
+		SortOrder:   types.ProfessionalTypeFreelancerSortOrder,
 		CanHost:     false,
 		IsActive:    true,
 	},
 }
 
 // ============================================================
-// DOMAIN METHODS (on ProfessionalTypeValue)
+// HELPER FUNCTIONS
 // ============================================================
 
-func (p ProfessionalTypeValue) String() string {
-	return string(p)
-}
-
-func (p ProfessionalTypeValue) IsValid() bool {
-	_, ok := professionalTypeRegistry[p]
-	return ok
-}
-
-func (p ProfessionalTypeValue) Info() (ProfessionalTypeInfo, bool) {
-	info, ok := professionalTypeRegistry[p]
+// GetProfessionalTypeInfo returns the type info for a given professional type
+func GetProfessionalTypeInfo(professionalType ProfessionalTypeValue) (ProfessionalTypeInfo, bool) {
+	info, ok := professionalTypeRegistry[professionalType]
 	return info, ok
-}
-
-func (p ProfessionalTypeValue) CanHost() bool {
-	info, ok := professionalTypeRegistry[p]
-	if !ok {
-		return false
-	}
-	return info.CanHost
-}
-
-func (p ProfessionalTypeValue) IsActive() bool {
-	info, ok := professionalTypeRegistry[p]
-	if !ok {
-		return false
-	}
-	return info.IsActive
 }
 
 // ============================================================
 // READ-ONLY GETTERS
 // ============================================================
 
-func ParseProfessionalType(slug string) (ProfessionalTypeValue, bool) {
-	t := ProfessionalTypeValue(slug)
-	if t.IsValid() {
-		return t, true
-	}
-	return "", false
-}
-
+// AllProfessionalTypeInfos returns all type infos
 func AllProfessionalTypeInfos() []ProfessionalTypeInfo {
 	infos := make([]ProfessionalTypeInfo, 0, len(professionalTypeRegistry))
 	for _, info := range professionalTypeRegistry {
@@ -129,14 +111,22 @@ func AllProfessionalTypeInfos() []ProfessionalTypeInfo {
 	return infos
 }
 
+// AllProfessionalTypeSlugs returns all type slugs (with hyphens)
 func AllProfessionalTypeSlugs() []string {
-	slugs := make([]string, 0, len(professionalTypeRegistry))
-	for slug := range professionalTypeRegistry {
-		slugs = append(slugs, string(slug))
-	}
-	return slugs
+	return types.AllProfessionalTypeSlugs()
 }
 
+// AllProfessionalTypeNames returns all internal type names (with underscores)
+func AllProfessionalTypeNames() []string {
+	return types.AllProfessionalTypeNames()
+}
+
+// AllProfessionalTypeDisplayNames returns all display names
+func AllProfessionalTypeDisplayNames() []string {
+	return types.AllProfessionalTypeDisplayNames()
+}
+
+// ActiveProfessionalTypeInfos returns only active type infos
 func ActiveProfessionalTypeInfos() []ProfessionalTypeInfo {
 	infos := make([]ProfessionalTypeInfo, 0)
 	for _, info := range professionalTypeRegistry {
@@ -145,4 +135,49 @@ func ActiveProfessionalTypeInfos() []ProfessionalTypeInfo {
 		}
 	}
 	return infos
+}
+
+// HostProfessionalTypeInfos returns only professional types that can host events
+func HostProfessionalTypeInfos() []ProfessionalTypeInfo {
+	infos := make([]ProfessionalTypeInfo, 0)
+	for _, info := range professionalTypeRegistry {
+		if info.CanHost && info.IsActive {
+			infos = append(infos, info)
+		}
+	}
+	return infos
+}
+
+// GetProfessionalTypeBySlug returns type info by slug
+func GetProfessionalTypeBySlug(slug string) (ProfessionalTypeInfo, bool) {
+	for _, info := range professionalTypeRegistry {
+		if info.Slug == slug {
+			return info, true
+		}
+	}
+	return ProfessionalTypeInfo{}, false
+}
+
+// GetProfessionalTypeByName returns type info by internal name (with underscores)
+func GetProfessionalTypeByName(name string) (ProfessionalTypeInfo, bool) {
+	professionalType, ok := types.ParseProfessionalType(name)
+	if !ok {
+		return ProfessionalTypeInfo{}, false
+	}
+	return GetProfessionalTypeInfo(professionalType)
+}
+
+// GetProfessionalTypeByDisplayName returns type info by display name
+func GetProfessionalTypeByDisplayName(displayName string) (ProfessionalTypeInfo, bool) {
+	for _, info := range professionalTypeRegistry {
+		if info.DisplayName == displayName {
+			return info, true
+		}
+	}
+	return ProfessionalTypeInfo{}, false
+}
+
+// IsProfessionalTypeValid checks if the professional type is valid
+func IsProfessionalTypeValid(professionalType ProfessionalTypeValue) bool {
+	return professionalType.IsValid()
 }

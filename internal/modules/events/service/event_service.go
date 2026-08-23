@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"log"
 	"time"
+	"strings"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/validation"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 )
 
 // ============================================================
@@ -20,6 +23,7 @@ type eventService struct {
 	repo        domain.Repository
 	permChecker domain.PermissionChecker
 	mediaSvc    domain.MediaService
+	validator   *validation.Validator
 }
 
 func NewService(
@@ -31,6 +35,7 @@ func NewService(
 		repo:        repo,
 		permChecker: permChecker,
 		mediaSvc:    mediaSvc,
+		validator:   validation.New(), 
 	}
 }
 
@@ -38,8 +43,6 @@ func NewService(
 // CREATE DRAFT (with optional image)
 // ============================================================
 
-
-// internal/modules/events/service/service_impl.go
 
 func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) (*domain.Event, error) {
 	log.Printf("🔄 CreateDraft called: Name='%s', TypeID='%s', AccountID='%s'",
@@ -51,31 +54,66 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 		return nil, errors.New("insufficient permissions to create events for this account")
 	}
 
-	// Name: Default if empty
-	if cmd.Name == "" {
-		cmd.Name = "Untitled Event"
-		log.Printf("📝 Generated default name: 'Untitled Event'")
+	// ============================================================
+	// ✅ HANDLE USER INPUT - Generate all three fields
+	// ============================================================
+
+	// 1. User input (what they typed in the form)
+	rawUserInput := cmd.Name
+	if rawUserInput == "" {
+		rawUserInput = "Untitled Event" // Default for drafts
+	}
+	log.Printf("📝 User input: '%s'", rawUserInput)
+
+	// 2. ✅ Display Name - PRESERVE USER INPUT (keep emojis, special chars, case)
+	// This is what users see on the UI
+	displayName := rawUserInput
+	if displayName == "" {
+		displayName = "Untitled Event"
+	}
+	log.Printf("📝 Display name (preserved): '%s'", displayName)
+
+	// 3. ✅ Name - Internal identifier (clean, lowercase, underscores, no emojis)
+	name := s.validator.Sanitize.Name(rawUserInput)
+	if name == "" {
+		name = "untitled_event"
+	}
+	log.Printf("📝 Internal name (sanitized): '%s'", name)
+
+	// 4. ✅ Slug - URL-friendly (lowercase, hyphens, no emojis)
+	slug := s.validator.Sanitize.Slug(name)
+	if slug == "" {
+		slug = "untitled-event"
+	}
+	log.Printf("📝 Slug: '%s'", slug)
+
+	// 5. Validate the name (log warnings for drafts)
+	if valid, msg := s.validator.Sanitize.ValidateName(name); !valid {
+		log.Printf("⚠️ Name validation warning: %s", msg)
 	}
 
-	// ✅ FIX: If no event type provided, use "Uncategorized"
+	// ============================================================
+	// CONTINUE WITH EXISTING LOGIC
+	// ============================================================
+
+	// If no event type provided, use "Uncategorized"
 	if cmd.EventTypeID == "" {
-		log.Printf("ℹ️ No event type provided - using default 'Uncategorized'")
+		log.Printf("ℹ️ No event type provided - using default: %s", domain.EventTypeUncategorized.GetDisplayName())
 		
-		// Get the uncategorized event type
-		uncategorized, err := s.repo.GetEventTypeBySlug(ctx, "uncategorized")
+		uncategorized, err := s.repo.GetEventTypeBySlug(ctx, domain.EventTypeUncategorized.GetSlug())
 		if err != nil {
 			log.Printf("❌ Failed to get uncategorized event type: %v", err)
 			return nil, fmt.Errorf("failed to get default event type: %w", err)
 		}
 		if uncategorized == nil {
 			log.Printf("❌ Uncategorized event type not found - please run seeders")
-			return nil, errors.New("default event type 'uncategorized' not found. Please run seeders")
+			return nil, fmt.Errorf("default event type '%s' not found. Please run seeders", domain.EventTypeUncategorized.GetSlug())
 		}
 		cmd.EventTypeID = uncategorized.ID
 		log.Printf("✅ Using uncategorized event type: %s (%s)", uncategorized.Name, uncategorized.ID)
 	}
 
-	// Validate event type (now always set)
+	// Validate event type
 	log.Printf("🔍 Validating event type: %s", cmd.EventTypeID)
 	eventType, err := s.repo.GetEventTypeByID(ctx, cmd.EventTypeID)
 	if err != nil {
@@ -96,8 +134,11 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 		return nil, errors.New("repository is not initialized")
 	}
 
+	// ✅ Use domain.NewEvent with all 7 parameters
 	event, err := domain.NewEvent(
-		cmd.Name,
+		name,           // ✅ Internal name (sanitized)
+		displayName,    // ✅ Display name (preserved user input)
+		slug,           // ✅ Generated slug
 		cmd.Description,
 		cmd.EventTypeID,
 		cmd.AccountID,
@@ -107,7 +148,9 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 		log.Printf("❌ Failed to create domain entity: %v", err)
 		return nil, err
 	}
-	log.Printf("✅ Domain entity created with ID: %s", event.ID)
+
+	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s", 
+		event.ID, event.Name, event.Slug, event.DisplayName)
 
 	// Set additional fields (all optional for drafts)
 	if cmd.Date != "" {
@@ -123,20 +166,18 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 	event.ZoomLink = cmd.ZoomLink
 	event.MeetLink = cmd.MeetLink
 	event.MaxAttendees = cmd.MaxAttendees
-
-	// ✅ Set feature flags
 	event.IsFeatured = cmd.IsFeatured
 	event.IsPrivate = cmd.IsPrivate
 
 	// Set status to DRAFT
-	log.Printf("🔍 Getting status by slug: draft")
-	status, err := s.repo.GetEventStatusBySlug(ctx, "draft")
+	log.Printf("🔍 Getting status by slug: %s", domain.EventStatusDraft.GetSlug())
+	status, err := s.repo.GetEventStatusBySlug(ctx, domain.EventStatusDraft.GetSlug())
 	if err != nil {
 		log.Printf("❌ Failed to get event status: %v", err)
 		return nil, err
 	}
 	if status == nil {
-		log.Printf("❌ Event status not found: draft")
+		log.Printf("❌ Event status not found: %s", domain.EventStatusDraft.GetSlug())
 		return nil, domain.ErrEventStatusNotFound
 	}
 	event.EventStatusID = status.ID
@@ -150,36 +191,32 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 	}
 	log.Printf("✅ Draft created successfully: %s", event.ID)
 
-	// ✅ If image is provided, upload it using pure domain types
+	// If image is provided, upload it
 	if len(cmd.ImageData) > 0 {
 		log.Printf("🔄 Uploading image for draft %s", event.ID)
-
-		if s.mediaSvc == nil {
+		if s.mediaSvc != nil {
+			media, err := s.mediaSvc.UploadFile(ctx, domain.UploadMediaCommand{
+				File:          cmd.ImageData,
+				FileName:      cmd.ImageName,
+				ContentType:   cmd.ContentType,
+				MediaTypeName: types.MediaTypeEvent.GetName(),
+				EntityID:      event.ID,
+				UploadedBy:    cmd.CreatedBy,
+			})
+			if err != nil {
+				log.Printf("⚠️ Failed to upload image for draft %s: %v", event.ID, err)
+				return event, nil
+			}
+			log.Printf("✅ Image uploaded: %s", media.URL)
+			event.ImageURL = media.URL
+			if err := s.repo.UpdateEvent(ctx, event); err != nil {
+				log.Printf("⚠️ Failed to update draft %s with image: %v", event.ID, err)
+				return event, nil
+			}
+			log.Printf("✅ Draft updated with image URL")
+		} else {
 			log.Printf("⚠️ Media service is nil, skipping image upload")
-			return event, nil
 		}
-
-		media, err := s.mediaSvc.UploadFile(ctx, domain.UploadMediaCommand{
-			File:          cmd.ImageData,
-			FileName:      cmd.ImageName,
-			ContentType:   cmd.ContentType,
-			MediaTypeName: "Event",
-			EntityID:      event.ID,
-			UploadedBy:    cmd.CreatedBy,
-		})
-		if err != nil {
-			log.Printf("⚠️ Failed to upload image for draft %s: %v", event.ID, err)
-			return event, nil
-		}
-		log.Printf("✅ Image uploaded: %s", media.URL)
-
-		// Update event with image URL
-		event.ImageURL = media.URL
-		if err := s.repo.UpdateEvent(ctx, event); err != nil {
-			log.Printf("⚠️ Failed to update draft %s with image: %v", event.ID, err)
-			return event, nil
-		}
-		log.Printf("✅ Draft updated with image URL")
 	} else {
 		log.Printf("ℹ️ No image provided for draft %s", event.ID)
 	}
@@ -201,10 +238,50 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 		return nil, errors.New("insufficient permissions to create events for this account")
 	}
 
-	// STRICT validation for published events
-	if cmd.Name == "" {
+	// ============================================================
+	// ✅ HANDLE USER INPUT - Generate all three fields
+	// ============================================================
+
+	// 1. User input (what they typed in the form)
+	rawUserInput := cmd.Name
+	if rawUserInput == "" {
 		return nil, errors.New("event name is required for published events")
 	}
+	log.Printf("📝 User input: '%s'", rawUserInput)
+
+	// 2. ✅ Display Name - PRESERVE USER INPUT (keep emojis, special chars, case)
+	// This is what users see on the UI
+	displayName := rawUserInput
+	if displayName == "" {
+		return nil, errors.New("display name is required")
+	}
+	log.Printf("📝 Display name (preserved): '%s'", displayName)
+
+	// 3. ✅ Name - Internal identifier (clean, lowercase, underscores, no emojis)
+	name := s.validator.Sanitize.Name(rawUserInput)
+	if name == "" {
+		return nil, errors.New("failed to generate internal name from event name")
+	}
+	log.Printf("📝 Internal name (sanitized): '%s'", name)
+
+	// 4. ✅ Slug - URL-friendly (lowercase, hyphens, no emojis)
+	slug := s.validator.Sanitize.Slug(name)
+	if slug == "" {
+		return nil, errors.New("failed to generate slug from event name")
+	}
+	log.Printf("📝 Slug: '%s'", slug)
+
+	// 5. Validate the name (strict for published events)
+	if valid, msg := s.validator.Sanitize.ValidateName(name); !valid {
+		log.Printf("❌ Name validation failed: %s", msg)
+		return nil, fmt.Errorf("invalid event name: %s", msg)
+	}
+
+	// ============================================================
+	// CONTINUE WITH EXISTING VALIDATION
+	// ============================================================
+
+	// STRICT validation for published events
 	if cmd.EventTypeID == "" {
 		return nil, errors.New("event type is required for published events")
 	}
@@ -248,8 +325,11 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 		return nil, errors.New("repository is not initialized")
 	}
 
+	// ✅ Use domain.NewEvent with all 7 parameters
 	event, err := domain.NewEvent(
-		cmd.Name,
+		name,           // ✅ Internal name (sanitized)
+		displayName,    // ✅ Display name (preserved user input)
+		slug,           // ✅ Generated slug
 		cmd.Description,
 		cmd.EventTypeID,
 		cmd.AccountID,
@@ -259,7 +339,9 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 		log.Printf("❌ Failed to create domain entity: %v", err)
 		return nil, err
 	}
-	log.Printf("✅ Domain entity created with ID: %s", event.ID)
+	
+	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s", 
+		event.ID, event.Name, event.Slug, event.DisplayName)
 
 	// Set all fields
 	event.Date = parseDate(cmd.Date)
@@ -272,20 +354,18 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 	event.ZoomLink = cmd.ZoomLink
 	event.MeetLink = cmd.MeetLink
 	event.MaxAttendees = cmd.MaxAttendees
-
-	// ✅ Set feature flags
 	event.IsFeatured = cmd.IsFeatured
 	event.IsPrivate = cmd.IsPrivate
 
 	// Set status to PUBLISHED
-	log.Printf("🔍 Getting status by slug: published")
-	status, err := s.repo.GetEventStatusBySlug(ctx, "published")
+	log.Printf("🔍 Getting status by slug: %s", domain.EventStatusPublished.String())
+	status, err := s.repo.GetEventStatusBySlug(ctx, domain.EventStatusPublished.GetSlug())
 	if err != nil {
 		log.Printf("❌ Failed to get event status: %v", err)
 		return nil, err
 	}
 	if status == nil {
-		log.Printf("❌ Event status not found: published")
+		log.Printf("❌ Event status not found: %s", domain.EventStatusPublished.GetSlug())
 		return nil, domain.ErrEventStatusNotFound
 	}
 	event.EventStatusID = status.ID
@@ -299,36 +379,32 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 	}
 	log.Printf("✅ Published event created successfully: %s", event.ID)
 
-	// ✅ If image is provided, upload it using pure domain types
+	// If image is provided, upload it
 	if len(cmd.ImageData) > 0 {
 		log.Printf("🔄 Uploading image for event %s", event.ID)
-
-		if s.mediaSvc == nil {
+		if s.mediaSvc != nil {
+			media, err := s.mediaSvc.UploadFile(ctx, domain.UploadMediaCommand{
+				File:          cmd.ImageData,
+				FileName:      cmd.ImageName,
+				ContentType:   cmd.ContentType,
+				MediaTypeName: types.MediaTypeEvent.GetName(),
+				EntityID:      event.ID,
+				UploadedBy:    cmd.CreatedBy,
+			})
+			if err != nil {
+				log.Printf("⚠️ Failed to upload image for event %s: %v", event.ID, err)
+				return event, nil
+			}
+			log.Printf("✅ Image uploaded: %s", media.URL)
+			event.ImageURL = media.URL
+			if err := s.repo.UpdateEvent(ctx, event); err != nil {
+				log.Printf("⚠️ Failed to update event %s with image URL: %v", event.ID, err)
+				return event, nil
+			}
+			log.Printf("✅ Event updated with image URL")
+		} else {
 			log.Printf("⚠️ Media service is nil, skipping image upload")
-			return event, nil
 		}
-
-		media, err := s.mediaSvc.UploadFile(ctx, domain.UploadMediaCommand{
-			File:          cmd.ImageData,
-			FileName:      cmd.ImageName,
-			ContentType:   cmd.ContentType,
-			MediaTypeName: "Event",
-			EntityID:      event.ID,
-			UploadedBy:    cmd.CreatedBy,
-		})
-		if err != nil {
-			log.Printf("⚠️ Failed to upload image for event %s: %v", event.ID, err)
-			return event, nil
-		}
-		log.Printf("✅ Image uploaded: %s", media.URL)
-
-		// Update event with image URL
-		event.ImageURL = media.URL
-		if err := s.repo.UpdateEvent(ctx, event); err != nil {
-			log.Printf("⚠️ Failed to update event %s with image URL: %v", event.ID, err)
-			return event, nil
-		}
-		log.Printf("✅ Event updated with image URL")
 	} else {
 		log.Printf("ℹ️ No image provided for event %s", event.ID)
 	}
@@ -378,13 +454,65 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
         return nil, errors.New("insufficient permissions to update this event")
     }
 
+    // ============================================================
+    // ✅ HANDLE NAME UPDATE (only field from user)
+    // ============================================================
+
+    var newName string
+    var newDisplayName string
+    var newSlug string
+    var nameChanged bool
+
+    if cmd.Name != nil {
+        rawName := *cmd.Name
+        if rawName == "" {
+            return nil, errors.New("event name cannot be empty")
+        }
+
+        // ✅ Display name - preserve user input (with emojis)
+        newDisplayName = rawName
+
+        // ✅ Sanitized name - internal use
+        newName = s.validator.Sanitize.Name(rawName)
+        if newName == "" {
+            return nil, errors.New("event name must contain valid characters after sanitization")
+        }
+
+        // ✅ Generate slug
+        newSlug = s.validator.Sanitize.Slug(newName)
+        if newSlug == "" {
+            return nil, errors.New("failed to generate slug from event name")
+        }
+
+        nameChanged = true
+        log.Printf("📝 Name update: display='%s', internal='%s', slug='%s'",
+            newDisplayName, newName, newSlug)
+    }
+
+    // ============================================================
+    // CONTINUE WITH EXISTING VALIDATION LOGIC
+    // ============================================================
+
     // ✅ Build updated values for validation - using pointers
     var name string
-    if cmd.Name != nil {
-        name = *cmd.Name
-    }
-    if name == "" {
+    if nameChanged {
+        name = newName
+    } else {
         name = event.Name
+    }
+
+    var displayName string
+    if nameChanged {
+        displayName = newDisplayName
+    } else {
+        displayName = event.DisplayName
+    }
+
+    var slug string
+    if nameChanged {
+        slug = newSlug
+    } else {
+        slug = event.Slug
     }
 
     var eventTypeID string
@@ -459,6 +587,12 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
         if name == "" {
             return nil, errors.New("event name is required")
         }
+        if displayName == "" {
+            return nil, errors.New("display name is required")
+        }
+        if slug == "" {
+            return nil, errors.New("slug is required")
+        }
         if eventTypeID == "" {
             return nil, errors.New("event type is required")
         }
@@ -488,6 +622,15 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
         if name == "" {
             name = "Untitled Event"
         }
+        if displayName == "" {
+            displayName = name
+        }
+        if slug == "" {
+            slug = s.validator.Sanitize.Slug(name)
+            if slug == "" {
+                slug = "untitled-event"
+            }
+        }
         if eventTypeID != "" {
             eventType, err := s.repo.GetEventTypeByID(ctx, eventTypeID)
             if err != nil {
@@ -515,8 +658,10 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
     }
 
     // ✅ Apply updates - only if provided
-    if cmd.Name != nil && *cmd.Name != "" {
-        event.Name = *cmd.Name
+    if nameChanged {
+        event.Name = newName
+        event.DisplayName = newDisplayName
+        event.Slug = newSlug
     }
     if cmd.Description != nil && *cmd.Description != "" {
         event.Description = *cmd.Description
@@ -590,7 +735,7 @@ func (s *eventService) isDraftStatus(ctx context.Context, statusID string) bool 
     if err != nil || status == nil {
         return false
     }
-    return status.Slug == "draft"
+    return status.Slug == domain.EventStatusDraft.GetSlug()
 }
 
 // ============================================================
@@ -838,51 +983,51 @@ func (s *eventService) PermanentlyDeleteEventsByAccount(ctx context.Context, acc
 // ============================================================
 // STATUS - Single
 // ============================================================
-
 func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
-    log.Printf("📤 Publishing event: %s", id)
+	log.Printf("📤 Publishing event: %s", id)
 
-    event, err := s.repo.GetEventByID(ctx, id)
-    if err != nil {
-        return nil, err
-    }
-    if event == nil {
-        return nil, domain.ErrEventNotFound
-    }
+	event, err := s.repo.GetEventByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if event == nil {
+		return nil, domain.ErrEventNotFound
+	}
 
-    if !s.permChecker.CanUpdateEvent(ctx, publishedBy, event.AccountID) {
-        return nil, errors.New("insufficient permissions to publish this event")
-    }
+	if !s.permChecker.CanUpdateEvent(ctx, publishedBy, event.AccountID) {
+		return nil, errors.New("insufficient permissions to publish this event")
+	}
 
-    // ✅ 1. Get the published status
-    status, err := s.repo.GetEventStatusBySlug(ctx, "published")
-    if err != nil {
-        log.Printf("❌ Failed to get published status: %v", err)
-        return nil, fmt.Errorf("failed to get published status: %w", err)
-    }
-    if status == nil {
-        log.Printf("❌ Published status not found")
-        return nil, errors.New("published status not found")
-    }
+	// ✅ 1. Get the published status
+	status, err := s.repo.GetEventStatusBySlug(ctx, domain.EventStatusPublished.GetSlug())
+	if err != nil {
+		log.Printf("❌ Failed to get published status: %v", err)
+		return nil, fmt.Errorf("failed to get published status: %w", err)
+	}
+	if status == nil {
+		log.Printf("❌ Published status not found")
+		return nil, domain.ErrEventStatusNotFound
+	}
 
-    // ✅ 2. Validate the event FIRST (without changing status)
-    if err := event.Publish(); err != nil {
-        log.Printf("❌ Publish validation failed: %v", err)
-        return nil, err
-    }
+	// ✅ 2. Validate the event using domain's ValidateForPublish
+	if err := event.ValidateForPublish(); err != nil {
+		log.Printf("❌ Publish validation failed: %v", err)
+		// ✅ Return the validation error directly
+		return nil, fmt.Errorf("cannot publish event: %w", err)
+	}
 
-    // ✅ 3. Set the status AFTER validation (this prevents it from being overwritten)
-    event.EventStatusID = status.ID
-    log.Printf("✅ Setting status to: %s (%s)", status.Name, status.ID)
+	// ✅ 3. Set the status AFTER validation
+	event.EventStatusID = status.ID
+	log.Printf("✅ Setting status to: %s (%s)", status.Name, status.ID)
 
-    // ✅ 4. Update the event
-    if err := s.repo.UpdateEvent(ctx, event); err != nil {
-        log.Printf("❌ Failed to update event: %v", err)
-        return nil, fmt.Errorf("failed to publish event: %w", err)
-    }
+	// ✅ 4. Update the event
+	if err := s.repo.UpdateEvent(ctx, event); err != nil {
+		log.Printf("❌ Failed to update event: %v", err)
+		return nil, fmt.Errorf("failed to publish event: %w", err)
+	}
 
-    log.Printf("✅ Event published successfully: %s", id)
-    return event, nil
+	log.Printf("✅ Event published successfully: %s", id)
+	return event, nil
 }
 
 func (s *eventService) CancelEvent(ctx context.Context, id, cancelledBy string) (*domain.Event, error) {
@@ -944,13 +1089,123 @@ func (s *eventService) BulkPublishEvents(ctx context.Context, ids []string, publ
 		Errors:         []string{},
 	}
 
+	// ✅ First: Validate all events and collect errors
+	var allErrors []string
+	var validationErrors []string // User-friendly error messages
+	validEvents := []string{}
+
 	for _, id := range ids {
+		event, err := s.repo.GetEventByID(ctx, id)
+		if err != nil {
+			allErrors = append(allErrors, fmt.Sprintf("event %s: failed to retrieve: %v", id, err))
+			validationErrors = append(validationErrors, fmt.Sprintf("Event not found or inaccessible"))
+			continue
+		}
+		if event == nil {
+			allErrors = append(allErrors, fmt.Sprintf("event %s: %v", id, domain.ErrEventNotFound))
+			validationErrors = append(validationErrors, fmt.Sprintf("Event not found"))
+			continue
+		}
+
+		// Check if user has permission
+		if !s.permChecker.CanUpdateEvent(ctx, publishedBy, event.AccountID) {
+			allErrors = append(allErrors, fmt.Sprintf("event %s: insufficient permissions", id))
+			validationErrors = append(validationErrors, fmt.Sprintf("Insufficient permissions"))
+			continue
+		}
+
+		// ✅ Validate the event using domain's ValidateForPublish
+		if err := event.ValidateForPublish(); err != nil {
+			// Extract the validation error message without the "event {id}: " prefix
+			errMsg := err.Error()
+			// Remove "validation failed: " prefix if present
+			if strings.HasPrefix(errMsg, "validation failed: ") {
+				errMsg = strings.TrimPrefix(errMsg, "validation failed: ")
+			}
+			allErrors = append(allErrors, fmt.Sprintf("event %s: %v", id, err))
+			validationErrors = append(validationErrors, errMsg)
+			continue
+		}
+
+		// This event is valid
+		validEvents = append(validEvents, id)
+	}
+
+	// ✅ If ALL events failed validation, return a user-friendly error
+	if len(allErrors) > 0 && len(allErrors) == len(ids) {
+		log.Printf("❌ Bulk publish failed: All %d events failed validation", len(ids))
+		
+		// Create a user-friendly error message
+		var friendlyErrors []string
+		for i, errMsg := range validationErrors {
+			friendlyErrors = append(friendlyErrors, fmt.Sprintf("%d) %s", i+1, errMsg))
+		}
+		
+		return nil, fmt.Errorf("cannot publish selected events. Please fix the following issues and try again: %s", 
+			strings.Join(friendlyErrors, "; "))
+	}
+
+	// ✅ If SOME events failed, log them but continue with valid ones
+	if len(allErrors) > 0 {
+		log.Printf("⚠️ Bulk publish: %d events failed validation, %d events valid", 
+			len(allErrors), len(validEvents))
+		
+		// ✅ Add validation errors to result for tracking
+		for _, errMsg := range allErrors {
+			// Extract event ID from error message
+			if strings.Contains(errMsg, "event ") {
+				parts := strings.SplitN(errMsg, ": ", 2)
+				if len(parts) == 2 {
+					eventPart := strings.TrimPrefix(parts[0], "event ")
+					result.FailedIDs = append(result.FailedIDs, eventPart)
+					// Clean up the error message
+					cleanErr := parts[1]
+					if strings.HasPrefix(cleanErr, "validation failed: ") {
+						cleanErr = strings.TrimPrefix(cleanErr, "validation failed: ")
+					}
+					result.Errors = append(result.Errors, cleanErr)
+				}
+			}
+		}
+	}
+
+	// ✅ Publish only valid events
+	for _, id := range validEvents {
 		if _, err := s.PublishEvent(ctx, id, publishedBy); err != nil {
 			result.FailedIDs = append(result.FailedIDs, id)
-			result.Errors = append(result.Errors, fmt.Sprintf("event %s: %v", id, err))
+			// Clean the error message
+			errMsg := err.Error()
+			if strings.HasPrefix(errMsg, "validation failed: ") {
+				errMsg = strings.TrimPrefix(errMsg, "validation failed: ")
+			}
+			result.Errors = append(result.Errors, errMsg)
 			continue
 		}
 		result.ProcessedCount++
+	}
+
+	// ✅ If all valid events were published successfully
+	if result.ProcessedCount == len(validEvents) && len(allErrors) == 0 {
+		log.Printf("✅ Bulk publish complete: %d events published successfully", result.ProcessedCount)
+		return result, nil
+	}
+
+	// ✅ If some events failed but others succeeded (partial success)
+	if result.ProcessedCount > 0 && len(result.FailedIDs) > 0 {
+		log.Printf("⚠️ Bulk publish partial success: %d succeeded, %d failed", 
+			result.ProcessedCount, len(result.FailedIDs))
+		return result, nil
+	}
+
+	// ✅ If we get here, something unexpected happened
+	if result.ProcessedCount == 0 && len(result.FailedIDs) > 0 {
+		// All valid events failed during actual publish
+		var friendlyErrors []string
+		for i, errMsg := range result.Errors {
+			friendlyErrors = append(friendlyErrors, fmt.Sprintf("%d) %s", i+1, errMsg))
+		}
+		return nil, fmt.Errorf("failed to publish selected events: %s", 
+			strings.Join(friendlyErrors, "; "))
 	}
 
 	return result, nil
@@ -1152,7 +1407,7 @@ func (s *eventService) UploadEventImage(ctx context.Context, cmd UploadEventImag
 		File:          cmd.ImageData,
 		FileName:      cmd.ImageName,
 		ContentType:   cmd.ContentType,
-		MediaTypeName: "Event",
+		MediaTypeName: types.MediaTypeEvent.GetName(),
 		EntityID:      cmd.EventID,
 		UploadedBy:    cmd.UploadedBy,
 	})
@@ -1193,7 +1448,7 @@ func (s *eventService) UploadCertificateTemplate(ctx context.Context, cmd Upload
 		File:          cmd.CertificateData,
 		FileName:      cmd.CertificateName,
 		ContentType:   cmd.ContentType,
-		MediaTypeName: "Certificate",
+		MediaTypeName: types.MediaTypeCertificate.GetName(),
 		EntityID:      cmd.EventID,
 		UploadedBy:    cmd.UploadedBy,
 	})
@@ -1226,7 +1481,7 @@ func (s *eventService) DeleteEventCertificate(ctx context.Context, eventID strin
 	}
 
 	// Get media type for Certificate
-	mediaType, err := s.mediaSvc.GetMediaTypeByName(ctx, "Certificate")
+	mediaType, err := s.mediaSvc.GetMediaTypeByName(ctx, types.MediaTypeCertificate.GetName())
 	if err != nil {
 		return fmt.Errorf("failed to get media type: %w", err)
 	}
@@ -1293,11 +1548,11 @@ func (s *eventService) DeleteEventImage(ctx context.Context, eventID string, del
     }
 
     // ✅ Get media type for Event
-    mediaType, err := s.mediaSvc.GetMediaTypeByName(ctx, "Event")
+    mediaType, err := s.mediaSvc.GetMediaTypeByName(ctx, types.MediaTypeEvent.GetName())
     if err != nil {
         log.Printf("⚠️ Failed to get media type: %v", err)
         // If we can't get the media type, try deleting all media
-        log.Printf("⚠️ Media type 'Event' not found, deleting all media for event %s", eventID)
+        log.Printf("⚠️ Media type '%s' not found, deleting all media for event %s", types.MediaTypeEvent.GetDisplayName(), eventID)
         if err := s.mediaSvc.DeleteFilesByEntity(ctx, eventID); err != nil {
             return fmt.Errorf("failed to delete media: %w", err)
         }

@@ -1,187 +1,148 @@
+// internal/modules/media/domain/media_type_value.go
+
 package domain
 
-// ============================================================
-// MEDIA TYPE - Value Object (Source of Truth)
-// ============================================================
-
-// MediaTypeValue is a custom typed string for compile-time safety
-type MediaTypeValue string
-
-const (
-	MediaTypeEvent       MediaTypeValue = "event"
-	MediaTypeBusiness    MediaTypeValue = "business"
-	MediaTypeProfile     MediaTypeValue = "profile"
-	MediaTypeCertificate MediaTypeValue = "certificate"
-	MediaTypeRecording   MediaTypeValue = "recording"
+import (
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 )
 
-// AllMediaTypes lists all valid media types
-var AllMediaTypes = []MediaTypeValue{
-	MediaTypeEvent,
-	MediaTypeBusiness,
-	MediaTypeProfile,
-	MediaTypeCertificate,
-	MediaTypeRecording,
-}
+// ============================================================
+// MEDIA TYPE - Value Object
+// ============================================================
+
+// MediaTypeValue is an alias for the shared MediaType
+type MediaTypeValue = types.MediaType
+
+// MediaType constants re-exported from shared types for convenience
+const (
+	MediaTypeEvent       = types.MediaTypeEvent
+	MediaTypeBusiness    = types.MediaTypeBusiness
+	MediaTypeProfile     = types.MediaTypeProfile
+	MediaTypeCertificate = types.MediaTypeCertificate
+	MediaTypeRecording   = types.MediaTypeRecording
+)
+
+// AllMediaTypes re-exported from shared types
+var AllMediaTypes = types.AllMediaTypes
 
 // MediaTypeInfo holds metadata for each media type
 type MediaTypeInfo struct {
-	Slug        MediaTypeValue
+	Slug        string
 	Name        string
 	DisplayName string
 	Description string
 	Bucket      string
 	Icon        string
+	Color       string
 	SortOrder   int
 	MaxFileSize int64
 	IsActive    bool
 }
 
-// Private registry (prevents external mutation)
-var mediaTypeRegistry = map[MediaTypeValue]MediaTypeInfo{
-	MediaTypeEvent: {
-		Slug:        MediaTypeEvent,
-		Name:        "Event",
-		DisplayName: "Event",
+// ============================================================
+// MEDIA TYPE REGISTRY - EXPORTED
+// ============================================================
+
+// MediaTypeRegistry is the single source of truth for media type metadata
+// ✅ Make sure this is exported (capital M)
+var MediaTypeRegistry = map[types.MediaType]MediaTypeInfo{
+	types.MediaTypeEvent: {
+		Slug:        types.MediaTypeEventSlug,
+		Name:        types.MediaTypeEventName,
+		DisplayName: types.MediaTypeEventDisplayName,
 		Description: "Event images and banners",
 		Bucket:      "events",
 		Icon:        "image",
+		Color:       "#3B82F6",
 		SortOrder:   1,
-		MaxFileSize: 5 * 1024 * 1024, // 5MB
+		MaxFileSize: 5 * 1024 * 1024,
 		IsActive:    true,
 	},
-	MediaTypeBusiness: {
-		Slug:        MediaTypeBusiness,
-		Name:        "Business",
-		DisplayName: "Business",
+	types.MediaTypeBusiness: {
+		Slug:        types.MediaTypeBusinessSlug,
+		Name:        types.MediaTypeBusinessName,
+		DisplayName: types.MediaTypeBusinessDisplayName,
 		Description: "Business logos and images",
 		Bucket:      "businesses",
 		Icon:        "building",
+		Color:       "#7C3AED",
 		SortOrder:   2,
-		MaxFileSize: 5 * 1024 * 1024, // 5MB
+		MaxFileSize: 5 * 1024 * 1024,
 		IsActive:    true,
 	},
-	MediaTypeProfile: {
-		Slug:        MediaTypeProfile,
-		Name:        "Profile",
-		DisplayName: "Profile",
+	types.MediaTypeProfile: {
+		Slug:        types.MediaTypeProfileSlug,
+		Name:        types.MediaTypeProfileName,
+		DisplayName: types.MediaTypeProfileDisplayName,
 		Description: "User profile pictures",
 		Bucket:      "profiles",
 		Icon:        "user",
+		Color:       "#10B981",
 		SortOrder:   3,
-		MaxFileSize: 2 * 1024 * 1024, // 2MB
+		MaxFileSize: 2 * 1024 * 1024,
 		IsActive:    true,
 	},
-	MediaTypeCertificate: {
-		Slug:        MediaTypeCertificate,
-		Name:        "Certificate",
-		DisplayName: "Certificate",
+	types.MediaTypeCertificate: {
+		Slug:        types.MediaTypeCertificateSlug,
+		Name:        types.MediaTypeCertificateName,
+		DisplayName: types.MediaTypeCertificateDisplayName,
 		Description: "Certificate templates and files",
 		Bucket:      "certificates",
 		Icon:        "certificate",
+		Color:       "#F59E0B",
 		SortOrder:   4,
-		MaxFileSize: 10 * 1024 * 1024, // 10MB
+		MaxFileSize: 10 * 1024 * 1024,
 		IsActive:    true,
 	},
-	MediaTypeRecording: {
-		Slug:        MediaTypeRecording,
-		Name:        "Recording",
-		DisplayName: "Recording",
+	types.MediaTypeRecording: {
+		Slug:        types.MediaTypeRecordingSlug,
+		Name:        types.MediaTypeRecordingName,
+		DisplayName: types.MediaTypeRecordingDisplayName,
 		Description: "Event recordings and videos",
 		Bucket:      "recordings",
 		Icon:        "video",
+		Color:       "#EF4444",
 		SortOrder:   5,
-		MaxFileSize: 100 * 1024 * 1024, // 100MB
+		MaxFileSize: 100 * 1024 * 1024,
 		IsActive:    true,
 	},
-}
-
-// ============================================================
-// DOMAIN METHODS (on MediaTypeValue)
-// ============================================================
-
-func (m MediaTypeValue) String() string {
-	return string(m)
-}
-
-func (m MediaTypeValue) IsValid() bool {
-	_, ok := mediaTypeRegistry[m]
-	return ok
-}
-
-func (m MediaTypeValue) IsActive() bool {
-	info, ok := mediaTypeRegistry[m]
-	if !ok {
-		return false
-	}
-	return info.IsActive
-}
-
-func (m MediaTypeValue) Info() (MediaTypeInfo, bool) {
-	info, ok := mediaTypeRegistry[m]
-	return info, ok
-}
-
-func (m MediaTypeValue) MaxFileSize() int64 {
-	info, ok := mediaTypeRegistry[m]
-	if !ok {
-		return 0
-	}
-	return info.MaxFileSize
-}
-
-func (m MediaTypeValue) Bucket() string {
-	info, ok := mediaTypeRegistry[m]
-	if !ok {
-		return ""
-	}
-	return info.Bucket
 }
 
 // ============================================================
 // READ-ONLY GETTERS
 // ============================================================
 
-func ParseMediaType(slug string) (MediaTypeValue, bool) {
-	t := MediaTypeValue(slug)
-	if t.IsValid() {
-		return t, true
-	}
-	return "", false
-}
-
+// AllMediaTypeInfos returns all media type infos from the registry
 func AllMediaTypeInfos() []MediaTypeInfo {
-	infos := make([]MediaTypeInfo, 0, len(mediaTypeRegistry))
-	for _, info := range mediaTypeRegistry {
+	infos := make([]MediaTypeInfo, 0, len(MediaTypeRegistry))
+	for _, info := range MediaTypeRegistry {
 		infos = append(infos, info)
 	}
 	return infos
 }
 
-func AllMediaTypeSlugs() []string {
-	slugs := make([]string, 0, len(mediaTypeRegistry))
-	for slug := range mediaTypeRegistry {
-		slugs = append(slugs, string(slug))
-	}
-	return slugs
+// GetMediaTypeInfo returns media type info from the registry
+func GetMediaTypeInfo(mediaType types.MediaType) (MediaTypeInfo, bool) {
+	info, ok := MediaTypeRegistry[mediaType]
+	return info, ok
 }
 
-func ActiveMediaTypeInfos() []MediaTypeInfo {
-	infos := make([]MediaTypeInfo, 0)
-	for _, info := range mediaTypeRegistry {
-		if info.IsActive {
-			infos = append(infos, info)
+// GetMediaTypeBySlug returns type info by slug
+func GetMediaTypeBySlug(slug string) (MediaTypeInfo, bool) {
+	// Parse the slug to get the media type
+	for mediaType := range MediaTypeRegistry {
+		if mediaType.GetSlug() == slug {
+			return GetMediaTypeInfo(mediaType)
 		}
 	}
-	return infos
+	return MediaTypeInfo{}, false
 }
 
-func ActiveMediaTypeSlugs() []string {
-	slugs := make([]string, 0)
-	for slug, info := range mediaTypeRegistry {
-		if info.IsActive {
-			slugs = append(slugs, string(slug))
-		}
+// GetMediaTypeByName returns type info by internal name (with underscores)
+func GetMediaTypeByName(name string) (MediaTypeInfo, bool) {
+	mediaType, ok := types.ParseMediaType(name)
+	if !ok {
+		return MediaTypeInfo{}, false
 	}
-	return slugs
+	return GetMediaTypeInfo(mediaType)
 }

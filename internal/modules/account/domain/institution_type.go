@@ -1,22 +1,33 @@
+// internal/modules/accounts/domain/institution_type.go
+
 package domain
+
+import (
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
+)
 
 // ============================================================
 // INSTITUTION TYPE - Value Object
 // ============================================================
 
-type InstitutionTypeValue string
+// InstitutionTypeValue is an alias for the shared InstitutionType
+type InstitutionTypeValue = types.InstitutionType
 
+// Type constants - Re-exported from shared types for convenience
 const (
-	InstitutionTypeCompany    InstitutionTypeValue = "company"
-	InstitutionTypeInstitute  InstitutionTypeValue = "institute"
-	InstitutionTypeAssociation InstitutionTypeValue = "association"
-	InstitutionTypeSchool     InstitutionTypeValue = "school"
-	InstitutionTypeUniversity InstitutionTypeValue = "university"
+	InstitutionTypeCompany     = types.InstitutionTypeCompany
+	InstitutionTypeInstitute   = types.InstitutionTypeInstitute
+	InstitutionTypeAssociation = types.InstitutionTypeAssociation
+	InstitutionTypeSchool      = types.InstitutionTypeSchool
+	InstitutionTypeUniversity  = types.InstitutionTypeUniversity
 )
+
+// AllInstitutionTypes re-exported from shared types
+var AllInstitutionTypes = types.AllInstitutionTypes
 
 // InstitutionTypeInfo holds metadata for each institution type
 type InstitutionTypeInfo struct {
-	Slug        InstitutionTypeValue
+	Slug        string
 	Name        string
 	DisplayName string
 	Description string
@@ -26,104 +37,78 @@ type InstitutionTypeInfo struct {
 	IsActive    bool
 }
 
-// Private registry (prevents external mutation)
-var institutionTypeRegistry = map[InstitutionTypeValue]InstitutionTypeInfo{
-	InstitutionTypeCompany: {
-		Slug:        InstitutionTypeCompany,
-		Name:        "Company",
-		DisplayName: "🏢 Company",
-		Description: "Corporate organization",
-		Icon:        "building",
-		Color:       "#7C3AED",
-		SortOrder:   1,
+// ============================================================
+// INSTITUTION TYPE REGISTRY - Domain specific wrapper
+// ============================================================
+
+var institutionTypeRegistry = map[types.InstitutionType]InstitutionTypeInfo{
+	types.InstitutionTypeCompany: {
+		Slug:        types.InstitutionTypeCompanySlug,
+		Name:        types.InstitutionTypeCompanyName,
+		DisplayName: types.InstitutionTypeCompanyDisplayName,
+		Description: types.InstitutionTypeCompanyDescription,
+		Icon:        types.InstitutionTypeCompanyIcon,
+		Color:       types.InstitutionTypeCompanyColor,
+		SortOrder:   types.InstitutionTypeCompanySortOrder,
 		IsActive:    true,
 	},
-	InstitutionTypeInstitute: {
-		Slug:        InstitutionTypeInstitute,
-		Name:        "Institute",
-		DisplayName: "🏛️ Institute",
-		Description: "Educational or research institute",
-		Icon:        "landmark",
-		Color:       "#4F46E5",
-		SortOrder:   2,
+	types.InstitutionTypeInstitute: {
+		Slug:        types.InstitutionTypeInstituteSlug,
+		Name:        types.InstitutionTypeInstituteName,
+		DisplayName: types.InstitutionTypeInstituteDisplayName,
+		Description: types.InstitutionTypeInstituteDescription,
+		Icon:        types.InstitutionTypeInstituteIcon,
+		Color:       types.InstitutionTypeInstituteColor,
+		SortOrder:   types.InstitutionTypeInstituteSortOrder,
 		IsActive:    true,
 	},
-	InstitutionTypeAssociation: {
-		Slug:        InstitutionTypeAssociation,
-		Name:        "Association",
-		DisplayName: "🤝 Association",
-		Description: "Professional or trade association",
-		Icon:        "users",
-		Color:       "#0EA5E9",
-		SortOrder:   3,
+	types.InstitutionTypeAssociation: {
+		Slug:        types.InstitutionTypeAssociationSlug,
+		Name:        types.InstitutionTypeAssociationName,
+		DisplayName: types.InstitutionTypeAssociationDisplayName,
+		Description: types.InstitutionTypeAssociationDescription,
+		Icon:        types.InstitutionTypeAssociationIcon,
+		Color:       types.InstitutionTypeAssociationColor,
+		SortOrder:   types.InstitutionTypeAssociationSortOrder,
 		IsActive:    true,
 	},
-	InstitutionTypeSchool: {
-		Slug:        InstitutionTypeSchool,
-		Name:        "School",
-		DisplayName: "📚 School",
-		Description: "Primary or secondary educational institution",
-		Icon:        "school",
-		Color:       "#F59E0B",
-		SortOrder:   4,
+	types.InstitutionTypeSchool: {
+		Slug:        types.InstitutionTypeSchoolSlug,
+		Name:        types.InstitutionTypeSchoolName,
+		DisplayName: types.InstitutionTypeSchoolDisplayName,
+		Description: types.InstitutionTypeSchoolDescription,
+		Icon:        types.InstitutionTypeSchoolIcon,
+		Color:       types.InstitutionTypeSchoolColor,
+		SortOrder:   types.InstitutionTypeSchoolSortOrder,
 		IsActive:    true,
 	},
-	InstitutionTypeUniversity: {
-		Slug:        InstitutionTypeUniversity,
-		Name:        "University",
-		DisplayName: "🎓 University",
-		Description: "Higher education institution",
-		Icon:        "graduation-cap",
-		Color:       "#10B981",
-		SortOrder:   5,
+	types.InstitutionTypeUniversity: {
+		Slug:        types.InstitutionTypeUniversitySlug,
+		Name:        types.InstitutionTypeUniversityName,
+		DisplayName: types.InstitutionTypeUniversityDisplayName,
+		Description: types.InstitutionTypeUniversityDescription,
+		Icon:        types.InstitutionTypeUniversityIcon,
+		Color:       types.InstitutionTypeUniversityColor,
+		SortOrder:   types.InstitutionTypeUniversitySortOrder,
 		IsActive:    true,
 	},
 }
 
 // ============================================================
-// DOMAIN METHODS (on InstitutionTypeValue)
+// HELPER FUNCTIONS
 // ============================================================
 
-// String returns the string representation
-func (i InstitutionTypeValue) String() string {
-	return string(i)
-}
-
-// IsValid checks if the institution type exists in the registry
-func (i InstitutionTypeValue) IsValid() bool {
-	_, ok := institutionTypeRegistry[i]
-	return ok
-}
-
-// Info returns the InstitutionTypeInfo for this type
-func (i InstitutionTypeValue) Info() (InstitutionTypeInfo, bool) {
-	info, ok := institutionTypeRegistry[i]
+// GetInstitutionTypeInfo returns the type info for a given institution type
+func GetInstitutionTypeInfo(institutionType InstitutionTypeValue) (InstitutionTypeInfo, bool) {
+	info, ok := institutionTypeRegistry[institutionType]
 	return info, ok
-}
-
-// IsActive returns whether the institution type is active
-func (i InstitutionTypeValue) IsActive() bool {
-	info, ok := institutionTypeRegistry[i]
-	if !ok {
-		return false
-	}
-	return info.IsActive
 }
 
 // ============================================================
 // READ-ONLY GETTERS
 // ============================================================
 
-// ParseInstitutionType parses a string into an InstitutionTypeValue
-func ParseInstitutionType(slug string) (InstitutionTypeValue, bool) {
-	t := InstitutionTypeValue(slug)
-	if t.IsValid() {
-		return t, true
-	}
-	return "", false
-}
-
-// AllInstitutionTypeInfos returns all institution type infos (read-only copy)
+// AllInstitutionTypeInfos returns all type infos
 func AllInstitutionTypeInfos() []InstitutionTypeInfo {
 	infos := make([]InstitutionTypeInfo, 0, len(institutionTypeRegistry))
 	for _, info := range institutionTypeRegistry {
@@ -132,16 +117,22 @@ func AllInstitutionTypeInfos() []InstitutionTypeInfo {
 	return infos
 }
 
-// AllInstitutionTypeSlugs returns all valid slugs
+// AllInstitutionTypeSlugs returns all type slugs (with hyphens)
 func AllInstitutionTypeSlugs() []string {
-	slugs := make([]string, 0, len(institutionTypeRegistry))
-	for slug := range institutionTypeRegistry {
-		slugs = append(slugs, string(slug))
-	}
-	return slugs
+	return types.AllInstitutionTypeSlugs()
 }
 
-// ActiveInstitutionTypeInfos returns only active institution types
+// AllInstitutionTypeNames returns all internal type names (with underscores)
+func AllInstitutionTypeNames() []string {
+	return types.AllInstitutionTypeNames()
+}
+
+// AllInstitutionTypeDisplayNames returns all display names
+func AllInstitutionTypeDisplayNames() []string {
+	return types.AllInstitutionTypeDisplayNames()
+}
+
+// ActiveInstitutionTypeInfos returns only active type infos
 func ActiveInstitutionTypeInfos() []InstitutionTypeInfo {
 	infos := make([]InstitutionTypeInfo, 0)
 	for _, info := range institutionTypeRegistry {
@@ -152,13 +143,36 @@ func ActiveInstitutionTypeInfos() []InstitutionTypeInfo {
 	return infos
 }
 
-// ActiveInstitutionTypeSlugs returns only active institution type slugs
-func ActiveInstitutionTypeSlugs() []string {
-	slugs := make([]string, 0)
-	for slug, info := range institutionTypeRegistry {
-		if info.IsActive {
-			slugs = append(slugs, string(slug))
+// GetInstitutionTypeBySlug returns type info by slug
+func GetInstitutionTypeBySlug(slug string) (InstitutionTypeInfo, bool) {
+	for _, info := range institutionTypeRegistry {
+		if info.Slug == slug {
+			return info, true
 		}
 	}
-	return slugs
+	return InstitutionTypeInfo{}, false
+}
+
+// GetInstitutionTypeByName returns type info by internal name (with underscores)
+func GetInstitutionTypeByName(name string) (InstitutionTypeInfo, bool) {
+	institutionType, ok := types.ParseInstitutionType(name)
+	if !ok {
+		return InstitutionTypeInfo{}, false
+	}
+	return GetInstitutionTypeInfo(institutionType)
+}
+
+// GetInstitutionTypeByDisplayName returns type info by display name
+func GetInstitutionTypeByDisplayName(displayName string) (InstitutionTypeInfo, bool) {
+	for _, info := range institutionTypeRegistry {
+		if info.DisplayName == displayName {
+			return info, true
+		}
+	}
+	return InstitutionTypeInfo{}, false
+}
+
+// IsInstitutionTypeValid checks if the institution type is valid
+func IsInstitutionTypeValid(institutionType InstitutionTypeValue) bool {
+	return institutionType.IsValid()
 }

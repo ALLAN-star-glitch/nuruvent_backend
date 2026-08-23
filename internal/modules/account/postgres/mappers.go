@@ -1,7 +1,10 @@
+// internal/modules/account/postgres/mappers.go
+
 package postgres
 
 import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 )
 
 // ============================================================
@@ -19,7 +22,7 @@ func ToDomainAccount(model *AccountModel) *domain.Account {
 		Name:               model.Name,
 		DisplayName:        model.DisplayName,
 		Email:              model.Email,
-		PasswordHash:       model.PasswordHash, // Updated from Password
+		PasswordHash:       model.PasswordHash,
 		Phone:              model.Phone,
 		AccountTypeID:      model.AccountTypeID,
 		ProfessionalTypeID: model.ProfessionalTypeID,
@@ -47,7 +50,7 @@ func ToModelAccount(account *domain.Account) *AccountModel {
 		Name:               account.Name,
 		DisplayName:        account.DisplayName,
 		Email:              account.Email,
-		PasswordHash:       account.PasswordHash, // Updated from Password
+		PasswordHash:       account.PasswordHash,
 		Phone:              account.Phone,
 		AccountTypeID:      account.AccountTypeID,
 		ProfessionalTypeID: account.ProfessionalTypeID,
@@ -74,12 +77,18 @@ func ToDomainAccountTypeInfo(model *AccountTypeModel) (*domain.AccountTypeInfo, 
 		return nil, nil
 	}
 
-	accountType, valid := domain.ParseAccountType(model.Slug)
+	// ✅ Use shared types to parse
+	accountType, valid := types.ParseAccountType(model.Name)
 	if !valid {
-		return nil, domain.ErrInvalidAccountType
+		// Try parsing by slug
+		accountType, valid = types.ParseAccountTypeBySlug(model.Slug)
+		if !valid {
+			return nil, domain.ErrInvalidAccountType
+		}
 	}
 
-	info, ok := accountType.Info()
+	// ✅ Use domain helper to get info
+	info, ok := domain.GetAccountTypeInfo(accountType)
 	if !ok {
 		return nil, domain.ErrAccountTypeNotFound
 	}
@@ -99,7 +108,7 @@ func ToDomainAccountTypeInfo(model *AccountTypeModel) (*domain.AccountTypeInfo, 
 // ToModelAccountType converts domain.AccountTypeInfo to AccountTypeModel
 func ToModelAccountType(info domain.AccountTypeInfo) *AccountTypeModel {
 	return &AccountTypeModel{
-		Slug:        info.Slug.String(),
+		Slug:        info.Slug, // ✅ info.Slug is already a string
 		Name:        info.Name,
 		DisplayName: info.DisplayName,
 		Description: info.Description,
@@ -163,12 +172,18 @@ func ToDomainProfessionalTypeInfo(model *ProfessionalTypeModel) (*domain.Profess
 		return nil, nil
 	}
 
-	profType, valid := domain.ParseProfessionalType(model.Slug)
+	// ✅ Use shared types to parse
+	profType, valid := types.ParseProfessionalType(model.Name)
 	if !valid {
-		return nil, domain.ErrInvalidProfessionalType
+		// Try parsing by slug
+		profType, valid = types.ParseProfessionalTypeBySlug(model.Slug)
+		if !valid {
+			return nil, domain.ErrInvalidProfessionalType
+		}
 	}
 
-	info, ok := profType.Info()
+	// ✅ Use domain helper to get info
+	info, ok := domain.GetProfessionalTypeInfo(profType)
 	if !ok {
 		return nil, domain.ErrProfessionalTypeNotFound
 	}
@@ -188,7 +203,7 @@ func ToDomainProfessionalTypeInfo(model *ProfessionalTypeModel) (*domain.Profess
 // ToModelProfessionalType converts domain.ProfessionalTypeInfo to ProfessionalTypeModel
 func ToModelProfessionalType(info domain.ProfessionalTypeInfo) *ProfessionalTypeModel {
 	return &ProfessionalTypeModel{
-		Slug:        info.Slug.String(),
+		Slug:        info.Slug, // ✅ info.Slug is already a string
 		Name:        info.Name,
 		DisplayName: info.DisplayName,
 		Description: info.Description,
@@ -255,12 +270,18 @@ func ToDomainInstitutionTypeInfo(model *InstitutionTypeModel) (*domain.Instituti
 		return nil, nil
 	}
 
-	instType, valid := domain.ParseInstitutionType(model.Slug)
+	// ✅ Use shared types to parse
+	instType, valid := types.ParseInstitutionType(model.Name)
 	if !valid {
-		return nil, domain.ErrInvalidInstitutionType
+		// Try parsing by slug
+		instType, valid = types.ParseInstitutionTypeBySlug(model.Slug)
+		if !valid {
+			return nil, domain.ErrInvalidInstitutionType
+		}
 	}
 
-	info, ok := instType.Info()
+	// ✅ Use domain helper to get info
+	info, ok := domain.GetInstitutionTypeInfo(instType)
 	if !ok {
 		return nil, domain.ErrInstitutionTypeNotFound
 	}
@@ -279,7 +300,7 @@ func ToDomainInstitutionTypeInfo(model *InstitutionTypeModel) (*domain.Instituti
 // ToModelInstitutionType converts domain.InstitutionTypeInfo to InstitutionTypeModel
 func ToModelInstitutionType(info domain.InstitutionTypeInfo) *InstitutionTypeModel {
 	return &InstitutionTypeModel{
-		Slug:        info.Slug.String(),
+		Slug:        info.Slug, // ✅ info.Slug is already a string
 		Name:        info.Name,
 		DisplayName: info.DisplayName,
 		Description: info.Description,

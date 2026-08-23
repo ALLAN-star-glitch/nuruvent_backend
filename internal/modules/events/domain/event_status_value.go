@@ -1,30 +1,32 @@
+// internal/modules/events/domain/event_status_value.go
+
 package domain
 
-// ============================================================
-// EVENT STATUS - Value Object (Source of Truth)
-// ============================================================
-
-// EventStatusValue is a custom typed string for compile-time safety
-type EventStatusValue string
-
-const (
-	EventStatusDraft     EventStatusValue = "draft"
-	EventStatusPublished EventStatusValue = "published"
-	EventStatusCancelled EventStatusValue = "cancelled"
-	EventStatusCompleted EventStatusValue = "completed"
+import (
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 )
 
-// AllEventStatuses lists all valid event statuses
-var AllEventStatuses = []EventStatusValue{
-	EventStatusDraft,
-	EventStatusPublished,
-	EventStatusCancelled,
-	EventStatusCompleted,
-}
+// ============================================================
+// EVENT STATUS - Value Object
+// ============================================================
+
+// EventStatusValue is an alias for the shared EventStatus
+type EventStatusValue = types.EventStatus
+
+// Status constants - Re-exported from shared types for convenience
+const (
+	EventStatusDraft     = types.EventStatusDraft
+	EventStatusPublished = types.EventStatusPublished
+	EventStatusCancelled = types.EventStatusCancelled
+	EventStatusCompleted = types.EventStatusCompleted
+)
+
+// AllEventStatuses re-exported from shared types
+var AllEventStatuses = types.AllEventStatuses
 
 // EventStatusInfo holds metadata for each event status
 type EventStatusInfo struct {
-	Slug        EventStatusValue
+	Slug        string
 	Name        string
 	DisplayName string
 	Description string
@@ -35,100 +37,94 @@ type EventStatusInfo struct {
 	IsActive    bool
 }
 
-// Private registry (prevents external mutation)
-var eventStatusRegistry = map[EventStatusValue]EventStatusInfo{
-	EventStatusDraft: {
-		Slug:        EventStatusDraft,
-		Name:        "Draft",
-		DisplayName: "Draft",
-		Description: "Event is being prepared, not yet published",
-		Color:       "#6B7280",
-		Icon:        "file-edit",
-		SortOrder:   1,
+// ============================================================
+// STATUS REGISTRY - Domain specific wrapper
+// ============================================================
+
+// eventStatusRegistry is the domain's source of truth for status metadata
+// ✅ Make this exported if needed elsewhere
+var eventStatusRegistry = map[types.EventStatus]EventStatusInfo{
+	types.EventStatusDraft: {
+		Slug:        types.EventStatusDraftSlug,
+		Name:        types.EventStatusDraftName,
+		DisplayName: types.EventStatusDraftDisplayName,
+		Description: types.EventStatusDraftDescription,
+		Color:       types.EventStatusDraftColor,
+		Icon:        types.EventStatusDraftIcon,
+		SortOrder:   types.EventStatusDraftSortOrder,
 		IsFinal:     false,
 		IsActive:    true,
 	},
-	EventStatusPublished: {
-		Slug:        EventStatusPublished,
-		Name:        "Published",
-		DisplayName: "Published",
-		Description: "Event is published and open for registration",
-		Color:       "#10B981",
-		Icon:        "globe",
-		SortOrder:   2,
+	types.EventStatusPublished: {
+		Slug:        types.EventStatusPublishedSlug,
+		Name:        types.EventStatusPublishedName,
+		DisplayName: types.EventStatusPublishedDisplayName,
+		Description: types.EventStatusPublishedDescription,
+		Color:       types.EventStatusPublishedColor,
+		Icon:        types.EventStatusPublishedIcon,
+		SortOrder:   types.EventStatusPublishedSortOrder,
 		IsFinal:     false,
 		IsActive:    true,
 	},
-	EventStatusCancelled: {
-		Slug:        EventStatusCancelled,
-		Name:        "Cancelled",
-		DisplayName: "Cancelled",
-		Description: "Event has been cancelled",
-		Color:       "#EF4444",
-		Icon:        "x-circle",
-		SortOrder:   3,
+	types.EventStatusCancelled: {
+		Slug:        types.EventStatusCancelledSlug,
+		Name:        types.EventStatusCancelledName,
+		DisplayName: types.EventStatusCancelledDisplayName,
+		Description: types.EventStatusCancelledDescription,
+		Color:       types.EventStatusCancelledColor,
+		Icon:        types.EventStatusCancelledIcon,
+		SortOrder:   types.EventStatusCancelledSortOrder,
 		IsFinal:     true,
 		IsActive:    true,
 	},
-	EventStatusCompleted: {
-		Slug:        EventStatusCompleted,
-		Name:        "Completed",
-		DisplayName: "Completed",
-		Description: "Event has been completed",
-		Color:       "#3B82F6",
-		Icon:        "check-circle",
-		SortOrder:   4,
+	types.EventStatusCompleted: {
+		Slug:        types.EventStatusCompletedSlug,
+		Name:        types.EventStatusCompletedName,
+		DisplayName: types.EventStatusCompletedDisplayName,
+		Description: types.EventStatusCompletedDescription,
+		Color:       types.EventStatusCompletedColor,
+		Icon:        types.EventStatusCompletedIcon,
+		SortOrder:   types.EventStatusCompletedSortOrder,
 		IsFinal:     true,
 		IsActive:    true,
 	},
 }
 
 // ============================================================
-// DOMAIN METHODS (on EventStatusValue)
+// HELPER FUNCTIONS (not methods on the type)
 // ============================================================
 
-func (e EventStatusValue) String() string {
-	return string(e)
-}
-
-func (e EventStatusValue) IsValid() bool {
-	_, ok := eventStatusRegistry[e]
-	return ok
-}
-
-func (e EventStatusValue) IsActive() bool {
-	info, ok := eventStatusRegistry[e]
-	if !ok {
-		return false
-	}
-	return info.IsActive
-}
-
-func (e EventStatusValue) IsFinal() bool {
-	info, ok := eventStatusRegistry[e]
-	if !ok {
-		return false
-	}
-	return info.IsFinal
-}
-
-func (e EventStatusValue) Info() (EventStatusInfo, bool) {
-	info, ok := eventStatusRegistry[e]
+// GetEventStatusInfo returns the status info for a given status
+func GetEventStatusInfo(status EventStatusValue) (EventStatusInfo, bool) {
+	info, ok := eventStatusRegistry[status]
 	return info, ok
+}
+
+// GetEventStatusSlug returns the slug for a status
+func GetEventStatusSlug(status EventStatusValue) string {
+	return status.GetSlug()
+}
+
+// GetEventStatusName returns the name for a status
+func GetEventStatusName(status EventStatusValue) string {
+	return status.GetName()
+}
+
+// GetEventStatusDisplayName returns the display name for a status
+func GetEventStatusDisplayName(status EventStatusValue) string {
+	return status.GetDisplayName()
+}
+
+// IsEventStatusValid checks if the status is valid
+func IsEventStatusValid(status EventStatusValue) bool {
+	return status.IsValid()
 }
 
 // ============================================================
 // READ-ONLY GETTERS
 // ============================================================
 
-func ParseEventStatus(slug string) (EventStatusValue, bool) {
-	t := EventStatusValue(slug)
-	if t.IsValid() {
-		return t, true
-	}
-	return "", false
-}
-
+// AllEventStatusInfos returns all status infos
 func AllEventStatusInfos() []EventStatusInfo {
 	infos := make([]EventStatusInfo, 0, len(eventStatusRegistry))
 	for _, info := range eventStatusRegistry {
@@ -137,14 +133,17 @@ func AllEventStatusInfos() []EventStatusInfo {
 	return infos
 }
 
+// AllEventStatusSlugs returns all status slugs (with hyphens)
 func AllEventStatusSlugs() []string {
-	slugs := make([]string, 0, len(eventStatusRegistry))
-	for slug := range eventStatusRegistry {
-		slugs = append(slugs, string(slug))
-	}
-	return slugs
+	return types.AllEventStatusSlugs()
 }
 
+// AllEventStatusNames returns all internal status names (with underscores)
+func AllEventStatusNames() []string {
+	return types.AllEventStatusNames()
+}
+
+// ActiveEventStatusInfos returns only active status infos
 func ActiveEventStatusInfos() []EventStatusInfo {
 	infos := make([]EventStatusInfo, 0)
 	for _, info := range eventStatusRegistry {
@@ -155,12 +154,31 @@ func ActiveEventStatusInfos() []EventStatusInfo {
 	return infos
 }
 
-func ActiveEventStatusSlugs() []string {
-	slugs := make([]string, 0)
-	for slug, info := range eventStatusRegistry {
-		if info.IsActive {
-			slugs = append(slugs, string(slug))
+// GetEventStatusBySlug returns status info by slug
+func GetEventStatusBySlug(slug string) (EventStatusInfo, bool) {
+	for status, info := range eventStatusRegistry {
+		if status.GetSlug() == slug {
+			return info, true
 		}
 	}
-	return slugs
+	return EventStatusInfo{}, false
+}
+
+// GetEventStatusByName returns status info by internal name (with underscores)
+func GetEventStatusByName(name string) (EventStatusInfo, bool) {
+	status, ok := types.ParseEventStatus(name)
+	if !ok {
+		return EventStatusInfo{}, false
+	}
+	return GetEventStatusInfo(status)
+}
+
+// GetEventStatusByDisplayName returns status info by display name
+func GetEventStatusByDisplayName(displayName string) (EventStatusInfo, bool) {
+	for _, info := range eventStatusRegistry {
+		if info.DisplayName == displayName {
+			return info, true
+		}
+	}
+	return EventStatusInfo{}, false
 }

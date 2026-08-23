@@ -1,3 +1,5 @@
+// internal/modules/events/infrastructure/seeder/event_type_seeder.go
+
 package eventseeder
 
 import (
@@ -18,7 +20,8 @@ func SeedEventTypes(db *gorm.DB) error {
 
 	for _, info := range infos {
 		var existing postgres.EventTypeModel
-		err := db.Where("slug = ?", info.Slug.String()).First(&existing).Error
+		// ✅ info.Slug is already a string - no need for .String()
+		err := db.Where("slug = ?", info.Slug).First(&existing).Error
 
 		if err == nil {
 			// Update existing
@@ -41,7 +44,7 @@ func SeedEventTypes(db *gorm.DB) error {
 
 		// Create new
 		eventType := &postgres.EventTypeModel{
-			Slug:                info.Slug.String(),
+			Slug:                info.Slug, // ✅ info.Slug is already a string
 			Name:                info.Name,
 			DisplayName:         info.DisplayName,
 			Description:         info.Description,

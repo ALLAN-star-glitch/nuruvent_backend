@@ -473,7 +473,7 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 		})
 	}
 
-	// Get image file if provided (optional) - convert to pure domain types
+	// Get image file if provided (optional)
 	var imageData []byte
 	var imageName string
 	var contentType string
@@ -486,7 +486,6 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 		}
 		defer fileContent.Close()
 
-		// Read file into bytes (pure Go type)
 		imageData, err = io.ReadAll(fileContent)
 		if err != nil {
 			return response.InternalError(c, "Failed to read image file", nil)
@@ -495,8 +494,10 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 		contentType = file.Header.Get("Content-Type")
 	}
 
+	// ✅ Build command - user only types Name
+	// Service will generate display_name and slug from this
 	cmd := service.CreateDraftCommand{
-		Name:             req.Name,
+		Name:             req.Name,        // ✅ User input - what they typed
 		Description:      req.Description,
 		EventTypeID:      req.EventTypeID,
 		AccountID:        accountID,
@@ -511,6 +512,8 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 		ZoomLink:         req.ZoomLink,
 		MeetLink:         req.MeetLink,
 		MaxAttendees:     req.MaxAttendees,
+		IsFeatured:       req.IsFeatured,
+		IsPrivate:        req.IsPrivate,
 		ImageData:        imageData,
 		ImageName:        imageName,
 		ContentType:      contentType,
@@ -631,8 +634,9 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 		contentType = file.Header.Get("Content-Type")
 	}
 
+	// ✅ Build command - user only types Name
 	cmd := service.CreateEventCommand{
-		Name:             req.Name,
+		Name:             req.Name,        // ✅ User input - what they typed
 		Description:      req.Description,
 		EventTypeID:      req.EventTypeID,
 		AccountID:        accountID,
@@ -647,12 +651,11 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 		ZoomLink:         req.ZoomLink,
 		MeetLink:         req.MeetLink,
 		MaxAttendees:     req.MaxAttendees,
+		IsFeatured:       req.IsFeatured,
+		IsPrivate:        req.IsPrivate,
 		ImageData:        imageData,
 		ImageName:        imageName,
 		ContentType:      contentType,
-		// ✅ NEW: Feature flags
-		IsFeatured: req.IsFeatured,
-		IsPrivate:  req.IsPrivate,
 	}
 
 	event, err := h.svc.CreateEvent(c.Context(), cmd)

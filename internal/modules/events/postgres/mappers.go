@@ -6,13 +6,13 @@ import (
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 	"gorm.io/gorm"
 )
 
 // ============================================================
 // DOMAIN ENTITY → DATABASE MODEL MAPPERS
 // ============================================================
-
 
 // ToModelEvent converts domain.Event to EventModel
 func ToModelEvent(event *domain.Event) *EventModel {
@@ -150,7 +150,8 @@ func ToDomainEvent(model *EventModel) *domain.Event {
 
 // ToModelEventTypeFromValue converts domain.EventTypeValue to EventTypeModel
 func ToModelEventTypeFromValue(value domain.EventTypeValue) *EventTypeModel {
-	info, ok := value.Info()
+	// ✅ Use GetEventTypeInfo helper instead of value.Info()
+	info, ok := domain.GetEventTypeInfo(value)
 	if !ok {
 		return nil
 	}
@@ -160,7 +161,7 @@ func ToModelEventTypeFromValue(value domain.EventTypeValue) *EventTypeModel {
 // ToModelEventTypeFromInfo converts domain.EventTypeInfo to EventTypeModel
 func ToModelEventTypeFromInfo(info domain.EventTypeInfo) *EventTypeModel {
 	return &EventTypeModel{
-		Slug:                info.Slug.String(),
+		Slug:                info.Slug, // ✅ info.Slug is already a string
 		Name:                info.Name,
 		DisplayName:         info.DisplayName,
 		Description:         info.Description,
@@ -180,12 +181,18 @@ func ToDomainEventTypeInfo(model *EventTypeModel) (*domain.EventTypeInfo, error)
 		return nil, nil
 	}
 
-	value, valid := domain.ParseEventType(model.Slug)
+	// ✅ Use shared types to parse
+	value, valid := types.ParseEventType(model.Name)
 	if !valid {
-		return nil, domain.ErrEventTypeNotFound
+		// Try parsing by slug
+		value, valid = types.ParseEventTypeBySlug(model.Slug)
+		if !valid {
+			return nil, domain.ErrEventTypeNotFound
+		}
 	}
 
-	info, ok := value.Info()
+	// ✅ Use GetEventTypeInfo helper
+	info, ok := domain.GetEventTypeInfo(value)
 	if !ok {
 		return nil, domain.ErrEventTypeNotFound
 	}
@@ -211,7 +218,8 @@ func ToDomainEventTypeInfo(model *EventTypeModel) (*domain.EventTypeInfo, error)
 
 // ToModelEventStatusFromValue converts domain.EventStatusValue to EventStatusModel
 func ToModelEventStatusFromValue(value domain.EventStatusValue) *EventStatusModel {
-	info, ok := value.Info()
+	// ✅ Use GetEventStatusInfo helper instead of value.Info()
+	info, ok := domain.GetEventStatusInfo(value)
 	if !ok {
 		return nil
 	}
@@ -221,7 +229,7 @@ func ToModelEventStatusFromValue(value domain.EventStatusValue) *EventStatusMode
 // ToModelEventStatusFromInfo converts domain.EventStatusInfo to EventStatusModel
 func ToModelEventStatusFromInfo(info domain.EventStatusInfo) *EventStatusModel {
 	return &EventStatusModel{
-		Slug:        info.Slug.String(),
+		Slug:        info.Slug, // ✅ info.Slug is already a string
 		Name:        info.Name,
 		DisplayName: info.DisplayName,
 		Description: info.Description,
@@ -239,12 +247,18 @@ func ToDomainEventStatusInfo(model *EventStatusModel) (*domain.EventStatusInfo, 
 		return nil, nil
 	}
 
-	value, valid := domain.ParseEventStatus(model.Slug)
+	// ✅ Use shared types to parse
+	value, valid := types.ParseEventStatus(model.Name)
 	if !valid {
-		return nil, domain.ErrEventStatusNotFound
+		// Try parsing by slug
+		value, valid = types.ParseEventStatusBySlug(model.Slug)
+		if !valid {
+			return nil, domain.ErrEventStatusNotFound
+		}
 	}
 
-	info, ok := value.Info()
+	// ✅ Use GetEventStatusInfo helper
+	info, ok := domain.GetEventStatusInfo(value)
 	if !ok {
 		return nil, domain.ErrEventStatusNotFound
 	}
@@ -354,34 +368,36 @@ func ToModelEventStatusEntity(eventStatus *domain.EventStatus) *EventStatusModel
 	}
 }
 
-// ✅ NEW: Convert EventModel to domain.Event with creator info
+// ============================================================
+// EVENT WITH CREATOR MAPPERS
+// ============================================================
 
-
+// toDomainEventWithCreator converts EventModel to domain.Event with creator info
 func toDomainEventWithCreator(model *EventModel) *domain.Event {
-    if model == nil {
-        return nil
-    }
+	if model == nil {
+		return nil
+	}
 
-    event := ToDomainEvent(model)
+	event := ToDomainEvent(model)
 
-    // ✅ Populate creator info from join fields
-    if model.CreatorName != "" || model.CreatorEmail != "" {
-        creator := &domain.AccountInfo{
-            ID:              model.CreatedBy,
-            Name:            model.CreatorName,
-            DisplayName:     model.CreatorDisplayName,
-            Email:           model.CreatorEmail,
-            Phone:           model.CreatorPhone,
-            AccountType:     model.CreatorAccountType, // Now comes from account_types.slug
-            InstitutionName: model.CreatorInstitutionName,
-        }
-        event.WithCreator(creator)
-    }
+	// ✅ Populate creator info from join fields
+	if model.CreatorName != "" || model.CreatorEmail != "" {
+		creator := &domain.AccountInfo{
+			ID:              model.CreatedBy,
+			Name:            model.CreatorName,
+			DisplayName:     model.CreatorDisplayName,
+			Email:           model.CreatorEmail,
+			Phone:           model.CreatorPhone,
+			AccountType:     model.CreatorAccountType,
+			InstitutionName: model.CreatorInstitutionName,
+		}
+		event.WithCreator(creator)
+	}
 
-    return event
+	return event
 }
 
-// ✅ NEW: Convert multiple EventModels to domain.Events with creator info
+// toDomainEventsWithCreator converts multiple EventModels to domain.Events with creator info
 func toDomainEventsWithCreator(models []EventModel) []*domain.Event {
 	events := make([]*domain.Event, len(models))
 	for i, model := range models {

@@ -2,9 +2,9 @@ package mediaseeder
 
 import (
 	"log"
+	
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
-
 	"gorm.io/gorm"
 )
 
@@ -16,7 +16,8 @@ func SeedMediaTypes(db *gorm.DB) error {
 
 	for _, info := range infos {
 		var existing postgres.MediaTypeModel
-		err := db.Where("slug = ?", info.Slug.String()).First(&existing).Error
+		// ✅ info.Slug is already a string, no need for .String()
+		err := db.Where("slug = ?", info.Slug).First(&existing).Error
 
 		if err == nil {
 			// Update existing
@@ -37,7 +38,7 @@ func SeedMediaTypes(db *gorm.DB) error {
 
 		// Create new
 		mediaType := &postgres.MediaTypeModel{
-			Slug:        info.Slug.String(),
+			Slug:        info.Slug,        // ✅ Already a string
 			Name:        info.Name,
 			DisplayName: info.DisplayName,
 			Description: info.Description,

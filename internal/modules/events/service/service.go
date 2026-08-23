@@ -137,8 +137,10 @@ type CreateDraftCommand struct {
 	AccountID string
 	CreatedBy string
 
+	// User input - what they type in the form
+	Name string // ✅ This is the ONLY field from user
+
 	// Optional
-	Name             string
 	Description      string
 	EventTypeID      string
 	Date             string
@@ -151,12 +153,9 @@ type CreateDraftCommand struct {
 	ZoomLink         string
 	MeetLink         string
 	MaxAttendees     int
+	IsFeatured       bool
+	IsPrivate        bool
 
-	// ✅ NEW: Feature flags (default to false)
-	IsFeatured bool
-	IsPrivate  bool
-
-	// Image - Pure Go types
 	ImageData   []byte
 	ImageName   string
 	ContentType string
@@ -168,8 +167,7 @@ type CreateDraftCommand struct {
 
 type CreateEventCommand struct {
 	// Required
-	Name        string
-	EventTypeID string
+	Name        string // ✅ User input - what they type
 	AccountID   string
 	CreatedBy   string
 	Date        string
@@ -178,6 +176,7 @@ type CreateEventCommand struct {
 
 	// Optional
 	Description      string
+	EventTypeID      string
 	Price            float64
 	CertificatePrice float64
 	Location         string
@@ -185,12 +184,9 @@ type CreateEventCommand struct {
 	ZoomLink         string
 	MeetLink         string
 	MaxAttendees     int
+	IsFeatured       bool
+	IsPrivate        bool
 
-	// ✅ NEW: Feature flags (default to false)
-	IsFeatured bool
-	IsPrivate  bool
-
-	// Image - Pure Go types
 	ImageData   []byte
 	ImageName   string
 	ContentType string
@@ -201,26 +197,26 @@ type CreateEventCommand struct {
 // ============================================================
 
 type UpdateEventCommand struct {
-    ID       string
-    UpdatedBy string
+	ID       string
+	UpdatedBy string
 
-    // ✅ Use pointers for optional fields
-    Name             *string
-    Description      *string
-    EventTypeID      *string
-    EventStatusID    *string
-    Date             *string
-    Time             *string
-    Duration         *int
-    Price            *float64
-    CertificatePrice *float64
-    Location         *string
-    IsVirtual        *bool
-    ZoomLink         *string
-    MeetLink         *string
-    MaxAttendees     *int
-    IsFeatured       *bool  // ✅ Pointer
-    IsPrivate        *bool  // ✅ Pointer
+	// ✅ Use pointers for optional fields
+	Name             *string // ✅ User input (optional)
+	Description      *string
+	EventTypeID      *string
+	EventStatusID    *string
+	Date             *string
+	Time             *string
+	Duration         *int
+	Price            *float64
+	CertificatePrice *float64
+	Location         *string
+	IsVirtual        *bool
+	ZoomLink         *string
+	MeetLink         *string
+	MaxAttendees     *int
+	IsFeatured       *bool
+	IsPrivate        *bool
 }
 
 // ============================================================

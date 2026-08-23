@@ -9,6 +9,7 @@ type Validator struct {
 	UUID     UUID
 	URL      URL
 	String   String
+	Sanitize Sanitize
 }
 
 // New creates a new validator instance
@@ -20,5 +21,6 @@ func New() *Validator {
 		UUID:     UUID{},
 		URL:      URL{},
 		String:   String{},
+		Sanitize: Sanitize{},
 	}
 }

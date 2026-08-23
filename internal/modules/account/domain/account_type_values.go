@@ -1,26 +1,30 @@
+// internal/modules/accounts/domain/account_type.go
+
 package domain
 
-// ============================================================
-// ACCOUNT TYPE - Value Object (Source of Truth)
-// ============================================================
-
-// AccountTypeValue is a custom typed string for compile-time safety
-type AccountTypeValue string
-
-const (
-	AccountTypePersonal    AccountTypeValue = "personal"
-	AccountTypeInstitution AccountTypeValue = "institution"
+import (
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 )
 
-// AllAccountTypes lists all valid account types
-var AllAccountTypes = []AccountTypeValue{
-	AccountTypePersonal,
-	AccountTypeInstitution,
-}
+// ============================================================
+// ACCOUNT TYPE - Value Object
+// ============================================================
+
+// AccountTypeValue is an alias for the shared AccountType
+type AccountTypeValue = types.AccountType
+
+// Type constants - Re-exported from shared types for convenience
+const (
+	AccountTypePersonal    = types.AccountTypePersonal
+	AccountTypeInstitution = types.AccountTypeInstitution
+)
+
+// AllAccountTypes re-exported from shared types
+var AllAccountTypes = types.AllAccountTypes
 
 // AccountTypeInfo holds metadata for each account type
 type AccountTypeInfo struct {
-	Slug        AccountTypeValue
+	Slug        string
 	Name        string
 	DisplayName string
 	Description string
@@ -30,61 +34,40 @@ type AccountTypeInfo struct {
 	IsActive    bool
 }
 
-// Private registry (prevents external mutation)
-var accountTypeRegistry = map[AccountTypeValue]AccountTypeInfo{
-	AccountTypePersonal: {
-		Slug:        AccountTypePersonal,
-		Name:        "Personal Account",
-		DisplayName: "Personal Account",
-		Description: "Individual person (trainer, coach, consultant, freelancer)",
-		Icon:        "user",
-		Color:       "#4F46E5",
-		SortOrder:   1,
+// ============================================================
+// ACCOUNT TYPE REGISTRY - Domain specific wrapper
+// ============================================================
+
+var accountTypeRegistry = map[types.AccountType]AccountTypeInfo{
+	types.AccountTypePersonal: {
+		Slug:        types.AccountTypePersonalSlug,
+		Name:        types.AccountTypePersonalName,
+		DisplayName: types.AccountTypePersonalDisplayName,
+		Description: types.AccountTypePersonalDescription,
+		Icon:        types.AccountTypePersonalIcon,
+		Color:       types.AccountTypePersonalColor,
+		SortOrder:   types.AccountTypePersonalSortOrder,
 		IsActive:    true,
 	},
-	AccountTypeInstitution: {
-		Slug:        AccountTypeInstitution,
-		Name:        "Institution Account",
-		DisplayName: "Institution Account",
-		Description: "Organization, company, institute, or association",
-		Icon:        "building",
-		Color:       "#7C3AED",
-		SortOrder:   2,
+	types.AccountTypeInstitution: {
+		Slug:        types.AccountTypeInstitutionSlug,
+		Name:        types.AccountTypeInstitutionName,
+		DisplayName: types.AccountTypeInstitutionDisplayName,
+		Description: types.AccountTypeInstitutionDescription,
+		Icon:        types.AccountTypeInstitutionIcon,
+		Color:       types.AccountTypeInstitutionColor,
+		SortOrder:   types.AccountTypeInstitutionSortOrder,
 		IsActive:    true,
 	},
 }
 
 // ============================================================
-// DOMAIN METHODS (on AccountTypeValue)
+// HELPER FUNCTIONS
 // ============================================================
 
-func (a AccountTypeValue) String() string {
-	return string(a)
-}
-
-func (a AccountTypeValue) IsValid() bool {
-	_, ok := accountTypeRegistry[a]
-	return ok
-}
-
-func (a AccountTypeValue) IsPersonal() bool {
-	return a == AccountTypePersonal
-}
-
-func (a AccountTypeValue) IsInstitution() bool {
-	return a == AccountTypeInstitution
-}
-
-func (a AccountTypeValue) IsActive() bool {
-	info, ok := accountTypeRegistry[a]
-	if !ok {
-		return false
-	}
-	return info.IsActive
-}
-
-func (a AccountTypeValue) Info() (AccountTypeInfo, bool) {
-	info, ok := accountTypeRegistry[a]
+// GetAccountTypeInfo returns the type info for a given account type
+func GetAccountTypeInfo(accountType AccountTypeValue) (AccountTypeInfo, bool) {
+	info, ok := accountTypeRegistry[accountType]
 	return info, ok
 }
 
@@ -92,14 +75,7 @@ func (a AccountTypeValue) Info() (AccountTypeInfo, bool) {
 // READ-ONLY GETTERS
 // ============================================================
 
-func ParseAccountType(slug string) (AccountTypeValue, bool) {
-	t := AccountTypeValue(slug)
-	if t.IsValid() {
-		return t, true
-	}
-	return "", false
-}
-
+// AllAccountTypeInfos returns all type infos
 func AllAccountTypeInfos() []AccountTypeInfo {
 	infos := make([]AccountTypeInfo, 0, len(accountTypeRegistry))
 	for _, info := range accountTypeRegistry {
@@ -108,14 +84,22 @@ func AllAccountTypeInfos() []AccountTypeInfo {
 	return infos
 }
 
+// AllAccountTypeSlugs returns all type slugs (with hyphens)
 func AllAccountTypeSlugs() []string {
-	slugs := make([]string, 0, len(accountTypeRegistry))
-	for slug := range accountTypeRegistry {
-		slugs = append(slugs, string(slug))
-	}
-	return slugs
+	return types.AllAccountTypeSlugs()
 }
 
+// AllAccountTypeNames returns all internal type names (with underscores)
+func AllAccountTypeNames() []string {
+	return types.AllAccountTypeNames()
+}
+
+// AllAccountTypeDisplayNames returns all display names
+func AllAccountTypeDisplayNames() []string {
+	return types.AllAccountTypeDisplayNames()
+}
+
+// ActiveAccountTypeInfos returns only active type infos
 func ActiveAccountTypeInfos() []AccountTypeInfo {
 	infos := make([]AccountTypeInfo, 0)
 	for _, info := range accountTypeRegistry {
@@ -126,12 +110,36 @@ func ActiveAccountTypeInfos() []AccountTypeInfo {
 	return infos
 }
 
-func ActiveAccountTypeSlugs() []string {
-	slugs := make([]string, 0)
-	for slug, info := range accountTypeRegistry {
-		if info.IsActive {
-			slugs = append(slugs, string(slug))
+// GetAccountTypeBySlug returns type info by slug
+func GetAccountTypeBySlug(slug string) (AccountTypeInfo, bool) {
+	for _, info := range accountTypeRegistry {
+		if info.Slug == slug {
+			return info, true
 		}
 	}
-	return slugs
+	return AccountTypeInfo{}, false
+}
+
+// GetAccountTypeByName returns type info by internal name (with underscores)
+func GetAccountTypeByName(name string) (AccountTypeInfo, bool) {
+	accountType, ok := types.ParseAccountType(name)
+	if !ok {
+		return AccountTypeInfo{}, false
+	}
+	return GetAccountTypeInfo(accountType)
+}
+
+// GetAccountTypeByDisplayName returns type info by display name
+func GetAccountTypeByDisplayName(displayName string) (AccountTypeInfo, bool) {
+	for _, info := range accountTypeRegistry {
+		if info.DisplayName == displayName {
+			return info, true
+		}
+	}
+	return AccountTypeInfo{}, false
+}
+
+// IsAccountTypeValid checks if the account type is valid
+func IsAccountTypeValid(accountType AccountTypeValue) bool {
+	return accountType.IsValid()
 }
