@@ -1101,7 +1101,7 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 	}
 
 	// ✅ 1. Get the published status
-	status, err := s.repo.GetEventStatusByName(ctx, domain.EventStatusDraft.GetName())
+	status, err := s.repo.GetEventStatusByName(ctx, domain.EventStatusPublished.GetName())
 	if err != nil {
 		log.Printf("❌ Failed to get published status: %v", err)
 		return nil, fmt.Errorf("failed to get published status: %w", err)
