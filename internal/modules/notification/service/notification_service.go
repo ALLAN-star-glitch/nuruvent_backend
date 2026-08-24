@@ -403,3 +403,48 @@ func (s *notificationService) sendLoginNotificationSync(ctx context.Context, req
 
 	return ch.Send(ctx, channelReq)
 }
+
+// ✅ NEW: SendInstitutionKYCWelcome sends KYC welcome email for institutions
+func (s *notificationService) SendInstitutionKYCWelcome(ctx context.Context, req notificationdomain.SendInstitutionKYCWelcomeRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.WelcomeInstitutionKYCTask{
+			To:              req.To,
+			AdminName:       req.AdminName,
+			InstitutionName: req.InstitutionName,
+			InstitutionType: req.InstitutionType,
+		}
+		if err := s.taskEnqueuer.EnqueueWelcomeInstitutionKYC(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue institution KYC welcome task: %v, falling back to sync", err)
+			return s.sendInstitutionKYCWelcomeSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendInstitutionKYCWelcomeSync(ctx, req)
+}
+
+func (s *notificationService) sendInstitutionKYCWelcomeSync(ctx context.Context, req notificationdomain.SendInstitutionKYCWelcomeRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Welcome to Nuruvent - Complete Your KYC Verification",
+		Type:    notificationdomain.TypeWelcomeInstitutionKYC,
+		Meta: map[string]string{
+			"admin_name":        req.AdminName,
+			"institution_name":  req.InstitutionName,
+			"institution_type":  req.InstitutionType,
+			"account_type":      "institution",
+			"kyc_required":      "true",
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}

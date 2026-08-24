@@ -25,6 +25,10 @@ type NotificationService interface {
 	
 	SendIndividualWelcome(ctx context.Context, req SendWelcomeRequest) error
 	SendInstitutionWelcome(ctx context.Context, req SendInstitutionWelcomeRequest) error
+	
+	// ✅ NEW: SendInstitutionKYCWelcome sends KYC welcome email for institutions
+	// This prompts institutions to complete their KYC verification within 7 days
+	SendInstitutionKYCWelcome(ctx context.Context, req SendInstitutionKYCWelcomeRequest) error
 
 	// ============================================================
 	// PASSWORD RESET CONFIRM
@@ -64,6 +68,15 @@ type SendInstitutionWelcomeRequest struct {
 	To              string
 	AdminName       string
 	InstitutionName string
+}
+
+// ✅ NEW: SendInstitutionKYCWelcomeRequest - Institution KYC welcome
+// Used to send KYC verification prompt to newly registered institutions
+type SendInstitutionKYCWelcomeRequest struct {
+	To              string // Admin email
+	AdminName       string // Admin name
+	InstitutionName string // Institution name
+	InstitutionType string // Institution type (e.g., "university", "college", "training_center")
 }
 
 // SendPasswordResetConfirmRequest - Password reset confirmation

@@ -111,6 +111,8 @@ func (c *EmailChannel) getTemplateName(notifType notificationdomain.Notification
 		return "verification-otp"        // ← hyphen
 	case notificationdomain.TypeWelcome:
 		return "welcome-individual"      // ← hyphen
+    case notificationdomain.TypeWelcomeInstitutionKYC: // ✅ NEW
+        return "welcome-institution-kyc"
 	case notificationdomain.TypeTwoFactor:
 		return "two-factor-otp"          // ← hyphen
 	case notificationdomain.TypePasswordResetConfirm:
@@ -168,40 +170,41 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 }
 
 func (c *EmailChannel) renderHTML(templateName, title string, data map[string]string) (string, error) {
-	var contentBuf bytes.Buffer
+    var contentBuf bytes.Buffer
 
-	// For welcome emails, determine if we need individual or institution template
-	actualTemplateName := templateName
-	if templateName == "welcome-individual" {
-		if data["account_type"] == "institution" {
-			actualTemplateName = "welcome-institution" // ← hyphen
-		}
-	}
+    // Determine the actual template name
+    actualTemplateName := templateName
+    
+    // For welcome emails, check if we need KYC version
+    if templateName == "welcome-institution" {
+        if data["kyc_required"] == "true" {
+            actualTemplateName = "welcome-institution-kyc"
+        }
+    }
 
-	// Execute the specific template
-	if err := c.tmpl.ExecuteTemplate(&contentBuf, actualTemplateName, data); err != nil {
-		return "", fmt.Errorf("failed to execute email template %s: %w", actualTemplateName, err)
-	}
+    // Execute the specific template
+    if err := c.tmpl.ExecuteTemplate(&contentBuf, actualTemplateName, data); err != nil {
+        return "", fmt.Errorf("failed to execute email template %s: %w", actualTemplateName, err)
+    }
 
-	// Wrap with base template
-	baseData := struct {
-		Title   string
-		Content template.HTML
-		Year    int
-	}{
-		Title:   title,
-		Content: template.HTML(contentBuf.String()),
-		Year:    time.Now().Year(),
-	}
+    // Wrap with base template
+    baseData := struct {
+        Title   string
+        Content template.HTML
+        Year    int
+    }{
+        Title:   title,
+        Content: template.HTML(contentBuf.String()),
+        Year:    time.Now().Year(),
+    }
 
-	var htmlBuf bytes.Buffer
-	if err := c.tmpl.ExecuteTemplate(&htmlBuf, "base", baseData); err != nil {
-		// If base template fails, render without wrapper
-		log.Printf("[EmailChannel] Base template failed, rendering without wrapper: %v", err)
-		return contentBuf.String(), nil
-	}
+    var htmlBuf bytes.Buffer
+    if err := c.tmpl.ExecuteTemplate(&htmlBuf, "base", baseData); err != nil {
+        log.Printf("[EmailChannel] Base template failed, rendering without wrapper: %v", err)
+        return contentBuf.String(), nil
+    }
 
-	return htmlBuf.String(), nil
+    return htmlBuf.String(), nil
 }
 
 func (c *EmailChannel) buildTextVersion(req notificationdomain.ChannelRequest, data map[string]string) string {
@@ -265,7 +268,30 @@ func (c *EmailChannel) buildTextVersion(req notificationdomain.ChannelRequest, d
 		text += "Device: " + data["user_agent"] + "\n\n"
 		text += "If this was you, you can safely ignore this notification.\n"
 		text += "If you did not log in, please reset your password immediately.\n\n"
+
+	case notificationdomain.TypeWelcomeInstitutionKYC:
+        text += "Welcome to Nuruvent!\n\n"
+        text += "Hello ,\n\n"
+        text += "Congratulations! " + data["institution_name"] + " an account has been successfully registered on Nuruvent, by admin: " +  data["admin_name"] +  "\n\n"
+        text += "Action Required: Complete Your KYC\n\n"
+        text += "To start receiving payouts and unlock all features, please complete your Know Your Customer (KYC) verification within the next 7 days.\n\n"
+        text += "The system allows you to:\n"
+        text += "- Create and publish events under your institution's brand\n"
+        text += "- Accept payments instantly with M-Pesa\n"
+        text += "- Issue QR-verified certificates to attendees\n"
+        text += "- Track attendance automatically via Zoom or Google Meet\n"
+        text += "- Get paid every Monday — only 10% commission\n"
+        text += "- Invite team members to manage events\n"
+        text += "- Build your institution's professional brand\n\n"
+        text += "Complete your KYC within 7 days to:\n"
+        text += "- Receive payments directly to your M-Pesa or bank account\n"
+        text += "- Get featured in our 'Verified Institutions' directory\n"
+        text += "- Access premium event management tools\n"
+        text += "- Build trust with attendees\n\n"
+        text += "Ready to get started? The admin should login to the dashboard and complete KYC.\n\n"
 	}
+
+
 
 	text += "--\nNuruvent - Light Your Events. Illuminate Your Growth."
 	return text

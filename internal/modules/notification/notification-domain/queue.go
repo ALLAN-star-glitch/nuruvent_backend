@@ -24,12 +24,6 @@ type TaskQueue interface {
 // TaskEnqueuer is the inbound port for enqueuing tasks
 type TaskEnqueuer interface {
 	// EnqueueVerificationOTP enqueues a verification OTP task for any purpose
-	// The purpose field determines the OTP type:
-	//   - PurposeRegistration: New user registration
-	//   - PurposeTwoFactor: Login 2FA
-	//   - PurposePasswordReset: Password reset
-	//   - PurposeEmailChange: Email change verification
-	//   - PurposePhoneChange: Phone change verification
 	EnqueueVerificationOTP(ctx context.Context, task VerificationOTPTask) error
 
 	// EnqueueWelcomeIndividual enqueues an individual welcome task
@@ -37,6 +31,9 @@ type TaskEnqueuer interface {
 
 	// EnqueueWelcomeInstitution enqueues an institution welcome task
 	EnqueueWelcomeInstitution(ctx context.Context, task WelcomeInstitutionTask) error
+
+	// ✅ NEW: EnqueueWelcomeInstitutionKYC enqueues an institution KYC welcome task
+	EnqueueWelcomeInstitutionKYC(ctx context.Context, task WelcomeInstitutionKYCTask) error
 
 	// EnqueuePasswordResetConfirm enqueues a password reset confirmation task
 	EnqueuePasswordResetConfirm(ctx context.Context, task PasswordResetConfirmTask) error

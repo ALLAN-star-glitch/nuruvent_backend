@@ -363,6 +363,7 @@ func (b *bytesReaderWrapper) Readdir(count int) ([]fs.FileInfo, error) {
 func (b *bytesReaderWrapper) Stat() (fs.FileInfo, error) {
 	return nil, nil
 }
+
 // ============================================================
 // AUTH NOTIFICATION ADAPTER - UNIFIED
 // ============================================================
@@ -377,7 +378,7 @@ func NewAuthNotificationAdapter(notifSvc notificationdomain.NotificationService)
 	return &AuthNotificationAdapter{notifSvc: notifSvc}
 }
 
-// ============================================================
+// ============================================================   
 // UNIFIED OTP METHOD
 // ============================================================
 
@@ -415,7 +416,16 @@ func (a *AuthNotificationAdapter) SendInstitutionWelcome(ctx context.Context, re
 	return a.notifSvc.SendInstitutionWelcome(ctx, notifReq)
 }
 
-
+// ✅ NEW: SendInstitutionKYCWelcome - Adapts auth domain request to notification domain
+func (a *AuthNotificationAdapter) SendInstitutionKYCWelcome(ctx context.Context, req authDomain.SendInstitutionKYCWelcomeRequest) error {
+	notifReq := notificationdomain.SendInstitutionKYCWelcomeRequest{
+		To:              req.To,
+		AdminName:       req.AdminName,
+		InstitutionName: req.InstitutionName,
+		InstitutionType: req.InstitutionType,
+	}
+	return a.notifSvc.SendInstitutionKYCWelcome(ctx, notifReq)
+}
 
 // ============================================================
 // PASSWORD RESET CONFIRM
@@ -443,6 +453,3 @@ func (a *AuthNotificationAdapter) SendLoginNotification(ctx context.Context, req
 	}
 	return a.notifSvc.SendLoginNotification(ctx, notifReq)
 }
-
-
-

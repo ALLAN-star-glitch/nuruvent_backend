@@ -59,6 +59,7 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
     mux.HandleFunc(notificationdomain.TaskWelcomeInstitution, notificationWorker.HandleWelcomeInstitution)
     mux.HandleFunc(notificationdomain.TaskPasswordResetConfirm, notificationWorker.HandlePasswordResetConfirm)
     mux.HandleFunc(notificationdomain.TaskLoginNotification, notificationWorker.HandleLoginNotification)
+    mux.HandleFunc(notificationdomain.TaskWelcomeInstitutionKYC, notificationWorker.HandleWelcomeInstitutionKYC)
 
     log.Println("✅ All task handlers registered")
     log.Println("📋 Registered tasks:")

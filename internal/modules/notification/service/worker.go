@@ -292,5 +292,41 @@ func (w *NotificationWorker) HandleLoginNotification(ctx context.Context, task *
 	return w.ProcessLoginNotification(ctx, data)
 }
 
+// ✅ NEW: ProcessWelcomeInstitutionKYC
+func (w *NotificationWorker) ProcessWelcomeInstitutionKYC(ctx context.Context, data notificationdomain.WelcomeInstitutionKYCTask) error {
+	log.Printf("[NotificationWorker] Processing institution KYC welcome for %s - Institution: %s", data.To, data.InstitutionName)
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Welcome to Nuruvent - Complete Your KYC Verification",
+		Type:    notificationdomain.TypeWelcomeInstitutionKYC,
+		Meta: map[string]string{
+			"admin_name":        data.AdminName,
+			"institution_name":  data.InstitutionName,
+			"institution_type":  data.InstitutionType,
+			"account_type":      "institution",
+			"kyc_required":      "true",
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send institution KYC welcome to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Institution KYC welcome sent to %s", data.To)
+	return nil
+}
+
+// HandleWelcomeInstitutionKYC is the asynq task handler
+func (w *NotificationWorker) HandleWelcomeInstitutionKYC(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.WelcomeInstitutionKYCTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse institution KYC welcome task: %v", err)
+		return err
+	}
+	return w.ProcessWelcomeInstitutionKYC(ctx, data)
+}
+
 // Ensure NotificationWorker implements notificationdomain.TaskProcessor
 var _ notificationdomain.TaskProcessor = (*NotificationWorker)(nil)

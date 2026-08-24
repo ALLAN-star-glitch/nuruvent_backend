@@ -1,4 +1,4 @@
-// notificationdomain/service.go
+// internal/modules/notification/notification-domain/service.go
 
 package notificationdomain
 
@@ -104,7 +104,8 @@ type NotificationService interface {
 	
 	SendIndividualWelcome(ctx context.Context, req SendWelcomeRequest) error
 	SendInstitutionWelcome(ctx context.Context, req SendInstitutionWelcomeRequest) error
-	
+	SendInstitutionKYCWelcome(ctx context.Context, req SendInstitutionKYCWelcomeRequest) error // ✅ NEW
+
 	// ============================================================
 	// SECURITY NOTIFICATIONS
 	// ============================================================
@@ -146,6 +147,14 @@ type SendInstitutionWelcomeRequest struct {
 	To              string
 	AdminName       string
 	InstitutionName string
+}
+
+// ✅ NEW: SendInstitutionKYCWelcomeRequest - Welcome email with KYC requirements
+type SendInstitutionKYCWelcomeRequest struct {
+	To              string
+	AdminName       string
+	InstitutionName string
+	InstitutionType string
 }
 
 // SendPasswordResetConfirmRequest - Password reset confirmation email

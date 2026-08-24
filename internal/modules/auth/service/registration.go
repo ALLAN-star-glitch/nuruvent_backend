@@ -222,9 +222,9 @@ func (s *service) VerifyOTPAndCreateAccount(ctx context.Context, email, otp stri
 		}
 	}
 
-	// 8. Send welcome email
-	if err := s.sendWelcomeEmail(ctx, account, userData); err != nil {
-		log.Printf("Failed to send welcome email: %v", err)
+	// 8. Send welcome emails
+	if err := s.sendWelcomeEmails(ctx, account, userData); err != nil {
+		log.Printf("Failed to send welcome emails: %v", err)
 	}
 
 	return account, additionalData, nil
@@ -309,17 +309,26 @@ func (s *service) createInstitution(ctx context.Context, accountID string, userD
 	return nil
 }
 
-// sendWelcomeEmail sends welcome email based on account type
-func (s *service) sendWelcomeEmail(ctx context.Context, account *authdomain.Account, userData map[string]string) error {
-	if userData["account_type"] == types.AccountTypeInstitutionName {
-		return s.notifSvc.SendInstitutionWelcome(ctx, authdomain.SendInstitutionWelcomeRequest{
-			To:              account.Email,
-			AdminName:       account.Name,
-			InstitutionName: userData["institution_name"],
-		})
-	}
-	return s.notifSvc.SendIndividualWelcome(ctx, authdomain.SendWelcomeRequest{
+// ✅ UPDATED: sendWelcomeEmails sends welcome emails based on account type
+// For institution accounts, sends both admin welcome and KYC welcome to institution email
+func (s *service) sendWelcomeEmails(ctx context.Context, account *authdomain.Account, userData map[string]string) error {
+	// Send individual welcome to the admin (account email)
+	if err := s.notifSvc.SendIndividualWelcome(ctx, authdomain.SendWelcomeRequest{
 		To:   account.Email,
 		Name: account.Name,
-	})
+	}); err != nil {
+		log.Printf("Failed to send individual welcome to admin: %v", err)
+	}
+
+	// If institution account, send KYC welcome to institution email
+	if userData["account_type"] == types.AccountTypeInstitutionName {
+		return s.notifSvc.SendInstitutionKYCWelcome(ctx, authdomain.SendInstitutionKYCWelcomeRequest{
+			To:              userData["institution_email"],
+			AdminName:       account.Name,
+			InstitutionName: userData["institution_name"],
+			InstitutionType: userData["institution_type"],
+		})
+	}
+	
+	return nil
 }

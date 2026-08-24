@@ -96,6 +96,7 @@ const (
 	TypePasswordResetConfirm NotificationType = "password_reset_confirm"
 	TypeTwoFactor            NotificationType = "two_factor"
 	TypeLoginNotification    NotificationType = "login_notification"
+	TypeWelcomeInstitutionKYC NotificationType = "welcome_institution_kyc"
 )
 
 func (t NotificationType) String() string {

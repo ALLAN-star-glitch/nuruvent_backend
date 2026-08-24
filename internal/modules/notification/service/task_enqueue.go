@@ -123,5 +123,23 @@ func (e *taskEnqueuer) EnqueueLoginNotification(ctx context.Context, task notifi
 	return nil
 }
 
+
+func (e *taskEnqueuer) EnqueueWelcomeInstitutionKYC(ctx context.Context, task notificationdomain.WelcomeInstitutionKYCTask) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing institution KYC welcome for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskWelcomeInstitutionKYC, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue institution KYC welcome: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Institution KYC welcome enqueued for %s", task.To)
+	return nil
+}
+
 // Ensure taskEnqueuer implements notificationdomain.TaskEnqueuer
 var _ notificationdomain.TaskEnqueuer = (*taskEnqueuer)(nil)
