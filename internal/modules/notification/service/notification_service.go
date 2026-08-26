@@ -448,3 +448,49 @@ func (s *notificationService) sendInstitutionKYCWelcomeSync(ctx context.Context,
 
 	return ch.Send(ctx, channelReq)
 }
+
+
+func (s *notificationService) SendNewInstitutionAccountNotification(ctx context.Context, req notificationdomain.SendNewInstitutionAccountRegistrationRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.NewInstitutionAccountRegistrationNotice{
+			TO:              req.TO,
+			NewAccountAdminName:       req.NewAccountAdminName,
+			InstitutionName: req.InstitutionName,
+			InstitutionType: req.InstitutionType,
+		}
+		if err := s.taskEnqueuer.EnqueueNewInstitutionAccountRegistration(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue task: %v, falling back to sync", err)
+			return s.SendNewInstitutionAccountNotificationSync(ctx, req)
+		}
+		return nil
+	}
+	return s.SendNewInstitutionAccountNotificationSync(ctx, req)
+}
+
+func (s *notificationService) SendNewInstitutionAccountNotificationSync(ctx context.Context, req notificationdomain.SendNewInstitutionAccountRegistrationRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.TO,
+		Subject: "New Organization Account - Please Follow Up",
+		Type:    notificationdomain.TypeWelcomeInstitutionKYC,
+		Meta: map[string]string{
+			"admin_name":        req.NewAccountAdminName,
+			"institution_name":  req.InstitutionName,
+			"institution_type":  req.InstitutionType,
+			"account_type":      "institution",
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+

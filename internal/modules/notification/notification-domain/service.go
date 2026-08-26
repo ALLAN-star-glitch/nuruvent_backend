@@ -104,7 +104,8 @@ type NotificationService interface {
 	
 	SendIndividualWelcome(ctx context.Context, req SendWelcomeRequest) error
 	SendInstitutionWelcome(ctx context.Context, req SendInstitutionWelcomeRequest) error
-	SendInstitutionKYCWelcome(ctx context.Context, req SendInstitutionKYCWelcomeRequest) error // ✅ NEW
+	SendInstitutionKYCWelcome(ctx context.Context, req SendInstitutionKYCWelcomeRequest) error
+	SendNewInstitutionAccountNotification(ctx context.Context, req SendNewInstitutionAccountRegistrationRequest) error
 
 	// ============================================================
 	// SECURITY NOTIFICATIONS
@@ -154,6 +155,13 @@ type SendInstitutionKYCWelcomeRequest struct {
 	To              string
 	AdminName       string
 	InstitutionName string
+	InstitutionType string
+}
+
+type SendNewInstitutionAccountRegistrationRequest struct {
+	TO string
+	NewAccountAdminName string
+	InstitutionName  string
 	InstitutionType string
 }
 

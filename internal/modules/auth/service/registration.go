@@ -309,8 +309,6 @@ func (s *service) createInstitution(ctx context.Context, accountID string, userD
 	return nil
 }
 
-// ✅ UPDATED: sendWelcomeEmails sends welcome emails based on account type
-// For institution accounts, sends both admin welcome and KYC welcome to institution email
 func (s *service) sendWelcomeEmails(ctx context.Context, account *authdomain.Account, userData map[string]string) error {
 	// Send individual welcome to the admin (account email)
 	if err := s.notifSvc.SendIndividualWelcome(ctx, authdomain.SendWelcomeRequest{
@@ -318,17 +316,36 @@ func (s *service) sendWelcomeEmails(ctx context.Context, account *authdomain.Acc
 		Name: account.Name,
 	}); err != nil {
 		log.Printf("Failed to send individual welcome to admin: %v", err)
+		// Consider whether to return this error or continue
+		// return fmt.Errorf("failed to send individual welcome: %w", err)
 	}
 
 	// If institution account, send KYC welcome to institution email
 	if userData["account_type"] == types.AccountTypeInstitutionName {
-		return s.notifSvc.SendInstitutionKYCWelcome(ctx, authdomain.SendInstitutionKYCWelcomeRequest{
+		// Send KYC welcome to institution
+		if err := s.notifSvc.SendInstitutionKYCWelcome(ctx, authdomain.SendInstitutionKYCWelcomeRequest{
 			To:              userData["institution_email"],
 			AdminName:       account.Name,
 			InstitutionName: userData["institution_name"],
 			InstitutionType: userData["institution_type"],
-		})
+		}); err != nil {
+			log.Printf("Failed to send institution KYC welcome: %v", err)
+			// Continue to send notification even if KYC welcome fails
+		}
+
+		// Send new account notification to admin
+		if err := s.notifSvc.SendNewAccountNotification(ctx, authdomain.SendNewInstitutionAccountRegistrationRequest{
+			TO:                  s.config.NuruOnboardingNoticeEmails.AdminEmail,
+			NewAccountAdminName: account.Name,
+			InstitutionName:     userData["institution_name"],
+			InstitutionType:     userData["institution_type"],
+		}); err != nil {
+			log.Printf("Failed to send new account notification: %v", err)
+			return fmt.Errorf("failed to send new account notification: %w", err)
+		}
 	}
-	
+
 	return nil
 }
+
+

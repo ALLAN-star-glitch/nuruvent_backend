@@ -41,6 +41,9 @@ type NotificationService interface {
 	// ============================================================
 	
 	SendLoginNotification(ctx context.Context, req SendLoginNotificationRequest) error
+
+
+	SendNewAccountNotification(ctx context.Context, req SendNewInstitutionAccountRegistrationRequest) error
 }
 
 // ============================================================
@@ -77,6 +80,14 @@ type SendInstitutionKYCWelcomeRequest struct {
 	AdminName       string // Admin name
 	InstitutionName string // Institution name
 	InstitutionType string // Institution type (e.g., "university", "college", "training_center")
+}
+
+// To send the nuruvent admin an email notification of a new account registration
+type SendNewInstitutionAccountRegistrationRequest struct {
+	TO 				string
+	NewAccountAdminName		string
+	InstitutionName			string
+	InstitutionType			string
 }
 
 // SendPasswordResetConfirmRequest - Password reset confirmation

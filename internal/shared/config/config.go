@@ -21,7 +21,17 @@ type Config struct {
 	Casbin      CasbinConfig
 	MPesa       MPesaConfig
 	Supabase    SupabaseConfig
+	NuruOnboardingNoticeEmails	NuruventOnboardingNoticeEmails
+
 }
+
+
+type NuruventOnboardingNoticeEmails struct{
+	AdminEmail string
+	MarketingEmail string
+	OnboardingTeamEmail string
+	CeoEmail string
+} 
 
 type ServerConfig struct {
 	Port string
@@ -126,6 +136,12 @@ func Load() *Config {
 			BucketProfile:     getEnv("SUPABASE_BUCKET_PROFILES", "profiles"),
 			BucketCertificate: getEnv("SUPABASE_BUCKET_CERTIFICATES", "certificates"),
 			BucketRecording:   getEnv("SUPABASE_BUCKET_RECORDINGS", "recordings"),
+		},
+		NuruOnboardingNoticeEmails: NuruventOnboardingNoticeEmails{
+			AdminEmail: getEnv("NURUVENT_ADMIN_EMAIL", "allaneditor67@gmail.com"),
+			OnboardingTeamEmail: getEnv("NURUVENT_ONBOARDING_TEAM_EMAIL", "allanmathenge22@gmail.com"),
+			MarketingEmail: getEnv("NURUVENT_MARKETING_EMAIL", "allanmathenge82@gmail.com"),
+			CeoEmail: getEnv("NURUVENT_CEO_EMAIL", "allanmathenge67@gmail.com"),
 		},
 	}
 

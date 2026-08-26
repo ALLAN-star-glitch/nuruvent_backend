@@ -416,7 +416,7 @@ func (a *AuthNotificationAdapter) SendInstitutionWelcome(ctx context.Context, re
 	return a.notifSvc.SendInstitutionWelcome(ctx, notifReq)
 }
 
-// ✅ NEW: SendInstitutionKYCWelcome - Adapts auth domain request to notification domain
+//  SendInstitutionKYCWelcome - Adapts auth domain request to notification domain
 func (a *AuthNotificationAdapter) SendInstitutionKYCWelcome(ctx context.Context, req authDomain.SendInstitutionKYCWelcomeRequest) error {
 	notifReq := notificationdomain.SendInstitutionKYCWelcomeRequest{
 		To:              req.To,
@@ -425,6 +425,17 @@ func (a *AuthNotificationAdapter) SendInstitutionKYCWelcome(ctx context.Context,
 		InstitutionType: req.InstitutionType,
 	}
 	return a.notifSvc.SendInstitutionKYCWelcome(ctx, notifReq)
+}
+
+func (a *AuthNotificationAdapter) SendNewAccountNotification(ctx context.Context, req authDomain.SendNewInstitutionAccountRegistrationRequest) error {
+	notifReq := notificationdomain.SendNewInstitutionAccountRegistrationRequest{
+		TO:              req.TO,
+		NewAccountAdminName:       req.NewAccountAdminName,
+		InstitutionName: req.InstitutionName,
+		InstitutionType: req.InstitutionType,
+	}
+	return a.notifSvc.SendNewInstitutionAccountNotification(ctx, notifReq)
+	
 }
 
 // ============================================================

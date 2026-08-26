@@ -104,23 +104,25 @@ func (c *EmailChannel) renderEmail(req notificationdomain.ChannelRequest) (strin
 	return html, text, nil
 }
 
-// ✅ UPDATED: All template names use hyphens to match template definitions
+// getTemplateName returns the template name based on notification type
 func (c *EmailChannel) getTemplateName(notifType notificationdomain.NotificationType) string {
 	switch notifType {
 	case notificationdomain.TypeVerificationOTP:
-		return "verification-otp"        // ← hyphen
+		return "verification-otp"
 	case notificationdomain.TypeWelcome:
-		return "welcome-individual"      // ← hyphen
-    case notificationdomain.TypeWelcomeInstitutionKYC: // ✅ NEW
-        return "welcome-institution-kyc"
+		return "welcome-individual"
+	case notificationdomain.TypeWelcomeInstitutionKYC:
+		return "welcome-institution-kyc"
 	case notificationdomain.TypeTwoFactor:
-		return "two-factor-otp"          // ← hyphen
+		return "two-factor-otp"
 	case notificationdomain.TypePasswordResetConfirm:
-		return "password-reset-confirm"  // ← hyphen
+		return "password-reset-confirm"
 	case notificationdomain.TypeLoginNotification:
-		return "login-notification"      // ← hyphen
+		return "login-notification"
+	case notificationdomain.TypeNewInstitutionAccountRegistration:
+		return "new-institution-account" 
 	default:
-		return "welcome-individual"      // ← hyphen
+		return "welcome-individual"
 	}
 }
 
@@ -164,47 +166,56 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["time"] = req.Meta["time"]
 		data["ip_address"] = req.Meta["ip_address"]
 		data["user_agent"] = req.Meta["user_agent"]
+
+	case notificationdomain.TypeNewInstitutionAccountRegistration: // ✅ NEW
+		data["admin_name"] = req.Meta["admin_name"]
+		data["institution_name"] = req.Meta["institution_name"]
+
+	case notificationdomain.TypeWelcomeInstitutionKYC:
+		data["admin_name"] = req.Meta["admin_name"]
+		data["institution_name"] = req.Meta["institution_name"]
+		data["kyc_required"] = req.Meta["kyc_required"]
 	}
 
 	return data
 }
 
 func (c *EmailChannel) renderHTML(templateName, title string, data map[string]string) (string, error) {
-    var contentBuf bytes.Buffer
+	var contentBuf bytes.Buffer
 
-    // Determine the actual template name
-    actualTemplateName := templateName
-    
-    // For welcome emails, check if we need KYC version
-    if templateName == "welcome-institution" {
-        if data["kyc_required"] == "true" {
-            actualTemplateName = "welcome-institution-kyc"
-        }
-    }
+	// Determine the actual template name
+	actualTemplateName := templateName
 
-    // Execute the specific template
-    if err := c.tmpl.ExecuteTemplate(&contentBuf, actualTemplateName, data); err != nil {
-        return "", fmt.Errorf("failed to execute email template %s: %w", actualTemplateName, err)
-    }
+	// For welcome emails, check if we need KYC version
+	if templateName == "welcome-institution" {
+		if data["kyc_required"] == "true" {
+			actualTemplateName = "welcome-institution-kyc"
+		}
+	}
 
-    // Wrap with base template
-    baseData := struct {
-        Title   string
-        Content template.HTML
-        Year    int
-    }{
-        Title:   title,
-        Content: template.HTML(contentBuf.String()),
-        Year:    time.Now().Year(),
-    }
+	// Execute the specific template
+	if err := c.tmpl.ExecuteTemplate(&contentBuf, actualTemplateName, data); err != nil {
+		return "", fmt.Errorf("failed to execute email template %s: %w", actualTemplateName, err)
+	}
 
-    var htmlBuf bytes.Buffer
-    if err := c.tmpl.ExecuteTemplate(&htmlBuf, "base", baseData); err != nil {
-        log.Printf("[EmailChannel] Base template failed, rendering without wrapper: %v", err)
-        return contentBuf.String(), nil
-    }
+	// Wrap with base template
+	baseData := struct {
+		Title   string
+		Content template.HTML
+		Year    int
+	}{
+		Title:   title,
+		Content: template.HTML(contentBuf.String()),
+		Year:    time.Now().Year(),
+	}
 
-    return htmlBuf.String(), nil
+	var htmlBuf bytes.Buffer
+	if err := c.tmpl.ExecuteTemplate(&htmlBuf, "base", baseData); err != nil {
+		log.Printf("[EmailChannel] Base template failed, rendering without wrapper: %v", err)
+		return contentBuf.String(), nil
+	}
+
+	return htmlBuf.String(), nil
 }
 
 func (c *EmailChannel) buildTextVersion(req notificationdomain.ChannelRequest, data map[string]string) string {
@@ -270,28 +281,40 @@ func (c *EmailChannel) buildTextVersion(req notificationdomain.ChannelRequest, d
 		text += "If you did not log in, please reset your password immediately.\n\n"
 
 	case notificationdomain.TypeWelcomeInstitutionKYC:
-        text += "Welcome to Nuruvent!\n\n"
-        text += "Hello ,\n\n"
-        text += "Congratulations! " + data["institution_name"] + " an account has been successfully registered on Nuruvent, by admin: " +  data["admin_name"] +  "\n\n"
-        text += "Action Required: Complete Your KYC\n\n"
-        text += "To start receiving payouts and unlock all features, please complete your Know Your Customer (KYC) verification within the next 7 days.\n\n"
-        text += "The system allows you to:\n"
-        text += "- Create and publish events under your institution's brand\n"
-        text += "- Accept payments instantly with M-Pesa\n"
-        text += "- Issue QR-verified certificates to attendees\n"
-        text += "- Track attendance automatically via Zoom or Google Meet\n"
-        text += "- Get paid every Monday — only 10% commission\n"
-        text += "- Invite team members to manage events\n"
-        text += "- Build your institution's professional brand\n\n"
-        text += "Complete your KYC within 7 days to:\n"
-        text += "- Receive payments directly to your M-Pesa or bank account\n"
-        text += "- Get featured in our 'Verified Institutions' directory\n"
-        text += "- Access premium event management tools\n"
-        text += "- Build trust with attendees\n\n"
-        text += "Ready to get started? The admin should login to the dashboard and complete KYC.\n\n"
+		text += "Welcome to Nuruvent!\n\n"
+		text += "Hello " + data["admin_name"] + ",\n\n"
+		text += "Congratulations! " + data["institution_name"] + " has been successfully registered on Nuruvent.\n\n"
+		text += "Action Required: Complete Your KYC\n\n"
+		text += "To start receiving payouts and unlock all features, please complete your Know Your Customer (KYC) verification within the next 7 days.\n\n"
+		text += "The system allows you to:\n"
+		text += "- Create and publish events under your institution's brand\n"
+		text += "- Accept payments instantly with M-Pesa\n"
+		text += "- Issue QR-verified certificates to attendees\n"
+		text += "- Track attendance automatically via Zoom or Google Meet\n"
+		text += "- Get paid every Monday — only 10% commission\n"
+		text += "- Invite team members to manage events\n"
+		text += "- Build your institution's professional brand\n\n"
+		text += "Complete your KYC within 7 days to:\n"
+		text += "- Receive payments directly to your M-Pesa or bank account\n"
+		text += "- Get featured in our 'Verified Institutions' directory\n"
+		text += "- Access premium event management tools\n"
+		text += "- Build trust with attendees\n\n"
+		text += "Ready to get started? Login to the dashboard and complete KYC.\n\n"
+
+	case notificationdomain.TypeNewInstitutionAccountRegistration: 
+		text += "Hello " + data["admin_name"] + ",\n\n"
+		text += "Success! " + data["institution_name"] + " has been successfully registered on Nuruvent.\n"
+		text += "The account has been created with Host privileges, allowing the account admin to manage events for the institution.\n\n"
+		text += "As an Institution Host, they can:\n"
+		text += "- Create and publish events under their institution's brand\n"
+		text += "- Accept payments instantly with M-Pesa\n"
+		text += "- Issue QR-verified certificates to attendees\n"
+		text += "- Track attendance automatically via Zoom or Google Meet\n"
+		text += "- Get paid every Monday — only 3.5% commission\n"
+		text += "- Invite team members to manage events\n"
+		text += "- Build their institution's professional brand\n\n"
+		text += "Important: Please follow up with the institution to help them get more acquainted with Nuruvent.\n\n"
 	}
-
-
 
 	text += "--\nNuruvent - Light Your Events. Illuminate Your Growth."
 	return text

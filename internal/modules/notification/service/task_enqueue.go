@@ -141,5 +141,24 @@ func (e *taskEnqueuer) EnqueueWelcomeInstitutionKYC(ctx context.Context, task no
 	return nil
 }
 
+
+func (e *taskEnqueuer) EnqueueNewInstitutionAccountRegistration(ctx context.Context, task notificationdomain.NewInstitutionAccountRegistrationNotice) error {
+	log.Printf("TaskEquerer: Equeueing new account registration for %s", task.TO)
+
+	email_payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("Failed to marshal task %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskNewInstitutionAccountRegistration, email_payload); err != nil {
+		return fmt.Errorf("Failed to enqueue new accountregistration %w", err)
+	}
+
+	log.Printf("✅ [TaskEnqueuer] NewAccountRegistration welcome enqueued for %s", task.TO)
+
+
+	return nil
+}
+
 // Ensure taskEnqueuer implements notificationdomain.TaskEnqueuer
 var _ notificationdomain.TaskEnqueuer = (*taskEnqueuer)(nil)

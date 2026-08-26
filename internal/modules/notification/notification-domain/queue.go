@@ -32,8 +32,10 @@ type TaskEnqueuer interface {
 	// EnqueueWelcomeInstitution enqueues an institution welcome task
 	EnqueueWelcomeInstitution(ctx context.Context, task WelcomeInstitutionTask) error
 
-	// ✅ NEW: EnqueueWelcomeInstitutionKYC enqueues an institution KYC welcome task
+	// EnqueueWelcomeInstitutionKYC enqueues an institution KYC welcome task
 	EnqueueWelcomeInstitutionKYC(ctx context.Context, task WelcomeInstitutionKYCTask) error
+
+	EnqueueNewInstitutionAccountRegistration(ctx context.Context, task NewInstitutionAccountRegistrationNotice)	error
 
 	// EnqueuePasswordResetConfirm enqueues a password reset confirmation task
 	EnqueuePasswordResetConfirm(ctx context.Context, task PasswordResetConfirmTask) error
