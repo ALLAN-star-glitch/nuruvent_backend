@@ -120,7 +120,9 @@ func (c *EmailChannel) getTemplateName(notifType notificationdomain.Notification
 	case notificationdomain.TypeLoginNotification:
 		return "login-notification"
 	case notificationdomain.TypeNewInstitutionAccountRegistration:
-		return "new-institution-account" 
+		return "new-institution-account"
+	case notificationdomain.TaskNewPersonalAccountRegistration:
+		return "new-personal-account"
 	default:
 		return "welcome-individual"
 	}
@@ -167,9 +169,12 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["ip_address"] = req.Meta["ip_address"]
 		data["user_agent"] = req.Meta["user_agent"]
 
-	case notificationdomain.TypeNewInstitutionAccountRegistration: // ✅ NEW
+	case notificationdomain.TypeNewInstitutionAccountRegistration:
 		data["admin_name"] = req.Meta["admin_name"]
 		data["institution_name"] = req.Meta["institution_name"]
+
+	case notificationdomain.TaskNewPersonalAccountRegistration:
+		data["name"] = req.Meta["name"]
 
 	case notificationdomain.TypeWelcomeInstitutionKYC:
 		data["admin_name"] = req.Meta["admin_name"]
@@ -301,7 +306,7 @@ func (c *EmailChannel) buildTextVersion(req notificationdomain.ChannelRequest, d
 		text += "- Build trust with attendees\n\n"
 		text += "Ready to get started? Login to the dashboard and complete KYC.\n\n"
 
-	case notificationdomain.TypeNewInstitutionAccountRegistration: 
+	case notificationdomain.TypeNewInstitutionAccountRegistration:
 		text += "Hello " + data["admin_name"] + ",\n\n"
 		text += "Success! " + data["institution_name"] + " has been successfully registered on Nuruvent.\n"
 		text += "The account has been created with Host privileges, allowing the account admin to manage events for the institution.\n\n"
@@ -314,6 +319,20 @@ func (c *EmailChannel) buildTextVersion(req notificationdomain.ChannelRequest, d
 		text += "- Invite team members to manage events\n"
 		text += "- Build their institution's professional brand\n\n"
 		text += "Important: Please follow up with the institution to help them get more acquainted with Nuruvent.\n\n"
+
+	case notificationdomain.TaskNewPersonalAccountRegistration:
+		text += "Hello " + data["name"] + ",\n\n"
+		text += "Welcome to Nuruvent — the platform that empowers independent trainers, coaches, and consultants to host professional training events in Kenya.\n"
+		text += "Your individual account has been successfully created.\n\n"
+		text += "Here is what you can do with your personal account:\n"
+		text += "- Create and publish training events (workshops, webinars, bootcamps, meetups)\n"
+		text += "- Accept M-Pesa payments instantly — no manual reconciliation\n"
+		text += "- Issue/Accept QR-verified certificates to attendees\n"
+		text += "- Track attendance automatically via Zoom or Google Meet\n"
+		text += "- Get paid every Monday — We take only 3.5% commission\n"
+		text += "- Save 3+ hours per event with automation\n"
+		text += "- Build your personal brand as a trainer/attendee\n\n"
+		text += "Please welcome them to Nuruvent.\n\n"
 	}
 
 	text += "--\nNuruvent - Light Your Events. Illuminate Your Growth."

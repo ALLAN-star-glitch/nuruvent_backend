@@ -14,6 +14,7 @@ const (
 	TaskLoginNotification    = "notification:login_notification"
 	TaskWelcomeInstitutionKYC     = "notification:welcome_institution_kyc" 
 	TaskNewInstitutionAccountRegistration    = "notification:new_account_institution_registration_notice"
+	TaskNewPersonalAccountRegistration = "notification:new_account_personal_registration_notice"
 )
 
 // ============================================================
@@ -71,4 +72,9 @@ type NewInstitutionAccountRegistrationNotice struct {
 	NewAccountAdminName		string 
 	InstitutionName			string
 	InstitutionType		    string
+}
+
+type NewPersonalAccountRegistrationTask struct {
+	To string
+	NewAccountAdminName		string
 }

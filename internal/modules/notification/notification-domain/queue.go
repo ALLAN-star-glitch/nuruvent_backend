@@ -37,9 +37,13 @@ type TaskEnqueuer interface {
 
 	EnqueueNewInstitutionAccountRegistration(ctx context.Context, task NewInstitutionAccountRegistrationNotice)	error
 
+	EnqueueNewPersonalAccountRegistration(ctx context.Context, task NewPersonalAccountRegistrationTask) error
+
 	// EnqueuePasswordResetConfirm enqueues a password reset confirmation task
 	EnqueuePasswordResetConfirm(ctx context.Context, task PasswordResetConfirmTask) error
 
 	// EnqueueLoginNotification enqueues a login notification task
 	EnqueueLoginNotification(ctx context.Context, task LoginNotificationTask) error
+
+
 }

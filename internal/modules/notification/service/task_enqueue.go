@@ -16,6 +16,8 @@ type taskEnqueuer struct {
 	queue notificationdomain.TaskQueue // ← Outbound Port (interface)
 }
 
+
+
 // ✅ Constructor returns the interface
 func NewTaskEnqueuer(queue notificationdomain.TaskQueue) notificationdomain.TaskEnqueuer {
 	return &taskEnqueuer{
@@ -123,7 +125,6 @@ func (e *taskEnqueuer) EnqueueLoginNotification(ctx context.Context, task notifi
 	return nil
 }
 
-
 func (e *taskEnqueuer) EnqueueWelcomeInstitutionKYC(ctx context.Context, task notificationdomain.WelcomeInstitutionKYCTask) error {
 	log.Printf("📧 [TaskEnqueuer] Enqueuing institution KYC welcome for %s", task.To)
 
@@ -141,7 +142,6 @@ func (e *taskEnqueuer) EnqueueWelcomeInstitutionKYC(ctx context.Context, task no
 	return nil
 }
 
-
 func (e *taskEnqueuer) EnqueueNewInstitutionAccountRegistration(ctx context.Context, task notificationdomain.NewInstitutionAccountRegistrationNotice) error {
 	log.Printf("TaskEquerer: Equeueing new account registration for %s", task.TO)
 
@@ -154,8 +154,24 @@ func (e *taskEnqueuer) EnqueueNewInstitutionAccountRegistration(ctx context.Cont
 		return fmt.Errorf("Failed to enqueue new accountregistration %w", err)
 	}
 
-	log.Printf("✅ [TaskEnqueuer] NewAccountRegistration welcome enqueued for %s", task.TO)
+	log.Printf("✅ [TaskEnqueuer] NewInstitutionAccountRegistration welcome enqueued for %s", task.TO)
 
+	return nil
+}
+
+func (e *taskEnqueuer) EnqueueNewPersonalAccountRegistration(ctx context.Context, task notificationdomain.NewPersonalAccountRegistrationTask) error {
+	log.Printf("TaskEquerer: Equeueing new account registration for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("Failed to marshal task %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskNewPersonalAccountRegistration, payload); err != nil {
+		return fmt.Errorf("Failed to enqueue new accountregistration %w", err)
+	}
+
+	log.Printf("✅ [TaskEnqueuer] NewPersonalAccountRegistration welcome enqueued for %s", task.To)
 
 	return nil
 }

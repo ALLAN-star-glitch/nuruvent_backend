@@ -106,6 +106,7 @@ type NotificationService interface {
 	SendInstitutionWelcome(ctx context.Context, req SendInstitutionWelcomeRequest) error
 	SendInstitutionKYCWelcome(ctx context.Context, req SendInstitutionKYCWelcomeRequest) error
 	SendNewInstitutionAccountNotification(ctx context.Context, req SendNewInstitutionAccountRegistrationRequest) error
+	SendNewPersonalAccountNotification(ctx context.Context, req SendNewPersonalAccountRegistrationRequest) error
 
 	// ============================================================
 	// SECURITY NOTIFICATIONS
@@ -163,6 +164,11 @@ type SendNewInstitutionAccountRegistrationRequest struct {
 	NewAccountAdminName string
 	InstitutionName  string
 	InstitutionType string
+}
+
+type SendNewPersonalAccountRegistrationRequest struct {
+	To string
+	NewAccountAdminName string
 }
 
 // SendPasswordResetConfirmRequest - Password reset confirmation email

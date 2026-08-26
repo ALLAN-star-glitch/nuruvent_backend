@@ -18,6 +18,8 @@ type notificationService struct {
 	async        bool
 }
 
+
+
 // NewNotificationService creates a new notification service (synchronous)
 func NewNotificationService(channels ...notificationdomain.Channel) notificationdomain.NotificationService {
 	channelMap := make(map[notificationdomain.NotificationChannel]notificationdomain.Channel)
@@ -133,12 +135,12 @@ func (s *notificationService) VerifyOTP(ctx context.Context, req notificationdom
 	// For notification service, verification just means we log it
 	// The actual verification happens in the auth service with the OTP repository
 	log.Printf("[NotificationService] OTP verification requested for %s with purpose: %s", req.To, req.Purpose)
-	
+
 	// Optionally send a confirmation notification
 	if req.Meta != nil && req.Meta["send_confirmation"] == "true" {
 		// Could send a "Your OTP was verified" email here
 	}
-	
+
 	return nil
 }
 
@@ -438,17 +440,16 @@ func (s *notificationService) sendInstitutionKYCWelcomeSync(ctx context.Context,
 		Subject: "Welcome to Nuruvent - Complete Your KYC Verification",
 		Type:    notificationdomain.TypeWelcomeInstitutionKYC,
 		Meta: map[string]string{
-			"admin_name":        req.AdminName,
-			"institution_name":  req.InstitutionName,
-			"institution_type":  req.InstitutionType,
-			"account_type":      "institution",
-			"kyc_required":      "true",
+			"admin_name":       req.AdminName,
+			"institution_name": req.InstitutionName,
+			"institution_type": req.InstitutionType,
+			"account_type":     "institution",
+			"kyc_required":     "true",
 		},
 	}
 
 	return ch.Send(ctx, channelReq)
 }
-
 
 func (s *notificationService) SendNewInstitutionAccountNotification(ctx context.Context, req notificationdomain.SendNewInstitutionAccountRegistrationRequest) error {
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
@@ -458,10 +459,10 @@ func (s *notificationService) SendNewInstitutionAccountNotification(ctx context.
 
 	if s.async && s.taskEnqueuer != nil {
 		task := notificationdomain.NewInstitutionAccountRegistrationNotice{
-			TO:              req.TO,
-			NewAccountAdminName:       req.NewAccountAdminName,
-			InstitutionName: req.InstitutionName,
-			InstitutionType: req.InstitutionType,
+			TO:                  req.TO,
+			NewAccountAdminName: req.NewAccountAdminName,
+			InstitutionName:     req.InstitutionName,
+			InstitutionType:     req.InstitutionType,
 		}
 		if err := s.taskEnqueuer.EnqueueNewInstitutionAccountRegistration(ctx, task); err != nil {
 			log.Printf("[NotificationService] Failed to enqueue task: %v, falling back to sync", err)
@@ -483,10 +484,10 @@ func (s *notificationService) SendNewInstitutionAccountNotificationSync(ctx cont
 		Subject: "New Organization Account - Please Follow Up",
 		Type:    notificationdomain.TypeWelcomeInstitutionKYC,
 		Meta: map[string]string{
-			"admin_name":        req.NewAccountAdminName,
-			"institution_name":  req.InstitutionName,
-			"institution_type":  req.InstitutionType,
-			"account_type":      "institution",
+			"admin_name":       req.NewAccountAdminName,
+			"institution_name": req.InstitutionName,
+			"institution_type": req.InstitutionType,
+			"account_type":     "institution",
 		},
 	}
 
@@ -494,3 +495,41 @@ func (s *notificationService) SendNewInstitutionAccountNotificationSync(ctx cont
 }
 
 
+func (s *notificationService) SendNewPersonalAccountNotification(ctx context.Context, req notificationdomain.SendNewPersonalAccountRegistrationRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.NewInstitutionAccountRegistrationNotice{
+			TO:                  req.To,
+			NewAccountAdminName: req.NewAccountAdminName,
+			
+		}
+		if err := s.taskEnqueuer.EnqueueNewInstitutionAccountRegistration(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue task: %v, falling back to sync", err)
+			return s.SendNewPersonalAccountNotificationSync(ctx, req)
+		}
+		return nil
+	}
+	return s.SendNewPersonalAccountNotificationSync(ctx, req)
+}
+
+func (s *notificationService) SendNewPersonalAccountNotificationSync(ctx context.Context, req notificationdomain.SendNewPersonalAccountRegistrationRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "New Personal Account - Please Follow Up",
+		Type:    notificationdomain.TaskNewPersonalAccountRegistration,
+		Meta: map[string]string{
+			"admin_name": req.NewAccountAdminName,
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}

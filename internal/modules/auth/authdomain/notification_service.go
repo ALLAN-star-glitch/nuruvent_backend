@@ -26,7 +26,7 @@ type NotificationService interface {
 	SendIndividualWelcome(ctx context.Context, req SendWelcomeRequest) error
 	SendInstitutionWelcome(ctx context.Context, req SendInstitutionWelcomeRequest) error
 	
-	// ✅ NEW: SendInstitutionKYCWelcome sends KYC welcome email for institutions
+	// SendInstitutionKYCWelcome sends KYC welcome email for institutions
 	// This prompts institutions to complete their KYC verification within 7 days
 	SendInstitutionKYCWelcome(ctx context.Context, req SendInstitutionKYCWelcomeRequest) error
 
@@ -43,7 +43,9 @@ type NotificationService interface {
 	SendLoginNotification(ctx context.Context, req SendLoginNotificationRequest) error
 
 
-	SendNewAccountNotification(ctx context.Context, req SendNewInstitutionAccountRegistrationRequest) error
+	SendNewInstitutionAccountNotification(ctx context.Context, req SendNewInstitutionAccountRegistrationRequest) error
+
+	SendNewPersonalAccountNotification(ctx context.Context, req SendNewPersonalAccountRegistrationRequest) error
 }
 
 // ============================================================
@@ -88,6 +90,11 @@ type SendNewInstitutionAccountRegistrationRequest struct {
 	NewAccountAdminName		string
 	InstitutionName			string
 	InstitutionType			string
+}
+
+type SendNewPersonalAccountRegistrationRequest struct {
+	To  string
+	NewAccountAdminName	string
 }
 
 // SendPasswordResetConfirmRequest - Password reset confirmation

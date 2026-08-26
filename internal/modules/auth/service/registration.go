@@ -320,6 +320,15 @@ func (s *service) sendWelcomeEmails(ctx context.Context, account *authdomain.Acc
 		// return fmt.Errorf("failed to send individual welcome: %w", err)
 	}
 
+
+	if err := s.notifSvc.SendNewPersonalAccountNotification(ctx, authdomain.SendNewPersonalAccountRegistrationRequest{
+		To: s.config.NuruOnboardingNoticeEmails.AdminEmail, 
+		NewAccountAdminName: account.Name,
+	}); err != nil {
+		log.Printf("Failed to send notification, Error: %w", err)
+
+	}
+
 	// If institution account, send KYC welcome to institution email
 	if userData["account_type"] == types.AccountTypeInstitutionName {
 		// Send KYC welcome to institution
@@ -334,7 +343,7 @@ func (s *service) sendWelcomeEmails(ctx context.Context, account *authdomain.Acc
 		}
 
 		// Send new account notification to admin
-		if err := s.notifSvc.SendNewAccountNotification(ctx, authdomain.SendNewInstitutionAccountRegistrationRequest{
+		if err := s.notifSvc.SendNewInstitutionAccountNotification(ctx, authdomain.SendNewInstitutionAccountRegistrationRequest{
 			TO:                  s.config.NuruOnboardingNoticeEmails.AdminEmail,
 			NewAccountAdminName: account.Name,
 			InstitutionName:     userData["institution_name"],

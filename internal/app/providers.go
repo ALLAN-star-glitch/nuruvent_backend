@@ -427,7 +427,7 @@ func (a *AuthNotificationAdapter) SendInstitutionKYCWelcome(ctx context.Context,
 	return a.notifSvc.SendInstitutionKYCWelcome(ctx, notifReq)
 }
 
-func (a *AuthNotificationAdapter) SendNewAccountNotification(ctx context.Context, req authDomain.SendNewInstitutionAccountRegistrationRequest) error {
+func (a *AuthNotificationAdapter) SendNewInstitutionAccountNotification(ctx context.Context, req authDomain.SendNewInstitutionAccountRegistrationRequest) error {
 	notifReq := notificationdomain.SendNewInstitutionAccountRegistrationRequest{
 		TO:              req.TO,
 		NewAccountAdminName:       req.NewAccountAdminName,
@@ -435,6 +435,16 @@ func (a *AuthNotificationAdapter) SendNewAccountNotification(ctx context.Context
 		InstitutionType: req.InstitutionType,
 	}
 	return a.notifSvc.SendNewInstitutionAccountNotification(ctx, notifReq)
+	
+}
+
+
+func (a *AuthNotificationAdapter) SendNewPersonalAccountNotification(ctx context.Context, req authDomain.SendNewPersonalAccountRegistrationRequest) error {
+	notifReq := notificationdomain.SendNewPersonalAccountRegistrationRequest{
+		To:              req.To,
+		NewAccountAdminName:       req.NewAccountAdminName,
+	}
+	return a.notifSvc.SendNewPersonalAccountNotification(ctx, notifReq)
 	
 }
 
