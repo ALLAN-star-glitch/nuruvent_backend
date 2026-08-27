@@ -86,7 +86,7 @@ type SendInstitutionKYCWelcomeRequest struct {
 
 // To send the nuruvent admin an email notification of a new account registration
 type SendNewInstitutionAccountRegistrationRequest struct {
-	TO 				string
+	To			string
 	NewAccountAdminName		string
 	InstitutionName			string
 	InstitutionType			string

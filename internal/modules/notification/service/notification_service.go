@@ -455,11 +455,12 @@ func (s *notificationService) SendNewInstitutionAccountNotification(ctx context.
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
 		return err
+
 	}
 
 	if s.async && s.taskEnqueuer != nil {
 		task := notificationdomain.NewInstitutionAccountRegistrationNotice{
-			TO:                  req.TO,
+			To:                  req.TO,
 			NewAccountAdminName: req.NewAccountAdminName,
 			InstitutionName:     req.InstitutionName,
 			InstitutionType:     req.InstitutionType,
@@ -502,12 +503,12 @@ func (s *notificationService) SendNewPersonalAccountNotification(ctx context.Con
 	}
 
 	if s.async && s.taskEnqueuer != nil {
-		task := notificationdomain.NewInstitutionAccountRegistrationNotice{
-			TO:                  req.To,
+		task := notificationdomain.NewPersonalAccountRegistrationTask{
+			To:                  req.To,
 			NewAccountAdminName: req.NewAccountAdminName,
 			
 		}
-		if err := s.taskEnqueuer.EnqueueNewInstitutionAccountRegistration(ctx, task); err != nil {
+		if err := s.taskEnqueuer.EnqueueNewPersonalAccountRegistration(ctx, task); err != nil {
 			log.Printf("[NotificationService] Failed to enqueue task: %v, falling back to sync", err)
 			return s.SendNewPersonalAccountNotificationSync(ctx, req)
 		}

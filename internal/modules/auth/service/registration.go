@@ -310,48 +310,73 @@ func (s *service) createInstitution(ctx context.Context, accountID string, userD
 }
 
 func (s *service) sendWelcomeEmails(ctx context.Context, account *authdomain.Account, userData map[string]string) error {
-	// Send individual welcome to the admin (account email)
+	// Validate
+	if account == nil {
+		return fmt.Errorf("account cannot be nil")
+	}
+
+	var errors []error
+
+	// 1. Send welcome email to the new account holder (always send)
 	if err := s.notifSvc.SendIndividualWelcome(ctx, authdomain.SendWelcomeRequest{
 		To:   account.Email,
 		Name: account.Name,
 	}); err != nil {
-		log.Printf("Failed to send individual welcome to admin: %v", err)
-		// Consider whether to return this error or continue
-		// return fmt.Errorf("failed to send individual welcome: %w", err)
+		errMsg := fmt.Errorf("failed to send individual welcome: %w", err)
+		log.Printf("[sendWelcomeEmails] %v", errMsg)
+		errors = append(errors, errMsg)
+		// Don't return here, continue with other emails
 	}
+	
 
+	// Determine account type using constants
+	accountType := userData["account_type"]
 
-	if err := s.notifSvc.SendNewPersonalAccountNotification(ctx, authdomain.SendNewPersonalAccountRegistrationRequest{
-		To: s.config.NuruOnboardingNoticeEmails.AdminEmail, 
-		NewAccountAdminName: account.Name,
-	}); err != nil {
-		log.Printf("Failed to send notification, Error: %w", err)
-
-	}
-
-	// If institution account, send KYC welcome to institution email
-	if userData["account_type"] == types.AccountTypeInstitutionName {
-		// Send KYC welcome to institution
+	switch accountType {
+	case types.AccountTypeInstitutionName:
+		// 2a. Send KYC welcome to institution
 		if err := s.notifSvc.SendInstitutionKYCWelcome(ctx, authdomain.SendInstitutionKYCWelcomeRequest{
 			To:              userData["institution_email"],
 			AdminName:       account.Name,
 			InstitutionName: userData["institution_name"],
 			InstitutionType: userData["institution_type"],
 		}); err != nil {
-			log.Printf("Failed to send institution KYC welcome: %v", err)
-			// Continue to send notification even if KYC welcome fails
+			errMsg := fmt.Errorf("failed to send institution KYC welcome: %w", err)
+			log.Printf("[sendWelcomeEmails] %v", errMsg)
+			errors = append(errors, errMsg)
 		}
 
-		// Send new account notification to admin
+		// 2b. Send notification to internal admin about new institution
 		if err := s.notifSvc.SendNewInstitutionAccountNotification(ctx, authdomain.SendNewInstitutionAccountRegistrationRequest{
-			TO:                  s.config.NuruOnboardingNoticeEmails.AdminEmail,
+			To:                  s.config.NuruOnboardingNoticeEmails.AdminEmail,
 			NewAccountAdminName: account.Name,
 			InstitutionName:     userData["institution_name"],
 			InstitutionType:     userData["institution_type"],
 		}); err != nil {
-			log.Printf("Failed to send new account notification: %v", err)
-			return fmt.Errorf("failed to send new account notification: %w", err)
+			errMsg := fmt.Errorf("failed to send new institution account notification: %w", err)
+			log.Printf("[sendWelcomeEmails] %v", errMsg)
+			errors = append(errors, errMsg)
 		}
+
+	case types.AccountTypePersonalName:
+		// Send notification to internal admin about new personal account
+		if err := s.notifSvc.SendNewPersonalAccountNotification(ctx, authdomain.SendNewPersonalAccountRegistrationRequest{
+			To:                  s.config.NuruOnboardingNoticeEmails.AdminEmail,
+			NewAccountAdminName: account.Name,
+		}); err != nil {
+			errMsg := fmt.Errorf("failed to send new personal account notification: %w", err)
+			log.Printf("[sendWelcomeEmails] %v", errMsg)
+			errors = append(errors, errMsg)
+		}
+
+	default:
+		log.Printf("[sendWelcomeEmails] Unknown account type: %s for account %s", accountType, account.Email)
+		errors = append(errors, fmt.Errorf("unknown account type: %s", accountType))
+	}
+
+	// Return aggregated errors if any occurred
+	if len(errors) > 0 {
+		return fmt.Errorf("encountered %d errors while sending welcome emails: %v", len(errors), errors)
 	}
 
 	return nil

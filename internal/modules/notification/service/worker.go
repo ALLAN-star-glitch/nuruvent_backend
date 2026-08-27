@@ -13,14 +13,11 @@ import (
 )
 
 // NotificationWorker handles async notification tasks
-// ✅ Implements notificationdomain.TaskProcessor (inbound port)
-// ✅ Depends on notificationdomain.Channel (outbound port)
 type NotificationWorker struct {
-	emailChannel notificationdomain.Channel // ← Outbound Port (interface)
+	emailChannel notificationdomain.Channel
 }
 
 // NewNotificationWorker creates a new notification worker
-// ✅ Injects the outbound port dependency
 func NewNotificationWorker(emailChannel notificationdomain.Channel) *NotificationWorker {
 	return &NotificationWorker{
 		emailChannel: emailChannel,
@@ -31,12 +28,9 @@ func NewNotificationWorker(emailChannel notificationdomain.Channel) *Notificatio
 // UNIFIED VERIFICATION OTP HANDLER
 // ============================================================
 
-// ProcessVerificationOTP implements notificationdomain.TaskProcessor
-// Handles ALL OTP purposes: registration, two_factor, password_reset, email_change, phone_change
 func (w *NotificationWorker) ProcessVerificationOTP(ctx context.Context, data notificationdomain.VerificationOTPTask) error {
 	log.Printf("[NotificationWorker] Processing verification OTP for %s (purpose: %s)", data.To, data.Purpose)
 
-	// Get content based on purpose
 	title, subtitle, description, message, warning := w.getVerificationContent(data)
 
 	channelReq := notificationdomain.ChannelRequest{
@@ -56,7 +50,6 @@ func (w *NotificationWorker) ProcessVerificationOTP(ctx context.Context, data no
 		},
 	}
 
-	// Add extra meta for specific purposes
 	if data.Purpose == notificationdomain.PurposeTwoFactor {
 		if ip, ok := data.Meta["ip_address"]; ok {
 			channelReq.Meta["ip_address"] = ip
@@ -87,7 +80,6 @@ func (w *NotificationWorker) ProcessVerificationOTP(ctx context.Context, data no
 	return nil
 }
 
-// getVerificationContent returns content based on the purpose
 func (w *NotificationWorker) getVerificationContent(data notificationdomain.VerificationOTPTask) (title, subtitle, description, message, warning string) {
 	switch data.Purpose {
 	case notificationdomain.PurposeRegistration:
@@ -292,7 +284,11 @@ func (w *NotificationWorker) HandleLoginNotification(ctx context.Context, task *
 	return w.ProcessLoginNotification(ctx, data)
 }
 
-// ✅ NEW: ProcessWelcomeInstitutionKYC
+// ============================================================
+// INSTITUTION KYC WELCOME HANDLER
+// ============================================================
+
+// ProcessWelcomeInstitutionKYC implements notificationdomain.TaskProcessor
 func (w *NotificationWorker) ProcessWelcomeInstitutionKYC(ctx context.Context, data notificationdomain.WelcomeInstitutionKYCTask) error {
 	log.Printf("[NotificationWorker] Processing institution KYC welcome for %s - Institution: %s", data.To, data.InstitutionName)
 
@@ -301,11 +297,11 @@ func (w *NotificationWorker) ProcessWelcomeInstitutionKYC(ctx context.Context, d
 		Subject: "Welcome to Nuruvent - Complete Your KYC Verification",
 		Type:    notificationdomain.TypeWelcomeInstitutionKYC,
 		Meta: map[string]string{
-			"admin_name":        data.AdminName,
-			"institution_name":  data.InstitutionName,
-			"institution_type":  data.InstitutionType,
-			"account_type":      "institution",
-			"kyc_required":      "true",
+			"admin_name":       data.AdminName,
+			"institution_name": data.InstitutionName,
+			"institution_type": data.InstitutionType,
+			"account_type":     "institution",
+			"kyc_required":     "true",
 		},
 	}
 
@@ -326,6 +322,82 @@ func (w *NotificationWorker) HandleWelcomeInstitutionKYC(ctx context.Context, ta
 		return err
 	}
 	return w.ProcessWelcomeInstitutionKYC(ctx, data)
+}
+
+// ============================================================
+// ✅ NEW: NEW INSTITUTION ACCOUNT REGISTRATION HANDLER
+// ============================================================
+
+// ProcessNewInstitutionAccountRegistration implements notificationdomain.TaskProcessor
+func (w *NotificationWorker) ProcessNewInstitutionAccountRegistration(ctx context.Context, data notificationdomain.NewInstitutionAccountRegistrationNotice) error {
+	log.Printf("[NotificationWorker] Processing new institution account registration for admin: %s, institution: %s", 
+		data.NewAccountAdminName, data.InstitutionName)
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "New Institution Account Registration - Nuruvent",
+		Type:    notificationdomain.TypeNewInstitutionAccountRegistration,
+		Meta: map[string]string{
+			"admin_name":       data.NewAccountAdminName,
+			"institution_name": data.InstitutionName,
+			"institution_type": data.InstitutionType,
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send new institution account registration to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] New institution account registration sent to %s", data.To)
+	return nil
+}
+
+// HandleNewInstitutionAccountRegistration is the asynq task handler
+func (w *NotificationWorker) HandleNewInstitutionAccountRegistration(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.NewInstitutionAccountRegistrationNotice
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse new institution account registration task: %v", err)
+		return err
+	}
+	return w.ProcessNewInstitutionAccountRegistration(ctx, data)
+}
+
+// ============================================================
+// ✅ NEW: NEW PERSONAL ACCOUNT REGISTRATION HANDLER
+// ============================================================
+
+// ProcessNewPersonalAccountRegistration implements notificationdomain.TaskProcessor
+func (w *NotificationWorker) ProcessNewPersonalAccountRegistration(ctx context.Context, data notificationdomain.NewPersonalAccountRegistrationTask) error {
+	log.Printf("[NotificationWorker] Processing new personal account registration for admin: %s", 
+		data.NewAccountAdminName)
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "New Personal Account Registration - Nuruvent",
+		Type:    notificationdomain.TypeNewPersonalAccountRegistration,
+		Meta: map[string]string{
+			"name": data.NewAccountAdminName,
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send new personal account registration to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] New personal account registration sent to %s", data.To)
+	return nil
+}
+
+// HandleNewPersonalAccountRegistration is the asynq task handler
+func (w *NotificationWorker) HandleNewPersonalAccountRegistration(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.NewPersonalAccountRegistrationTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse new personal account registration task: %v", err)
+		return err
+	}
+	return w.ProcessNewPersonalAccountRegistration(ctx, data)
 }
 
 // Ensure NotificationWorker implements notificationdomain.TaskProcessor

@@ -121,7 +121,7 @@ func (c *EmailChannel) getTemplateName(notifType notificationdomain.Notification
 		return "login-notification"
 	case notificationdomain.TypeNewInstitutionAccountRegistration:
 		return "new-institution-account"
-	case notificationdomain.TaskNewPersonalAccountRegistration:
+	case notificationdomain.TypeNewPersonalAccountRegistration:
 		return "new-personal-account"
 	default:
 		return "welcome-individual"

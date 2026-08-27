@@ -98,6 +98,7 @@ const (
 	TypeLoginNotification    NotificationType = "login_notification"
 	TypeWelcomeInstitutionKYC NotificationType = "welcome_institution_kyc"
 	TypeNewInstitutionAccountRegistration		NotificationType = "new_account_institution_registration_notice"
+	TypeNewPersonalAccountRegistration			NotificationType = "new_account_personal_registration_notice"
 )
 
 func (t NotificationType) String() string {

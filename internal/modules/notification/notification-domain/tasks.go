@@ -68,7 +68,7 @@ type WelcomeInstitutionKYCTask struct {
 }
 
 type NewInstitutionAccountRegistrationNotice struct {
-	TO						string
+	To						string
 	NewAccountAdminName		string 
 	InstitutionName			string
 	InstitutionType		    string
