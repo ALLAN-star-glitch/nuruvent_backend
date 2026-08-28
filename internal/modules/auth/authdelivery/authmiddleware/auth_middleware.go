@@ -41,16 +41,13 @@ func AuthMiddleware(tokenService authdomain.TokenService) fiber.Handler {
 			return response.Unauthorized(c, "Invalid or expired token", nil)
 		}
 
-		// 4. Store user context using authdomain constants
+		// 4. Store user context
 		c.Locals(authdomain.ContextKeyUserID, tokenCtx.UserID)
 		c.Locals(authdomain.ContextKeyUserRole, tokenCtx.Role)
 		c.Locals(authdomain.ContextKeyUserEmail, tokenCtx.Email)
-		c.Locals(authdomain.ContextKeyAccountID, tokenCtx.AccountID)
 
-		// Store additional context
-		if tokenCtx.InstitutionID != "" {
-			c.Locals(authdomain.ContextKeyInstitutionID, tokenCtx.InstitutionID)
-		}
+		// Domain is set by authorization middleware based on the request path
+		// Do NOT set it here
 
 		return c.Next()
 	}
@@ -86,19 +83,21 @@ func OptionalAuthMiddleware(tokenService authdomain.TokenService) fiber.Handler 
 			return c.Next()
 		}
 
-		// Store user context using authdomain constants
+		// Store user context
 		c.Locals(authdomain.ContextKeyUserID, tokenCtx.UserID)
 		c.Locals(authdomain.ContextKeyUserRole, tokenCtx.Role)
 		c.Locals(authdomain.ContextKeyUserEmail, tokenCtx.Email)
-		c.Locals(authdomain.ContextKeyAccountID, tokenCtx.AccountID)
 
-		if tokenCtx.InstitutionID != "" {
-			c.Locals(authdomain.ContextKeyInstitutionID, tokenCtx.InstitutionID)
-		}
+		// Domain is set by authorization middleware based on the request path
+		// Do NOT set it here
 
 		return c.Next()
 	}
 }
+
+// ============================================================
+// HELPER FUNCTIONS TO EXTRACT CONTEXT VALUES
+// ============================================================
 
 // GetUserID extracts the user ID from the context
 func GetUserID(c fiber.Ctx) string {
@@ -127,20 +126,53 @@ func GetUserEmail(c fiber.Ctx) string {
 	return email
 }
 
-// GetAccountID extracts the account ID from the context
-func GetAccountID(c fiber.Ctx) string {
-	accountID, ok := c.Locals(authdomain.ContextKeyAccountID).(string)
+// GetDomain extracts the domain from the context
+func GetDomain(c fiber.Ctx) string {
+	domain, ok := c.Locals(authdomain.ContextKeyDomain).(string)
 	if !ok {
 		return ""
 	}
-	return accountID
+	return domain
 }
 
-// GetInstitutionID extracts the institution ID from the context
-func GetInstitutionID(c fiber.Ctx) string {
-	institutionID, ok := c.Locals(authdomain.ContextKeyInstitutionID).(string)
-	if !ok {
+// GetUser extracts the full User from the context (if available)
+func GetUser(c fiber.Ctx) *authdomain.TokenContext {
+	userID := GetUserID(c)
+	if userID == "" {
+		return nil
+	}
+
+	return &authdomain.TokenContext{
+		UserID:      userID,
+		Role:        GetUserRole(c),
+		Email:       GetUserEmail(c),
+		IsVerified:  false,
+		IsActive:    true,
+	}
+}
+
+// GetUserTeamDomain returns the user's personal team domain
+// Note: This returns the personal team domain based on the user ID
+func GetUserTeamDomain(c fiber.Ctx) string {
+	userID := GetUserID(c)
+	if userID == "" {
 		return ""
 	}
-	return institutionID
+	return authdomain.PersonalTeamDomain(userID)
+}
+
+// GetCurrentTeamID returns the team ID from the current context
+func GetCurrentTeamID(c fiber.Ctx) string {
+	domain := GetDomain(c)
+	if authdomain.IsTeamDomain(domain) {
+		return authdomain.ExtractTeamID(domain)
+	}
+	return ""
+}
+
+// IsPersonalTeamContext checks if the current request is in a personal team context
+func IsPersonalTeamContext(c fiber.Ctx) bool {
+	domain := GetDomain(c)
+	return authdomain.IsTeamDomain(domain) && 
+		domain == authdomain.PersonalTeamDomain(GetUserID(c))
 }

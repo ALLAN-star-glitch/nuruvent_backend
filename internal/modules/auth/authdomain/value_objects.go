@@ -12,23 +12,4 @@ type AccountType struct {
     IsActive    bool
 }
 
-// ProfessionalType is a value object
-type ProfessionalType struct {
-    ID          string
-    Slug        string
-    Name        string
-    DisplayName string
-    Description string
-    CanHost     bool
-    IsActive    bool
-}
 
-// InstitutionType is a value object
-type InstitutionType struct {
-    ID          string
-    Slug        string
-    Name        string
-    DisplayName string
-    Description string
-    IsActive    bool
-}

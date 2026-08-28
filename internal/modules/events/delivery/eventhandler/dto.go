@@ -21,9 +21,9 @@ type CreateDraftRequest struct {
 	ZoomLink         string  `form:"zoom_link"`
 	MeetLink         string  `form:"meet_link"`
 	MaxAttendees     int     `form:"max_attendees"`
-	// ✅ NEW: Feature flags
-	IsFeatured bool `form:"is_featured"`
-	IsPrivate  bool `form:"is_private"`
+	IsFeatured       bool    `form:"is_featured"`
+	IsPrivate        bool    `form:"is_private"`
+	TeamType         string  `form:"team_type"` // ✅ NEW: "personal" or "institution"
 }
 
 // ✅ CreateEventRequest - All fields required for published events (application/json)
@@ -31,8 +31,8 @@ type CreateEventRequest struct {
 	Name             string  `json:"name" binding:"required"`
 	Description      string  `json:"description"`
 	EventTypeID      string  `json:"event_type_id" binding:"required"`
-	Date             string  `json:"date" binding:"required"` // YYYY-MM-DD
-	Time             string  `json:"time" binding:"required"` // HH:MM
+	Date             string  `json:"date" binding:"required"`
+	Time             string  `json:"time" binding:"required"`
 	Duration         int     `json:"duration" binding:"required"`
 	Price            float64 `json:"price"`
 	CertificatePrice float64 `json:"certificate_price"`
@@ -41,6 +41,7 @@ type CreateEventRequest struct {
 	ZoomLink         string  `json:"zoom_link"`
 	MeetLink         string  `json:"meet_link"`
 	MaxAttendees     int     `json:"max_attendees"`
+	TeamType         string  `json:"team_type"` // ✅ NEW: "personal" or "institution"
 }
 
 // ✅ CreateEventWithImageRequest - All fields required for published events (multipart/form-data)
@@ -58,33 +59,33 @@ type CreateEventWithImageRequest struct {
 	ZoomLink         string  `form:"zoom_link"`
 	MeetLink         string  `form:"meet_link"`
 	MaxAttendees     int     `form:"max_attendees"`
-	// ✅ NEW: Feature flags
-	IsFeatured bool `form:"is_featured"`
-	IsPrivate  bool `form:"is_private"`
+	IsFeatured       bool    `form:"is_featured"`
+	IsPrivate        bool    `form:"is_private"`
+	TeamType         string  `form:"team_type"` // ✅ NEW: "personal" or "institution"
 }
 
 // ✅ UpdateEventRequest - All fields optional for updates (application/json)
 type UpdateEventRequest struct {
-    Name             *string  `json:"name,omitempty"`
-	DisplayName      *string  `json:"display_name,omitempty"` 
-    Description      *string  `json:"description,omitempty"`
-    EventTypeID      *string  `json:"event_type_id,omitempty"`
-    EventStatusID    *string  `json:"event_status_id,omitempty"`
-    Date             *string  `json:"date,omitempty"`
-    Time             *string  `json:"time,omitempty"`
-    Duration         *int     `json:"duration,omitempty"`
-    Price            *float64 `json:"price,omitempty"`
-    CertificatePrice *float64 `json:"certificate_price,omitempty"`
-    Location         *string  `json:"location,omitempty"`
-    IsVirtual        *bool    `json:"is_virtual,omitempty"`
-    ZoomLink         *string  `json:"zoom_link,omitempty"`
-    MeetLink         *string  `json:"meet_link,omitempty"`
-    MaxAttendees     *int     `json:"max_attendees,omitempty"`
-    IsFeatured       *bool    `json:"is_featured,omitempty"`  // ✅ Pointer
-    IsPrivate        *bool    `json:"is_private,omitempty"`   // ✅ Pointer
+	Name             *string  `json:"name,omitempty"`
+	DisplayName      *string  `json:"display_name,omitempty"`
+	Description      *string  `json:"description,omitempty"`
+	EventTypeID      *string  `json:"event_type_id,omitempty"`
+	EventStatusID    *string  `json:"event_status_id,omitempty"`
+	Date             *string  `json:"date,omitempty"`
+	Time             *string  `json:"time,omitempty"`
+	Duration         *int     `json:"duration,omitempty"`
+	Price            *float64 `json:"price,omitempty"`
+	CertificatePrice *float64 `json:"certificate_price,omitempty"`
+	Location         *string  `json:"location,omitempty"`
+	IsVirtual        *bool    `json:"is_virtual,omitempty"`
+	ZoomLink         *string  `json:"zoom_link,omitempty"`
+	MeetLink         *string  `json:"meet_link,omitempty"`
+	MaxAttendees     *int     `json:"max_attendees,omitempty"`
+	IsFeatured       *bool    `json:"is_featured,omitempty"`
+	IsPrivate        *bool    `json:"is_private,omitempty"`
 }
 
-// ✅ BulkIDsRequest - For bulk operations (delete, publish, cancel, complete, restore)
+// ✅ BulkIDsRequest - For bulk operations
 type BulkIDsRequest struct {
 	IDs []string `json:"ids" binding:"required,min=1"`
 }
@@ -92,8 +93,8 @@ type BulkIDsRequest struct {
 // ✅ DuplicateEventRequest - For duplicating a single event
 type DuplicateEventRequest struct {
 	Name    string `json:"name"`
-	Date    string `json:"date"`     // YYYY-MM-DD
-	IsDraft bool   `json:"is_draft"` // Default: true
+	Date    string `json:"date"`
+	IsDraft bool   `json:"is_draft"`
 }
 
 // ✅ BulkDuplicateRequest - For duplicating multiple events
@@ -119,7 +120,7 @@ type CreatorDTO struct {
 	InstitutionName string `json:"institution_name,omitempty"`
 }
 
-// ✅ EventResponse - API response for event data (with creator info)
+// ✅ EventResponse - API response for event data
 type EventResponse struct {
 	ID               string     `json:"id"`
 	Slug             string     `json:"slug"`
@@ -128,6 +129,8 @@ type EventResponse struct {
 	Description      string     `json:"description,omitempty"`
 	EventTypeID      string     `json:"event_type_id"`
 	EventStatusID    string     `json:"event_status_id"`
+	InstitutionID    string     `json:"institution_id,omitempty"` // ✅ NULL for personal events
+	TeamType         string     `json:"team_type"`               // ✅ NEW: "personal" or "institution"
 	ImageURL         string     `json:"image_url,omitempty"`
 	ThumbnailURL     string     `json:"thumbnail_url,omitempty"`
 	Date             string     `json:"date"`
@@ -141,7 +144,6 @@ type EventResponse struct {
 	MeetLink         string     `json:"meet_link,omitempty"`
 	MaxAttendees     int        `json:"max_attendees"`
 	CurrentAttendees int        `json:"current_attendees"`
-	AccountID        string     `json:"account_id"`
 	IsActive         bool       `json:"is_active"`
 	IsFeatured       bool       `json:"is_featured"`
 	IsPrivate        bool       `json:"is_private"`
@@ -151,11 +153,10 @@ type EventResponse struct {
 	RestoredBy       string     `json:"restored_by,omitempty"`
 	CreatedAt        string     `json:"created_at"`
 	UpdatedAt        string     `json:"updated_at"`
-	// ✅ NEW: Creator information (replaces created_by)
 	Creator          CreatorDTO `json:"creator"`
 }
 
-// ✅ MediaInfoResponse - API response for media data
+// ✅ MediaInfoResponse - Response for media data
 type MediaInfoResponse struct {
 	ID         string `json:"id"`
 	URL        string `json:"url"`
@@ -165,28 +166,28 @@ type MediaInfoResponse struct {
 	CreatedAt  string `json:"created_at"`
 }
 
-// ✅ BulkDeleteResult - Response for bulk delete operations
+// ✅ BulkDeleteResultResponse
 type BulkDeleteResultResponse struct {
 	DeletedCount int      `json:"deleted_count"`
 	FailedIDs    []string `json:"failed_ids,omitempty"`
 	Errors       []string `json:"errors,omitempty"`
 }
 
-// ✅ BulkRestoreResult - Response for bulk restore operations
+// ✅ BulkRestoreResultResponse
 type BulkRestoreResultResponse struct {
 	RestoredCount int      `json:"restored_count"`
 	FailedIDs     []string `json:"failed_ids,omitempty"`
 	Errors        []string `json:"errors,omitempty"`
 }
 
-// ✅ BulkStatusResult - Response for bulk status operations
+// ✅ BulkStatusResultResponse
 type BulkStatusResultResponse struct {
 	ProcessedCount int      `json:"processed_count"`
 	FailedIDs      []string `json:"failed_ids,omitempty"`
 	Errors         []string `json:"errors,omitempty"`
 }
 
-// ✅ BulkDuplicateResult - Response for bulk duplicate operations
+// ✅ BulkDuplicateResultResponse
 type BulkDuplicateResultResponse struct {
 	DuplicatedCount int `json:"duplicated_count"`
 	CreatedEvents   []struct {

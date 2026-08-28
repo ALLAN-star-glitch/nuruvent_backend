@@ -1,22 +1,22 @@
-package accseeder
+package authseeder
 
 import (
 	"log"
 
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
 	"gorm.io/gorm"
-
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/domain"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/postgres"
 )
 
-// SeedInstitutionTypes seeds the institution types from domain constants
-func SeedInstitutionTypes(db *gorm.DB) error {
-	log.Println("🌱 Seeding institution types...")
+// SeedAccountTypes seeds the account types from domain constants
+func SeedAccountTypes(db *gorm.DB) error {
+	log.Println("🌱 Seeding account types...")
 
-	infos := domain.AllInstitutionTypeInfos()
+	// Get account types from domain constants
+	infos := authdomain.AllAccountTypeInfos()
 
 	for _, info := range infos {
-		var existing postgres.InstitutionTypeModel
+		var existing postgres.AccountTypeModel
 		// ✅ info.Slug is already a string - no need for .String()
 		err := db.Where("slug = ?", info.Slug).First(&existing).Error
 
@@ -32,11 +32,12 @@ func SeedInstitutionTypes(db *gorm.DB) error {
 			if err := db.Save(&existing).Error; err != nil {
 				return err
 			}
-			log.Printf("✅ Updated institution type: %s", info.Name)
+			log.Printf("✅ Updated account type: %s", info.Name)
 			continue
 		}
 
-		institutionType := &postgres.InstitutionTypeModel{
+		// Create new
+		accountType := &postgres.AccountTypeModel{
 			Slug:        info.Slug, // ✅ info.Slug is already a string
 			Name:        info.Name,
 			DisplayName: info.DisplayName,
@@ -46,12 +47,12 @@ func SeedInstitutionTypes(db *gorm.DB) error {
 			SortOrder:   info.SortOrder,
 			IsActive:    info.IsActive,
 		}
-		if err := db.Create(institutionType).Error; err != nil {
+		if err := db.Create(accountType).Error; err != nil {
 			return err
 		}
-		log.Printf("✅ Created institution type: %s", info.Name)
+		log.Printf("✅ Created account type: %s", info.Name)
 	}
 
-	log.Printf("✅ Institution types seeded: %d types", len(infos))
+	log.Printf("✅ Account types seeded: %d types", len(infos))
 	return nil
 }

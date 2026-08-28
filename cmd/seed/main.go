@@ -12,8 +12,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accseeder"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/permseeder"
+	authseeder "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/auth_seeder"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/eventseeder"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/mediaseeder"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
@@ -73,26 +72,26 @@ func main() {
 	seedersList := []SeederInfo{
 		{
 			Name:        "permissions",
-			Fn:          permseeder.SeedPermissions,
+			Fn:          authseeder.SeedPermissions,
 			Description: "Seed platform permissions (Casbin policies)",
 			Deps:        []string{},
 		},
 
 		{
 		Name:        "account_types",
-		Fn:          accseeder.SeedAccountTypes,
+		Fn:          authseeder.SeedAccountTypes,
 		Description: "Seed account types (personal, institution)",
 		Deps:        []string{},
 		},
 		{
 			Name:        "professional_types",
-			Fn:          accseeder.SeedProfessionalTypes,
+			Fn:          authseeder.SeedProfessionalTypes,
 			Description: "Seed professional types (trainer, professional, student, other)",
 			Deps:        []string{},
 		},
 		{
 			Name:        "institution_types",
-			Fn:          accseeder.SeedInstitutionTypes,
+			Fn:          authseeder.SeedInstitutionTypes,
 			Description: "Seed institution types (training_institute, college, professional_body, ngo, corporate, government)",
 			Deps:        []string{},
 		},

@@ -2,17 +2,17 @@
 <h1 class="title">Welcome <span class="highlight">{{.institution_name}}</span></h1>
 <p class="subtitle">Complete Your KYC to Unlock Full Features</p>
 
-<p class="greeting">Hello <span class="name">{{.admin_name}}</span>,</p>
+<p class="greeting">Hello <span class="name">{{.institution_name}}</span>,</p>
 
 <p class="body-text">
     Congratulations! Your institution <span class="highlight">{{.institution_name}}</span> has been successfully registered on <span class="highlight">Nuruvent</span>.
-    Your account has been created with <strong>Host privileges</strong>, allowing you to manage events for your institution.
+    The account admin (<strong>{{.admin_name}}</strong>) has been granted <strong>Account Admin privileges</strong> to manage events, members, and settings for your institution.
 </p>
 
-<!-- KYC Alert - Prominent -->
+<!-- KYC Alert -->
 <div class="alert-danger" style="background: #FEE2E2; border-left: 4px solid #EA4335; padding: 16px 20px; border-radius: 10px; margin: 16px 0;">
     <p style="font-size: 14px; font-weight: 600; color: #991B1B; margin-bottom: 4px;">
-        ⚠️ Action Required: Complete Your KYC
+        Action Required: Complete Your KYC
     </p>
     <p style="font-size: 13px; color: #991B1B; margin: 0;">
         To start receiving payouts and unlock all features, please complete your 
@@ -20,15 +20,53 @@
     </p>
 </div>
 
-<!-- Institution Type -->
-<div class="details-box" style="background: #F8F9FA; padding: 16px 20px; border-radius: 12px; margin: 16px 0; border: 1px solid #E8EAED;">
-    <div style="display: flex; justify-content: space-between; padding: 4px 0;">
-        <span style="color: #5F6368; font-size: 12px; font-weight: 500; text-transform: uppercase;">Institution Type</span>
-        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.institution_type}}</span>
+<!-- KYC Instructions -->
+<div style="background: #F8F9FA; padding: 16px 20px; border-radius: 12px; margin: 16px 0; border: 1px solid #E8EAED;">
+    <p style="font-size: 14px; font-weight: 600; color: #202124; margin-bottom: 12px;">
+        How to Complete Your KYC
+    </p>
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <span style="background: #1A73E8; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">1</span>
+            <span style="font-size: 13px; color: #3C4043;"><strong>Log in</strong> to your Nuruvent dashboard</span>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <span style="background: #1A73E8; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">2</span>
+            <span style="font-size: 13px; color: #3C4043;">Go to <strong>Settings -> KYC Verification</strong></span>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <span style="background: #1A73E8; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">3</span>
+            <span style="font-size: 13px; color: #3C4043;">Upload your <strong>Business Registration Certificate</strong></span>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <span style="background: #1A73E8; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">4</span>
+            <span style="font-size: 13px; color: #3C4043;">Upload your <strong>Tax Identification Number (TIN) Certificate</strong></span>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <span style="background: #1A73E8; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">5</span>
+            <span style="font-size: 13px; color: #3C4043;">Upload <strong>Director/Authorized Signatory Details</strong></span>
+        </div>
+        <div style="display: flex; align-items: flex-start; gap: 10px;">
+            <span style="background: #1A73E8; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0;">6</span>
+            <span style="font-size: 13px; color: #3C4043;"><strong>Submit</strong> for review (we will verify within 24-48 hours)</span>
+        </div>
     </div>
 </div>
 
-<p class="body-text" style="font-weight:600;margin-top:16px;">As an Institution Host, you can:</p>
+<!-- Required Documents List -->
+<div style="background: #FFF8E1; border-left: 4px solid #F9A825; padding: 12px 16px; border-radius: 8px; margin: 12px 0;">
+    <p style="font-size: 13px; font-weight: 600; color: #E65100; margin-bottom: 4px;">
+        Required Documents
+    </p>
+    <ul style="margin: 4px 0 0 20px; padding: 0; font-size: 13px; color: #3C4043;">
+        <li>Business Registration Certificate</li>
+        <li>Tax Identification Number (TIN) Certificate</li>
+        <li>ID/Passport of Director/Authorized Signatory</li>
+        <li>Proof of address (utility bill or bank statement - optional)</li>
+    </ul>
+</div>
+
+<p class="body-text" style="font-weight:600;margin-top:16px;">What you can do as an Account Admin:</p>
 
 <div class="feature-item">
     <span class="feature-icon">◆</span>
@@ -36,7 +74,11 @@
 </div>
 <div class="feature-item">
     <span class="feature-icon">◆</span>
-    <span class="feature-text">Accept payments instantly with M-Pesa</span>
+    <span class="feature-text">Invite team members to manage events with you</span>
+</div>
+<div class="feature-item">
+    <span class="feature-icon">◆</span>
+    <span class="feature-text">Accept payments — 3.5% commission</span>
 </div>
 <div class="feature-item">
     <span class="feature-icon">◆</span>
@@ -44,29 +86,17 @@
 </div>
 <div class="feature-item">
     <span class="feature-icon">◆</span>
-    <span class="feature-text">Track attendance automatically via Zoom or Google Meet</span>
-</div>
-<div class="feature-item">
-    <span class="feature-icon">◆</span>
     <span class="feature-text">Get paid every Monday — We take only 3.5% commission</span>
-</div>
-<div class="feature-item">
-    <span class="feature-icon">◆</span>
-    <span class="feature-text">Invite team members to manage events</span>
-</div>
-<div class="feature-item">
-    <span class="feature-icon">◆</span>
-    <span class="feature-text">Build your institution's professional brand</span>
 </div>
 
 <!-- KYC Benefits -->
 <div style="margin-top: 20px;">
     <p style="font-size: 15px; font-weight: 600; color: #202124; margin-bottom: 8px;">
-        💡 Complete your KYC within 7 days to:
+        Complete your KYC within 7 days to:
     </p>
     <div class="feature-item">
         <span class="feature-icon" style="color: #34A853;">✓</span>
-        <span class="feature-text">Receive payments directly to your M-Pesa or bank account</span>
+        <span class="feature-text">Receive payments directly to your preferred payment method</span>
     </div>
     <div class="feature-item">
         <span class="feature-icon" style="color: #34A853;">✓</span>

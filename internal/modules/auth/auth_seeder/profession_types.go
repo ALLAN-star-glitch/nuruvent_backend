@@ -1,19 +1,18 @@
-package accseeder
+package authseeder
 
 import (
 	"log"
 
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
 	"gorm.io/gorm"
-
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/domain"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/postgres"
 )
 
 // SeedProfessionalTypes seeds the professional types from domain constants
 func SeedProfessionalTypes(db *gorm.DB) error {
 	log.Println("🌱 Seeding professional types...")
 
-	infos := domain.AllProfessionalTypeInfos()
+	infos := authdomain.AllProfessionalTypeInfos()
 
 	for _, info := range infos {
 		var existing postgres.ProfessionalTypeModel
@@ -28,7 +27,6 @@ func SeedProfessionalTypes(db *gorm.DB) error {
 			existing.Icon = info.Icon
 			existing.Color = info.Color
 			existing.SortOrder = info.SortOrder
-			existing.CanHost = info.CanHost
 			existing.IsActive = info.IsActive
 			if err := db.Save(&existing).Error; err != nil {
 				return err
@@ -45,7 +43,6 @@ func SeedProfessionalTypes(db *gorm.DB) error {
 			Icon:        info.Icon,
 			Color:       info.Color,
 			SortOrder:   info.SortOrder,
-			CanHost:     info.CanHost,
 			IsActive:    info.IsActive,
 		}
 		if err := db.Create(professionalType).Error; err != nil {

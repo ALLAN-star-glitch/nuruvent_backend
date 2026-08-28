@@ -16,39 +16,81 @@ func (h *EventHandler) RegisterRoutes(
 	// ============================================================
 	public := router.Group("/events")
 	{
-		// ✅ All public endpoints now include creator info
-		public.Get("/upcoming", h.GetUpcomingEventsWithCreator)
+		// Simple versions (no creator info)
+		public.Get("/upcoming", h.GetUpcomingEvents)
+		public.Get("/slug/:slug", h.GetEventBySlug)
+		public.Get("/:id", h.GetEvent)
+
+		// With creator info versions
+		public.Get("/upcoming/with-creator", h.GetUpcomingEventsWithCreator)
+		public.Get("/slug/:slug/with-creator", h.GetEventBySlugWithCreator)
+		public.Get("/:id/with-creator", h.GetEventByIDWithCreator)
+
+		// Other public endpoints
 		public.Get("/past", h.GetPastEvents)
 		public.Get("/types", h.GetEventTypes)
 		public.Get("/statuses", h.GetEventStatuses)
 		public.Get("/search", h.SearchEvents)
 		public.Get("/", h.ListEvents)
-		public.Get("/slug/:slug", h.GetEventBySlugWithCreator)
 		public.Get("/type/:type", h.GetEventsByType)
-		public.Get("/:id", h.GetEventByIDWithCreator)
 	}
 
 	// ============================================================
-	// PROTECTED ROUTES - Account Level (Auth required)
+	// PERSONAL ROUTES - User's own events (Auth required)
 	// ============================================================
-	protected := router.Group("/accounts/:accountId/events")
-	protected.Use(authMiddleware)
-	protected.Use(authzMiddleware)
+	personal := router.Group("/users/me/events")
+	personal.Use(authMiddleware)
 	{
-		// ✅ All account endpoints now include creator info
-		protected.Get("/", h.GetEventsByAccountWithCreator)
-		protected.Post("/draft", h.CreateDraft)
-		protected.Post("/", h.CreateEvent)
-		protected.Post("/:eventId/image", h.UploadEventImage)
-		protected.Post("/:eventId/certificate", h.UploadCertificateTemplate)
-		protected.Delete("/:eventId/image", h.DeleteEventImage)
-		protected.Delete("/:eventId/certificate", h.DeleteEventCertificate)
-		protected.Delete("/:eventId/media", h.DeleteAllEventMedia)
-		protected.Delete("/bulk/media", h.BulkDeleteEventMedia)
+		personal.Get("/", h.GetMyEvents)
+		personal.Get("/with-creator", h.GetMyEventsWithCreator)
+		personal.Post("/draft", h.CreatePersonalDraft)
+		personal.Post("/", h.CreatePersonalEvent)
 	}
 
 	// ============================================================
-	// ✅ BULK OPERATIONS - REGISTER FIRST (before single routes)
+	// USER ROUTES - View events by specific user (Auth + Authz required)
+	// ============================================================
+	userRoutes := router.Group("/users/:userId/events")
+	userRoutes.Use(authMiddleware)
+	userRoutes.Use(authzMiddleware)
+	{
+		userRoutes.Get("/with-creator", h.GetEventsByUserWithCreator)
+	}
+
+	// ============================================================
+	// INSTITUTION ROUTES - Public viewing (Auth optional, authz at service level)
+	// ============================================================
+	institutionRoutes := router.Group("/institutions/:institutionId/events")
+	{
+		// GET endpoints - Public, but filters private events
+		institutionRoutes.Get("/", h.GetEventsByInstitution)
+		institutionRoutes.Get("/with-creator", h.GetEventsByInstitutionWithCreator)
+	}
+
+	// ============================================================
+	// INSTITUTION MANAGEMENT - Protected (Auth + Authz required)
+	// ============================================================
+	institutionManagement := router.Group("/institutions/:institutionId/events")
+	institutionManagement.Use(authMiddleware)
+	institutionManagement.Use(authzMiddleware)
+	{
+		// POST endpoints - require write permissions
+		institutionManagement.Post("/draft", h.CreateDraft)
+		institutionManagement.Post("/", h.CreateEvent)
+		
+		// Media uploads - require write permissions
+		institutionManagement.Post("/:eventId/image", h.UploadEventImage)
+		institutionManagement.Post("/:eventId/certificate", h.UploadCertificateTemplate)
+		
+		// Media deletions - require write permissions
+		institutionManagement.Delete("/:eventId/image", h.DeleteEventImage)
+		institutionManagement.Delete("/:eventId/certificate", h.DeleteEventCertificate)
+		institutionManagement.Delete("/:eventId/media", h.DeleteAllEventMedia)
+		institutionManagement.Delete("/bulk/media", h.BulkDeleteEventMedia)
+	}
+
+	// ============================================================
+	// BULK OPERATIONS - REGISTER FIRST (before single routes)
 	// ============================================================
 	bulkRoutes := router.Group("/events/bulk")
 	bulkRoutes.Use(authMiddleware)
@@ -64,7 +106,7 @@ func (h *EventHandler) RegisterRoutes(
 	}
 
 	// ============================================================
-	// ✅ SINGLE EVENT MANAGEMENT - REGISTER AFTER bulk routes
+	// SINGLE EVENT MANAGEMENT - REGISTER AFTER bulk routes
 	// ============================================================
 	eventRoutes := router.Group("/events")
 	eventRoutes.Use(authMiddleware)

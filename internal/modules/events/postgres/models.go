@@ -31,26 +31,27 @@ type EventModel struct {
 	MeetLink         string
 	MaxAttendees     int
 	CurrentAttendees int
-	AccountID        string `gorm:"index"`
-	CreatedBy        string `gorm:"index"`
+	InstitutionID    string `gorm:"index"` // ✅ Changed from AccountID
+	CreatedBy        string `gorm:"index"` // User ID who created this event
 	IsActive         bool   `gorm:"default:true"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	DeletedAt        gorm.DeletedAt `gorm:"index"`
 
-	// ✅ NEW FIELDS - Add these for soft delete tracking
-	DeletedBy  *string        `gorm:"index"`  // ✅ Use *string to allow NULL
-	RestoredAt *time.Time `gorm:"index"`
-	RestoredBy *string        `gorm:"index"`  // ✅ Use *string to allow NULL
-	IsFeatured bool       `gorm:"default:false;index"`
-	IsPrivate  bool       `gorm:"default:false;index"`
+	// Soft delete tracking
+	DeletedBy  *string        `gorm:"index"`
+	RestoredAt *time.Time     `gorm:"index"`
+	RestoredBy *string        `gorm:"index"`
+	IsFeatured bool           `gorm:"default:false;index"`
+	IsPrivate  bool           `gorm:"default:false;index"`
 
-	CreatorName           string `gorm:"column:creator_name;<-:false"`
-    CreatorDisplayName    string `gorm:"column:creator_display_name;<-:false"`
-    CreatorEmail          string `gorm:"column:creator_email;<-:false"`
-    CreatorPhone          string `gorm:"column:creator_phone;<-:false"`
-    CreatorAccountType    string `gorm:"column:creator_account_type;<-:false"`
-    CreatorInstitutionName string `gorm:"column:creator_institution_name;<-:false"`
+	// Creator info (populated via JOIN for display purposes only)
+	CreatorName            string `gorm:"column:creator_name;<-:false"`
+	CreatorDisplayName     string `gorm:"column:creator_display_name;<-:false"`
+	CreatorEmail           string `gorm:"column:creator_email;<-:false"`
+	CreatorPhone           string `gorm:"column:creator_phone;<-:false"`
+	CreatorAccountType     string `gorm:"column:creator_account_type;<-:false"`
+	CreatorInstitutionName string `gorm:"column:creator_institution_name;<-:false"`
 }
 
 func (EventModel) TableName() string {
@@ -107,4 +108,66 @@ func (EventStatusModel) TableName() string {
 	return "event_statuses"
 }
 
+// ============================================================
+// USER MODEL (for creator info)
+// ============================================================
 
+type UserModel struct {
+	ID               string `gorm:"primaryKey"`
+	Name             string
+	DisplayName      string
+	Email            string
+	Phone            string
+	AccountTypeID    string `gorm:"index"`
+	InstitutionID    *string `gorm:"index"`
+	InstitutionName  string `gorm:"-"` // Not a DB column, populated via JOIN
+	IsActive         bool   `gorm:"default:true"`
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	DeletedAt        gorm.DeletedAt `gorm:"index"`
+}
+
+func (UserModel) TableName() string {
+	return "users"
+}
+
+// ============================================================
+// INSTITUTION MODEL
+// ============================================================
+
+type InstitutionModel struct {
+	ID          string `gorm:"primaryKey"`
+	Name        string
+	DisplayName string
+	Slug        string
+	Email       string
+	Phone       string
+	IsActive    bool `gorm:"default:true"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
+}
+
+func (InstitutionModel) TableName() string {
+	return "institutions"
+}
+
+// ============================================================
+// ACCOUNT TYPE MODEL
+// ============================================================
+
+type AccountTypeModel struct {
+	ID          string `gorm:"primaryKey"`
+	Slug        string `gorm:"uniqueIndex;not null"`
+	Name        string `gorm:"not null"`
+	DisplayName string
+	Description string
+	IsActive    bool `gorm:"default:true"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
+}
+
+func (AccountTypeModel) TableName() string {
+	return "account_types"
+}

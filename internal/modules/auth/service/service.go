@@ -20,21 +20,21 @@ type Service interface {
 	// REGISTRATION
 	// ============================================================
 	
-	RegisterAccount(ctx context.Context, req RegisterRequest) error
-	VerifyOTPAndCreateAccount(ctx context.Context, email, otp string) (*authdomain.Account, map[string]interface{}, error)
+	RegisterUser(ctx context.Context, req RegisterRequest) error
+	VerifyOTPAndCreateUser(ctx context.Context, email, otp string) (*authdomain.User, map[string]interface{}, error)
 
 	// ============================================================
 	// LOGIN
 	// ============================================================
 	
-	LoginAccount(ctx context.Context, email, password, ipAddress, userAgent string) (*authdomain.Account, string, error)
-	VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAddress, userAgent string) (*authdomain.Account, string, string, error)
+	LoginUser(ctx context.Context, email, password, ipAddress, userAgent string) (*authdomain.User, string, error)
+	VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAddress, userAgent string) (*authdomain.User, string, string, error)
 
 	// ============================================================
 	// TOKEN MANAGEMENT
 	// ============================================================
 	
-	GenerateTokens(ctx context.Context, account *authdomain.Account) (string, string, error)
+	GenerateTokens(ctx context.Context, user *authdomain.User) (string, string, error)
 	RefreshTokens(ctx context.Context, refreshToken, userAgent, ip string) (string, string, error)
 	RevokeToken(ctx context.Context, refreshToken string) error
 
@@ -49,30 +49,17 @@ type Service interface {
 	// UNIFIED OTP METHODS
 	// ============================================================
 	
-	// GenerateOTP generates a 6-digit OTP
 	GenerateOTP() string
-	
-	// StoreOTP stores an OTP with purpose
 	StoreOTP(ctx context.Context, email, otp, purpose string) error
-	
-	// GetOTP retrieves an OTP by email and purpose
 	GetOTP(ctx context.Context, email, purpose string) (string, error)
-	
-	// DeleteOTP deletes an OTP by email and purpose
 	DeleteOTP(ctx context.Context, email, purpose string) error
-	
-	// VerifyOTP verifies an OTP for a specific purpose
 	VerifyOTP(ctx context.Context, email, otp, purpose string) error
 
 	// ============================================================
 	// CONVENIENCE OTP METHOD
 	// ============================================================
 	
-	// SendOTPEmail is a convenience method that generates, stores, and sends an OTP
-	// Purpose can be: "registration", "two_factor", "password_reset", "email_change", "phone_change"
 	SendOTPEmail(ctx context.Context, to, name, purpose string, meta map[string]string) error
-
-
 	ResendOTP(ctx context.Context, email, name, purpose string) error
 
 	// ============================================================
@@ -90,6 +77,17 @@ type Service interface {
 	StoreResetData(ctx context.Context, email, otp, newPassword string) error
 	GetResetData(ctx context.Context, email string) (map[string]string, error)
 	DeleteResetData(ctx context.Context, email string) error
+
+	// ============================================================
+	// PROFESSIONAL TYPE
+	// ============================================================
+	
+	GetProfessionalTypeBySlug(ctx context.Context, slug string) (*authdomain.ProfessionalType, error)
+	ListProfessionalTypes(ctx context.Context) ([]*authdomain.ProfessionalType, error)
+
+
+	GetAccountTypeByID(ctx context.Context, id string) (*authdomain.AccountType, error)
+    GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error)
 }
 
 // ============================================================
@@ -97,16 +95,21 @@ type Service interface {
 // ============================================================
 
 type RegisterRequest struct {
-	Email       string
-	Password    string
-	Name        string
-	Phone       string
-	AccountType string
+	// User fields
+	Email          string `json:"email" validate:"required,email"`
+	Password       string `json:"password" validate:"required,min=8"`
+	Name           string `json:"name" validate:"required"`
+	Phone          string `json:"phone" validate:"required"`
+	AccountType    string `json:"account_type" validate:"required,oneof=personal institution"` // personal or institution
+	
+	// Professional Type (for personal accounts)
+	ProfessionalType string `json:"professional_type,omitempty"` // trainer, coach, consultant, freelancer
 
-	InstitutionName  string
-	InstitutionEmail string
-	InstitutionPhone string
-	InstitutionType  string
+	// Institution fields (for institution accounts)
+	InstitutionName  string `json:"institution_name,omitempty"`
+	InstitutionEmail string `json:"institution_email,omitempty"`
+	InstitutionPhone string `json:"institution_phone,omitempty"`
+	InstitutionType  string `json:"institution_type,omitempty"` // university, company, institute, association, school
 }
 
 // ============================================================
@@ -144,4 +147,31 @@ func NewService(
 		notifSvc:    notifSvc,
 		enforcer:    enforcer,
 	}
+}
+
+// ============================================================
+// PROFESSIONAL TYPE METHODS
+// ============================================================
+
+// GetProfessionalTypeBySlug gets a professional type by slug
+func (s *service) GetProfessionalTypeBySlug(ctx context.Context, slug string) (*authdomain.ProfessionalType, error) {
+	// This would call the repository method
+	// return s.repo.GetProfessionalTypeBySlug(ctx, slug)
+	return nil, nil
+}
+
+// ListProfessionalTypes lists all professional types
+func (s *service) ListProfessionalTypes(ctx context.Context) ([]*authdomain.ProfessionalType, error) {
+	// This would call the repository method
+	// return s.repo.ListProfessionalTypes(ctx)
+	return nil, nil
+}
+
+func (s *service) GetAccountTypeByID(ctx context.Context, id string) (*authdomain.AccountType, error) {
+    return s.repo.GetAccountTypeByID(id)
+}
+
+// GetProfessionalTypeByID gets a professional type by ID
+func (s *service) GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error) {
+    return s.repo.GetProfessionalTypeByID(id)
 }

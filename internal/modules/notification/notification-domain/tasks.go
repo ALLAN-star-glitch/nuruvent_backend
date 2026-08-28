@@ -43,6 +43,7 @@ type WelcomeInstitutionTask struct {
 	To              string
 	AdminName       string
 	InstitutionName string
+	InstitutionEmail string
 }
 
 // PasswordResetConfirmTask - Password reset confirmation task

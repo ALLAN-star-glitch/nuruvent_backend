@@ -182,7 +182,7 @@ func (w *NotificationWorker) ProcessWelcomeInstitution(ctx context.Context, data
 	channelReq := notificationdomain.ChannelRequest{
 		To:      data.To,
 		Subject: "Welcome to Nuruvent - Your Institution is Live!",
-		Type:    notificationdomain.TypeWelcome,
+		Type:    notificationdomain.TypeWelcomeInstitution,
 		Meta: map[string]string{
 			"admin_name":       data.AdminName,
 			"institution_name": data.InstitutionName,

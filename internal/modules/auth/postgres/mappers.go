@@ -9,44 +9,54 @@ import (
 // authdomain → DATABASE MODEL MAPPERS
 // ============================================================
 
-func ToAccountModel(account *authdomain.Account) *AccountModel {
-	if account == nil {
+// ============================================================
+// USER MAPPERS (formerly Account)
+// ============================================================
+
+func ToUserModel(user *authdomain.User) *UserModel {
+	if user == nil {
 		return nil
 	}
 
-	accountTypeID := uuid.MustParse(account.AccountTypeID)
+	accountTypeID := uuid.MustParse(user.AccountTypeID)
 
 	var professionalTypeID *uuid.UUID
-	if account.ProfessionalTypeID != nil {
-		id := uuid.MustParse(*account.ProfessionalTypeID)
+	if user.ProfessionalTypeID != nil {
+		id := uuid.MustParse(*user.ProfessionalTypeID)
 		professionalTypeID = &id
 	}
 
 	var institutionID *uuid.UUID
-	if account.InstitutionID != nil {
-		id := uuid.MustParse(*account.InstitutionID)
+	if user.InstitutionID != nil {
+		id := uuid.MustParse(*user.InstitutionID)
 		institutionID = &id
 	}
 
-	return &AccountModel{
-		ID:                 uuid.MustParse(account.ID),
-		Slug:               account.Slug,
-		Name:               account.Name,
-		DisplayName:        account.DisplayName,
-		Email:              account.Email,
-		PasswordHash:       account.PasswordHash,
-		Phone:              account.Phone,
+	return &UserModel{
+		ID:                 uuid.MustParse(user.ID),
+		Slug:               user.Slug,
+		Name:               user.Name,
+		DisplayName:        user.DisplayName,
+		Email:              user.Email,
+		PasswordHash:       user.PasswordHash,
+		Phone:              user.Phone,
 		AccountTypeID:      accountTypeID,
 		ProfessionalTypeID: professionalTypeID,
 		InstitutionID:      institutionID,
-		EmailVerified:      account.EmailVerified,
-		EmailVerifiedAt:    account.EmailVerifiedAt,
-		IdentityVerified:   account.IdentityVerified,
-		IsActive:           account.IsActive,
-		CreatedAt:          account.CreatedAt,
-		UpdatedAt:          account.UpdatedAt,
+		EmailVerified:      user.EmailVerified,
+		EmailVerifiedAt:    user.EmailVerifiedAt,
+		IdentityVerified:   user.IdentityVerified,
+		PhoneVerified:      false,
+		KYCStatus:          "pending",
+		IsActive:           user.IsActive,
+		CreatedAt:          user.CreatedAt,
+		UpdatedAt:          user.UpdatedAt,
 	}
 }
+
+// ============================================================
+// REFRESH TOKEN MAPPERS
+// ============================================================
 
 func ToRefreshTokenModel(token *authdomain.RefreshToken) *RefreshTokenModel {
 	if token == nil {
@@ -54,17 +64,21 @@ func ToRefreshTokenModel(token *authdomain.RefreshToken) *RefreshTokenModel {
 	}
 
 	return &RefreshTokenModel{
-		ID:         uuid.MustParse(token.ID),
-		AccountID:  uuid.MustParse(token.AccountID),
-		Token:      token.Token,
-		ExpiresAt:  token.ExpiresAt,
-		Revoked:    token.Revoked,
-		UserAgent:  token.UserAgent,
-		IPAddress:  token.IPAddress,
-		CreatedAt:  token.CreatedAt,
-		UpdatedAt:  token.UpdatedAt,
+		ID:        uuid.MustParse(token.ID),
+		UserID:    uuid.MustParse(token.UserID), // formerly AccountID
+		Token:     token.Token,
+		ExpiresAt: token.ExpiresAt,
+		Revoked:   token.Revoked,
+		UserAgent: token.UserAgent,
+		IPAddress: token.IPAddress,
+		CreatedAt: token.CreatedAt,
+		UpdatedAt: token.UpdatedAt,
 	}
 }
+
+// ============================================================
+// INSTITUTION MAPPERS
+// ============================================================
 
 func ToInstitutionModel(institution *authdomain.Institution) *InstitutionModel {
 	if institution == nil {
@@ -89,28 +103,39 @@ func ToInstitutionModel(institution *authdomain.Institution) *InstitutionModel {
 	}
 }
 
+// ============================================================
+// TEAM MEMBER MAPPERS (UPDATED)
+// ============================================================
+
 func ToTeamMemberModel(member *authdomain.TeamMember) *TeamMemberModel {
 	if member == nil {
 		return nil
 	}
 
 	model := &TeamMemberModel{
-		ID:          uuid.MustParse(member.ID),
-		Slug:        member.Slug,
-		Name:        member.Name,
-		DisplayName: member.DisplayName,
-		AccountID:   uuid.MustParse(member.AccountID),
-		MemberID:    uuid.MustParse(member.MemberID),
-		Role:        TeamMemberRole(member.Role),
-		JobTitle:    member.JobTitle,
-		IsActive:    member.IsActive,
-		JoinedAt:    member.JoinedAt,
-		CreatedAt:   member.CreatedAt,
-		UpdatedAt:   member.UpdatedAt,
+		ID:         uuid.MustParse(member.ID),
+		MemberID:   uuid.MustParse(member.MemberID),
+		TeamTypeID: uuid.MustParse(member.TeamTypeID),
+		IsActive:   member.IsActive,
+		JoinedAt:   member.JoinedAt,
+		CreatedAt:  member.CreatedAt,
+		UpdatedAt:  member.UpdatedAt,
 	}
 
-	// ✅ Handle nullable CreatedBy
-	if member.CreatedBy != nil && *member.CreatedBy != "" {
+	// Handle nullable InstitutionID
+	if member.InstitutionID != nil {
+		id := uuid.MustParse(*member.InstitutionID)
+		model.InstitutionID = &id
+	}
+
+	// Handle nullable InvitedBy
+	if member.InvitedBy != nil {
+		id := uuid.MustParse(*member.InvitedBy)
+		model.InvitedBy = &id
+	}
+
+	// Handle nullable CreatedBy
+	if member.CreatedBy != nil {
 		id := uuid.MustParse(*member.CreatedBy)
 		model.CreatedBy = &id
 	}
@@ -119,10 +144,35 @@ func ToTeamMemberModel(member *authdomain.TeamMember) *TeamMemberModel {
 }
 
 // ============================================================
+// TEAM TYPE MAPPERS (NEW)
+// ============================================================
+
+func ToTeamTypeModel(teamType *authdomain.TeamType) *TeamTypeModel {
+	if teamType == nil {
+		return nil
+	}
+
+	return &TeamTypeModel{
+		ID:          uuid.MustParse(teamType.ID),
+		Name:        teamType.Name,
+		DisplayName: teamType.DisplayName,
+		Slug:        teamType.Slug,
+		Description: teamType.Description,
+		IsActive:    teamType.IsActive,
+		CreatedAt:   teamType.CreatedAt,
+		UpdatedAt:   teamType.UpdatedAt,
+	}
+}
+
+// ============================================================
 // DATABASE MODEL → authdomain MAPPERS
 // ============================================================
 
-func ToauthdomainAccount(model *AccountModel) *authdomain.Account {
+// ============================================================
+// USER MAPPERS (formerly Account)
+// ============================================================
+
+func ToAuthDomainUser(model *UserModel) *authdomain.User {
 	if model == nil {
 		return nil
 	}
@@ -139,7 +189,7 @@ func ToauthdomainAccount(model *AccountModel) *authdomain.Account {
 		institutionID = &id
 	}
 
-	return &authdomain.Account{
+	return &authdomain.User{
 		ID:                 model.ID.String(),
 		Slug:               model.Slug,
 		Name:               model.Name,
@@ -159,25 +209,33 @@ func ToauthdomainAccount(model *AccountModel) *authdomain.Account {
 	}
 }
 
-func ToauthdomainRefreshToken(model *RefreshTokenModel) *authdomain.RefreshToken {
+// ============================================================
+// REFRESH TOKEN MAPPERS
+// ============================================================
+
+func ToAuthDomainRefreshToken(model *RefreshTokenModel) *authdomain.RefreshToken {
 	if model == nil {
 		return nil
 	}
 
 	return &authdomain.RefreshToken{
-		ID:         model.ID.String(),
-		AccountID:  model.AccountID.String(),
-		Token:      model.Token,
-		ExpiresAt:  model.ExpiresAt,
-		Revoked:    model.Revoked,
-		UserAgent:  model.UserAgent,
-		IPAddress:  model.IPAddress,
-		CreatedAt:  model.CreatedAt,
-		UpdatedAt:  model.UpdatedAt,
+		ID:        model.ID.String(),
+		UserID:    model.UserID.String(), // formerly AccountID
+		Token:     model.Token,
+		ExpiresAt: model.ExpiresAt,
+		Revoked:   model.Revoked,
+		UserAgent: model.UserAgent,
+		IPAddress: model.IPAddress,
+		CreatedAt: model.CreatedAt,
+		UpdatedAt: model.UpdatedAt,
 	}
 }
 
-func ToauthdomainInstitution(model *InstitutionModel) *authdomain.Institution {
+// ============================================================
+// INSTITUTION MAPPERS
+// ============================================================
+
+func ToAuthDomainInstitution(model *InstitutionModel) *authdomain.Institution {
 	if model == nil {
 		return nil
 	}
@@ -200,9 +258,25 @@ func ToauthdomainInstitution(model *InstitutionModel) *authdomain.Institution {
 	}
 }
 
-func ToauthdomainTeamMember(model *TeamMemberModel) *authdomain.TeamMember {
+// ============================================================
+// TEAM MEMBER MAPPERS (UPDATED)
+// ============================================================
+
+func ToAuthDomainTeamMember(model *TeamMemberModel) *authdomain.TeamMember {
 	if model == nil {
 		return nil
+	}
+
+	var institutionID *string
+	if model.InstitutionID != nil {
+		id := model.InstitutionID.String()
+		institutionID = &id
+	}
+
+	var invitedBy *string
+	if model.InvitedBy != nil {
+		id := model.InvitedBy.String()
+		invitedBy = &id
 	}
 
 	var createdBy *string
@@ -212,17 +286,35 @@ func ToauthdomainTeamMember(model *TeamMemberModel) *authdomain.TeamMember {
 	}
 
 	return &authdomain.TeamMember{
+		ID:            model.ID.String(),
+		MemberID:      model.MemberID.String(),
+		InstitutionID: institutionID,
+		TeamTypeID:    model.TeamTypeID.String(),
+		InvitedBy:     invitedBy,
+		IsActive:      model.IsActive,
+		JoinedAt:      model.JoinedAt,
+		CreatedBy:     createdBy,
+		CreatedAt:     model.CreatedAt,
+		UpdatedAt:     model.UpdatedAt,
+	}
+}
+
+// ============================================================
+// TEAM TYPE MAPPERS (NEW)
+// ============================================================
+
+func ToAuthDomainTeamType(model *TeamTypeModel) *authdomain.TeamType {
+	if model == nil {
+		return nil
+	}
+
+	return &authdomain.TeamType{
 		ID:          model.ID.String(),
-		Slug:        model.Slug,
 		Name:        model.Name,
 		DisplayName: model.DisplayName,
-		AccountID:   model.AccountID.String(),
-		MemberID:    model.MemberID.String(),
-		Role:        string(model.Role),
-		JobTitle:    model.JobTitle,
+		Slug:        model.Slug,
+		Description: model.Description,
 		IsActive:    model.IsActive,
-		CreatedBy:   createdBy,
-		JoinedAt:    model.JoinedAt,
 		CreatedAt:   model.CreatedAt,
 		UpdatedAt:   model.UpdatedAt,
 	}
@@ -232,7 +324,7 @@ func ToauthdomainTeamMember(model *TeamMemberModel) *authdomain.TeamMember {
 // VALUE OBJECT MAPPERS
 // ============================================================
 
-func ToauthdomainAccountType(model *AccountTypeModel) *authdomain.AccountType {
+func ToAuthDomainAccountType(model *AccountTypeModel) *authdomain.AccountType {
 	if model == nil {
 		return nil
 	}
@@ -249,7 +341,7 @@ func ToauthdomainAccountType(model *AccountTypeModel) *authdomain.AccountType {
 	}
 }
 
-func ToauthdomainProfessionalType(model *ProfessionalTypeModel) *authdomain.ProfessionalType {
+func ToAuthDomainProfessionalType(model *ProfessionalTypeModel) *authdomain.ProfessionalType {
 	if model == nil {
 		return nil
 	}
@@ -260,12 +352,11 @@ func ToauthdomainProfessionalType(model *ProfessionalTypeModel) *authdomain.Prof
 		Name:        model.Name,
 		DisplayName: model.DisplayName,
 		Description: model.Description,
-		CanHost:     model.CanHost,
 		IsActive:    model.IsActive,
 	}
 }
 
-func ToauthdomainInstitutionType(model *InstitutionTypeModel) *authdomain.InstitutionType {
+func ToAuthDomainInstitutionType(model *InstitutionTypeModel) *authdomain.InstitutionType {
 	if model == nil {
 		return nil
 	}
@@ -278,4 +369,56 @@ func ToauthdomainInstitutionType(model *InstitutionTypeModel) *authdomain.Instit
 		Description: model.Description,
 		IsActive:    model.IsActive,
 	}
+}
+
+// ============================================================
+// BULK MAPPERS
+// ============================================================
+
+func ToAuthDomainUsers(models []UserModel) []*authdomain.User {
+	if len(models) == 0 {
+		return nil
+	}
+
+	users := make([]*authdomain.User, len(models))
+	for i, model := range models {
+		users[i] = ToAuthDomainUser(&model)
+	}
+	return users
+}
+
+func ToAuthDomainTeamMembers(models []TeamMemberModel) []*authdomain.TeamMember {
+	if len(models) == 0 {
+		return nil
+	}
+
+	members := make([]*authdomain.TeamMember, len(models))
+	for i, model := range models {
+		members[i] = ToAuthDomainTeamMember(&model)
+	}
+	return members
+}
+
+func ToAuthDomainInstitutions(models []InstitutionModel) []*authdomain.Institution {
+	if len(models) == 0 {
+		return nil
+	}
+
+	institutions := make([]*authdomain.Institution, len(models))
+	for i, model := range models {
+		institutions[i] = ToAuthDomainInstitution(&model)
+	}
+	return institutions
+}
+
+func ToAuthDomainTeamTypes(models []TeamTypeModel) []*authdomain.TeamType {
+	if len(models) == 0 {
+		return nil
+	}
+
+	teamTypes := make([]*authdomain.TeamType, len(models))
+	for i, model := range models {
+		teamTypes[i] = ToAuthDomainTeamType(&model)
+	}
+	return teamTypes
 }

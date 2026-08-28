@@ -178,7 +178,15 @@ func (s *service) GetResetData(ctx context.Context, email string) (map[string]st
 	return result, nil
 }
 
+// DeleteResetData deletes password reset data
+func (s *service) DeleteResetData(ctx context.Context, email string) error {
+	key := "reset:" + email
+	return s.redisClient.Delete(ctx, key)
+}
 
+// ============================================================
+// RESEND OTP
+// ============================================================
 
 // ResendOTP resends an OTP for any purpose
 // Purpose can be: "registration", "two_factor", "password_reset", "email_change", "phone_change"
@@ -193,11 +201,11 @@ func (s *service) ResendOTP(ctx context.Context, email, name, purpose string) er
 
 	// 2. For certain purposes, try to get the user's name from the repository
 	if name == "User" && (purpose == "two_factor" || purpose == "password_reset") {
-		account, err := s.repo.GetAccountByEmail(email)
-		if err == nil && account != nil {
-			name = account.Name
+		user, err := s.repo.GetUserByEmail(email)
+		if err == nil && user != nil {
+			name = user.Name
 		}
-		// Don't return error if account not found - just use default name
+		// Don't return error if user not found - just use default name
 		// This prevents email enumeration attacks
 	}
 
@@ -222,10 +230,4 @@ func (s *service) ResendOTP(ctx context.Context, email, name, purpose string) er
 	}
 
 	return nil
-}
-
-// DeleteResetData deletes password reset data
-func (s *service) DeleteResetData(ctx context.Context, email string) error {
-	key := "reset:" + email
-	return s.redisClient.Delete(ctx, key)
 }

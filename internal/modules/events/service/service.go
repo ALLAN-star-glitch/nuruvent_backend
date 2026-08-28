@@ -17,10 +17,7 @@ type Service interface {
 	// CREATE
 	// ============================================================
 
-	// Create draft event (with optional image data)
 	CreateDraft(ctx context.Context, cmd CreateDraftCommand) (*domain.Event, error)
-	
-	// Create published event (with optional image data)
 	CreateEvent(ctx context.Context, cmd CreateEventCommand) (*domain.Event, error)
 
 	// ============================================================
@@ -38,7 +35,8 @@ type Service interface {
 	GetEventBySlug(ctx context.Context, slug string) (*domain.Event, error)
 	ListEvents(ctx context.Context, filters ListEventsFilters) ([]*domain.Event, int64, error)
 	GetEventsByType(ctx context.Context, eventTypeSlug string, page, pageSize int) ([]*domain.Event, int64, error)
-	GetEventsByAccount(ctx context.Context, accountID string, page, pageSize int) ([]*domain.Event, int64, error)
+	GetEventsByInstitution(ctx context.Context, institutionID string, page, pageSize int) ([]*domain.Event, int64, error)
+	GetEventsByUser(ctx context.Context, userID string, page, pageSize int) ([]*domain.Event, int64, error)
 	GetUpcomingEvents(ctx context.Context, limit int) ([]*domain.Event, error)
 	GetPastEvents(ctx context.Context, limit int) ([]*domain.Event, error)
 	SearchEvents(ctx context.Context, query string, filters SearchFilters) ([]*domain.Event, int64, error)
@@ -47,17 +45,11 @@ type Service interface {
 	// READ - With Creator Info
 	// ============================================================
 
-	// GetUpcomingEventsWithCreator returns upcoming events with creator info populated
 	GetUpcomingEventsWithCreator(ctx context.Context, limit int) ([]*domain.Event, error)
-
-	// GetEventBySlugWithCreator returns an event by slug with creator info populated
 	GetEventBySlugWithCreator(ctx context.Context, slug string) (*domain.Event, error)
-
-	// GetEventByIDWithCreator returns an event by ID with creator info populated
 	GetEventByIDWithCreator(ctx context.Context, id string) (*domain.Event, error)
-
-	// GetEventsByAccountWithCreator returns events for an account with creator info populated
-	GetEventsByAccountWithCreator(ctx context.Context, accountID string, page, pageSize int) ([]*domain.Event, int64, error)
+	GetEventsByInstitutionWithCreator(ctx context.Context, institutionID string, page, pageSize int) ([]*domain.Event, int64, error)
+	GetEventsByUserWithCreator(ctx context.Context, userID string, page, pageSize int) ([]*domain.Event, int64, error)
 
 	// ============================================================
 	// UPDATE
@@ -80,8 +72,8 @@ type Service interface {
 	DeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error)
 	PermanentlyDeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error)
 	RestoreEvents(ctx context.Context, ids []string, restoredBy string) (*BulkRestoreResult, error)
-	DeleteEventsByAccount(ctx context.Context, accountID string, deletedBy string) (*BulkDeleteResult, error)
-	PermanentlyDeleteEventsByAccount(ctx context.Context, accountID string, deletedBy string) (*BulkDeleteResult, error)
+	DeleteEventsByInstitution(ctx context.Context, institutionID string, deletedBy string) (*BulkDeleteResult, error)
+	PermanentlyDeleteEventsByInstitution(ctx context.Context, institutionID string, deletedBy string) (*BulkDeleteResult, error)
 
 	// ============================================================
 	// STATUS - Single
@@ -129,16 +121,17 @@ type Service interface {
 }
 
 // ============================================================
-// COMMANDS - CREATE DRAFT (Pure Domain Types - NO JSON TAGS)
+// COMMANDS - CREATE DRAFT
 // ============================================================
 
 type CreateDraftCommand struct {
 	// Required
-	AccountID string
-	CreatedBy string
+	InstitutionID *string // ✅ Can be NULL for personal events
+	CreatedBy     string  // ✅ The user (human) creating the event
+	TeamType      string  // ✅ "personal" or "institution"
 
 	// User input - what they type in the form
-	Name string // ✅ This is the ONLY field from user
+	Name string
 
 	// Optional
 	Description      string
@@ -162,17 +155,18 @@ type CreateDraftCommand struct {
 }
 
 // ============================================================
-// COMMANDS - CREATE PUBLISHED EVENT (Pure Domain Types - NO JSON TAGS)
+// COMMANDS - CREATE PUBLISHED EVENT
 // ============================================================
 
 type CreateEventCommand struct {
 	// Required
-	Name        string // ✅ User input - what they type
-	AccountID   string
-	CreatedBy   string
-	Date        string
-	Time        string
-	Duration    int
+	Name          string  // User input - what they type
+	InstitutionID *string // ✅ Can be NULL for personal events
+	CreatedBy     string  // ✅ The user (human) creating the event
+	TeamType      string  // ✅ "personal" or "institution"
+	Date          string
+	Time          string
+	Duration      int
 
 	// Optional
 	Description      string
@@ -193,16 +187,16 @@ type CreateEventCommand struct {
 }
 
 // ============================================================
-// COMMANDS - UPDATE EVENT (Pure Domain Types - NO JSON TAGS)
+// COMMANDS - UPDATE EVENT
 // ============================================================
 
 type UpdateEventCommand struct {
-	ID       string
-	UpdatedBy string
+	ID        string
+	UpdatedBy string // ✅ The user (human) updating the event
 
-	// ✅ Use pointers for optional fields
-	Name             *string // ✅ User input (optional)
-	DisplayName      *string 
+	// Use pointers for optional fields
+	Name             *string
+	DisplayName      *string
 	Description      *string
 	EventTypeID      *string
 	EventStatusID    *string
@@ -221,7 +215,7 @@ type UpdateEventCommand struct {
 }
 
 // ============================================================
-// COMMANDS - DUPLICATE (Pure Domain Types - NO JSON TAGS)
+// COMMANDS - DUPLICATE
 // ============================================================
 
 type DuplicateEventCommand struct {
@@ -237,7 +231,7 @@ type BulkDuplicateCommand struct {
 }
 
 // ============================================================
-// COMMANDS - MEDIA (Pure Domain Types - NO JSON TAGS)
+// COMMANDS - MEDIA
 // ============================================================
 
 type UploadEventImageCommand struct {
@@ -257,11 +251,12 @@ type UploadCertificateCommand struct {
 }
 
 // ============================================================
-// FILTERS (Pure Domain Types - NO JSON TAGS)
+// FILTERS
 // ============================================================
 
 type ListEventsFilters struct {
-	AccountID      string
+	InstitutionID  string // Filter by institution
+	UserID         string // ✅ NEW: Filter by user (creator)
 	EventTypeID    string
 	EventStatusID  string
 	IncludeDeleted bool
@@ -271,7 +266,8 @@ type ListEventsFilters struct {
 }
 
 type SearchFilters struct {
-	AccountID      string
+	InstitutionID  string // Filter by institution
+	UserID         string // ✅ NEW: Filter by user (creator)
 	EventTypeID    string
 	IncludeDeleted bool
 	OnlyDeleted    bool
@@ -280,7 +276,7 @@ type SearchFilters struct {
 }
 
 // ============================================================
-// BULK RESULT TYPES (NO JSON TAGS - These are for internal use)
+// BULK RESULT TYPES
 // ============================================================
 
 type BulkDeleteResult struct {

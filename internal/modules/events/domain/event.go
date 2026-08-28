@@ -4,28 +4,17 @@ package domain
 
 import (
 	"errors"
-	"time"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 )
 
-// ✅ Default UUID for drafts when no event type is provided
+// Default UUID for drafts when no event type is provided
 const DefaultEventTypeID = "00000000-0000-0000-0000-000000000000"
 
-// ❌ REMOVE these hardcoded UUID constants - they're environment-specific
-// const (
-// 	PublishedStatusID = "68717108-031d-4ff5-89de-9475b148c25b"
-// 	DraftStatusID     = "f47ac10b-58cc-4372-a567-0e02b2c3d479"
-// 	CancelledStatusID = "0c8ad19d-0473-4dc8-ae7d-f9e33242e8bc"
-// 	CompletedStatusID = "791595dd-91ad-40cb-a2c1-08cb06a84eb0"
-// )
-
-// ✅ Instead, use the domain status value objects from event_status_value.go
-// These are already defined in event_status_value.go:
-// EventStatusDraft, EventStatusPublished, EventStatusCancelled, EventStatusCompleted
-
+// Event entity
 type Event struct {
 	// Core fields
 	ID          string
@@ -37,8 +26,8 @@ type Event struct {
 	// Relations
 	EventTypeID   string
 	EventStatusID string
-	AccountID     string
-	CreatedBy     string
+	InstitutionID string // ✅ NEW: Institution this event belongs to
+	CreatedBy     string // ✅ User ID who created this event
 	Creator       *AccountInfo
 
 	// Media
@@ -72,16 +61,20 @@ type Event struct {
 	// Feature flags
 	IsFeatured bool
 	IsPrivate  bool
+
+	// ✅ DEPRECATED - Use InstitutionID instead
+	// AccountID string // Keep for backward compatibility during migration
 }
 
 // ============================================================
-// ✅ FACTORY METHODS - Pure domain, no sanitization
+// FACTORY METHODS
 // ============================================================
 
 // NewEvent creates a new event with all required fields
-// All fields are expected to be already sanitized by the service layer
-func NewEvent(name, displayName, slug, description, eventTypeID, accountID, createdBy string) (*Event, error) {
-	// Domain only checks: are the fields present?
+func NewEvent(
+	name, displayName, slug, description,
+	eventTypeID, institutionID, createdBy string,
+) (*Event, error) {
 	if name == "" {
 		return nil, errors.New("event name is required")
 	}
@@ -91,8 +84,8 @@ func NewEvent(name, displayName, slug, description, eventTypeID, accountID, crea
 	if slug == "" {
 		return nil, errors.New("event slug is required")
 	}
-	if accountID == "" {
-		return nil, errors.New("account ID is required")
+	if institutionID == "" {
+		return nil, errors.New("institution ID is required")
 	}
 	if createdBy == "" {
 		return nil, errors.New("created by is required")
@@ -108,6 +101,8 @@ func NewEvent(name, displayName, slug, description, eventTypeID, accountID, crea
 		Description:      description,
 		EventTypeID:      eventTypeID,
 		EventStatusID:    "",
+		InstitutionID:    institutionID,
+		CreatedBy:        createdBy,
 		ImageURL:         "",
 		ThumbnailURL:     "",
 		Date:             time.Time{},
@@ -121,8 +116,6 @@ func NewEvent(name, displayName, slug, description, eventTypeID, accountID, crea
 		MeetLink:         "",
 		MaxAttendees:     0,
 		CurrentAttendees: 0,
-		AccountID:        accountID,
-		CreatedBy:        createdBy,
 		IsActive:         true,
 		CreatedAt:        now,
 		UpdatedAt:        now,
@@ -136,7 +129,7 @@ func NewEvent(name, displayName, slug, description, eventTypeID, accountID, crea
 }
 
 // ============================================================
-// ✅ VALIDATION METHODS - Pure business rules
+// VALIDATION METHODS
 // ============================================================
 
 // ValidateForPublish - Validate event before publishing
@@ -157,6 +150,12 @@ func (e *Event) ValidateForPublish() error {
 	}
 	if e.EventTypeID == "" || e.EventTypeID == DefaultEventTypeID {
 		validationErrors = append(validationErrors, ErrEventTypeRequired.Error())
+	}
+	if e.InstitutionID == "" {
+		validationErrors = append(validationErrors, "institution ID is required")
+	}
+	if e.CreatedBy == "" {
+		validationErrors = append(validationErrors, "created by is required")
 	}
 	if e.Date.IsZero() {
 		validationErrors = append(validationErrors, ErrEventDateRequired.Error())
@@ -214,6 +213,12 @@ func (e *Event) ValidateForUpdate() error {
 	}
 	if e.EventTypeID == "" || e.EventTypeID == DefaultEventTypeID {
 		return errors.New("valid event type is required")
+	}
+	if e.InstitutionID == "" {
+		return errors.New("institution ID is required")
+	}
+	if e.CreatedBy == "" {
+		return errors.New("created by is required")
 	}
 	if e.Date.IsZero() {
 		return errors.New("event date is required")
@@ -286,8 +291,6 @@ func (e *Event) Publish() error {
 	if err := e.ValidateForPublish(); err != nil {
 		return err
 	}
-	// ✅ This will be set by the service layer using domain.EventStatusPublished
-	// The service will look up the actual ID from the database
 	e.UpdatedAt = time.Now()
 	return nil
 }
@@ -364,7 +367,7 @@ func (e *Event) Restore(restoredBy string) error {
 }
 
 // ============================================================
-// BOOLEAN CHECKS - Pure business logic
+// BOOLEAN CHECKS
 // ============================================================
 
 func (e *Event) IsDeleted() bool {
@@ -372,24 +375,20 @@ func (e *Event) IsDeleted() bool {
 }
 
 func (e *Event) IsDraft() bool {
-	// ✅ This will check against the status slug from the domain
-	// The service layer will handle the actual comparison with the status object
-	// For now, we keep the logic but it will be used by the service
 	return e.EventStatusID == ""
 }
 
 func (e *Event) IsPublished() bool {
-	// ✅ This will check against the status slug from the domain
-	// The service layer will handle the actual comparison with the status object
-	return false // Will be overridden by service layer logic
+	// Will be handled by service layer with status lookup
+	return false
 }
 
 func (e *Event) IsCancelled() bool {
-	return e.EventStatusID == "" // Will be handled by service
+	return false // Will be handled by service
 }
 
 func (e *Event) IsCompleted() bool {
-	return e.EventStatusID == "" // Will be handled by service
+	return false // Will be handled by service
 }
 
 func (e *Event) IsFull() bool {
@@ -431,7 +430,7 @@ func (e *Event) IsVisibleToUser(userID string) bool {
 	if !e.IsPrivate {
 		return true
 	}
-	return e.CreatedBy == userID || e.AccountID == userID
+	return e.CreatedBy == userID || e.InstitutionID == userID
 }
 
 // ============================================================

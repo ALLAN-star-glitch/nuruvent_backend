@@ -149,6 +149,7 @@ type SendInstitutionWelcomeRequest struct {
 	To              string
 	AdminName       string
 	InstitutionName string
+	InstitutionEmail string
 }
 
 // ✅ NEW: SendInstitutionKYCWelcomeRequest - Welcome email with KYC requirements

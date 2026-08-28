@@ -1,6 +1,6 @@
-// internal/modules/accounts/domain/professional_type.go
 
-package domain
+
+package authdomain
 
 import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"

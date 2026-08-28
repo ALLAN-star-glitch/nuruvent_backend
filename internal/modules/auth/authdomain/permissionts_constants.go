@@ -2,19 +2,20 @@
 
 package authdomain
 
+import "strings"
+
 // Role represents a user role in the system
 type Role string
 
 // Context keys for storing values in Fiber context
-// Note: These are domain concepts - the actual context keys are used in delivery layer
 const (
 	ContextKeyUserID        = "user_id"
 	ContextKeyUserRole      = "user_role"
 	ContextKeyUserEmail     = "user_email"
 	ContextKeyUserName      = "user_name"
 	ContextKeyDomain        = "domain"
-	ContextKeyAccountID     = "account_id"
 	ContextKeyInstitutionID = "institution_id"
+	ContextKeyTeamTypeID    = "team_type_id"
 	ContextKeyUserRoles     = "user_roles"
 )
 
@@ -23,8 +24,8 @@ const (
 	RoleSuperAdmin Role = "super_admin" // Full platform access
 	RoleAdmin      Role = "admin"       // Platform management
 
-	// Account team roles (assigned within an account domain)
-	RoleAccountAdmin   Role = "account_admin" // Full account management
+	// Team roles (assigned within a team domain)
+	RoleAccountAdmin   Role = "account_admin" // Full team management (admin)
 	RoleEventManager   Role = "event_manager" // Manage events, attendees, certificates
 	RoleTeamMember     Role = "team_member"   // View-only access
 
@@ -36,19 +37,24 @@ const (
 type Resource string
 
 const (
+	// Platform resources
+	ResourcePlatform    Resource = "platform"
+	ResourceUser        Resource = "user"
+	ResourceInstitution Resource = "institution"
+	ResourceTeam        Resource = "team"
+	ResourceTeamType    Resource = "team_type"
+	
+	// Team-level resources (within a team domain)
 	ResourceEvent        Resource = "event"
 	ResourceCertificate  Resource = "certificate"
 	ResourceAttendee     Resource = "attendee"
 	ResourcePayment      Resource = "payment"
 	ResourcePayout       Resource = "payout"
-	ResourceInstitution  Resource = "institution"
 	ResourceMember       Resource = "member"
-	ResourceAccount      Resource = "account"
 	ResourceProfile      Resource = "profile"
 	ResourceDashboard    Resource = "dashboard"
 	ResourceAnalytics    Resource = "analytics"
 	ResourceNotification Resource = "notification"
-	ResourcePlatform     Resource = "platform"
 	ResourceMedia        Resource = "media"
 )
 
@@ -74,21 +80,24 @@ const (
 	DomainPlatform = "platform"
 )
 
+// Team domain prefixes
+const (
+	TeamDomainPrefixPersonal   = "personal:team:"
+	TeamDomainPrefixInstitution = "institution:team:"
+)
+
 // ============================================================
 // STRING METHODS
 // ============================================================
 
-// String returns the string representation of a Role
 func (r Role) String() string {
 	return string(r)
 }
 
-// String returns the string representation of a Resource
 func (r Resource) String() string {
 	return string(r)
 }
 
-// String returns the string representation of an Action
 func (a Action) String() string {
 	return string(a)
 }
@@ -97,7 +106,6 @@ func (a Action) String() string {
 // VALIDATION HELPERS
 // ============================================================
 
-// IsValidRole checks if a role is valid
 func IsValidRole(role string) bool {
 	validRoles := map[string]bool{
 		RoleSuperAdmin.String():   true,
@@ -110,7 +118,6 @@ func IsValidRole(role string) bool {
 	return validRoles[role]
 }
 
-// IsTeamRole checks if a role is a team-level role (within an account domain)
 func IsTeamRole(role string) bool {
 	teamRoles := map[string]bool{
 		RoleAccountAdmin.String(): true,
@@ -120,7 +127,6 @@ func IsTeamRole(role string) bool {
 	return teamRoles[role]
 }
 
-// IsPlatformRole checks if a role is a platform-level role
 func IsPlatformRole(role string) bool {
 	platformRoles := map[string]bool{
 		RoleSuperAdmin.String(): true,
@@ -130,21 +136,45 @@ func IsPlatformRole(role string) bool {
 	return platformRoles[role]
 }
 
+func IsValidTeamRole(role string) bool {
+	return IsTeamRole(role)
+}
+
 // ============================================================
 // DOMAIN HELPERS
 // ============================================================
 
-// AccountDomain returns the account domain string
-func AccountDomain(accountID string) string {
-	if accountID == "" {
+// PersonalTeamDomain returns the personal team domain for a user
+// Format: "personal:team:{user_id}"
+func PersonalTeamDomain(userID string) string {
+	if userID == "" {
 		return ""
 	}
-	return "account:" + accountID
+	return TeamDomainPrefixPersonal + userID
 }
 
-// IsAccountDomain checks if a domain is an account domain
-func IsAccountDomain(domain string) bool {
-	return len(domain) > 8 && domain[:8] == "account:"
+// InstitutionTeamDomain returns the institution team domain
+// Format: "institution:team:{institution_id}"
+func InstitutionTeamDomain(institutionID string) string {
+	if institutionID == "" {
+		return ""
+	}
+	return TeamDomainPrefixInstitution + institutionID
+}
+
+// IsPersonalTeamDomain checks if a domain is a personal team domain
+func IsPersonalTeamDomain(domain string) bool {
+	return strings.HasPrefix(domain, TeamDomainPrefixPersonal)
+}
+
+// IsInstitutionTeamDomain checks if a domain is an institution team domain
+func IsInstitutionTeamDomain(domain string) bool {
+	return strings.HasPrefix(domain, TeamDomainPrefixInstitution)
+}
+
+// IsTeamDomain checks if a domain is a team domain (personal or institution)
+func IsTeamDomain(domain string) bool {
+	return IsPersonalTeamDomain(domain) || IsInstitutionTeamDomain(domain)
 }
 
 // IsPlatformDomain checks if a domain is the platform domain
@@ -152,10 +182,25 @@ func IsPlatformDomain(domain string) bool {
 	return domain == DomainPlatform
 }
 
-// ExtractAccountID extracts account ID from domain
-func ExtractAccountID(domain string) string {
-	if IsAccountDomain(domain) {
-		return domain[8:]
+// ExtractTeamID extracts team ID from a team domain
+func ExtractTeamID(domain string) string {
+	if IsPersonalTeamDomain(domain) {
+		return strings.TrimPrefix(domain, TeamDomainPrefixPersonal)
+	}
+	if IsInstitutionTeamDomain(domain) {
+		return strings.TrimPrefix(domain, TeamDomainPrefixInstitution)
+	}
+	return ""
+}
+
+// ExtractTeamType extracts team type from a team domain
+// Returns: "personal", "institution", or empty string
+func ExtractTeamType(domain string) string {
+	if IsPersonalTeamDomain(domain) {
+		return "personal"
+	}
+	if IsInstitutionTeamDomain(domain) {
+		return "institution"
 	}
 	return ""
 }
@@ -164,7 +209,6 @@ func ExtractAccountID(domain string) string {
 // GET ALL HELPERS
 // ============================================================
 
-// GetAllRoles returns all defined roles
 func GetAllRoles() []Role {
 	return []Role{
 		RoleSuperAdmin,
@@ -176,7 +220,6 @@ func GetAllRoles() []Role {
 	}
 }
 
-// GetAllTeamRoles returns all team-level roles
 func GetAllTeamRoles() []Role {
 	return []Role{
 		RoleAccountAdmin,
@@ -185,7 +228,6 @@ func GetAllTeamRoles() []Role {
 	}
 }
 
-// GetAllPlatformRoles returns all platform-level roles
 func GetAllPlatformRoles() []Role {
 	return []Role{
 		RoleSuperAdmin,
@@ -194,27 +236,53 @@ func GetAllPlatformRoles() []Role {
 	}
 }
 
-// GetAllResources returns all defined resources
 func GetAllResources() []Resource {
+	return []Resource{
+		ResourcePlatform,
+		ResourceUser,
+		ResourceInstitution,
+		ResourceTeam,
+		ResourceTeamType,
+		ResourceEvent,
+		ResourceCertificate,
+		ResourceAttendee,
+		ResourcePayment,
+		ResourcePayout,
+		ResourceMember,
+		ResourceProfile,
+		ResourceDashboard,
+		ResourceAnalytics,
+		ResourceNotification,
+		ResourceMedia,
+	}
+}
+
+func GetAllTeamResources() []Resource {
 	return []Resource{
 		ResourceEvent,
 		ResourceCertificate,
 		ResourceAttendee,
 		ResourcePayment,
 		ResourcePayout,
-		ResourceInstitution,
 		ResourceMember,
-		ResourceAccount,
 		ResourceProfile,
 		ResourceDashboard,
 		ResourceAnalytics,
 		ResourceNotification,
-		ResourcePlatform,
 		ResourceMedia,
 	}
 }
 
-// GetAllActions returns all defined actions
+func GetAllPlatformResources() []Resource {
+	return []Resource{
+		ResourcePlatform,
+		ResourceUser,
+		ResourceInstitution,
+		ResourceTeam,
+		ResourceTeamType,
+	}
+}
+
 func GetAllActions() []Action {
 	return []Action{
 		ActionCreate,
@@ -229,4 +297,118 @@ func GetAllActions() []Action {
 		ActionDownload,
 		ActionInvite,
 	}
+}
+
+// ============================================================
+// PERMISSION MATRIX HELPERS
+// ============================================================
+
+func DefaultPlatformPermissions() map[Role][]string {
+	return map[Role][]string{
+		RoleSuperAdmin: {
+			"*:*",
+		},
+		RoleAdmin: {
+			"user:read",
+			"user:update",
+			"user:delete",
+			"institution:read",
+			"institution:update",
+			"institution:delete",
+			"event:read",
+			"event:update",
+			"event:delete",
+			"team:read",
+			"team:update",
+			"team:delete",
+			"analytics:read",
+			"payment:read",
+			"certificate:read",
+			"member:read",
+			"member:delete",
+		},
+	}
+}
+
+func DefaultTeamPermissions() map[Role][]string {
+	return map[Role][]string{
+		RoleAccountAdmin: {
+			"event:create",
+			"event:read",
+			"event:update",
+			"event:delete",
+			"event:manage",
+			"certificate:create",
+			"certificate:read",
+			"certificate:update",
+			"certificate:issue",
+			"certificate:delete",
+			"attendee:read",
+			"attendee:update",
+			"attendee:export",
+			"payment:read",
+			"payment:create",
+			"payment:refund",
+			"member:create",
+			"member:read",
+			"member:update",
+			"member:delete",
+			"member:invite",
+			"institution:read",
+			"institution:update",
+			"team:create",
+			"team:read",
+			"team:update",
+			"team:delete",
+			"dashboard:read",
+			"profile:read",
+			"profile:update",
+		},
+		RoleEventManager: {
+			"event:create",
+			"event:read",
+			"event:update",
+			"event:delete",
+			"attendee:read",
+			"attendee:update",
+			"attendee:export",
+			"certificate:create",
+			"certificate:read",
+			"certificate:issue",
+			"payment:read",
+			"dashboard:read",
+			"team:read",
+		},
+		RoleTeamMember: {
+			"event:read",
+			"attendee:read",
+			"certificate:read",
+			"dashboard:read",
+			"team:read",
+		},
+	}
+}
+
+// ============================================================
+// ROLE PRIORITY HELPERS
+// ============================================================
+
+func RolePriority(role Role) int {
+	priority := map[Role]int{
+		RoleSuperAdmin:   100,
+		RoleAdmin:        90,
+		RoleAccountAdmin: 80,
+		RoleEventManager: 70,
+		RoleTeamMember:   60,
+		RoleGuest:        10,
+	}
+	return priority[role]
+}
+
+func HasHigherOrEqualPriority(role1, role2 Role) bool {
+	return RolePriority(role1) >= RolePriority(role2)
+}
+
+func IsRoleAtLeast(role Role, minRole Role) bool {
+	return RolePriority(role) >= RolePriority(minRole)
 }

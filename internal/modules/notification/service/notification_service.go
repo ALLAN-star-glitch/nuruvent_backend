@@ -278,6 +278,7 @@ func (s *notificationService) SendInstitutionWelcome(ctx context.Context, req no
 			To:              req.To,
 			AdminName:       req.AdminName,
 			InstitutionName: req.InstitutionName,
+			InstitutionEmail: req.InstitutionEmail,
 		}
 		if err := s.taskEnqueuer.EnqueueWelcomeInstitution(ctx, task); err != nil {
 			log.Printf("[NotificationService] Failed to enqueue institution welcome task: %v, falling back to sync", err)

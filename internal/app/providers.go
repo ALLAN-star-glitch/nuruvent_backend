@@ -16,10 +16,6 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/recover"
 	"gorm.io/gorm"
 
-	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/acchandler"
-	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/domain"
-	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
-
 	authHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
@@ -60,15 +56,15 @@ func provideFiberAppWithMiddleware() *fiber.App {
 			"http://localhost:3002",
 			"http://localhost:8080",
 
-			// ✅ Production - Your custom domain
+			// Production - Your custom domain
 			"https://nuruvent.com",
 			"https://www.nuruvent.com",
 
-			// ✅ Vercel preview deployments
+			// Vercel preview deployments
 			"https://nuruvent.vercel.app",
 			"https://*.vercel.app",
 
-			// ✅ If you have staging
+			// Staging
 			"https://staging.nuruvent.com",
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
@@ -88,11 +84,9 @@ func provideAppDependencies(
 	enforcer *authorization.Enforcer,
 	authService authService.Service,
 	authTokenService authDomain.TokenService,
-	accountService accountService.Service,
 	eventsService eventsService.Service,
 	mediaService mediaService.Service,
 	authHandler *authHandler.AuthHandler,
-	accountHandler *accountHandler.AccountHandler,
 	eventsHandler *eventsHandler.EventHandler,
 ) *AppDependencies {
 	return &AppDependencies{
@@ -104,11 +98,9 @@ func provideAppDependencies(
 		Enforcer:         enforcer,
 		AuthService:      authService,
 		AuthTokenService: authTokenService,
-		AccountService:   accountService,
 		EventsService:    eventsService,
 		MediaService:     mediaService,
 		AuthHandler:      authHandler,
-		AccountHandler:   accountHandler,
 		EventsHandler:    eventsHandler,
 	}
 }
@@ -142,76 +134,44 @@ func (a *QueueAdapter) EnqueueDelayed(ctx context.Context, task string, payload 
 	return a.queue.EnqueueDelayed(ctx, task, data, delaySeconds)
 }
 
-// AccountPermissionAdapter adapts authDomain.PermissionService to account domain.PermissionService
-type AccountPermissionAdapter struct {
-	permSvc authDomain.PermissionService
-}
 
-func NewAccountPermissionAdapter(permSvc authDomain.PermissionService) accountDomain.PermissionService {
-	return &AccountPermissionAdapter{permSvc: permSvc}
-}
+// ============================================================
+// EVENTS PERMISSION ADAPTER - Updated for new team-based auth
+// ============================================================
 
-func (a *AccountPermissionAdapter) AssignAccountAdminRole(ctx context.Context, accountID, userID string) error {
-	return a.permSvc.AssignAccountAdminRole(ctx, accountID, userID)
-}
-
-func (a *AccountPermissionAdapter) AssignEventManagerRole(ctx context.Context, accountID, userID string) error {
-	return a.permSvc.AssignEventManagerRole(ctx, accountID, userID)
-}
-
-func (a *AccountPermissionAdapter) AssignTeamMemberRole(ctx context.Context, accountID, userID string) error {
-	return a.permSvc.AssignTeamMemberRole(ctx, accountID, userID)
-}
-
-func (a *AccountPermissionAdapter) RemoveRole(ctx context.Context, accountID, userID, role string) error {
-	return a.permSvc.RemoveRole(ctx, accountID, userID, role)
-}
-
-func (a *AccountPermissionAdapter) HasPermission(ctx context.Context, userID, domain, resource, action string) bool {
-	return a.permSvc.HasPermission(ctx, userID, domain, resource, action)
-}
-
-func (a *AccountPermissionAdapter) IsAccountAdmin(ctx context.Context, accountID, userID string) bool {
-	return a.permSvc.IsAccountAdmin(ctx, accountID, userID)
-}
-
-func (a *AccountPermissionAdapter) IsEventManager(ctx context.Context, accountID, userID string) bool {
-	return a.permSvc.IsEventManager(ctx, accountID, userID)
-}
-
-func (a *AccountPermissionAdapter) IsTeamMember(ctx context.Context, accountID, userID string) bool {
-	return a.permSvc.IsTeamMember(ctx, accountID, userID)
-}
-
-// EventsPermissionAdapter adapts authDomain.PermissionService to events domain.PermissionChecker
 type EventsPermissionAdapter struct {
-	permSvc authDomain.PermissionService
+    permSvc authDomain.PermissionService
 }
 
 func NewEventsPermissionAdapter(permSvc authDomain.PermissionService) eventsDomain.PermissionChecker {
-	return &EventsPermissionAdapter{permSvc: permSvc}
+    return &EventsPermissionAdapter{permSvc: permSvc}
 }
 
-func (a *EventsPermissionAdapter) CanManageEvent(ctx context.Context, userID, eventAccountID string) bool {
-	return a.permSvc.CanManageEvent(ctx, eventAccountID, userID)
+func (a *EventsPermissionAdapter) CanManageEvent(ctx context.Context, userID, teamID string) bool {
+    return a.permSvc.CanManageTeamEvent(ctx, teamID, userID)
 }
 
-func (a *EventsPermissionAdapter) CanReadEvent(ctx context.Context, userID, eventAccountID string) bool {
-	domain := authDomain.AccountDomain(eventAccountID)
-	return a.permSvc.HasPermission(ctx, userID, domain, authDomain.ResourceEvent.String(), authDomain.ActionRead.String())
+func (a *EventsPermissionAdapter) CanUpdateEvent(ctx context.Context, userID, teamID string) bool {
+    // Try personal team first
+    if a.permSvc.HasPersonalTeamPermission(ctx, userID, teamID, "event", "update") {
+        return true
+    }
+    return a.permSvc.HasInstitutionTeamPermission(ctx, userID, teamID, "event", "update")
 }
 
-func (a *EventsPermissionAdapter) CanUpdateEvent(ctx context.Context, userID, eventAccountID string) bool {
-	domain := authDomain.AccountDomain(eventAccountID)
-	return a.permSvc.HasPermission(ctx, userID, domain, authDomain.ResourceEvent.String(), authDomain.ActionUpdate.String())
+func (a *EventsPermissionAdapter) CanDeleteEvent(ctx context.Context, userID, teamID string) bool {
+    if a.permSvc.HasPersonalTeamPermission(ctx, userID, teamID, "event", "delete") {
+        return true
+    }
+    return a.permSvc.HasInstitutionTeamPermission(ctx, userID, teamID, "event", "delete")
 }
 
-func (a *EventsPermissionAdapter) CanDeleteEvent(ctx context.Context, userID, eventAccountID string) bool {
-	domain := authDomain.AccountDomain(eventAccountID)
-	return a.permSvc.HasPermission(ctx, userID, domain, authDomain.ResourceEvent.String(), authDomain.ActionDelete.String())
+func (a *EventsPermissionAdapter) CanViewEvent(ctx context.Context, userID, teamID string) bool {
+    if a.permSvc.HasPersonalTeamPermission(ctx, userID, teamID, "event", "read") {
+        return true
+    }
+    return a.permSvc.HasInstitutionTeamPermission(ctx, userID, teamID, "event", "read")
 }
-
-
 
 // ============================================================
 // EVENTS MEDIA ADAPTER - Using pure domain types
@@ -225,7 +185,6 @@ func NewEventsMediaAdapter(mediaSvc mediaService.Service) eventsDomain.MediaServ
 	return &EventsMediaAdapter{mediaSvc: mediaSvc}
 }
 
-// ✅ UPLOAD - Pure domain types pass-through
 func (a *EventsMediaAdapter) UploadFile(ctx context.Context, cmd eventsDomain.UploadMediaCommand) (*eventsDomain.MediaInfo, error) {
 	mediaCmd := mediaService.UploadCommand{
 		File:          cmd.File,
@@ -254,7 +213,6 @@ func (a *EventsMediaAdapter) UploadFile(ctx context.Context, cmd eventsDomain.Up
 	}, nil
 }
 
-// ✅ GET BY ID
 func (a *EventsMediaAdapter) GetMediaByID(ctx context.Context, id string) (*eventsDomain.MediaInfo, error) {
 	media, err := a.mediaSvc.GetMediaByID(ctx, id)
 	if err != nil {
@@ -264,7 +222,6 @@ func (a *EventsMediaAdapter) GetMediaByID(ctx context.Context, id string) (*even
 		return nil, nil
 	}
 
-	// Get media type name
 	mediaTypeName := ""
 	mediaType, err := a.mediaSvc.GetMediaTypeByID(ctx, media.MediaTypeID)
 	if err == nil && mediaType != nil {
@@ -281,7 +238,6 @@ func (a *EventsMediaAdapter) GetMediaByID(ctx context.Context, id string) (*even
 	}, nil
 }
 
-// ✅ GET MEDIA BY ENTITY
 func (a *EventsMediaAdapter) GetMediaByEntity(ctx context.Context, entityID string) ([]*eventsDomain.MediaInfo, error) {
 	mediaList, _, err := a.mediaSvc.GetMediaByEntity(ctx, entityID, 1, 100)
 	if err != nil {
@@ -312,7 +268,6 @@ func (a *EventsMediaAdapter) GetMediaByEntity(ctx context.Context, entityID stri
 	return result, nil
 }
 
-// ✅ GET MEDIA TYPE BY NAME
 func (a *EventsMediaAdapter) GetMediaTypeByName(ctx context.Context, name string) (*eventsDomain.MediaTypeInfo, error) {
 	mediaType, err := a.mediaSvc.GetMediaTypeByName(ctx, name)
 	if err != nil {
@@ -328,26 +283,22 @@ func (a *EventsMediaAdapter) GetMediaTypeByName(ctx context.Context, name string
 	}, nil
 }
 
-// ✅ DELETE FILE
 func (a *EventsMediaAdapter) DeleteFile(ctx context.Context, id string) error {
 	return a.mediaSvc.DeleteFile(ctx, id)
 }
 
-// ✅ DELETE MEDIA BY ENTITY
 func (a *EventsMediaAdapter) DeleteFilesByEntity(ctx context.Context, entityID string) error {
-    return a.mediaSvc.DeleteFilesByEntity(ctx, entityID)
+	return a.mediaSvc.DeleteFilesByEntity(ctx, entityID)
 }
 
-// ✅ DELETE FILES BY ENTITY AND MEDIA TYPE
 func (a *EventsMediaAdapter) DeleteFilesByEntityAndMediaType(ctx context.Context, entityID, mediaTypeID string) error {
 	return a.mediaSvc.DeleteFilesByEntityAndMediaType(ctx, entityID, mediaTypeID)
 }
 
 // ============================================================
-// BYTES READER WRAPPER - Implements multipart.File
+// BYTES READER WRAPPER
 // ============================================================
 
-// bytesReaderWrapper wraps a bytes.Reader to implement multipart.File interface
 type bytesReaderWrapper struct {
 	*bytes.Reader
 }
@@ -368,8 +319,6 @@ func (b *bytesReaderWrapper) Stat() (fs.FileInfo, error) {
 // AUTH NOTIFICATION ADAPTER - UNIFIED
 // ============================================================
 
-// AuthNotificationAdapter adapts notificationdomain.NotificationService 
-// to authDomain.NotificationService
 type AuthNotificationAdapter struct {
 	notifSvc notificationdomain.NotificationService
 }
@@ -377,10 +326,6 @@ type AuthNotificationAdapter struct {
 func NewAuthNotificationAdapter(notifSvc notificationdomain.NotificationService) authDomain.NotificationService {
 	return &AuthNotificationAdapter{notifSvc: notifSvc}
 }
-
-// ============================================================   
-// UNIFIED OTP METHOD
-// ============================================================
 
 // SendOTP - Unified method for all OTP purposes
 func (a *AuthNotificationAdapter) SendOTP(ctx context.Context, req authDomain.SendOTPRequest) error {
@@ -395,10 +340,7 @@ func (a *AuthNotificationAdapter) SendOTP(ctx context.Context, req authDomain.Se
 	return a.notifSvc.SendOTP(ctx, notifReq)
 }
 
-// ============================================================
-// WELCOME EMAILS
-// ============================================================
-
+// Welcome emails
 func (a *AuthNotificationAdapter) SendIndividualWelcome(ctx context.Context, req authDomain.SendWelcomeRequest) error {
 	notifReq := notificationdomain.SendWelcomeRequest{
 		To:   req.To,
@@ -409,14 +351,14 @@ func (a *AuthNotificationAdapter) SendIndividualWelcome(ctx context.Context, req
 
 func (a *AuthNotificationAdapter) SendInstitutionWelcome(ctx context.Context, req authDomain.SendInstitutionWelcomeRequest) error {
 	notifReq := notificationdomain.SendInstitutionWelcomeRequest{
-		To:              req.To,
-		AdminName:       req.AdminName,
-		InstitutionName: req.InstitutionName,
+		To:               req.To,
+		AdminName:        req.AdminName,
+		InstitutionName:  req.InstitutionName,
+		InstitutionEmail: req.InstitutionEmail,
 	}
 	return a.notifSvc.SendInstitutionWelcome(ctx, notifReq)
 }
 
-//  SendInstitutionKYCWelcome - Adapts auth domain request to notification domain
 func (a *AuthNotificationAdapter) SendInstitutionKYCWelcome(ctx context.Context, req authDomain.SendInstitutionKYCWelcomeRequest) error {
 	notifReq := notificationdomain.SendInstitutionKYCWelcomeRequest{
 		To:              req.To,
@@ -429,29 +371,23 @@ func (a *AuthNotificationAdapter) SendInstitutionKYCWelcome(ctx context.Context,
 
 func (a *AuthNotificationAdapter) SendNewInstitutionAccountNotification(ctx context.Context, req authDomain.SendNewInstitutionAccountRegistrationRequest) error {
 	notifReq := notificationdomain.SendNewInstitutionAccountRegistrationRequest{
-		TO:              req.To,
-		NewAccountAdminName:       req.NewAccountAdminName,
-		InstitutionName: req.InstitutionName,
-		InstitutionType: req.InstitutionType,
+		TO:                  req.To,
+		NewAccountAdminName: req.NewAccountAdminName,
+		InstitutionName:     req.InstitutionName,
+		InstitutionType:     req.InstitutionType,
 	}
 	return a.notifSvc.SendNewInstitutionAccountNotification(ctx, notifReq)
-	
 }
-
 
 func (a *AuthNotificationAdapter) SendNewPersonalAccountNotification(ctx context.Context, req authDomain.SendNewPersonalAccountRegistrationRequest) error {
 	notifReq := notificationdomain.SendNewPersonalAccountRegistrationRequest{
-		To:              req.To,
-		NewAccountAdminName:       req.NewAccountAdminName,
+		To:                  req.To,
+		NewAccountAdminName: req.NewAccountAdminName,
 	}
 	return a.notifSvc.SendNewPersonalAccountNotification(ctx, notifReq)
-	
 }
 
-// ============================================================
-// PASSWORD RESET CONFIRM
-// ============================================================
-
+// Password reset confirm
 func (a *AuthNotificationAdapter) SendPasswordResetConfirm(ctx context.Context, req authDomain.SendPasswordResetConfirmRequest) error {
 	notifReq := notificationdomain.SendPasswordResetConfirmRequest{
 		To:   req.To,
@@ -460,10 +396,7 @@ func (a *AuthNotificationAdapter) SendPasswordResetConfirm(ctx context.Context, 
 	return a.notifSvc.SendPasswordResetConfirm(ctx, notifReq)
 }
 
-// ============================================================
-// LOGIN NOTIFICATION
-// ============================================================
-
+// Login notification
 func (a *AuthNotificationAdapter) SendLoginNotification(ctx context.Context, req authDomain.SendLoginNotificationRequest) error {
 	notifReq := notificationdomain.SendLoginNotificationRequest{
 		To:        req.To,

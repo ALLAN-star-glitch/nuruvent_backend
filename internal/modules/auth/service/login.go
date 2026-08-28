@@ -15,35 +15,35 @@ import (
 // LOGIN METHODS
 // ============================================================
 
-func (s *service) LoginAccount(ctx context.Context, email, password, ipAddress, userAgent string) (*authdomain.Account, string, error) {
-	account, err := s.repo.GetAccountByEmail(email)
+func (s *service) LoginUser(ctx context.Context, email, password, ipAddress, userAgent string) (*authdomain.User, string, error) {
+	user, err := s.repo.GetUserByEmail(email)
 	if err != nil {
 		return nil, "", err
 	}
-	if account == nil {
+	if user == nil {
 		return nil, "", authdomain.ErrInvalidCredentials
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(account.PasswordHash), []byte(password)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return nil, "", authdomain.ErrInvalidCredentials
 	}
 
-	if !account.IsActiveAccount() {
-		return nil, "", authdomain.ErrAccountInactive
+	if !user.IsActiveUser() {
+		return nil, "", authdomain.ErrUserInactive
 	}
 
 	// Generate OTP
 	otp := s.GenerateOTP()
 
 	// Store 2FA OTP with purpose
-	if err := s.StoreOTP(ctx, account.Email, otp, "two_factor"); err != nil {
+	if err := s.StoreOTP(ctx, user.Email, otp, "two_factor"); err != nil {
 		return nil, "", err
 	}
 
 	// Send 2FA OTP via unified SendOTP
 	if err := s.notifSvc.SendOTP(ctx, authdomain.SendOTPRequest{
-		To:      account.Email,
-		Name:    account.Name,
+		To:      user.Email,
+		Name:    user.Name,
 		OTP:     otp,
 		Expires: "5 minutes",
 		Purpose: "two_factor",
@@ -55,21 +55,21 @@ func (s *service) LoginAccount(ctx context.Context, email, password, ipAddress, 
 		log.Printf("Failed to send 2FA OTP: %v", err)
 	}
 
-	return account, otp, nil
+	return user, otp, nil
 }
 
-func (s *service) VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAddress, userAgent string) (*authdomain.Account, string, string, error) {
+func (s *service) VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAddress, userAgent string) (*authdomain.User, string, string, error) {
 	// Verify 2FA OTP using unified VerifyOTP
 	if err := s.VerifyOTP(ctx, email, otp, "two_factor"); err != nil {
 		return nil, "", "", err
 	}
 
-	account, err := s.repo.GetAccountByEmail(email)
+	user, err := s.repo.GetUserByEmail(email)
 	if err != nil {
 		return nil, "", "", err
 	}
-	if account == nil {
-		return nil, "", "", authdomain.ErrAccountNotFound
+	if user == nil {
+		return nil, "", "", authdomain.ErrUserNotFound
 	}
 
 	// Delete used 2FA OTP
@@ -78,7 +78,7 @@ func (s *service) VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAdd
 	}
 
 	// Generate tokens
-	accessToken, refreshToken, err := s.GenerateTokens(ctx, account)
+	accessToken, refreshToken, err := s.GenerateTokens(ctx, user)
 	if err != nil {
 		return nil, "", "", err
 	}
@@ -86,8 +86,8 @@ func (s *service) VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAdd
 	// Send login notification
 	now := time.Now().Format("January 2, 2006 at 3:04 PM")
 	if err := s.notifSvc.SendLoginNotification(ctx, authdomain.SendLoginNotificationRequest{
-		To:        account.Email,
-		Name:      account.Name,
+		To:        user.Email,
+		Name:      user.Name,
 		Time:      now,
 		IPAddress: ipAddress,
 		UserAgent: userAgent,
@@ -95,5 +95,5 @@ func (s *service) VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAdd
 		log.Printf("Failed to send login notification: %v", err)
 	}
 
-	return account, accessToken, refreshToken, nil
+	return user, accessToken, refreshToken, nil
 }

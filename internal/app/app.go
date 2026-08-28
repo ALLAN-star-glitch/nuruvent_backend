@@ -63,9 +63,6 @@ func (app *App) Init(ctx context.Context) error {
 	if app.AuthService != nil {
 		log.Println("✅ Auth module ready")
 	}
-	if app.AccountService != nil {
-		log.Println("✅ Account module ready")
-	}
 	if app.EventsService != nil {
 		log.Println("✅ Events module ready")
 	}
@@ -94,7 +91,6 @@ func (app *App) SetupRoutes() {
 		authMiddleware,
 		authzMiddleware,
 		app.AuthHandler,
-		app.AccountHandler,
 		app.EventsHandler,
 	)
 	log.Println("Routes registered successfully")

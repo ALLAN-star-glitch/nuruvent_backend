@@ -1,6 +1,10 @@
-package domain
+package authdomain
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // ============================================================
 // INSTITUTION TYPE - Domain Entity (Database Representation)
@@ -20,6 +24,15 @@ type InstitutionType struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   *time.Time
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+// generateID generates a new UUID for domain entities
+func generateID() string {
+	return uuid.New().String()
 }
 
 // ============================================================

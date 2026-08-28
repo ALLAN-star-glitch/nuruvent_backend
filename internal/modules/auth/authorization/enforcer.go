@@ -32,7 +32,6 @@ type Enforcer struct {
 	stopped bool
 }
 
-// NewEnforcer creates a new Casbin enforcer (for Wire DI)
 func NewEnforcer(db *gorm.DB, cfg *config.Config) (*Enforcer, error) {
 	// Create GORM adapter
 	adapter, err := gormadapter.NewAdapterByDB(db)
@@ -49,10 +48,19 @@ func NewEnforcer(db *gorm.DB, cfg *config.Config) (*Enforcer, error) {
 	// Enable auto-save for policy changes
 	e.EnableAutoSave(true)
 
-	// Load policies from database
+	// Load policies from database with error handling
 	err = e.LoadPolicy()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load policies: %w", err)
+		log.Printf("⚠️ Error loading policies: %v", err)
+		log.Printf("ℹ️ Attempting to clean up invalid policies...")
+
+		if cleanErr := cleanInvalidPolicies(db); cleanErr != nil {
+			return nil, fmt.Errorf("failed to clean invalid policies: %w", cleanErr)
+		}
+
+		if err := e.LoadPolicy(); err != nil {
+			return nil, fmt.Errorf("failed to load policies after cleanup: %w", err)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -66,12 +74,28 @@ func NewEnforcer(db *gorm.DB, cfg *config.Config) (*Enforcer, error) {
 
 	log.Println("Casbin enforcer initialized successfully")
 
-	// Start auto-reload if enabled
 	if cfg.Casbin.AutoLoad {
+		log.Printf("🚀 Auto-load enabled (interval: %v)", cfg.Casbin.AutoLoadInterval)
 		go enforcer.autoLoadPolicies()
+	} else {
+		log.Println("ℹ️ Auto-load is disabled")
 	}
 
 	return enforcer, nil
+}
+
+// cleanInvalidPolicies removes invalid policy rules from the database
+func cleanInvalidPolicies(db *gorm.DB) error {
+	result := db.Exec(`
+		DELETE FROM casbin_rule 
+		WHERE ptype = 'p' 
+		AND (v3 IS NULL OR v3 = '')
+	`)
+	if result.Error != nil {
+		return result.Error
+	}
+	log.Printf("✅ Removed %d invalid policy rules", result.RowsAffected)
+	return nil
 }
 
 // Close stops the enforcer and cleans up resources
@@ -115,6 +139,12 @@ func (e *Enforcer) autoLoadPolicies() {
 func (e *Enforcer) Enforce(userID string, domain string, resource string, action string) (bool, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+
+	// ✅ Super Admin bypass - has access to everything
+	if e.IsSuperAdmin(userID) {
+		return true, nil
+	}
+
 	return e.Enforcer.Enforce(userID, domain, resource, action)
 }
 
@@ -312,66 +342,108 @@ func (e *Enforcer) IsAdmin(userID string) bool {
 }
 
 // ================================================
-// ACCOUNT ACCESS METHODS
+// PERSONAL TEAM METHODS
+// Domain: personal:team:{user_id}
 // ================================================
 
-// AddAccountRole adds a role for a user in an account domain
-func (e *Enforcer) AddAccountRole(accountID, userID, role string) (bool, error) {
-	domain := authdomain.AccountDomain(accountID)
+// AddPersonalTeamRole adds a role for a user in their personal team
+func (e *Enforcer) AddPersonalTeamRole(userID, role string) (bool, error) {
+	domain := authdomain.PersonalTeamDomain(userID)
 	return e.AddRoleForUserInDomain(userID, role, domain)
 }
 
-// RemoveAccountRole removes a role for a user in an account domain
-func (e *Enforcer) RemoveAccountRole(accountID, userID, role string) (bool, error) {
-	domain := authdomain.AccountDomain(accountID)
+// RemovePersonalTeamRole removes a role from a user's personal team
+func (e *Enforcer) RemovePersonalTeamRole(userID, role string) (bool, error) {
+	domain := authdomain.PersonalTeamDomain(userID)
 	return e.RemoveRoleForUserInDomain(userID, role, domain)
 }
 
-// RemoveAllAccountRoles removes all roles for a user in an account domain
-func (e *Enforcer) RemoveAllAccountRoles(accountID, userID string) (bool, error) {
-	domain := authdomain.AccountDomain(accountID)
+// GetUserPersonalTeamRoles returns all roles for a user in their personal team
+func (e *Enforcer) GetUserPersonalTeamRoles(userID string) []string {
+	domain := authdomain.PersonalTeamDomain(userID)
+	return e.GetRolesForUserInDomain(userID, domain)
+}
+
+// IsUserInPersonalTeam checks if a user has any role in their personal team
+func (e *Enforcer) IsUserInPersonalTeam(userID string) bool {
+	domain := authdomain.PersonalTeamDomain(userID)
+	roles := e.GetRolesForUserInDomain(userID, domain)
+	return len(roles) > 0
+}
+
+// HasPersonalTeamRole checks if a user has a specific role in their personal team
+func (e *Enforcer) HasPersonalTeamRole(userID, role string) bool {
+	domain := authdomain.PersonalTeamDomain(userID)
+	return e.HasRoleForUserInDomain(userID, role, domain)
+}
+
+// IsPersonalTeamAdmin checks if a user is an admin of their personal team
+func (e *Enforcer) IsPersonalTeamAdmin(userID string) bool {
+	return e.HasPersonalTeamRole(userID, authdomain.RoleAccountAdmin.String())
+}
+
+// ================================================
+// INSTITUTION TEAM METHODS
+// Domain: institution:team:{institution_id}
+// ================================================
+
+// AddInstitutionTeamRole adds a role for a user in an institution team
+func (e *Enforcer) AddInstitutionTeamRole(userID, institutionID, role string) (bool, error) {
+	domain := authdomain.InstitutionTeamDomain(institutionID)
+	return e.AddRoleForUserInDomain(userID, role, domain)
+}
+
+// RemoveInstitutionTeamRole removes a role from a user in an institution team
+func (e *Enforcer) RemoveInstitutionTeamRole(userID, institutionID, role string) (bool, error) {
+	domain := authdomain.InstitutionTeamDomain(institutionID)
+	return e.RemoveRoleForUserInDomain(userID, role, domain)
+}
+
+// RemoveAllInstitutionTeamRoles removes all roles for a user in an institution team
+func (e *Enforcer) RemoveAllInstitutionTeamRoles(userID, institutionID string) (bool, error) {
+	domain := authdomain.InstitutionTeamDomain(institutionID)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.Enforcer.RemoveFilteredGroupingPolicy(0, userID, "", domain)
 }
 
-// GetUserAccountRoles returns all roles for a user in an account domain
-func (e *Enforcer) GetUserAccountRoles(accountID, userID string) []string {
-	domain := authdomain.AccountDomain(accountID)
+// GetUserInstitutionTeamRoles returns all roles for a user in an institution team
+func (e *Enforcer) GetUserInstitutionTeamRoles(userID, institutionID string) []string {
+	domain := authdomain.InstitutionTeamDomain(institutionID)
 	return e.GetRolesForUserInDomain(userID, domain)
 }
 
-// HasAccountRole checks if a user has a specific role in an account domain
-func (e *Enforcer) HasAccountRole(accountID, userID, role string) bool {
-	domain := authdomain.AccountDomain(accountID)
+// HasInstitutionTeamRole checks if a user has a specific role in an institution team
+func (e *Enforcer) HasInstitutionTeamRole(userID, institutionID, role string) bool {
+	domain := authdomain.InstitutionTeamDomain(institutionID)
 	return e.HasRoleForUserInDomain(userID, role, domain)
 }
 
-// IsAccountAdmin checks if a user is an account admin
-func (e *Enforcer) IsAccountAdmin(accountID, userID string) bool {
-	return e.HasAccountRole(accountID, userID, authdomain.RoleAccountAdmin.String())
+// IsInstitutionTeamAdmin checks if a user is an admin of an institution team
+func (e *Enforcer) IsInstitutionTeamAdmin(userID, institutionID string) bool {
+	return e.HasInstitutionTeamRole(userID, institutionID, authdomain.RoleAccountAdmin.String())
 }
 
-// IsEventManagerForAccount checks if a user is an event manager for an account
-func (e *Enforcer) IsEventManagerForAccount(accountID, userID string) bool {
-	return e.HasAccountRole(accountID, userID, authdomain.RoleEventManager.String())
+// IsInstitutionEventManager checks if a user is an event manager in an institution team
+func (e *Enforcer) IsInstitutionEventManager(userID, institutionID string) bool {
+	return e.HasInstitutionTeamRole(userID, institutionID, authdomain.RoleEventManager.String())
 }
 
-// IsTeamMemberForAccount checks if a user is a team member for an account
-func (e *Enforcer) IsTeamMemberForAccount(accountID, userID string) bool {
-	return e.HasAccountRole(accountID, userID, authdomain.RoleTeamMember.String())
+// IsInstitutionTeamMember checks if a user is a team member in an institution team
+func (e *Enforcer) IsInstitutionTeamMember(userID, institutionID string) bool {
+	return e.HasInstitutionTeamRole(userID, institutionID, authdomain.RoleTeamMember.String())
 }
 
 // ================================================
 // USER INFORMATION METHODS
 // ================================================
 
-// HasAnyAccountRole checks if a user has any account-related role in any domain
-func (e *Enforcer) HasAnyAccountRole(userID string) bool {
+// HasAnyTeamRole checks if a user has any team-related role in any domain
+func (e *Enforcer) HasAnyTeamRole(userID string) bool {
 	domains := e.GetDomainsForUser(userID)
 
 	for _, domain := range domains {
-		if authdomain.IsAccountDomain(domain) {
+		if authdomain.IsTeamDomain(domain) {
 			roles := e.GetRolesForUserInDomain(userID, domain)
 			if len(roles) > 0 {
 				return true
@@ -379,34 +451,6 @@ func (e *Enforcer) HasAnyAccountRole(userID string) bool {
 		}
 	}
 	return false
-}
-
-// HasAnyAccountRoleInAccount checks if a user has any account role in a specific account
-func (e *Enforcer) HasAnyAccountRoleInAccount(accountID, userID string) bool {
-	domain := authdomain.AccountDomain(accountID)
-	roles := e.GetRolesForUserInDomain(userID, domain)
-	return len(roles) > 0
-}
-
-// GetUserAccountIDsWithRole returns account IDs where a user has a specific role
-func (e *Enforcer) GetUserAccountIDsWithRole(userID string, role string) []string {
-	domains := e.GetDomainsForUser(userID)
-	accounts := []string{}
-
-	for _, domain := range domains {
-		if authdomain.IsAccountDomain(domain) && e.HasRoleForUserInDomain(userID, role, domain) {
-			accountID := authdomain.ExtractAccountID(domain)
-			if accountID != "" {
-				accounts = append(accounts, accountID)
-			}
-		}
-	}
-	return accounts
-}
-
-// GetUserAccountIDsWithAdminRole returns account IDs where a user has account_admin role
-func (e *Enforcer) GetUserAccountIDsWithAdminRole(userID string) []string {
-	return e.GetUserAccountIDsWithRole(userID, authdomain.RoleAccountAdmin.String())
 }
 
 // GetDomainsForUser returns all domains where a user has roles
@@ -435,63 +479,170 @@ func (e *Enforcer) GetDomainsForUser(userID string) []string {
 	return result
 }
 
-// GetUserAccountIDs returns all account IDs where a user has roles
-func (e *Enforcer) GetUserAccountIDs(userID string) []string {
+// GetUserPersonalTeamIDs returns personal team IDs where a user has roles
+func (e *Enforcer) GetUserPersonalTeamIDs(userID string) []string {
 	domains := e.GetDomainsForUser(userID)
-	accounts := []string{}
+	teams := []string{}
 
 	for _, domain := range domains {
-		if authdomain.IsAccountDomain(domain) {
-			accountID := authdomain.ExtractAccountID(domain)
-			if accountID != "" {
-				accounts = append(accounts, accountID)
+		if authdomain.IsPersonalTeamDomain(domain) {
+			teamID := authdomain.ExtractTeamID(domain)
+			if teamID != "" {
+				teams = append(teams, teamID)
 			}
 		}
 	}
-	return accounts
+	return teams
+}
+
+// GetUserInstitutionTeamIDs returns institution team IDs where a user has roles
+func (e *Enforcer) GetUserInstitutionTeamIDs(userID string) []string {
+	domains := e.GetDomainsForUser(userID)
+	teams := []string{}
+
+	for _, domain := range domains {
+		if authdomain.IsInstitutionTeamDomain(domain) {
+			teamID := authdomain.ExtractTeamID(domain)
+			if teamID != "" {
+				teams = append(teams, teamID)
+			}
+		}
+	}
+	return teams
+}
+
+// GetUserTeamIDs returns all team IDs where a user has roles (both personal and institution)
+func (e *Enforcer) GetUserTeamIDs(userID string) []string {
+	teams := []string{}
+	teams = append(teams, e.GetUserPersonalTeamIDs(userID)...)
+	teams = append(teams, e.GetUserInstitutionTeamIDs(userID)...)
+	return teams
 }
 
 // ================================================
 // RESOURCE-SPECIFIC PERMISSION HELPERS
 // ================================================
 
-// CanManageAccount checks if user can manage an account
-func (e *Enforcer) CanManageAccount(userID, accountID string) bool {
-	allowed, err := e.Enforce(userID, authdomain.AccountDomain(accountID), authdomain.ResourceAccount.String(), authdomain.ActionManage.String())
+// CanManageTeam checks if user can manage a team (personal or institution)
+func (e *Enforcer) CanManageTeam(userID, teamID string) bool {
+	// Check personal team domain
+	if e.HasPermission(userID, teamID, authdomain.ResourceTeam, authdomain.ActionManage) {
+		return true
+	}
+	// Check institution team domain
+	domain := authdomain.InstitutionTeamDomain(teamID)
+	allowed, err := e.Enforce(userID, domain, authdomain.ResourceTeam.String(), authdomain.ActionManage.String())
+	if err == nil && allowed {
+		return true
+	}
+	return false
+}
+
+// CanManageEvent checks if user can manage events in a team
+func (e *Enforcer) CanManageEvent(userID, teamID string) bool {
+	// Try personal team domain first
+	if e.HasPermission(userID, teamID, authdomain.ResourceEvent, authdomain.ActionManage) {
+		return true
+	}
+	// Try institution team domain
+	domain := authdomain.InstitutionTeamDomain(teamID)
+	allowed, err := e.Enforce(userID, domain, authdomain.ResourceEvent.String(), authdomain.ActionManage.String())
+	if err == nil && allowed {
+		return true
+	}
+	return false
+}
+
+// CanManageMember checks if user can manage members in a team
+func (e *Enforcer) CanManageMember(userID, teamID string) bool {
+	if e.HasPermission(userID, teamID, authdomain.ResourceMember, authdomain.ActionManage) {
+		return true
+	}
+	domain := authdomain.InstitutionTeamDomain(teamID)
+	allowed, err := e.Enforce(userID, domain, authdomain.ResourceMember.String(), authdomain.ActionManage.String())
+	if err == nil && allowed {
+		return true
+	}
+	return false
+}
+
+// CanIssueCertificate checks if user can issue certificates in a team
+func (e *Enforcer) CanIssueCertificate(userID, teamID string) bool {
+	if e.HasPermission(userID, teamID, authdomain.ResourceCertificate, authdomain.ActionIssue) {
+		return true
+	}
+	domain := authdomain.InstitutionTeamDomain(teamID)
+	allowed, err := e.Enforce(userID, domain, authdomain.ResourceCertificate.String(), authdomain.ActionIssue.String())
+	if err == nil && allowed {
+		return true
+	}
+	return false
+}
+
+// HasPermission checks if user has a specific permission in a personal team
+func (e *Enforcer) HasPermission(userID, teamID string, resource authdomain.Resource, action authdomain.Action) bool {
+	domain := authdomain.PersonalTeamDomain(teamID)
+	allowed, err := e.Enforce(userID, domain, resource.String(), action.String())
 	if err != nil {
 		return false
 	}
 	return allowed
 }
 
-// CanManageEvent checks if user can manage events in an account
-func (e *Enforcer) CanManageEvent(userID, accountID string) bool {
-	allowed, err := e.Enforce(userID, authdomain.AccountDomain(accountID), authdomain.ResourceEvent.String(), authdomain.ActionManage.String())
+// ================================================
+// ONBOARDING HELPERS
+// ================================================
+
+// SetupPersonalTeam sets up a user's personal team with account_admin role
+// Called when a new user is onboarded
+// Domain: personal:team:{user_id}
+func (e *Enforcer) SetupPersonalTeam(userID string) error {
+	// Add user as account_admin of their personal team
+	_, err := e.AddPersonalTeamRole(userID, authdomain.RoleAccountAdmin.String())
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to setup personal team for user %s: %w", userID, err)
 	}
-	return allowed
+	log.Printf("✅ Personal team setup for user: %s", userID)
+	return nil
 }
 
-// CanIssueCertificate checks if user can issue certificates in an account
-func (e *Enforcer) CanIssueCertificate(userID, accountID string) bool {
-	allowed, err := e.Enforce(userID, authdomain.AccountDomain(accountID), authdomain.ResourceCertificate.String(), authdomain.ActionIssue.String())
+// SetupInstitutionTeam sets up an institution team with the admin as account_admin
+// Called when a new institution is onboarded
+// Domain: institution:team:{institution_id}
+func (e *Enforcer) SetupInstitutionTeam(adminUserID, institutionID string) error {
+	// Add admin as account_admin of the institution team
+	_, err := e.AddInstitutionTeamRole(adminUserID, institutionID, authdomain.RoleAccountAdmin.String())
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to setup institution team for admin %s in institution %s: %w", adminUserID, institutionID, err)
 	}
-	return allowed
+	log.Printf("✅ Institution team setup for admin: %s in institution: %s", adminUserID, institutionID)
+	return nil
 }
 
-// HasPermission checks if user has a specific permission in an account
-func (e *Enforcer) HasPermission(userID, accountID string, resource authdomain.Resource, action authdomain.Action) bool {
-	allowed, err := e.Enforce(userID, authdomain.AccountDomain(accountID), resource.String(), action.String())
-	if err != nil {
-		return false
+// AddUserToInstitutionTeam adds a user to an institution team with a specific role
+func (e *Enforcer) AddUserToInstitutionTeam(userID, institutionID, role string) error {
+	if !authdomain.IsValidTeamRole(role) {
+		return fmt.Errorf("invalid role: %s", role)
 	}
-	return allowed
+	_, err := e.AddInstitutionTeamRole(userID, institutionID, role)
+	if err != nil {
+		return fmt.Errorf("failed to add user %s to institution %s with role %s: %w", userID, institutionID, role, err)
+	}
+	return nil
 }
+
+// ================================================
+// HELPER METHODS
+// ================================================
 
 // GetRolesForUser gets all roles for a user (used by service)
 func (e *Enforcer) GetRolesForUser(userID string, domain string) ([]string, error) {
 	return e.GetRolesForUserInDomain(userID, domain), nil
+}
+
+// RemoveFilteredGroupingPolicy removes grouping policies matching filters
+func (e *Enforcer) RemoveFilteredGroupingPolicy(fieldIndex int, fieldValues ...string) (bool, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.Enforcer.RemoveFilteredGroupingPolicy(fieldIndex, fieldValues...)
 }

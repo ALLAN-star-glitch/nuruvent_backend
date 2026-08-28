@@ -20,16 +20,13 @@ func ToModelEvent(event *domain.Event) *EventModel {
 		return nil
 	}
 
-	// ✅ Handle DeletedAt properly for restore operations
 	var deletedAt gorm.DeletedAt
 	if event.DeletedAt != nil && !event.DeletedAt.IsZero() {
 		deletedAt = gorm.DeletedAt{Time: *event.DeletedAt, Valid: true}
 	} else {
-		// ✅ IMPORTANT: Set Valid: false to clear the deleted_at column
 		deletedAt = gorm.DeletedAt{Valid: false}
 	}
 
-	// ✅ Convert empty string to nil for UUID fields
 	var deletedBy *string
 	if event.DeletedBy != "" {
 		deletedBy = &event.DeletedBy
@@ -40,7 +37,6 @@ func ToModelEvent(event *domain.Event) *EventModel {
 		restoredBy = &event.RestoredBy
 	}
 
-	// ✅ Handle RestoredAt
 	var restoredAt *time.Time
 	if event.RestoredAt != nil && !event.RestoredAt.IsZero() {
 		restoredAt = event.RestoredAt
@@ -67,7 +63,7 @@ func ToModelEvent(event *domain.Event) *EventModel {
 		MeetLink:         event.MeetLink,
 		MaxAttendees:     event.MaxAttendees,
 		CurrentAttendees: event.CurrentAttendees,
-		AccountID:        event.AccountID,
+		InstitutionID:    event.InstitutionID, // ✅ Changed from AccountID
 		CreatedBy:        event.CreatedBy,
 		IsActive:         event.IsActive,
 		CreatedAt:        event.CreatedAt,
@@ -92,7 +88,6 @@ func ToDomainEvent(model *EventModel) *domain.Event {
 		deletedAt = &model.DeletedAt.Time
 	}
 
-	// ✅ Convert *string to string (empty string if nil)
 	deletedBy := ""
 	if model.DeletedBy != nil {
 		deletedBy = *model.DeletedBy
@@ -103,7 +98,6 @@ func ToDomainEvent(model *EventModel) *domain.Event {
 		restoredBy = *model.RestoredBy
 	}
 
-	// ✅ Handle RestoredAt
 	var restoredAt *time.Time
 	if model.RestoredAt != nil && !model.RestoredAt.IsZero() {
 		restoredAt = model.RestoredAt
@@ -130,7 +124,7 @@ func ToDomainEvent(model *EventModel) *domain.Event {
 		MeetLink:         model.MeetLink,
 		MaxAttendees:     model.MaxAttendees,
 		CurrentAttendees: model.CurrentAttendees,
-		AccountID:        model.AccountID,
+		InstitutionID:    model.InstitutionID, // ✅ Changed from AccountID
 		CreatedBy:        model.CreatedBy,
 		IsActive:         model.IsActive,
 		CreatedAt:        model.CreatedAt,
@@ -145,12 +139,35 @@ func ToDomainEvent(model *EventModel) *domain.Event {
 }
 
 // ============================================================
+// USER INFO MAPPERS (NEW)
+// ============================================================
+
+// ToDomainUserInfo converts UserModel to domain.UserInfo
+func ToDomainUserInfo(model *UserModel) *domain.UserInfo {
+	if model == nil {
+		return nil
+	}
+
+	return &domain.UserInfo{
+		ID:              model.ID,
+		Name:            model.Name,
+		DisplayName:     model.DisplayName,
+		Email:           model.Email,
+		Phone:           model.Phone,
+		AccountType:     model.AccountTypeID, // Will be resolved by caller
+		InstitutionName: model.InstitutionName,
+		IsActive:        model.IsActive,
+		CreatedAt:       model.CreatedAt,
+		UpdatedAt:       model.UpdatedAt,
+	}
+}
+
+// ============================================================
 // EVENT TYPE - DOMAIN VALUE MAPPERS
 // ============================================================
 
 // ToModelEventTypeFromValue converts domain.EventTypeValue to EventTypeModel
 func ToModelEventTypeFromValue(value domain.EventTypeValue) *EventTypeModel {
-	// ✅ Use GetEventTypeInfo helper instead of value.Info()
 	info, ok := domain.GetEventTypeInfo(value)
 	if !ok {
 		return nil
@@ -161,7 +178,7 @@ func ToModelEventTypeFromValue(value domain.EventTypeValue) *EventTypeModel {
 // ToModelEventTypeFromInfo converts domain.EventTypeInfo to EventTypeModel
 func ToModelEventTypeFromInfo(info domain.EventTypeInfo) *EventTypeModel {
 	return &EventTypeModel{
-		Slug:                info.Slug, // ✅ info.Slug is already a string
+		Slug:                info.Slug,
 		Name:                info.Name,
 		DisplayName:         info.DisplayName,
 		Description:         info.Description,
@@ -181,23 +198,19 @@ func ToDomainEventTypeInfo(model *EventTypeModel) (*domain.EventTypeInfo, error)
 		return nil, nil
 	}
 
-	// ✅ Use shared types to parse
 	value, valid := types.ParseEventType(model.Name)
 	if !valid {
-		// Try parsing by slug
 		value, valid = types.ParseEventTypeBySlug(model.Slug)
 		if !valid {
 			return nil, domain.ErrEventTypeNotFound
 		}
 	}
 
-	// ✅ Use GetEventTypeInfo helper
 	info, ok := domain.GetEventTypeInfo(value)
 	if !ok {
 		return nil, domain.ErrEventTypeNotFound
 	}
 
-	// Override with database values
 	info.Name = model.Name
 	info.DisplayName = model.DisplayName
 	info.Description = model.Description
@@ -218,7 +231,6 @@ func ToDomainEventTypeInfo(model *EventTypeModel) (*domain.EventTypeInfo, error)
 
 // ToModelEventStatusFromValue converts domain.EventStatusValue to EventStatusModel
 func ToModelEventStatusFromValue(value domain.EventStatusValue) *EventStatusModel {
-	// ✅ Use GetEventStatusInfo helper instead of value.Info()
 	info, ok := domain.GetEventStatusInfo(value)
 	if !ok {
 		return nil
@@ -229,7 +241,7 @@ func ToModelEventStatusFromValue(value domain.EventStatusValue) *EventStatusMode
 // ToModelEventStatusFromInfo converts domain.EventStatusInfo to EventStatusModel
 func ToModelEventStatusFromInfo(info domain.EventStatusInfo) *EventStatusModel {
 	return &EventStatusModel{
-		Slug:        info.Slug, // ✅ info.Slug is already a string
+		Slug:        info.Slug,
 		Name:        info.Name,
 		DisplayName: info.DisplayName,
 		Description: info.Description,
@@ -247,23 +259,19 @@ func ToDomainEventStatusInfo(model *EventStatusModel) (*domain.EventStatusInfo, 
 		return nil, nil
 	}
 
-	// ✅ Use shared types to parse
 	value, valid := types.ParseEventStatus(model.Name)
 	if !valid {
-		// Try parsing by slug
 		value, valid = types.ParseEventStatusBySlug(model.Slug)
 		if !valid {
 			return nil, domain.ErrEventStatusNotFound
 		}
 	}
 
-	// ✅ Use GetEventStatusInfo helper
 	info, ok := domain.GetEventStatusInfo(value)
 	if !ok {
 		return nil, domain.ErrEventStatusNotFound
 	}
 
-	// Override with database values
 	info.Name = model.Name
 	info.DisplayName = model.DisplayName
 	info.Description = model.Description
@@ -372,7 +380,7 @@ func ToModelEventStatusEntity(eventStatus *domain.EventStatus) *EventStatusModel
 // EVENT WITH CREATOR MAPPERS
 // ============================================================
 
-// toDomainEventWithCreator converts EventModel to domain.Event with creator info
+// toDomainEventWithCreator converts EventModel to domain.Event with creator info (UserInfo)
 func toDomainEventWithCreator(model *EventModel) *domain.Event {
 	if model == nil {
 		return nil
@@ -380,9 +388,9 @@ func toDomainEventWithCreator(model *EventModel) *domain.Event {
 
 	event := ToDomainEvent(model)
 
-	// ✅ Populate creator info from join fields
+	// ✅ Populate creator info from join fields using UserInfo
 	if model.CreatorName != "" || model.CreatorEmail != "" {
-		creator := &domain.AccountInfo{
+		creator := &domain.UserInfo{
 			ID:              model.CreatedBy,
 			Name:            model.CreatorName,
 			DisplayName:     model.CreatorDisplayName,
@@ -390,6 +398,9 @@ func toDomainEventWithCreator(model *EventModel) *domain.Event {
 			Phone:           model.CreatorPhone,
 			AccountType:     model.CreatorAccountType,
 			InstitutionName: model.CreatorInstitutionName,
+			IsActive:        true,
+			CreatedAt:       time.Now(),
+			UpdatedAt:       time.Now(),
 		}
 		event.WithCreator(creator)
 	}

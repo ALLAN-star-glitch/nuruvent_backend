@@ -18,7 +18,7 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 		Description:      event.Description,
 		EventTypeID:      event.EventTypeID,
 		EventStatusID:    event.EventStatusID,
-		AccountID:        event.AccountID,
+		InstitutionID:    event.InstitutionID, // ✅ Changed from AccountID
 		ImageURL:         event.ImageURL,
 		ThumbnailURL:     event.ThumbnailURL,
 		Date:             event.Date.Format("2006-01-02"),

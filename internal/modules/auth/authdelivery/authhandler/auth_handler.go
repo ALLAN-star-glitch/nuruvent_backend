@@ -42,102 +42,85 @@ func NewAuthHandler(
 // ============================================================
 
 func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
-    // ✅ Determine environment
-    isProduction := h.config.Environment == "production"
-    
-    // ✅ Secure: true in production, false in development
-    isSecure := isProduction
-    
-    // ✅ SameSite: None in production (cross-origin), Lax in development
-    sameSite := "Lax"
-    if isProduction {
-        sameSite = "None"
-    }
-    
-    // ✅ Domain: Only set in production, and only if using custom domain
-    domain := ""
-    if isProduction {
-        // For Render.com, DON'T set domain
-        // For custom domain (nuruvent.com), set it
-        // domain = ".nuruvent.com" // Only if using custom domain
-        // Otherwise leave empty
-    }
-    
-    c.Cookie(&fiber.Cookie{
-        Name:     "access_token",
-        Value:    token,
-        Expires:  time.Now().Add(h.config.JWT.AccessExpiration),
-        HTTPOnly: true,
-        Secure:   isSecure,      // ✅ true in prod, false in dev
-        SameSite: sameSite,      // ✅ None in prod, Lax in dev
-        Path:     "/",
-        Domain:   domain,        // ✅ Empty in dev, optional in prod
-    })
-    
-    log.Printf("🍪 Cookie set: Secure=%v, SameSite=%v, Domain='%s', Environment=%s", 
-        isSecure, sameSite, domain, h.config.Environment)
+	isProduction := h.config.Environment == "production"
+	isSecure := isProduction
+
+	sameSite := "Lax"
+	if isProduction {
+		sameSite = "None"
+	}
+
+	domain := ""
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "access_token",
+		Value:    token,
+		Expires:  time.Now().Add(h.config.JWT.AccessExpiration),
+		HTTPOnly: true,
+		Secure:   isSecure,
+		SameSite: sameSite,
+		Path:     "/",
+		Domain:   domain,
+	})
+
+	log.Printf("🍪 Cookie set: Secure=%v, SameSite=%v, Domain='%s', Environment=%s",
+		isSecure, sameSite, domain, h.config.Environment)
 }
 
 func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
-    isProduction := h.config.Environment == "production"
-    isSecure := isProduction
-    
-    sameSite := "Lax"
-    if isProduction {
-        sameSite = "None"
-    }
-    
-    domain := ""
-    if isProduction {
-        // domain = ".nuruvent.com" // Optional
-    }
-    
-    c.Cookie(&fiber.Cookie{
-        Name:     "refresh_token",
-        Value:    token,
-        Expires:  time.Now().Add(h.config.JWT.RefreshExpiration),
-        HTTPOnly: true,
-        Secure:   isSecure,
-        SameSite: sameSite,
-        Path:     "/auth/refresh",
-        Domain:   domain,
-    })
+	isProduction := h.config.Environment == "production"
+	isSecure := isProduction
+
+	sameSite := "Lax"
+	if isProduction {
+		sameSite = "None"
+	}
+
+	domain := ""
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "refresh_token",
+		Value:    token,
+		Expires:  time.Now().Add(h.config.JWT.RefreshExpiration),
+		HTTPOnly: true,
+		Secure:   isSecure,
+		SameSite: sameSite,
+		Path:     "/auth/refresh",
+		Domain:   domain,
+	})
 }
 
 func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
-    isProduction := h.config.Environment == "production"
-    isSecure := isProduction
-    
-    sameSite := "Lax"
-    if isProduction {
-        sameSite = "None"
-    }
-    
-    domain := ""
-    if isProduction {
-        // domain = ".nuruvent.com"
-    }
-    
-    c.Cookie(&fiber.Cookie{
-        Name:     "access_token",
-        Value:    "",
-        Expires:  time.Now().Add(-time.Hour),
-        HTTPOnly: true,
-        Secure:   isSecure,
-        SameSite: sameSite,
-        Path:     "/",
-        Domain:   domain,
-    })
-    c.Cookie(&fiber.Cookie{
-        Name:     "refresh_token",
-        Value:    "",
-        Expires:  time.Now().Add(-time.Hour),
-        HTTPOnly: true,
-        Secure:   isSecure,
-        SameSite: sameSite,
-        Path:     "/auth/refresh",
-        Domain:   domain,
-    })
+	isProduction := h.config.Environment == "production"
+	isSecure := isProduction
+
+	sameSite := "Lax"
+	if isProduction {
+		sameSite = "None"
+	}
+
+	domain := ""
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		HTTPOnly: true,
+		Secure:   isSecure,
+		SameSite: sameSite,
+		Path:     "/",
+		Domain:   domain,
+	})
+	c.Cookie(&fiber.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		HTTPOnly: true,
+		Secure:   isSecure,
+		SameSite: sameSite,
+		Path:     "/auth/refresh",
+		Domain:   domain,
+	})
 }
 
 func (h *AuthHandler) getRefreshTokenFromCookie(c fiber.Ctx) (string, error) {
@@ -153,8 +136,8 @@ func (h *AuthHandler) getRefreshTokenFromCookie(c fiber.Ctx) (string, error) {
 // ============================================================
 
 // Register handles user registration
-// @Summary Register a new account
-// @Description Register a new account (personal or institution). An OTP will be sent to the provided email.
+// @Summary Register a new user
+// @Description Register a new user (personal or institution). An OTP will be sent to the provided email.
 // @Tags Authentication
 // @Accept json
 // @Produce json
@@ -175,11 +158,12 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 	}
 
 	svcReq := service.RegisterRequest{
-		Email:       req.Email,
-		Password:    req.Password,
-		Name:        req.Name,
-		Phone:       req.Phone,
-		AccountType: req.AccountType,
+		Email:            req.Email,
+		Password:         req.Password,
+		Name:             req.Name,
+		Phone:            req.Phone,
+		AccountType:      req.AccountType,
+		ProfessionalType: req.ProfessionalType,
 	}
 
 	if req.AccountType == types.AccountTypeInstitutionName {
@@ -189,7 +173,7 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 		svcReq.InstitutionType = req.InstitutionType
 	}
 
-	if err := h.service.RegisterAccount(c.Context(), svcReq); err != nil {
+	if err := h.service.RegisterUser(c.Context(), svcReq); err != nil {
 		return response.BadRequest(c, err.Error(), nil)
 	}
 
@@ -200,9 +184,7 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 	})
 }
 
-// ✅ FIXED: validateRegisterRequest using shared types
 func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
-	// Verify and validate email
 	if req.Email == "" {
 		return errors.New("email is required")
 	}
@@ -210,17 +192,14 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 		return errors.New("invalid email format")
 	}
 
-	// Validate password
 	if valid, msg := validator.Password.Validate(req.Password); !valid {
 		return errors.New(msg)
 	}
 
-	// Validate name
 	if req.Name == "" {
 		return errors.New("name is required")
 	}
 
-	// Validate phone
 	if req.Phone == "" {
 		return errors.New("phone is required")
 	}
@@ -229,18 +208,31 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 	}
 	req.Phone = validator.Phone.Normalize(req.Phone)
 
-	// Account type is optional - default to "personal"
 	if req.AccountType == "" {
 		req.AccountType = types.AccountTypePersonalName
 	}
 
-	// ✅ Validate account type using shared types
 	if req.AccountType != types.AccountTypePersonalName && req.AccountType != types.AccountTypeInstitutionName {
-		return fmt.Errorf("account_type must be '%s' or '%s'", 
+		return fmt.Errorf("account_type must be '%s' or '%s'",
 			types.AccountTypePersonalName, types.AccountTypeInstitutionName)
 	}
 
-	// ✅ Only validate institution fields if account_type is "institution"
+	// Validate professional type for personal accounts
+	if req.AccountType == types.AccountTypePersonalName && req.ProfessionalType != "" {
+		validTypes := types.AllProfessionalTypeNames()
+		isValid := false
+		for _, validType := range validTypes {
+			if req.ProfessionalType == validType {
+				isValid = true
+				break
+			}
+		}
+		if !isValid {
+			return fmt.Errorf("invalid professional_type: %s. Valid types: %v",
+				req.ProfessionalType, validTypes)
+		}
+	}
+
 	if req.AccountType == types.AccountTypeInstitutionName {
 		if req.InstitutionName == "" {
 			return errors.New("institution_name is required for institution accounts")
@@ -262,7 +254,6 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 			return errors.New("institution_type is required for institution accounts")
 		}
 
-		// ✅ FIXED: Check if institution type is valid using NAMES (with underscores)
 		validTypes := types.AllInstitutionTypeNames()
 		isValid := false
 		for _, validType := range validTypes {
@@ -272,7 +263,7 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 			}
 		}
 		if !isValid {
-			return fmt.Errorf("invalid institution_type: %s. Valid types: %v", 
+			return fmt.Errorf("invalid institution_type: %s. Valid types: %v",
 				req.InstitutionType, validTypes)
 		}
 	}
@@ -286,7 +277,7 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 
 // VerifyOTP verifies OTP and completes registration
 // @Summary Verify OTP and complete registration
-// @Description Verify the OTP sent to your email and complete account creation
+// @Description Verify the OTP sent to your email and complete user creation
 // @Tags Authentication
 // @Accept json
 // @Produce json
@@ -302,7 +293,7 @@ func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 		return response.BadRequest(c, "Invalid request", fiber.Map{"error": err.Error()})
 	}
 
-	account, result, err := h.service.VerifyOTPAndCreateAccount(c.Context(), req.Email, req.OTP)
+	user, result, err := h.service.VerifyOTPAndCreateUser(c.Context(), req.Email, req.OTP)
 	if err != nil {
 		if errors.Is(err, authdomain.ErrInvalidOTP) {
 			return response.Unauthorized(c, "Invalid or expired OTP", nil)
@@ -310,7 +301,6 @@ func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 		return response.BadRequest(c, err.Error(), nil)
 	}
 
-	// ✅ SAFELY extract tokens with nil checks
 	var accessToken, refreshToken string
 	if val, ok := result["access_token"].(string); ok {
 		accessToken = val
@@ -319,7 +309,6 @@ func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 		refreshToken = val
 	}
 
-	// ✅ Only set cookies if tokens exist
 	if accessToken != "" {
 		h.setAccessTokenCookie(c, accessToken)
 	}
@@ -327,7 +316,6 @@ func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 		h.setRefreshTokenCookie(c, refreshToken)
 	}
 
-	// ✅ Build response safely
 	authResp := AuthResponse{
 		TokenResponse: TokenResponse{
 			AccessToken:  accessToken,
@@ -335,7 +323,7 @@ func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 			TokenType:    "Bearer",
 			ExpiresIn:    int64(h.config.JWT.AccessExpiration.Seconds()),
 		},
-		Account: NewAccountResponse(account),
+		User: NewUserResponse(user, h.service, c.Context()),
 	}
 
 	if institution, ok := result["institution"].(*authdomain.Institution); ok && institution != nil {
@@ -373,7 +361,6 @@ func (h *AuthHandler) ResendOTP(c fiber.Ctx) error {
 		return response.BadRequest(c, "Invalid email format", nil)
 	}
 
-	// Validate purpose
 	validPurposes := map[string]bool{
 		"registration":   true,
 		"two_factor":     true,
@@ -382,19 +369,16 @@ func (h *AuthHandler) ResendOTP(c fiber.Ctx) error {
 		"phone_change":   true,
 	}
 	if req.Purpose == "" {
-		req.Purpose = "registration" // Default to registration
+		req.Purpose = "registration"
 	}
 	if !validPurposes[req.Purpose] {
 		return response.BadRequest(c, "Invalid purpose. Must be: registration, two_factor, password_reset, email_change, or phone_change", nil)
 	}
 
-	// Resend OTP using unified method
-	// The service will handle name lookup if needed
 	if err := h.service.ResendOTP(c.Context(), req.Email, "User", req.Purpose); err != nil {
 		return response.InternalError(c, "Failed to resend OTP", fiber.Map{"error": err.Error()})
 	}
 
-	// Get expiry based on purpose
 	expiryMinutes := 5
 	if req.Purpose == "registration" || req.Purpose == "email_change" || req.Purpose == "phone_change" {
 		expiryMinutes = 60
@@ -444,12 +428,12 @@ func (h *AuthHandler) Login(c fiber.Ctx) error {
 	ipAddress := c.IP()
 	userAgent := c.Get("User-Agent")
 
-	account, _, err := h.service.LoginAccount(c.Context(), req.Email, req.Password, ipAddress, userAgent)
+	user, _, err := h.service.LoginUser(c.Context(), req.Email, req.Password, ipAddress, userAgent)
 	if err != nil {
 		if errors.Is(err, authdomain.ErrInvalidCredentials) {
 			return response.Unauthorized(c, "Invalid credentials", nil)
 		}
-		if errors.Is(err, authdomain.ErrAccountInactive) {
+		if errors.Is(err, authdomain.ErrUserInactive) {
 			return response.Unauthorized(c, "Account is inactive", nil)
 		}
 		return response.InternalError(c, "Login failed", fiber.Map{"error": err.Error()})
@@ -457,7 +441,7 @@ func (h *AuthHandler) Login(c fiber.Ctx) error {
 
 	return response.Success(c, "2FA verification required", TwoFactorResponse{
 		Requires2FA: true,
-		Email:       account.Email,
+		Email:       user.Email,
 		ExpiresIn:   300,
 	})
 }
@@ -479,48 +463,45 @@ func (h *AuthHandler) Login(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/auth/verify-2fa [post]
 func (h *AuthHandler) VerifyTwoFactorOTP(c fiber.Ctx) error {
-    var req VerifyTwoFactorOTPRequest
-    if err := c.Bind().Body(&req); err != nil {
-        return response.BadRequest(c, "Invalid request", fiber.Map{"error": err.Error()})
-    }
+	var req VerifyTwoFactorOTPRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request", fiber.Map{"error": err.Error()})
+	}
 
-    ipAddress := c.IP()
-    userAgent := c.Get("User-Agent")
+	ipAddress := c.IP()
+	userAgent := c.Get("User-Agent")
 
-    account, accessToken, refreshToken, err := h.service.VerifyTwoFactorAndLogin(
-        c.Context(),
-        req.Email,
-        req.OTP,
-        ipAddress,
-        userAgent,
-    )
-    if err != nil {
-        if errors.Is(err, authdomain.ErrInvalidOTP) {
-            return response.Unauthorized(c, "Invalid or expired OTP", nil)
-        }
-        return response.Unauthorized(c, err.Error(), nil)
-    }
+	user, accessToken, refreshToken, err := h.service.VerifyTwoFactorAndLogin(
+		c.Context(),
+		req.Email,
+		req.OTP,
+		ipAddress,
+		userAgent,
+	)
+	if err != nil {
+		if errors.Is(err, authdomain.ErrInvalidOTP) {
+			return response.Unauthorized(c, "Invalid or expired OTP", nil)
+		}
+		return response.Unauthorized(c, err.Error(), nil)
+	}
 
-    // ✅ Log that tokens were received
-    log.Printf("✅ Tokens received - Access: %s..., Refresh: %s...", 
-        accessToken[:20], refreshToken[:20])
+	log.Printf("✅ Tokens received - Access: %s..., Refresh: %s...",
+		accessToken[:20], refreshToken[:20])
 
-    // ✅ Set cookies
-    h.setAccessTokenCookie(c, accessToken)
-    h.setRefreshTokenCookie(c, refreshToken)
-    
-    // ✅ Log that cookies were set
-    log.Println("✅ Cookies set in response")
+	h.setAccessTokenCookie(c, accessToken)
+	h.setRefreshTokenCookie(c, refreshToken)
 
-    return response.Success(c, "Login successful", AuthResponse{
-        TokenResponse: TokenResponse{
-            AccessToken:  accessToken,
-            RefreshToken: refreshToken,
-            TokenType:    "Bearer",
-            ExpiresIn:    int64(h.config.JWT.AccessExpiration.Seconds()),
-        },
-        Account: NewAccountResponse(account),
-    })
+	log.Println("✅ Cookies set in response")
+
+	return response.Success(c, "Login successful", AuthResponse{
+		TokenResponse: TokenResponse{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			TokenType:    "Bearer",
+			ExpiresIn:    int64(h.config.JWT.AccessExpiration.Seconds()),
+		},
+		User: NewUserResponse(user, h.service, c.Context()),
+	})
 }
 
 // ============================================================

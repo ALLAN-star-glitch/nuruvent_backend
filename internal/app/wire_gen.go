@@ -7,9 +7,6 @@
 package app
 
 import (
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/acchandler"
-	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/postgres"
-	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
@@ -17,10 +14,10 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
 	service2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
-	postgres3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
-	service5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
-	postgres4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
-	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
+	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
+	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
+	postgres3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
+	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
@@ -64,18 +61,14 @@ func InitializeApp() (*AppDependencies, error) {
 	authdomainNotificationService := NewAuthNotificationAdapter(notificationService)
 	serviceService := service2.NewService(repository, configConfig, redisClient, queueService, permissionService, tokenService, authdomainNotificationService, enforcer)
 	domainRepository := postgres2.NewPostgresRepository(db)
-	domainPermissionService := NewAccountPermissionAdapter(permissionService)
-	service6 := service3.NewService(domainRepository, domainPermissionService)
-	repository2 := postgres3.NewPostgresRepository(db)
 	permissionChecker := NewEventsPermissionAdapter(permissionService)
-	repository3 := postgres4.NewPostgresRepository(db)
-	service7 := service4.NewService(repository3, client)
-	mediaService := NewEventsMediaAdapter(service7)
-	service8 := service5.NewService(repository2, permissionChecker, mediaService)
+	repository2 := postgres3.NewPostgresRepository(db)
+	service5 := service3.NewService(repository2, client)
+	mediaService := NewEventsMediaAdapter(service5)
+	service6 := service4.NewService(domainRepository, permissionChecker, mediaService)
 	authHandler := authhandler.NewAuthHandler(serviceService, configConfig)
-	accountHandler := acchandler.NewAccountHandler(service6)
-	eventHandler := eventhandler.NewEventHandler(service8)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, serviceService, tokenService, service6, service8, service7, authHandler, accountHandler, eventHandler)
+	eventHandler := eventhandler.NewEventHandler(service6)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, serviceService, tokenService, service6, service5, authHandler, eventHandler)
 	return appDependencies, nil
 }
 
@@ -91,10 +84,8 @@ type AppDependencies struct {
 	AuthTokenService authdomain.TokenService
 	Notification     notificationdomain.NotificationService
 	AuthService      service2.Service
-	AccountService   service3.Service
-	EventsService    service5.Service
-	MediaService     service4.Service
+	EventsService    service4.Service
+	MediaService     service3.Service
 	AuthHandler      *authhandler.AuthHandler
-	AccountHandler   *acchandler.AccountHandler
 	EventsHandler    *eventhandler.EventHandler
 }

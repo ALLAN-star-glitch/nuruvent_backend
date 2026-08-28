@@ -1,0 +1,1 @@
+SELECT * FROM casbin_rule WHERE v0='1a4dbaec-9a19-4cbd-9ae2-7ff867c6f084' AND (v1='super_admin' OR v1='admin') AND v2='platform';

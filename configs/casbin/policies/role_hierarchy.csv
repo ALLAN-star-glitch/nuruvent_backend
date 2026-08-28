@@ -1,15 +1,60 @@
 # Nuruvent Platform Role Hierarchy
 # Format: g, user, role, domain
+# Meaning: "user inherits role in domain"
 
 # ============================================================
-# ROLE HIERARCHY (Static)
+# PLATFORM ROLE HIERARCHY
 # ============================================================
 
-# Admin inherits from Super Admin
-g, admin, super_admin, platform
+# Super Admin has full platform access
+g, super_admin, admin, platform
 
-# Account Admin inherits from Admin (for platform access)
-g, account_admin, admin, platform
+# Admin can act as account admin on platform
+g, admin, account_admin, platform
 
-# Event Manager inherits from Team Member
-g, event_manager, team_member, *
+# ============================================================
+# PERSONAL TEAM ROLE HIERARCHY
+# Domain: personal:team:{user_id}
+# ============================================================
+
+# Account Admin inherits all lower roles within the same personal team
+g, account_admin, event_manager, personal:team:{user_id}
+g, account_admin, team_member, personal:team:{user_id}
+
+# Event Manager inherits Team Member within the same personal team
+g, event_manager, team_member, personal:team:{user_id}
+
+# ============================================================
+# INSTITUTION TEAM ROLE HIERARCHY
+# Domain: institution:team:{institution_id}
+# ============================================================
+
+# Account Admin inherits all lower roles within the same institution team
+g, account_admin, event_manager, institution:team:{institution_id}
+g, account_admin, team_member, institution:team:{institution_id}
+
+# Event Manager inherits Team Member within the same institution team
+g, event_manager, team_member, institution:team:{institution_id}
+
+# ============================================================
+# WHAT THIS MEANS
+# ============================================================
+
+# If Caroline is assigned as account_admin for KCA:
+# g, 32825ab7-..., account_admin, institution:team:e1ea0a4f-...
+#
+# She automatically gets:
+# ✅ account_admin permissions for KCA
+# ✅ event_manager permissions for KCA
+# ✅ team_member permissions for KCA
+#
+# She does NOT get permissions for any other institution!
+
+# If Allan is assigned as event_manager for his personal team:
+# g, 6f2a17e5-..., event_manager, personal:team:6f2a17e5-...
+#
+# He automatically gets:
+# ✅ event_manager permissions for his personal team
+# ✅ team_member permissions for his personal team
+#
+# He does NOT get account_admin permissions!

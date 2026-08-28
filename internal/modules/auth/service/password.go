@@ -18,23 +18,23 @@ import (
 func (s *service) InitiatePasswordReset(ctx context.Context, email, newPassword string) error {
 	log.Printf("🔐 [Auth] InitiatePasswordReset called for: %s", email)
 
-	account, err := s.repo.GetAccountByEmail(email)
+	user, err := s.repo.GetUserByEmail(email)
 	if err != nil {
-		log.Printf("❌ [Auth] Error getting account: %v", err)
+		log.Printf("❌ [Auth] Error getting user: %v", err)
 		return err
 	}
-	if account == nil {
-		log.Printf("⚠️ [Auth] Account not found for: %s", email)
+	if user == nil {
+		log.Printf("⚠️ [Auth] User not found for: %s", email)
 		return nil // Don't reveal if email exists for security
 	}
 
-	log.Printf("✅ [Auth] Account found: %s (ID: %s)", account.Email, account.ID)
+	log.Printf("✅ [Auth] User found: %s (ID: %s)", user.Email, user.ID)
 
 	// ✅ Generate OTP
 	otp := s.GenerateOTP()
 	log.Printf("🔑 [Auth] Generated OTP: %s for %s", otp, email)
 
-	// ✅ Store OTP with purpose - THIS IS THE KEY FIX
+	// ✅ Store OTP with purpose
 	if err := s.StoreOTP(ctx, email, otp, "password_reset"); err != nil {
 		log.Printf("❌ [Auth] Failed to store OTP: %v", err)
 		return fmt.Errorf("failed to store OTP: %w", err)
@@ -55,8 +55,8 @@ func (s *service) InitiatePasswordReset(ctx context.Context, email, newPassword 
 	}
 
 	if err := s.notifSvc.SendOTP(ctx, authdomain.SendOTPRequest{
-		To:      account.Email,
-		Name:    account.Name,
+		To:      user.Email,
+		Name:    user.Name,
 		OTP:     otp,
 		Expires: "15 minutes",
 		Purpose: "password_reset",
@@ -94,15 +94,15 @@ func (s *service) VerifyResetOTPAndResetPassword(ctx context.Context, email, otp
 		return fmt.Errorf("invalid reset data")
 	}
 
-	// Get account
-	account, err := s.repo.GetAccountByEmail(email)
+	// Get user
+	user, err := s.repo.GetUserByEmail(email)
 	if err != nil {
-		log.Printf("❌ [Auth] Error getting account: %v", err)
+		log.Printf("❌ [Auth] Error getting user: %v", err)
 		return err
 	}
-	if account == nil {
-		log.Printf("❌ [Auth] Account not found for %s", email)
-		return authdomain.ErrAccountNotFound
+	if user == nil {
+		log.Printf("❌ [Auth] User not found for %s", email)
+		return authdomain.ErrUserNotFound
 	}
 
 	// Hash new password
@@ -113,9 +113,9 @@ func (s *service) VerifyResetOTPAndResetPassword(ctx context.Context, email, otp
 	}
 
 	// Update password
-	account.UpdatePassword(string(hashedPassword))
-	if err := s.repo.UpdateAccount(account); err != nil {
-		log.Printf("❌ [Auth] Failed to update account: %v", err)
+	user.UpdatePassword(string(hashedPassword))
+	if err := s.repo.UpdateUser(user); err != nil {
+		log.Printf("❌ [Auth] Failed to update user: %v", err)
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 
@@ -131,8 +131,8 @@ func (s *service) VerifyResetOTPAndResetPassword(ctx context.Context, email, otp
 
 	// Send password reset confirmation
 	if err := s.notifSvc.SendPasswordResetConfirm(ctx, authdomain.SendPasswordResetConfirmRequest{
-		To:   account.Email,
-		Name: account.Name,
+		To:   user.Email,
+		Name: user.Name,
 	}); err != nil {
 		log.Printf("⚠️ [Auth] Failed to send password reset confirmation: %v", err)
 	}

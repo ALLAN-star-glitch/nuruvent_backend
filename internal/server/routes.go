@@ -5,7 +5,6 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/acchandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
@@ -19,7 +18,6 @@ func SetupRoutes(
 	authMiddleware fiber.Handler,
 	authzMiddleware fiber.Handler,
 	authHandler *authhandler.AuthHandler,
-	accountHandler *acchandler.AccountHandler,
 	eventsHandler *eventhandler.EventHandler,
 ) {
 	// ================================================
@@ -45,8 +43,6 @@ func SetupRoutes(
 	// Auth routes (public + protected)
 	authHandler.RegisterRoutes(api, authMiddleware)
 
-	// Account routes
-	accountHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
 
 	// Events routes
 	eventsHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)

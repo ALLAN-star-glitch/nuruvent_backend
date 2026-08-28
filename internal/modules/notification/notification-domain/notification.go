@@ -96,6 +96,7 @@ const (
 	TypePasswordResetConfirm NotificationType = "password_reset_confirm"
 	TypeTwoFactor            NotificationType = "two_factor"
 	TypeLoginNotification    NotificationType = "login_notification"
+	TypeWelcomeInstitution   NotificationType = "welcome_institution" // For Admin of institution
 	TypeWelcomeInstitutionKYC NotificationType = "welcome_institution_kyc"
 	TypeNewInstitutionAccountRegistration		NotificationType = "new_account_institution_registration_notice"
 	TypeNewPersonalAccountRegistration			NotificationType = "new_account_personal_registration_notice"

@@ -1,9 +1,11 @@
 package authhandler
 
 import (
+	"context"
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 )
 
 // ============================================================
@@ -17,6 +19,9 @@ type RegisterRequest struct {
 	Name        string `json:"name"`
 	Phone       string `json:"phone"`
 	AccountType string `json:"account_type"`
+
+	// Professional type (for personal accounts)
+	ProfessionalType string `json:"professional_type,omitempty"`
 
 	// Institution fields (only for institution accounts)
 	InstitutionName  string `json:"institution_name,omitempty"`
@@ -103,22 +108,24 @@ type PasswordResetResponse struct {
 	ExpiresIn int    `json:"expires_in"`
 }
 
-// AccountResponse represents the account response
-type AccountResponse struct {
-	ID             string     `json:"id"`
-	Slug           string     `json:"slug"`
-	Name           string     `json:"name"`
-	DisplayName    string     `json:"display_name,omitempty"`
-	Email          string     `json:"email"`
-	Phone          string     `json:"phone"`
-	AccountType    string     `json:"account_type"`
-	AccountTypeID  string     `json:"account_type_id"`
-	EmailVerified  bool       `json:"email_verified"`
-	IdentityVerified bool     `json:"identity_verified"`
-	IsActive       bool       `json:"is_active"`
-	CreatedAt      time.Time  `json:"created_at"`
-	UpdatedAt      time.Time  `json:"updated_at"`
-	InstitutionID  *string    `json:"institution_id,omitempty"`
+// UserResponse represents the user response
+type UserResponse struct {
+	ID                 string     `json:"id"`
+	Slug               string     `json:"slug"`
+	Name               string     `json:"name"`
+	DisplayName        string     `json:"display_name,omitempty"`
+	Email              string     `json:"email"`
+	Phone              string     `json:"phone"`
+	AccountType        string     `json:"account_type"`
+	AccountTypeID      string     `json:"account_type_id"`
+	ProfessionalTypeID *string    `json:"professional_type_id,omitempty"`
+	ProfessionalType   string     `json:"professional_type,omitempty"`
+	EmailVerified      bool       `json:"email_verified"`
+	IdentityVerified   bool       `json:"identity_verified"`
+	IsActive           bool       `json:"is_active"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
+	InstitutionID      *string    `json:"institution_id,omitempty"`
 }
 
 // InstitutionResponse represents the institution response
@@ -137,8 +144,8 @@ type InstitutionResponse struct {
 
 // AuthResponse represents the auth response
 type AuthResponse struct {
-	TokenResponse TokenResponse      `json:"token"`
-	Account       AccountResponse    `json:"account"`
+	TokenResponse TokenResponse        `json:"token"`
+	User          UserResponse         `json:"user"`
 	Institution   *InstitutionResponse `json:"institution,omitempty"`
 }
 
@@ -146,33 +153,48 @@ type AuthResponse struct {
 // RESPONSE BUILDERS (Mappers)
 // ============================================================
 
-// NewAccountResponse converts authdomain.Account to AccountResponse
-func NewAccountResponse(account *authdomain.Account) AccountResponse {
-	if account == nil {
-		return AccountResponse{}
+// NewUserResponse converts authdomain.User to UserResponse
+// Fetches account type and professional type names from database
+func NewUserResponse(user *authdomain.User, svc service.Service, ctx context.Context) UserResponse {
+	if user == nil {
+		return UserResponse{}
 	}
 
-	// Get account type name
-	accountTypeName := ""
-	if account.AccountTypeID != "" {
-		// We could fetch the name here if needed
+	// Fetch account type name from database
+	accountType := ""
+	if user.AccountTypeID != "" {
+		accountTypeObj, err := svc.GetAccountTypeByID(ctx, user.AccountTypeID)
+		if err == nil && accountTypeObj != nil {
+			accountType = accountTypeObj.Name // e.g., "account_type_personal"
+		}
 	}
 
-	return AccountResponse{
-		ID:              account.ID,
-		Slug:            account.Slug,
-		Name:            account.Name,
-		DisplayName:     account.DisplayName,
-		Email:           account.Email,
-		Phone:           account.Phone,
-		AccountType:     accountTypeName,
-		AccountTypeID:   account.AccountTypeID,
-		EmailVerified:   account.EmailVerified,
-		IdentityVerified: account.IdentityVerified,
-		IsActive:        account.IsActive,
-		CreatedAt:       account.CreatedAt,
-		UpdatedAt:       account.UpdatedAt,
-		InstitutionID:   account.InstitutionID,
+	// Fetch professional type name from database
+	professionalType := ""
+	if user.ProfessionalTypeID != nil {
+		professionalTypeObj, err := svc.GetProfessionalTypeByID(ctx, *user.ProfessionalTypeID)
+		if err == nil && professionalTypeObj != nil {
+			professionalType = professionalTypeObj.Name // e.g., "professional_type_trainer"
+		}
+	}
+
+	return UserResponse{
+		ID:                 user.ID,
+		Slug:               user.Slug,
+		Name:               user.Name,
+		DisplayName:        user.DisplayName,
+		Email:              user.Email,
+		Phone:              user.Phone,
+		AccountType:        accountType,
+		AccountTypeID:      user.AccountTypeID,
+		ProfessionalTypeID: user.ProfessionalTypeID,
+		ProfessionalType:   professionalType,
+		EmailVerified:      user.EmailVerified,
+		IdentityVerified:   user.IdentityVerified,
+		IsActive:           user.IsActive,
+		CreatedAt:          user.CreatedAt,
+		UpdatedAt:          user.UpdatedAt,
+		InstitutionID:      user.InstitutionID,
 	}
 }
 
@@ -193,5 +215,19 @@ func NewInstitutionResponse(institution *authdomain.Institution) *InstitutionRes
 		Logo:        institution.Logo,
 		Website:     institution.Website,
 		IsActive:    institution.IsActive,
+	}
+}
+
+// NewAuthResponse creates a complete auth response
+func NewAuthResponse(user *authdomain.User, accessToken, refreshToken string, institution *authdomain.Institution, svc service.Service, ctx context.Context) AuthResponse {
+	return AuthResponse{
+		TokenResponse: TokenResponse{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			TokenType:    "Bearer",
+			ExpiresIn:    3600, // 1 hour
+		},
+		User:        NewUserResponse(user, svc, ctx),
+		Institution: NewInstitutionResponse(institution),
 	}
 }

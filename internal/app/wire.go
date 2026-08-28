@@ -10,9 +10,6 @@ import (
 	"github.com/google/wire"
 	"gorm.io/gorm"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account"
-	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/acchandler"
-	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth"
 	authHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
@@ -48,11 +45,9 @@ type AppDependencies struct {
 	AuthTokenService authdomain.TokenService 
 	Notification     notificationdomain.NotificationService
 	AuthService      authService.Service
-	AccountService   accountService.Service
 	EventsService    eventsService.Service
 	MediaService     mediaService.Service
 	AuthHandler      *authHandler.AuthHandler
-	AccountHandler   *accountHandler.AccountHandler
 	EventsHandler    *eventsHandler.EventHandler
 }
 
@@ -78,7 +73,6 @@ func InitializeApp() (*AppDependencies, error) {
 		// ============================================================
 		notification.ProviderSet,
 		auth.ProviderSet,
-		account.ProviderSet,
 		events.ProviderSet,
 		media.ProviderSet,
 
@@ -87,7 +81,6 @@ func InitializeApp() (*AppDependencies, error) {
 		// ============================================================
 		NewAuthNotificationAdapter,
 		NewQueueAdapter,
-		NewAccountPermissionAdapter,
 		NewEventsPermissionAdapter,
 		NewEventsMediaAdapter,
 	)
