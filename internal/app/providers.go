@@ -147,6 +147,12 @@ func NewEventsPermissionAdapter(permSvc authDomain.PermissionService) eventsDoma
     return &EventsPermissionAdapter{permSvc: permSvc}
 }
 
+// ✅ CanManagePersonalEvent - checks if user can manage their own personal events
+func (a *EventsPermissionAdapter) CanManagePersonalEvent(ctx context.Context, userID string) bool {
+    // User can manage their own personal events if they are the account admin
+    return a.permSvc.IsPersonalTeamAdmin(ctx, userID, userID)
+}
+
 func (a *EventsPermissionAdapter) CanManageEvent(ctx context.Context, userID, teamID string) bool {
     return a.permSvc.CanManageTeamEvent(ctx, teamID, userID)
 }

@@ -189,34 +189,46 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	}
 
 	// ============================================================
-	// ✅ SETUP CASBIN POLICIES FOR THE USER - PERSONAL TEAM
+	// ✅ SETUP CASBIN POLICIES - ONLY FOR PERSONAL ACCOUNTS
 	// ============================================================
+	
+	if accountTypeName == types.AccountTypePersonalName {
+		// 10. Assign account_admin role for user's personal team
+		if err := s.permService.AssignPersonalTeamAdmin(ctx, user.ID); err != nil {
+			log.Printf("⚠️ Failed to assign personal team admin role: %v", err)
+		}
 
-	// 10. Assign account_admin role for user's personal team
-	// Domain: team:{user_id}
-	if err := s.permService.AssignPersonalTeamAdmin(ctx, user.ID); err != nil {
-		log.Printf("⚠️ Failed to assign personal team admin role: %v", err)
-	}
+		// 11. Add default policies for the user's personal team
+		if err := s.permService.AddPersonalTeamPolicies(ctx, user.ID); err != nil {
+			log.Printf("⚠️ Failed to add personal team policies: %v", err)
+		}
 
-	// 11. Add default policies for the user's personal team
-	if err := s.permService.AddPersonalTeamPolicies(ctx, user.ID); err != nil {
-		log.Printf("⚠️ Failed to add personal team policies: %v", err)
-	}
-
-	// 12. Add user to team_members table for their personal team
-	if err := s.createPersonalTeamMember(ctx, user.ID); err != nil {
-		log.Printf("⚠️ Failed to create personal team member: %v", err)
+		// 12. Add user to team_members table for their personal team
+		if err := s.createPersonalTeamMember(ctx, user.ID); err != nil {
+			log.Printf("⚠️ Failed to create personal team member: %v", err)
+		}
+		
+		log.Printf("✅ Personal team created for user: %s", user.ID)
 	}
 
 	// ============================================================
 	// ✅ CREATE INSTITUTION (if institution account)
 	// ============================================================
 	if accountTypeName == types.AccountTypeInstitutionName {
-		if err := s.createInstitution(ctx, user.ID, userData, institutionTypeID); err != nil {
-			return nil, nil, fmt.Errorf("failed to create institution: %w", err)
-		}
-		log.Printf("✅ Institution created successfully for user: %s", user.ID)
-	}
+    if err := s.createInstitution(ctx, user.ID, userData, institutionTypeID); err != nil {
+        return nil, nil, fmt.Errorf("failed to create institution: %w", err)
+    }
+    log.Printf("✅ Institution created successfully for user: %s", user.ID)
+    
+    // ✅ Refresh user to get the updated InstitutionID
+    updatedUser, err := s.repo.GetUserByID(user.ID)
+    if err != nil {
+        log.Printf("⚠️ Failed to refresh user: %v", err)
+    } else if updatedUser != nil {
+        user = updatedUser
+        log.Printf("✅ User refreshed with InstitutionID: %v", user.InstitutionID)
+    }
+}
 
 	// ============================================================
 	// ✅ GENERATE TOKENS

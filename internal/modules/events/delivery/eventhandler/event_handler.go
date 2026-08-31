@@ -4,28 +4,41 @@ package eventhandler
 
 import (
 	"errors"
-	"fmt"
 	"io"
+	"log"
 	"strconv"
 
 	"github.com/gofiber/fiber/v3"
 
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
+
+	"github.com/gorilla/schema"
 )
 
 // ============================================================
 // EVENT HANDLER
 // ============================================================
 
+
 type EventHandler struct {
-	svc service.Service
+	svc      service.Service
+	enforcer *authorization.Enforcer
+	decoder  *schema.Decoder
 }
 
-func NewEventHandler(svc service.Service) *EventHandler {
+func NewEventHandler(svc service.Service, enforcer *authorization.Enforcer) *EventHandler {
+	decoder := schema.NewDecoder()
+	decoder.SetAliasTag("form") // Use the form tag
+	decoder.IgnoreUnknownKeys(true)
+	
 	return &EventHandler{
-		svc: svc,
+		svc:      svc,
+		enforcer: enforcer,
+		decoder:  decoder,
 	}
 }
 
@@ -54,7 +67,7 @@ func getQueryString(c fiber.Ctx, key string, defaultValue string) string {
 }
 
 func getUserID(c fiber.Ctx) (string, error) {
-	userID := c.Locals("user_id")
+	userID := c.Locals(authdomain.ContextKeyUserID)
 	if userID == nil {
 		return "", errors.New("user not authenticated")
 	}
@@ -63,6 +76,36 @@ func getUserID(c fiber.Ctx) (string, error) {
 		return "", errors.New("invalid user ID")
 	}
 	return userIDStr, nil
+}
+
+// canViewCreatorInfo checks if a user has permission to view creator info
+func (h *EventHandler) canViewCreatorInfo(c fiber.Ctx, userID string, event *domain.Event) bool {
+	if event.CreatedBy == userID {
+		return true
+	}
+
+	var teamDomain string
+	if event.InstitutionID != nil && *event.InstitutionID != "" {
+		teamDomain = authdomain.InstitutionTeamDomain(*event.InstitutionID)
+	} else {
+		teamDomain = authdomain.PersonalTeamDomain(event.CreatedBy)
+	}
+
+	roles := h.enforcer.GetRolesForUserInDomain(userID, teamDomain)
+	if len(roles) == 0 {
+		return false
+	}
+
+	for _, role := range roles {
+		switch role {
+		case authdomain.RoleAccountAdmin.String(),
+			authdomain.RoleEventManager.String(),
+			authdomain.RoleTeamMember.String():
+			return true
+		}
+	}
+
+	return false
 }
 
 // ============================================================
@@ -75,7 +118,7 @@ func getUserID(c fiber.Ctx) (string, error) {
 // @Tags Events
 // @Produce json
 // @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse{data=domain.Event}
+// @Success 200 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 404 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
@@ -100,7 +143,7 @@ func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
-	return response.Success(c, "Event retrieved successfully", event)
+	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
 }
 
 // GetEventBySlug godoc
@@ -109,7 +152,7 @@ func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 // @Tags Events
 // @Produce json
 // @Param slug path string true "Event Slug"
-// @Success 200 {object} response.BaseResponse{data=domain.Event}
+// @Success 200 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 404 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
@@ -134,7 +177,7 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
-	return response.Success(c, "Event retrieved successfully", event)
+	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
 }
 
 // GetUpcomingEvents godoc
@@ -143,7 +186,7 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 // @Tags Events
 // @Produce json
 // @Param limit query int false "Number of events to return" default(10)
-// @Success 200 {object} response.BaseResponse{data=[]domain.Event}
+// @Success 200 {object} response.BaseResponse{data=[]EventResponse}
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/upcoming [get]
 func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
@@ -159,7 +202,7 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 		})
 	}
 
-	return response.Success(c, "Upcoming events retrieved successfully", events)
+	return response.Success(c, "Upcoming events retrieved successfully", NewEventResponseFromEvents(events))
 }
 
 // ListEvents godoc
@@ -171,10 +214,13 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 // @Param user_id query string false "User ID (creator)"
 // @Param event_type_id query string false "Event Type ID"
 // @Param event_status_id query string false "Event Status ID"
+// @Param category_id query string false "Category ID"
 // @Param include_deleted query bool false "Include soft-deleted events"
 // @Param only_deleted query bool false "Show ONLY soft-deleted events"
 // @Param limit query int false "Limit" default(20)
 // @Param offset query int false "Offset" default(0)
+// @Param sort_by query string false "Sort by field (created_at, start_date, name)" default(created_at)
+// @Param sort_order query string false "Sort order (asc, desc)" default(desc)
 // @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
@@ -184,13 +230,13 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 	userID := getQueryString(c, "user_id", "")
 	eventTypeID := getQueryString(c, "event_type_id", "")
 	eventStatusID := getQueryString(c, "event_status_id", "")
+	categoryID := getQueryString(c, "category_id", "")
 	includeDeleted := c.Query("include_deleted") == "true"
 	onlyDeleted := c.Query("only_deleted") == "true"
 	limit := getQueryInt(c, "limit", 20)
 	offset := getQueryInt(c, "offset", 0)
-
-	fmt.Printf("DEBUG Handler: onlyDeleted=%v, institutionID=%s, userID=%s, limit=%d, offset=%d\n", 
-		onlyDeleted, institutionID, userID, limit, offset)
+	sortBy := getQueryString(c, "sort_by", "created_at")
+	sortOrder := getQueryString(c, "sort_order", "desc")
 
 	if limit > 100 {
 		limit = 100
@@ -201,10 +247,13 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 		UserID:         userID,
 		EventTypeID:    eventTypeID,
 		EventStatusID:  eventStatusID,
+		CategoryID:     categoryID,
 		IncludeDeleted: includeDeleted,
 		OnlyDeleted:    onlyDeleted,
 		Limit:          limit,
 		Offset:         offset,
+		SortBy:         sortBy,
+		SortOrder:      sortOrder,
 	}
 
 	events, total, err := h.svc.ListEvents(c.Context(), filters)
@@ -215,10 +264,12 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 	}
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
-		"data":   events,
-		"total":  total,
-		"limit":  limit,
-		"offset": offset,
+		"data":        NewEventResponseFromEvents(events),
+		"total":       total,
+		"limit":       limit,
+		"offset":      offset,
+		"sort_by":     sortBy,
+		"sort_order":  sortOrder,
 	})
 }
 
@@ -254,7 +305,7 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 	}
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
-		"data":        events,
+		"data":        NewEventResponseFromEvents(events),
 		"total":       total,
 		"page":        page,
 		"page_size":   pageSize,
@@ -268,7 +319,7 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 // @Tags Events
 // @Produce json
 // @Param limit query int false "Number of events to return" default(10)
-// @Success 200 {object} response.BaseResponse{data=[]domain.Event}
+// @Success 200 {object} response.BaseResponse{data=[]EventResponse}
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/past [get]
 func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
@@ -284,7 +335,7 @@ func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
 		})
 	}
 
-	return response.Success(c, "Past events retrieved successfully", events)
+	return response.Success(c, "Past events retrieved successfully", NewEventResponseFromEvents(events))
 }
 
 // GetEventTypes godoc
@@ -334,6 +385,7 @@ func (h *EventHandler) GetEventStatuses(c fiber.Ctx) error {
 // @Param institution_id query string false "Institution ID"
 // @Param user_id query string false "User ID (creator)"
 // @Param event_type_id query string false "Event Type ID"
+// @Param category_id query string false "Category ID"
 // @Param include_deleted query bool false "Include soft-deleted events"
 // @Param only_deleted query bool false "Show ONLY soft-deleted events"
 // @Param page query int false "Page number" default(1)
@@ -347,6 +399,7 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 	institutionID := getQueryString(c, "institution_id", "")
 	userID := getQueryString(c, "user_id", "")
 	eventTypeID := getQueryString(c, "event_type_id", "")
+	categoryID := getQueryString(c, "category_id", "")
 	includeDeleted := c.Query("include_deleted") == "true"
 	onlyDeleted := c.Query("only_deleted") == "true"
 	page := getQueryInt(c, "page", 1)
@@ -360,6 +413,7 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 		InstitutionID:  institutionID,
 		UserID:         userID,
 		EventTypeID:    eventTypeID,
+		CategoryID:     categoryID,
 		IncludeDeleted: includeDeleted,
 		OnlyDeleted:    onlyDeleted,
 		Limit:          pageSize,
@@ -374,7 +428,7 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 	}
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
-		"data":        events,
+		"data":        NewEventResponseFromEvents(events),
 		"total":       total,
 		"page":        page,
 		"page_size":   pageSize,
@@ -383,19 +437,26 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 }
 
 // ============================================================
-// PUBLIC HANDLERS WITH CREATOR INFO
+// PUBLIC HANDLERS WITH CREATOR INFO (Auth Required)
 // ============================================================
 
 // GetUpcomingEventsWithCreator godoc
 // @Summary Get upcoming events with creator details
-// @Description Get all upcoming published events with full creator information
+// @Description Get all upcoming published events with full creator information (requires auth)
 // @Tags Events
 // @Produce json
+// @Security BearerAuth
 // @Param limit query int false "Number of events to return" default(10)
 // @Success 200 {object} response.BaseResponse{data=[]EventResponse}
+// @Failure 401 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/upcoming/with-creator [get]
 func (h *EventHandler) GetUpcomingEventsWithCreator(c fiber.Ctx) error {
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
 	limit := getQueryInt(c, "limit", 10)
 	if limit > 50 {
 		limit = 50
@@ -410,7 +471,11 @@ func (h *EventHandler) GetUpcomingEventsWithCreator(c fiber.Ctx) error {
 
 	responses := make([]EventResponse, len(events))
 	for i, event := range events {
-		responses[i] = NewEventResponseFromEvent(event)
+		if h.canViewCreatorInfo(c, userID, event) {
+			responses[i] = NewEventResponseFromEventWithCreator(event)
+		} else {
+			responses[i] = NewEventResponseFromEvent(event)
+		}
 	}
 
 	return response.Success(c, "Upcoming events retrieved successfully", responses)
@@ -418,16 +483,24 @@ func (h *EventHandler) GetUpcomingEventsWithCreator(c fiber.Ctx) error {
 
 // GetEventBySlugWithCreator godoc
 // @Summary Get event by slug with creator details
-// @Description Get event details by slug with full creator information
+// @Description Get event details by slug with full creator information (requires auth)
 // @Tags Events
 // @Produce json
+// @Security BearerAuth
 // @Param slug path string true "Event Slug"
 // @Success 200 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
+// @Failure 401 {object} response.BaseResponse
+// @Failure 403 {object} response.BaseResponse
 // @Failure 404 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/slug/{slug}/with-creator [get]
 func (h *EventHandler) GetEventBySlugWithCreator(c fiber.Ctx) error {
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
 	slug := c.Params("slug")
 	if slug == "" {
 		return response.BadRequest(c, "Event slug is required", nil)
@@ -447,21 +520,33 @@ func (h *EventHandler) GetEventBySlugWithCreator(c fiber.Ctx) error {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
+	if h.canViewCreatorInfo(c, userID, event) {
+		return response.Success(c, "Event retrieved successfully", NewEventResponseFromEventWithCreator(event))
+	}
+
 	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
 }
 
 // GetEventByIDWithCreator godoc
 // @Summary Get event by ID with creator details
-// @Description Get event details by ID with full creator information
+// @Description Get event details by ID with full creator information (requires auth)
 // @Tags Events
 // @Produce json
+// @Security BearerAuth
 // @Param id path string true "Event ID"
 // @Success 200 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
+// @Failure 401 {object} response.BaseResponse
+// @Failure 403 {object} response.BaseResponse
 // @Failure 404 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/{id}/with-creator [get]
 func (h *EventHandler) GetEventByIDWithCreator(c fiber.Ctx) error {
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
 	id := c.Params("id")
 	if id == "" {
 		return response.BadRequest(c, "Event ID is required", nil)
@@ -481,6 +566,10 @@ func (h *EventHandler) GetEventByIDWithCreator(c fiber.Ctx) error {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
+	if h.canViewCreatorInfo(c, userID, event) {
+		return response.Success(c, "Event retrieved successfully", NewEventResponseFromEventWithCreator(event))
+	}
+
 	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
 }
 
@@ -490,50 +579,71 @@ func (h *EventHandler) GetEventByIDWithCreator(c fiber.Ctx) error {
 
 // GetEventsByInstitution godoc
 // @Summary Get events by institution
-// @Description Get all events for an institution
+// @Description Get all events for an institution (public - filters private events)
 // @Tags Events
 // @Produce json
-// @Security BearerAuth
 // @Param institutionId path string true "Institution ID"
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
 // @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
 // @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/institutions/{institutionId}/events [get]
 func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
-	institutionID := c.Params("institutionId")
-	if institutionID == "" {
-		return response.BadRequest(c, "Institution ID is required", nil)
-	}
+    institutionID := c.Params("institutionId")
+    if institutionID == "" {
+        return response.BadRequest(c, "Institution ID is required", nil)
+    }
 
-	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "page_size", 20)
-	if pageSize > 100 {
-		pageSize = 100
-	}
+    // ✅ Auth is OPTIONAL - user may or may not be logged in
+    var userID string
+    if user := c.Locals(authdomain.ContextKeyUserID); user != nil {
+        if id, ok := user.(string); ok {
+            userID = id
+        }
+    }
 
-	events, total, err := h.svc.GetEventsByInstitution(c.Context(), institutionID, page, pageSize)
-	if err != nil {
-		return response.InternalError(c, "Failed to get events", fiber.Map{
-			"error": err.Error(),
-		})
-	}
+    page := getQueryInt(c, "page", 1)
+    pageSize := getQueryInt(c, "page_size", 20)
+    if pageSize > 100 {
+        pageSize = 100
+    }
 
-	return response.Success(c, "Events retrieved successfully", fiber.Map{
-		"data":        events,
-		"total":       total,
-		"page":        page,
-		"page_size":   pageSize,
-		"total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
-	})
+    events, total, err := h.svc.GetEventsByInstitution(c.Context(), institutionID, page, pageSize)
+    if err != nil {
+        return response.InternalError(c, "Failed to get events", fiber.Map{
+            "error": err.Error(),
+        })
+    }
+
+    // If user is authenticated, check permissions for each event
+    var responses []EventResponse
+    if userID != "" {
+        responses = make([]EventResponse, len(events))
+        for i, event := range events {
+            if h.canViewCreatorInfo(c, userID, event) {
+                responses[i] = NewEventResponseFromEventWithCreator(event)
+            } else {
+                responses[i] = NewEventResponseFromEvent(event)
+            }
+        }
+    } else {
+        // Not authenticated - return events without creator info
+        responses = NewEventResponseFromEvents(events)
+    }
+
+    return response.Success(c, "Events retrieved successfully", fiber.Map{
+        "data":        responses,
+        "total":       total,
+        "page":        page,
+        "page_size":   pageSize,
+        "total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
+    })
 }
 
 // GetEventsByInstitutionWithCreator godoc
 // @Summary Get events by institution with creator details
-// @Description Get all events for an institution with full creator information
+// @Description Get all events for an institution with full creator information (requires team admin)
 // @Tags Events
 // @Produce json
 // @Security BearerAuth
@@ -547,6 +657,11 @@ func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/institutions/{institutionId}/events/with-creator [get]
 func (h *EventHandler) GetEventsByInstitutionWithCreator(c fiber.Ctx) error {
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
 	institutionID := c.Params("institutionId")
 	if institutionID == "" {
 		return response.BadRequest(c, "Institution ID is required", nil)
@@ -567,7 +682,11 @@ func (h *EventHandler) GetEventsByInstitutionWithCreator(c fiber.Ctx) error {
 
 	responses := make([]EventResponse, len(events))
 	for i, event := range events {
-		responses[i] = NewEventResponseFromEvent(event)
+		if h.canViewCreatorInfo(c, userID, event) {
+			responses[i] = NewEventResponseFromEventWithCreator(event)
+		} else {
+			responses[i] = NewEventResponseFromEvent(event)
+		}
 	}
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
@@ -581,7 +700,7 @@ func (h *EventHandler) GetEventsByInstitutionWithCreator(c fiber.Ctx) error {
 
 // GetEventsByUserWithCreator godoc
 // @Summary Get events by user with creator details
-// @Description Get all events created by a specific user with full creator information
+// @Description Get all events created by a specific user with full creator information (requires auth)
 // @Tags Events
 // @Produce json
 // @Security BearerAuth
@@ -595,8 +714,13 @@ func (h *EventHandler) GetEventsByInstitutionWithCreator(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/users/{userId}/events/with-creator [get]
 func (h *EventHandler) GetEventsByUserWithCreator(c fiber.Ctx) error {
-	userID := c.Params("userId")
-	if userID == "" {
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
+	targetUserID := c.Params("userId")
+	if targetUserID == "" {
 		return response.BadRequest(c, "User ID is required", nil)
 	}
 
@@ -606,7 +730,7 @@ func (h *EventHandler) GetEventsByUserWithCreator(c fiber.Ctx) error {
 		pageSize = 100
 	}
 
-	events, total, err := h.svc.GetEventsByUserWithCreator(c.Context(), userID, page, pageSize)
+	events, total, err := h.svc.GetEventsByUserWithCreator(c.Context(), targetUserID, page, pageSize)
 	if err != nil {
 		return response.InternalError(c, "Failed to get events", fiber.Map{
 			"error": err.Error(),
@@ -615,7 +739,11 @@ func (h *EventHandler) GetEventsByUserWithCreator(c fiber.Ctx) error {
 
 	responses := make([]EventResponse, len(events))
 	for i, event := range events {
-		responses[i] = NewEventResponseFromEvent(event)
+		if h.canViewCreatorInfo(c, userID, event) {
+			responses[i] = NewEventResponseFromEventWithCreator(event)
+		} else {
+			responses[i] = NewEventResponseFromEvent(event)
+		}
 	}
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
@@ -659,50 +787,9 @@ func (h *EventHandler) GetMyEvents(c fiber.Ctx) error {
 		})
 	}
 
-	return response.Success(c, "Events retrieved successfully", fiber.Map{
-		"data":        events,
-		"total":       total,
-		"page":        page,
-		"page_size":   pageSize,
-		"total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
-	})
-}
-
-// GetMyEventsWithCreator godoc
-// @Summary Get my events with creator details
-// @Description Get all events created by the authenticated user with creator info
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/users/me/events/with-creator [get]
-func (h *EventHandler) GetMyEventsWithCreator(c fiber.Ctx) error {
-	userID, err := getUserID(c)
-	if err != nil {
-		return response.Unauthorized(c, "User not authenticated", nil)
-	}
-
-	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "page_size", 20)
-	if pageSize > 100 {
-		pageSize = 100
-	}
-
-	events, total, err := h.svc.GetEventsByUserWithCreator(c.Context(), userID, page, pageSize)
-	if err != nil {
-		return response.InternalError(c, "Failed to get events", fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
 	responses := make([]EventResponse, len(events))
 	for i, event := range events {
-		responses[i] = NewEventResponseFromEvent(event)
+		responses[i] = NewEventResponseFromEventWithCreator(event)
 	}
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
@@ -714,6 +801,27 @@ func (h *EventHandler) GetMyEventsWithCreator(c fiber.Ctx) error {
 	})
 }
 
+// GetMyEventsWithCreator godoc
+// @Summary Get my events with creator details
+// @Description Get all events created by the authenticated user with creator info (same as GetMyEvents)
+// @Tags Events
+// @Produce json
+// @Security BearerAuth
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(20)
+// @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
+// @Failure 400 {object} response.BaseResponse
+// @Failure 401 {object} response.BaseResponse
+// @Failure 500 {object} response.BaseResponse
+// @Router /api/v1/users/me/events/with-creator [get]
+func (h *EventHandler) GetMyEventsWithCreator(c fiber.Ctx) error {
+	return h.GetMyEvents(c)
+}
+
+// ============================================================
+// CREATE DRAFT - Personal
+// ============================================================
+
 // ============================================================
 // CREATE DRAFT - Personal
 // ============================================================
@@ -722,24 +830,11 @@ func (h *EventHandler) GetMyEventsWithCreator(c fiber.Ctx) error {
 // @Summary Create a personal draft event
 // @Description Create a draft event for personal account (no institution required)
 // @Tags Events
-// @Accept multipart/form-data
+// @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param name formData string false "Event name" default(Untitled Event)
-// @Param description formData string false "Event description"
-// @Param event_type_id formData string false "Event Type ID"
-// @Param date formData string false "Event date (YYYY-MM-DD)"
-// @Param time formData string false "Event time (HH:MM)"
-// @Param duration formData int false "Event duration in minutes" default(60)
-// @Param price formData number false "Event price"
-// @Param certificate_price formData number false "Certificate price"
-// @Param location formData string false "Event location"
-// @Param is_virtual formData bool false "Is virtual event" default(true)
-// @Param zoom_link formData string false "Zoom link"
-// @Param meet_link formData string false "Meet link"
-// @Param max_attendees formData int false "Maximum attendees"
-// @Param image formData file false "Event image"
-// @Success 201 {object} response.BaseResponse{data=domain.Event}
+// @Param request body CreateDraftRequest true "Draft event details"
+// @Success 201 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
@@ -751,57 +846,17 @@ func (h *EventHandler) CreatePersonalDraft(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
+	// Bind JSON request
 	var req CreateDraftRequest
-	if err := c.Bind().Form(&req); err != nil {
+	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	// Get image file if provided (optional)
-	var imageData []byte
-	var imageName string
-	var contentType string
-
-	file, err := c.FormFile("image")
-	if err == nil && file != nil {
-		fileContent, err := file.Open()
-		if err != nil {
-			return response.InternalError(c, "Failed to open image file", nil)
-		}
-		defer fileContent.Close()
-
-		imageData, err = io.ReadAll(fileContent)
-		if err != nil {
-			return response.InternalError(c, "Failed to read image file", nil)
-		}
-		imageName = file.Filename
-		contentType = file.Header.Get("Content-Type")
-	}
-
-	cmd := service.CreateDraftCommand{
-		Name:             req.Name,
-		Description:      req.Description,
-		EventTypeID:      req.EventTypeID,
-		InstitutionID:    nil,
-		CreatedBy:        userID,
-		Date:             req.Date,
-		Time:             req.Time,
-		Duration:         req.Duration,
-		Price:            req.Price,
-		CertificatePrice: req.CertificatePrice,
-		Location:         req.Location,
-		IsVirtual:        req.IsVirtual,
-		ZoomLink:         req.ZoomLink,
-		MeetLink:         req.MeetLink,
-		MaxAttendees:     req.MaxAttendees,
-		IsFeatured:       req.IsFeatured,
-		IsPrivate:        req.IsPrivate,
-		ImageData:        imageData,
-		ImageName:        imageName,
-		ContentType:      contentType,
-		TeamType:         "personal",
-	}
+	// ✅ Convert to command - set owner_type from URL context
+	// Personal endpoint = "personal", no institution ID
+	cmd := ConvertCreateDraftRequestToCommand(req, userID, "personal", "")
 
 	event, err := h.svc.CreateDraft(c.Context(), cmd)
 	if err != nil {
@@ -816,8 +871,14 @@ func (h *EventHandler) CreatePersonalDraft(c fiber.Ctx) error {
 		})
 	}
 
-	return response.Created(c, "Draft created successfully", event)
+	return response.Created(c, "Draft created successfully", NewEventResponseFromEventWithCreator(event))
 }
+
+// ============================================================
+// CREATE DRAFT - Institution
+// ============================================================
+
+// internal/modules/events/handler/eventhandler.go
 
 // ============================================================
 // CREATE DRAFT - Institution
@@ -827,25 +888,12 @@ func (h *EventHandler) CreatePersonalDraft(c fiber.Ctx) error {
 // @Summary Create a draft event for institution
 // @Description Create a draft event for institution account (institution ID required)
 // @Tags Events
-// @Accept multipart/form-data
+// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param institutionId path string true "Institution ID"
-// @Param name formData string false "Event name" default(Untitled Event)
-// @Param description formData string false "Event description"
-// @Param event_type_id formData string false "Event Type ID"
-// @Param date formData string false "Event date (YYYY-MM-DD)"
-// @Param time formData string false "Event time (HH:MM)"
-// @Param duration formData int false "Event duration in minutes" default(60)
-// @Param price formData number false "Event price"
-// @Param certificate_price formData number false "Certificate price"
-// @Param location formData string false "Event location"
-// @Param is_virtual formData bool false "Is virtual event" default(true)
-// @Param zoom_link formData string false "Zoom link"
-// @Param meet_link formData string false "Meet link"
-// @Param max_attendees formData int false "Maximum attendees"
-// @Param image formData file false "Event image"
-// @Success 201 {object} response.BaseResponse{data=domain.Event}
+// @Param request body CreateDraftRequest true "Draft event details"
+// @Success 201 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
@@ -862,57 +910,17 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
+	// Bind JSON request
 	var req CreateDraftRequest
-	if err := c.Bind().Form(&req); err != nil {
+	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	// Get image file if provided (optional)
-	var imageData []byte
-	var imageName string
-	var contentType string
-
-	file, err := c.FormFile("image")
-	if err == nil && file != nil {
-		fileContent, err := file.Open()
-		if err != nil {
-			return response.InternalError(c, "Failed to open image file", nil)
-		}
-		defer fileContent.Close()
-
-		imageData, err = io.ReadAll(fileContent)
-		if err != nil {
-			return response.InternalError(c, "Failed to read image file", nil)
-		}
-		imageName = file.Filename
-		contentType = file.Header.Get("Content-Type")
-	}
-
-	cmd := service.CreateDraftCommand{
-		Name:             req.Name,
-		Description:      req.Description,
-		EventTypeID:      req.EventTypeID,
-		InstitutionID:    &institutionID,
-		CreatedBy:        userID,
-		Date:             req.Date,
-		Time:             req.Time,
-		Duration:         req.Duration,
-		Price:            req.Price,
-		CertificatePrice: req.CertificatePrice,
-		Location:         req.Location,
-		IsVirtual:        req.IsVirtual,
-		ZoomLink:         req.ZoomLink,
-		MeetLink:         req.MeetLink,
-		MaxAttendees:     req.MaxAttendees,
-		IsFeatured:       req.IsFeatured,
-		IsPrivate:        req.IsPrivate,
-		ImageData:        imageData,
-		ImageName:        imageName,
-		ContentType:      contentType,
-		TeamType:         "institution",
-	}
+	// ✅ Convert to command - set owner_type from URL context
+	// Institution endpoint = "institution", institution ID from URL
+	cmd := ConvertCreateDraftRequestToCommand(req, userID, "institution", institutionID)
 
 	event, err := h.svc.CreateDraft(c.Context(), cmd)
 	if err != nil {
@@ -927,8 +935,12 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 		})
 	}
 
-	return response.Created(c, "Draft created successfully", event)
+	return response.Created(c, "Draft created successfully", NewEventResponseFromEventWithCreator(event))
 }
+
+// ============================================================
+// CREATE PUBLISHED EVENT - Personal
+// ============================================================
 
 // ============================================================
 // CREATE PUBLISHED EVENT - Personal
@@ -938,26 +950,11 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 // @Summary Create a published personal event
 // @Description Create a published event for personal account (no institution required)
 // @Tags Events
-// @Accept multipart/form-data
+// @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param name formData string true "Event name"
-// @Param description formData string false "Event description"
-// @Param event_type_id formData string true "Event Type ID"
-// @Param date formData string true "Event date (YYYY-MM-DD)"
-// @Param time formData string true "Event time (HH:MM)"
-// @Param duration formData int true "Event duration in minutes"
-// @Param price formData number false "Event price"
-// @Param certificate_price formData number false "Certificate price"
-// @Param location formData string false "Event location (required for in-person)"
-// @Param is_virtual formData bool false "Is virtual event" default(true)
-// @Param is_featured formData bool false "Is featured event"
-// @Param is_private formData bool false "Is private event"
-// @Param zoom_link formData string false "Zoom link (required for virtual)"
-// @Param meet_link formData string false "Meet link (required for virtual)"
-// @Param max_attendees formData int false "Maximum attendees"
-// @Param image formData file false "Event image"
-// @Success 201 {object} response.BaseResponse{data=domain.Event}
+// @Param request body CreateEventRequest true "Event details"
+// @Success 201 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
@@ -969,8 +966,9 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	var req CreateEventWithImageRequest
-	if err := c.Bind().Form(&req); err != nil {
+	// Bind JSON request
+	var req CreateEventRequest
+	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{
 			"error": err.Error(),
 		})
@@ -983,69 +981,22 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 	if req.EventTypeID == "" {
 		return response.BadRequest(c, "Event type is required", nil)
 	}
-	if req.Date == "" {
-		return response.BadRequest(c, "Event date is required", nil)
+	if req.Description == "" {
+		return response.BadRequest(c, "Description is required for published events", nil)
 	}
-	if req.Time == "" {
-		return response.BadRequest(c, "Event time is required", nil)
+	if len(req.Schedules) == 0 {
+		return response.BadRequest(c, "At least one schedule is required", nil)
 	}
-	if req.Duration <= 0 {
-		return response.BadRequest(c, "Event duration must be greater than 0", nil)
+	if len(req.Tickets) == 0 {
+		return response.BadRequest(c, "At least one ticket is required", nil)
 	}
-	if req.Duration < 15 {
-		return response.BadRequest(c, "Duration must be at least 15 minutes", nil)
-	}
-	if !req.IsVirtual && req.Location == "" {
-		return response.BadRequest(c, "Location is required for in-person events", nil)
-	}
-	if req.IsVirtual && req.ZoomLink == "" && req.MeetLink == "" {
-		return response.BadRequest(c, "At least one meeting link is required for virtual events", nil)
+	if req.Visibility == "" {
+		return response.BadRequest(c, "Visibility is required (public, private, unlisted)", nil)
 	}
 
-	// Get image file if provided (optional)
-	var imageData []byte
-	var imageName string
-	var contentType string
-
-	file, err := c.FormFile("image")
-	if err == nil && file != nil {
-		fileContent, err := file.Open()
-		if err != nil {
-			return response.InternalError(c, "Failed to open image file", nil)
-		}
-		defer fileContent.Close()
-
-		imageData, err = io.ReadAll(fileContent)
-		if err != nil {
-			return response.InternalError(c, "Failed to read image file", nil)
-		}
-		imageName = file.Filename
-		contentType = file.Header.Get("Content-Type")
-	}
-
-	cmd := service.CreateEventCommand{
-		Name:             req.Name,
-		Description:      req.Description,
-		EventTypeID:      req.EventTypeID,
-		InstitutionID:    nil,
-		CreatedBy:        userID,
-		Date:             req.Date,
-		Time:             req.Time,
-		Duration:         req.Duration,
-		Price:            req.Price,
-		CertificatePrice: req.CertificatePrice,
-		Location:         req.Location,
-		IsVirtual:        req.IsVirtual,
-		ZoomLink:         req.ZoomLink,
-		MeetLink:         req.MeetLink,
-		MaxAttendees:     req.MaxAttendees,
-		IsFeatured:       req.IsFeatured,
-		IsPrivate:        req.IsPrivate,
-		ImageData:        imageData,
-		ImageName:        imageName,
-		ContentType:      contentType,
-		TeamType:         "personal",
-	}
+	// ✅ Convert to command - set owner_type from URL context
+	// Personal endpoint = "personal", no institution ID
+	cmd := ConvertCreateEventRequestToCommand(req, userID, "personal", "")
 
 	event, err := h.svc.CreateEvent(c.Context(), cmd)
 	if err != nil {
@@ -1060,8 +1011,12 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 		})
 	}
 
-	return response.Created(c, "Event created successfully", event)
+	return response.Created(c, "Event created successfully", NewEventResponseFromEventWithCreator(event))
 }
+
+// ============================================================
+// CREATE PUBLISHED EVENT - Institution
+// ============================================================
 
 // ============================================================
 // CREATE PUBLISHED EVENT - Institution
@@ -1071,136 +1026,73 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 // @Summary Create a published event for institution
 // @Description Create a published event for institution account (institution ID required)
 // @Tags Events
-// @Accept multipart/form-data
+// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param institutionId path string true "Institution ID"
-// @Param name formData string true "Event name"
-// @Param description formData string false "Event description"
-// @Param event_type_id formData string true "Event Type ID"
-// @Param date formData string true "Event date (YYYY-MM-DD)"
-// @Param time formData string true "Event time (HH:MM)"
-// @Param duration formData int true "Event duration in minutes"
-// @Param price formData number false "Event price"
-// @Param certificate_price formData number false "Certificate price"
-// @Param location formData string false "Event location (required for in-person)"
-// @Param is_virtual formData bool false "Is virtual event" default(true)
-// @Param is_featured formData bool false "Is featured event"
-// @Param is_private formData bool false "Is private event"
-// @Param zoom_link formData string false "Zoom link (required for virtual)"
-// @Param meet_link formData string false "Meet link (required for virtual)"
-// @Param max_attendees formData int false "Maximum attendees"
-// @Param image formData file false "Event image"
-// @Success 201 {object} response.BaseResponse{data=domain.Event}
+// @Param request body CreateEventRequest true "Event details"
+// @Success 201 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/institutions/{institutionId}/events [post]
 func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
-	institutionID := c.Params("institutionId")
-	if institutionID == "" {
-		return response.BadRequest(c, "Institution ID is required", nil)
-	}
+    institutionID := c.Params("institutionId")
+    if institutionID == "" {
+        return response.BadRequest(c, "Institution ID is required", nil)
+    }
 
-	userID, err := getUserID(c)
-	if err != nil {
-		return response.Unauthorized(c, "User not authenticated", nil)
-	}
+    userID, err := getUserID(c)
+    if err != nil {
+        return response.Unauthorized(c, "User not authenticated", nil)
+    }
 
-	var req CreateEventWithImageRequest
-	if err := c.Bind().Form(&req); err != nil {
-		return response.BadRequest(c, "Invalid request", fiber.Map{
-			"error": err.Error(),
-		})
-	}
+    var req CreateEventRequest
+    if err := c.Bind().Body(&req); err != nil {
+        return response.BadRequest(c, "Invalid request", fiber.Map{
+            "error": err.Error(),
+        })
+    }
 
-	// Strict validation for published events
-	if req.Name == "" {
-		return response.BadRequest(c, "Event name is required", nil)
-	}
-	if req.EventTypeID == "" {
-		return response.BadRequest(c, "Event type is required", nil)
-	}
-	if req.Date == "" {
-		return response.BadRequest(c, "Event date is required", nil)
-	}
-	if req.Time == "" {
-		return response.BadRequest(c, "Event time is required", nil)
-	}
-	if req.Duration <= 0 {
-		return response.BadRequest(c, "Event duration must be greater than 0", nil)
-	}
-	if req.Duration < 15 {
-		return response.BadRequest(c, "Duration must be at least 15 minutes", nil)
-	}
-	if !req.IsVirtual && req.Location == "" {
-		return response.BadRequest(c, "Location is required for in-person events", nil)
-	}
-	if req.IsVirtual && req.ZoomLink == "" && req.MeetLink == "" {
-		return response.BadRequest(c, "At least one meeting link is required for virtual events", nil)
-	}
+    // ✅ ADD DEBUG LOGGING
+    log.Printf("🔍 DEBUG: Request - Name='%s', EventTypeID='%s', Tickets count=%d", 
+        req.Name, req.EventTypeID, len(req.Tickets))
+    for i, ticket := range req.Tickets {
+        log.Printf("🔍 DEBUG: Ticket %d - TypeID='%s', Name='%s', Price=%f, Quantity=%d", 
+            i, ticket.TicketTypeID, ticket.Name, ticket.Price, ticket.Quantity)
+    }
 
-	// Get image file if provided (optional)
-	var imageData []byte
-	var imageName string
-	var contentType string
+    // ✅ Convert to command - set owner_type from URL context
+    cmd := ConvertCreateEventRequestToCommand(req, userID, "institution", institutionID)
 
-	file, err := c.FormFile("image")
-	if err == nil && file != nil {
-		fileContent, err := file.Open()
-		if err != nil {
-			return response.InternalError(c, "Failed to open image file", nil)
-		}
-		defer fileContent.Close()
+    // ✅ ADD DEBUG LOGGING FOR COMMAND
+    log.Printf("🔍 DEBUG: Command - OwnerType='%s', InstitutionID='%s', Tickets count=%d", 
+        cmd.OwnerType, cmd.InstitutionID, len(cmd.Tickets))
+    for i, ticket := range cmd.Tickets {
+        log.Printf("🔍 DEBUG: Command Ticket %d - TypeID='%s', Name='%s', Price=%f, Quantity=%d", 
+            i, ticket.TicketTypeID, ticket.Name, ticket.Price, ticket.Quantity)
+    }
 
-		imageData, err = io.ReadAll(fileContent)
-		if err != nil {
-			return response.InternalError(c, "Failed to read image file", nil)
-		}
-		imageName = file.Filename
-		contentType = file.Header.Get("Content-Type")
-	}
+    event, err := h.svc.CreateEvent(c.Context(), cmd)
+    if err != nil {
+        if errors.Is(err, domain.ErrEventStatusNotFound) {
+            return response.BadRequest(c, "Invalid event status", nil)
+        }
+        if errors.Is(err, domain.ErrEventTypeNotFound) {
+            return response.BadRequest(c, "Invalid event type", nil)
+        }
+        return response.InternalError(c, "Failed to create event", fiber.Map{
+            "error": err.Error(),
+        })
+    }
 
-	cmd := service.CreateEventCommand{
-		Name:             req.Name,
-		Description:      req.Description,
-		EventTypeID:      req.EventTypeID,
-		InstitutionID:    &institutionID,
-		CreatedBy:        userID,
-		Date:             req.Date,
-		Time:             req.Time,
-		Duration:         req.Duration,
-		Price:            req.Price,
-		CertificatePrice: req.CertificatePrice,
-		Location:         req.Location,
-		IsVirtual:        req.IsVirtual,
-		ZoomLink:         req.ZoomLink,
-		MeetLink:         req.MeetLink,
-		MaxAttendees:     req.MaxAttendees,
-		IsFeatured:       req.IsFeatured,
-		IsPrivate:        req.IsPrivate,
-		ImageData:        imageData,
-		ImageName:        imageName,
-		ContentType:      contentType,
-		TeamType:         "institution",
-	}
-
-	event, err := h.svc.CreateEvent(c.Context(), cmd)
-	if err != nil {
-		if errors.Is(err, domain.ErrEventStatusNotFound) {
-			return response.BadRequest(c, "Invalid event status", nil)
-		}
-		if errors.Is(err, domain.ErrEventTypeNotFound) {
-			return response.BadRequest(c, "Invalid event type", nil)
-		}
-		return response.InternalError(c, "Failed to create event", fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return response.Created(c, "Event created successfully", event)
+    return response.Created(c, "Event created successfully", NewEventResponseFromEventWithCreator(event))
 }
+
+// ============================================================
+// UPDATE EVENT
+// ============================================================
 
 // ============================================================
 // UPDATE EVENT
@@ -1215,7 +1107,7 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Param id path string true "Event ID"
 // @Param request body UpdateEventRequest true "Event update details"
-// @Success 200 {object} response.BaseResponse{data=domain.Event}
+// @Success 200 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
@@ -1223,56 +1115,38 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/{id} [put]
 func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
-	id := c.Params("id")
-	if id == "" {
-		return response.BadRequest(c, "Event ID is required", nil)
-	}
+    id := c.Params("id")
+    if id == "" {
+        return response.BadRequest(c, "Event ID is required", nil)
+    }
 
-	userID, err := getUserID(c)
-	if err != nil {
-		return response.Unauthorized(c, "User not authenticated", nil)
-	}
+    userID, err := getUserID(c)
+    if err != nil {
+        return response.Unauthorized(c, "User not authenticated", nil)
+    }
 
-	var req UpdateEventRequest
-	if err := c.Bind().Body(&req); err != nil {
-		return response.BadRequest(c, "Invalid request", fiber.Map{
-			"error": err.Error(),
-		})
-	}
+    var req UpdateEventRequest
+    if err := c.Bind().Body(&req); err != nil {
+        return response.BadRequest(c, "Invalid request", fiber.Map{
+            "error": err.Error(),
+        })
+    }
 
-	cmd := service.UpdateEventCommand{
-		ID:               id,
-		UpdatedBy:        userID,
-		Name:             req.Name,
-		DisplayName:      req.DisplayName,
-		Description:      req.Description,
-		EventTypeID:      req.EventTypeID,
-		EventStatusID:    req.EventStatusID,
-		Date:             req.Date,
-		Time:             req.Time,
-		Duration:         req.Duration,
-		Price:            req.Price,
-		CertificatePrice: req.CertificatePrice,
-		Location:         req.Location,
-		IsVirtual:        req.IsVirtual,
-		ZoomLink:         req.ZoomLink,
-		MeetLink:         req.MeetLink,
-		MaxAttendees:     req.MaxAttendees,
-		IsFeatured:       req.IsFeatured,
-		IsPrivate:        req.IsPrivate,
-	}
+    // ✅ Convert to command - no owner_type needed
+    // The service will determine owner_type from the existing event
+    cmd := ConvertUpdateEventRequestToCommand(req, id, userID)
 
-	event, err := h.svc.UpdateEvent(c.Context(), cmd)
-	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		return response.InternalError(c, "Failed to update event", fiber.Map{
-			"error": err.Error(),
-		})
-	}
+    event, err := h.svc.UpdateEvent(c.Context(), cmd)
+    if err != nil {
+        if errors.Is(err, domain.ErrEventNotFound) {
+            return response.NotFound(c, "Event not found", nil)
+        }
+        return response.InternalError(c, "Failed to update event", fiber.Map{
+            "error": err.Error(),
+        })
+    }
 
-	return response.Success(c, "Event updated successfully", event)
+    return response.Success(c, "Event updated successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // ============================================================
@@ -1360,7 +1234,7 @@ func (h *EventHandler) PermanentlyDeleteEvent(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse{data=domain.Event}
+// @Success 200 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
@@ -1388,7 +1262,7 @@ func (h *EventHandler) RestoreEvent(c fiber.Ctx) error {
 		})
 	}
 
-	return response.Success(c, "Event restored successfully", event)
+	return response.Success(c, "Event restored successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // ============================================================
@@ -1541,7 +1415,7 @@ func (h *EventHandler) BulkRestoreEvents(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse{data=domain.Event}
+// @Success 200 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
@@ -1569,7 +1443,7 @@ func (h *EventHandler) PublishEvent(c fiber.Ctx) error {
 		})
 	}
 
-	return response.Success(c, "Event published successfully", event)
+	return response.Success(c, "Event published successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // CancelEvent godoc
@@ -1579,7 +1453,7 @@ func (h *EventHandler) PublishEvent(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse{data=domain.Event}
+// @Success 200 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
@@ -1607,7 +1481,7 @@ func (h *EventHandler) CancelEvent(c fiber.Ctx) error {
 		})
 	}
 
-	return response.Success(c, "Event cancelled successfully", event)
+	return response.Success(c, "Event cancelled successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // CompleteEvent godoc
@@ -1617,7 +1491,7 @@ func (h *EventHandler) CancelEvent(c fiber.Ctx) error {
 // @Produce json
 // @Security BearerAuth
 // @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse{data=domain.Event}
+// @Success 200 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
@@ -1640,7 +1514,7 @@ func (h *EventHandler) CompleteEvent(c fiber.Ctx) error {
 		})
 	}
 
-	return response.Success(c, "Event completed successfully", event)
+	return response.Success(c, "Event completed successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // ============================================================
@@ -1790,7 +1664,7 @@ func (h *EventHandler) BulkCompleteEvents(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Param id path string true "Event ID"
 // @Param request body DuplicateEventRequest false "Duplicate options"
-// @Success 200 {object} response.BaseResponse{data=domain.Event}
+// @Success 200 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
@@ -1826,7 +1700,7 @@ func (h *EventHandler) DuplicateEvent(c fiber.Ctx) error {
 		})
 	}
 
-	return response.Success(c, "Event duplicated successfully", event)
+	return response.Success(c, "Event duplicated successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // ============================================================
@@ -1893,7 +1767,7 @@ func (h *EventHandler) BulkDuplicateEvents(c fiber.Ctx) error {
 // @Param institutionId path string true "Institution ID"
 // @Param eventId path string true "Event ID"
 // @Param image formData file true "Event image"
-// @Success 200 {object} response.BaseResponse{data=domain.MediaInfo}
+// @Success 200 {object} response.BaseResponse{data=MediaInfoResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
@@ -1959,7 +1833,7 @@ func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 // @Param institutionId path string true "Institution ID"
 // @Param eventId path string true "Event ID"
 // @Param certificate formData file true "Certificate template (PDF or image)"
-// @Success 200 {object} response.BaseResponse{data=domain.MediaInfo}
+// @Success 200 {object} response.BaseResponse{data=MediaInfoResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse

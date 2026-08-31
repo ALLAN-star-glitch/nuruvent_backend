@@ -5,10 +5,10 @@ package postgres
 import (
 	"context"
 	"errors"
-	"time"
 	"fmt"
-
 	"log"
+	"time"
+
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	"gorm.io/gorm"
 )
@@ -45,9 +45,39 @@ func (r *PostgresRepository) getStatusIDByName(ctx context.Context, name string)
 // EVENT CRUD
 // ============================================================
 
+// internal/modules/events/postgres/repository.go
+
 func (r *PostgresRepository) CreateEvent(ctx context.Context, event *domain.Event) error {
-	model := ToModelEvent(event)
-	return r.db.WithContext(ctx).Create(model).Error
+    model := toModelEvent(event)
+    
+    // ✅ Add debug logging
+    log.Printf("🔍 Creating event with model: %+v", model)
+    log.Printf("🔍 Schedules: %+v", event.Schedules)
+    log.Printf("🔍 Tickets: %+v", event.Tickets)
+    log.Printf("🔍 Speakers: %+v", event.Speakers)
+    log.Printf("🔍 Materials: %+v", event.Materials)
+    
+    // Create the main event
+    if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
+        log.Printf("❌ Failed to create event: %v", err)
+        return err
+    }
+
+    // Save child entities
+    if err := r.saveSchedules(ctx, event.ID, event.Schedules); err != nil {
+        return err
+    }
+    if err := r.saveTickets(ctx, event.ID, event.Tickets); err != nil {
+        return err
+    }
+    if err := r.saveSpeakers(ctx, event.ID, event.Speakers); err != nil {
+        return err
+    }
+    if err := r.saveMaterials(ctx, event.ID, event.Materials); err != nil {
+        return err
+    }
+
+    return nil
 }
 
 func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*domain.Event, error) {
@@ -61,7 +91,18 @@ func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*doma
 		}
 		return nil, err
 	}
-	return ToDomainEvent(&model), nil
+
+	event := toDomainEvent(&model)
+	if event == nil {
+		return nil, nil
+	}
+
+	// Load child entities
+	if err := r.loadChildEntities(ctx, event); err != nil {
+		return nil, err
+	}
+
+	return event, nil
 }
 
 func (r *PostgresRepository) GetEventByIDIncludingDeleted(ctx context.Context, id string) (*domain.Event, error) {
@@ -76,19 +117,40 @@ func (r *PostgresRepository) GetEventByIDIncludingDeleted(ctx context.Context, i
 		}
 		return nil, err
 	}
-	return ToDomainEvent(&model), nil
+
+	event := toDomainEvent(&model)
+	if event == nil {
+		return nil, nil
+	}
+
+	// Load child entities
+	if err := r.loadChildEntities(ctx, event); err != nil {
+		return nil, err
+	}
+
+	return event, nil
 }
 
 func (r *PostgresRepository) GetEventByName(ctx context.Context, name string) (*domain.Event, error) {
 	var model EventModel
-	err := r.db.WithContext(ctx).Where("slug = ?", name).First(&model).Error
+	err := r.db.WithContext(ctx).Where("name = ? AND deleted_at IS NULL", name).First(&model).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	return ToDomainEvent(&model), nil
+
+	event := toDomainEvent(&model)
+	if event == nil {
+		return nil, nil
+	}
+
+	if err := r.loadChildEntities(ctx, event); err != nil {
+		return nil, err
+	}
+
+	return event, nil
 }
 
 func (r *PostgresRepository) GetEventBySlug(ctx context.Context, slug string) (*domain.Event, error) {
@@ -100,26 +162,62 @@ func (r *PostgresRepository) GetEventBySlug(ctx context.Context, slug string) (*
 		}
 		return nil, err
 	}
-	return ToDomainEvent(&model), nil
+
+	event := toDomainEvent(&model)
+	if event == nil {
+		return nil, nil
+	}
+
+	if err := r.loadChildEntities(ctx, event); err != nil {
+		return nil, err
+	}
+
+	return event, nil
 }
 
 func (r *PostgresRepository) UpdateEvent(ctx context.Context, event *domain.Event) error {
-	model := ToModelEvent(event)
-	
-	log.Printf("🔍 Updating event %s: DeletedAt.Valid=%v, DeletedAt.Time=%v", 
-		event.ID, model.DeletedAt.Valid, model.DeletedAt.Time)
-	
+	model := toModelEvent(event)
+
+	// Update main event
 	result := r.db.WithContext(ctx).Unscoped().
 		Model(&EventModel{}).
 		Where("id = ?", event.ID).
 		Select("*").
 		Updates(model)
-	
+
 	if result.Error != nil {
 		return result.Error
 	}
-	
-	log.Printf("✅ Event updated: %s, Rows affected: %d", event.ID, result.RowsAffected)
+
+	// Update child entities - delete and recreate
+	if err := r.deleteSchedules(ctx, event.ID); err != nil {
+		return err
+	}
+	if err := r.saveSchedules(ctx, event.ID, event.Schedules); err != nil {
+		return err
+	}
+
+	if err := r.deleteTickets(ctx, event.ID); err != nil {
+		return err
+	}
+	if err := r.saveTickets(ctx, event.ID, event.Tickets); err != nil {
+		return err
+	}
+
+	if err := r.deleteSpeakers(ctx, event.ID); err != nil {
+		return err
+	}
+	if err := r.saveSpeakers(ctx, event.ID, event.Speakers); err != nil {
+		return err
+	}
+
+	if err := r.deleteMaterials(ctx, event.ID); err != nil {
+		return err
+	}
+	if err := r.saveMaterials(ctx, event.ID, event.Materials); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -130,6 +228,20 @@ func (r *PostgresRepository) DeleteEvent(ctx context.Context, id string) error {
 }
 
 func (r *PostgresRepository) PermanentlyDeleteEvent(ctx context.Context, id string) error {
+	// Delete child entities first
+	if err := r.deleteSchedules(ctx, id); err != nil {
+		return err
+	}
+	if err := r.deleteTickets(ctx, id); err != nil {
+		return err
+	}
+	if err := r.deleteSpeakers(ctx, id); err != nil {
+		return err
+	}
+	if err := r.deleteMaterials(ctx, id); err != nil {
+		return err
+	}
+
 	return r.db.WithContext(ctx).Unscoped().Delete(&EventModel{}, "id = ?", id).Error
 }
 
@@ -162,6 +274,9 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 	if filters.EventStatusID != "" {
 		query = query.Where("event_status_id = ?", filters.EventStatusID)
 	}
+	if filters.CategoryID != "" {
+		query = query.Where("category_id = ?", filters.CategoryID)
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -174,14 +289,25 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 		query = query.Offset(filters.Offset)
 	}
 
-	err := query.Order("date DESC").Find(&models).Error
+	// Use start_date for sorting
+	sortField := "start_date"
+	if filters.SortBy != "" {
+		sortField = filters.SortBy
+	}
+	sortOrder := "DESC"
+	if filters.SortOrder == "asc" {
+		sortOrder = "ASC"
+	}
+	query = query.Order(sortField + " " + sortOrder)
+
+	err := query.Find(&models).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
 	events := make([]*domain.Event, len(models))
 	for i, m := range models {
-		events[i] = ToDomainEvent(&m)
+		events[i] = toDomainEvent(&m)
 	}
 	return events, total, nil
 }
@@ -204,18 +330,17 @@ func (r *PostgresRepository) GetEventsByType(ctx context.Context, eventTypeID st
 		query = query.Offset(offset)
 	}
 
-	if err := query.Order("date DESC").Find(&models).Error; err != nil {
+	if err := query.Order("start_date DESC").Find(&models).Error; err != nil {
 		return nil, 0, err
 	}
 
 	events := make([]*domain.Event, len(models))
 	for i, model := range models {
-		events[i] = ToDomainEvent(&model)
+		events[i] = toDomainEvent(&model)
 	}
 	return events, total, nil
 }
 
-// ✅ GetEventsByInstitution - all events for an organization
 func (r *PostgresRepository) GetEventsByInstitution(ctx context.Context, institutionID string, limit, offset int) ([]*domain.Event, int64, error) {
 	var models []EventModel
 	var total int64
@@ -234,19 +359,18 @@ func (r *PostgresRepository) GetEventsByInstitution(ctx context.Context, institu
 		query = query.Offset(offset)
 	}
 
-	err := query.Order("date DESC").Find(&models).Error
+	err := query.Order("start_date DESC").Find(&models).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
 	events := make([]*domain.Event, len(models))
 	for i, m := range models {
-		events[i] = ToDomainEvent(&m)
+		events[i] = toDomainEvent(&m)
 	}
 	return events, total, nil
 }
 
-// ✅ GetEventsByUser - all events created by a specific user
 func (r *PostgresRepository) GetEventsByUser(ctx context.Context, userID string, limit, offset int) ([]*domain.Event, int64, error) {
 	var models []EventModel
 	var total int64
@@ -265,14 +389,14 @@ func (r *PostgresRepository) GetEventsByUser(ctx context.Context, userID string,
 		query = query.Offset(offset)
 	}
 
-	err := query.Order("date DESC").Find(&models).Error
+	err := query.Order("start_date DESC").Find(&models).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
 	events := make([]*domain.Event, len(models))
 	for i, m := range models {
-		events[i] = ToDomainEvent(&m)
+		events[i] = toDomainEvent(&m)
 	}
 	return events, total, nil
 }
@@ -287,14 +411,14 @@ func (r *PostgresRepository) GetUpcomingEvents(ctx context.Context, limit int) (
 	}
 
 	query := r.db.WithContext(ctx).Model(&EventModel{}).
-		Where("date >= CURRENT_DATE AND deleted_at IS NULL").
+		Where("start_date >= CURRENT_DATE AND deleted_at IS NULL").
 		Where("event_status_id = ?", publishedStatusID)
 
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
 
-	err = query.Order("date ASC").Find(&models).Error
+	err = query.Order("start_date ASC").Find(&models).Error
 	if err != nil {
 		log.Printf("❌ Query error: %v", err)
 		return nil, err
@@ -304,7 +428,7 @@ func (r *PostgresRepository) GetUpcomingEvents(ctx context.Context, limit int) (
 
 	events := make([]*domain.Event, len(models))
 	for i, m := range models {
-		events[i] = ToDomainEvent(&m)
+		events[i] = toDomainEvent(&m)
 	}
 	return events, nil
 }
@@ -319,14 +443,14 @@ func (r *PostgresRepository) GetPastEvents(ctx context.Context, limit int) ([]*d
 	}
 
 	query := r.db.WithContext(ctx).Model(&EventModel{}).
-		Where("date < CURRENT_DATE AND deleted_at IS NULL").
+		Where("start_date < CURRENT_DATE AND deleted_at IS NULL").
 		Where("event_status_id = ?", publishedStatusID)
 
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
 
-	err = query.Order("date DESC").Find(&models).Error
+	err = query.Order("start_date DESC").Find(&models).Error
 	if err != nil {
 		log.Printf("❌ Query error: %v", err)
 		return nil, err
@@ -336,7 +460,7 @@ func (r *PostgresRepository) GetPastEvents(ctx context.Context, limit int) ([]*d
 
 	events := make([]*domain.Event, len(models))
 	for i, m := range models {
-		events[i] = ToDomainEvent(&m)
+		events[i] = toDomainEvent(&m)
 	}
 	return events, nil
 }
@@ -355,7 +479,7 @@ func (r *PostgresRepository) SearchEvents(ctx context.Context, query string, fil
 
 	if query != "" {
 		searchTerm := "%" + query + "%"
-		dbQuery = dbQuery.Where("name ILIKE ? OR description ILIKE ?", searchTerm, searchTerm)
+		dbQuery = dbQuery.Where("name ILIKE ? OR description ILIKE ? OR display_name ILIKE ?", searchTerm, searchTerm, searchTerm)
 	}
 	if filters.InstitutionID != "" {
 		dbQuery = dbQuery.Where("institution_id = ?", filters.InstitutionID)
@@ -365,6 +489,9 @@ func (r *PostgresRepository) SearchEvents(ctx context.Context, query string, fil
 	}
 	if filters.EventTypeID != "" {
 		dbQuery = dbQuery.Where("event_type_id = ?", filters.EventTypeID)
+	}
+	if filters.CategoryID != "" {
+		dbQuery = dbQuery.Where("category_id = ?", filters.CategoryID)
 	}
 
 	if err := dbQuery.Count(&total).Error; err != nil {
@@ -378,14 +505,14 @@ func (r *PostgresRepository) SearchEvents(ctx context.Context, query string, fil
 		dbQuery = dbQuery.Offset(filters.Offset)
 	}
 
-	err := dbQuery.Order("date DESC").Find(&models).Error
+	err := dbQuery.Order("start_date DESC").Find(&models).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
 	events := make([]*domain.Event, len(models))
 	for i, m := range models {
-		events[i] = ToDomainEvent(&m)
+		events[i] = toDomainEvent(&m)
 	}
 	return events, total, nil
 }
@@ -414,9 +541,9 @@ func (r *PostgresRepository) GetUpcomingEventsWithCreator(ctx context.Context, l
 		Joins("LEFT JOIN users ON events.created_by = users.id").
 		Joins("LEFT JOIN institutions ON events.institution_id = institutions.id").
 		Joins("LEFT JOIN account_types ON users.account_type_id = account_types.id").
-		Where("events.date >= CURRENT_DATE AND events.deleted_at IS NULL").
+		Where("events.start_date >= CURRENT_DATE AND events.deleted_at IS NULL").
 		Where("events.event_status_id = ?", publishedStatusID).
-		Order("events.date ASC, events.time ASC").
+		Order("events.start_date ASC").
 		Limit(limit)
 
 	err = query.Find(&models).Error
@@ -426,7 +553,16 @@ func (r *PostgresRepository) GetUpcomingEventsWithCreator(ctx context.Context, l
 	}
 
 	log.Printf("✅ Found %d upcoming published events with creator info", len(models))
-	return toDomainEventsWithCreator(models), nil
+	events := toDomainEventsWithCreator(models)
+
+	// Load child entities for each event
+	for _, event := range events {
+		if err := r.loadChildEntities(ctx, event); err != nil {
+			return nil, err
+		}
+	}
+
+	return events, nil
 }
 
 func (r *PostgresRepository) GetEventBySlugWithCreator(ctx context.Context, slug string) (*domain.Event, error) {
@@ -457,7 +593,13 @@ func (r *PostgresRepository) GetEventBySlugWithCreator(ctx context.Context, slug
 	if len(events) == 0 {
 		return nil, nil
 	}
-	return events[0], nil
+	event := events[0]
+
+	if err := r.loadChildEntities(ctx, event); err != nil {
+		return nil, err
+	}
+
+	return event, nil
 }
 
 func (r *PostgresRepository) GetEventByNameWithCreator(ctx context.Context, name string) (*domain.Event, error) {
@@ -488,7 +630,13 @@ func (r *PostgresRepository) GetEventByNameWithCreator(ctx context.Context, name
 	if len(events) == 0 {
 		return nil, nil
 	}
-	return events[0], nil
+	event := events[0]
+
+	if err := r.loadChildEntities(ctx, event); err != nil {
+		return nil, err
+	}
+
+	return event, nil
 }
 
 func (r *PostgresRepository) GetEventByIDWithCreator(ctx context.Context, id string) (*domain.Event, error) {
@@ -519,10 +667,15 @@ func (r *PostgresRepository) GetEventByIDWithCreator(ctx context.Context, id str
 	if len(events) == 0 {
 		return nil, nil
 	}
-	return events[0], nil
+	event := events[0]
+
+	if err := r.loadChildEntities(ctx, event); err != nil {
+		return nil, err
+	}
+
+	return event, nil
 }
 
-// ✅ GetEventsByInstitutionWithCreator - events for an institution with creator info
 func (r *PostgresRepository) GetEventsByInstitutionWithCreator(ctx context.Context, institutionID string, limit, offset int) ([]*domain.Event, int64, error) {
 	var models []EventModel
 	var total int64
@@ -551,15 +704,23 @@ func (r *PostgresRepository) GetEventsByInstitutionWithCreator(ctx context.Conte
 		query = query.Offset(offset)
 	}
 
-	err := query.Order("events.date DESC").Find(&models).Error
+	err := query.Order("events.start_date DESC").Find(&models).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return toDomainEventsWithCreator(models), total, nil
+	events := toDomainEventsWithCreator(models)
+
+	// Load child entities for each event
+	for _, event := range events {
+		if err := r.loadChildEntities(ctx, event); err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return events, total, nil
 }
 
-// ✅ GetEventsByUserWithCreator - events created by a user with creator info
 func (r *PostgresRepository) GetEventsByUserWithCreator(ctx context.Context, userID string, limit, offset int) ([]*domain.Event, int64, error) {
 	var models []EventModel
 	var total int64
@@ -588,20 +749,27 @@ func (r *PostgresRepository) GetEventsByUserWithCreator(ctx context.Context, use
 		query = query.Offset(offset)
 	}
 
-	err := query.Order("events.date DESC").Find(&models).Error
+	err := query.Order("events.start_date DESC").Find(&models).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return toDomainEventsWithCreator(models), total, nil
+	events := toDomainEventsWithCreator(models)
+
+	// Load child entities for each event
+	for _, event := range events {
+		if err := r.loadChildEntities(ctx, event); err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return events, total, nil
 }
 
 // ============================================================
 // EVENT QUERIES WITH CREATOR INFO AND FILTERS (NEW)
 // ============================================================
 
-// GetEventsByUserWithCreatorFiltered returns events with creator info, with privacy/status filters
-// includePrivate: true to include private events (for team members/owners)
 func (r *PostgresRepository) GetEventsByUserWithCreatorFiltered(ctx context.Context, userID string, includePrivate bool, limit, offset int) ([]*domain.Event, int64, error) {
 	var models []EventModel
 	var total int64
@@ -658,15 +826,23 @@ func (r *PostgresRepository) GetEventsByUserWithCreatorFiltered(ctx context.Cont
 		query = query.Offset(offset)
 	}
 
-	err = query.Order("events.date DESC").Find(&models).Error
+	err = query.Order("events.start_date DESC").Find(&models).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
-	return toDomainEventsWithCreator(models), total, nil
+	events := toDomainEventsWithCreator(models)
+
+	// Load child entities for each event
+	for _, event := range events {
+		if err := r.loadChildEntities(ctx, event); err != nil {
+			return nil, 0, err
+		}
+	}
+
+	return events, total, nil
 }
 
-// GetEventsByUserWithCreatorPublic returns only public events (published, non-private)
 func (r *PostgresRepository) GetEventsByUserWithCreatorPublic(ctx context.Context, userID string, limit, offset int) ([]*domain.Event, int64, error) {
 	return r.GetEventsByUserWithCreatorFiltered(ctx, userID, false, limit, offset)
 }
@@ -689,7 +865,7 @@ func (r *PostgresRepository) GetUserInfoByID(ctx context.Context, userID string)
 		}
 		return nil, err
 	}
-	return ToDomainUserInfo(&model), nil
+	return toDomainUserInfo(&model), nil
 }
 
 func (r *PostgresRepository) GetUserInfoByIDs(ctx context.Context, userIDs []string) ([]*domain.UserInfo, error) {
@@ -710,7 +886,7 @@ func (r *PostgresRepository) GetUserInfoByIDs(ctx context.Context, userIDs []str
 
 	userInfos := make([]*domain.UserInfo, len(models))
 	for i, m := range models {
-		userInfos[i] = ToDomainUserInfo(&m)
+		userInfos[i] = toDomainUserInfo(&m)
 	}
 	return userInfos, nil
 }
@@ -728,7 +904,7 @@ func (r *PostgresRepository) GetEventTypeByID(ctx context.Context, id string) (*
 		}
 		return nil, err
 	}
-	return ToDomainEventTypeEntity(&model), nil
+	return toDomainEventTypeEntity(&model), nil
 }
 
 func (r *PostgresRepository) GetEventTypeByName(ctx context.Context, name string) (*domain.EventType, error) {
@@ -740,7 +916,7 @@ func (r *PostgresRepository) GetEventTypeByName(ctx context.Context, name string
 		}
 		return nil, err
 	}
-	return ToDomainEventTypeEntity(&model), nil
+	return toDomainEventTypeEntity(&model), nil
 }
 
 func (r *PostgresRepository) GetEventTypeBySlug(ctx context.Context, slug string) (*domain.EventType, error) {
@@ -752,7 +928,7 @@ func (r *PostgresRepository) GetEventTypeBySlug(ctx context.Context, slug string
 		}
 		return nil, err
 	}
-	return ToDomainEventTypeEntity(&model), nil
+	return toDomainEventTypeEntity(&model), nil
 }
 
 func (r *PostgresRepository) GetAllEventTypes(ctx context.Context) ([]*domain.EventType, error) {
@@ -766,7 +942,7 @@ func (r *PostgresRepository) GetAllEventTypes(ctx context.Context) ([]*domain.Ev
 
 	types := make([]*domain.EventType, len(models))
 	for i, m := range models {
-		types[i] = ToDomainEventTypeEntity(&m)
+		types[i] = toDomainEventTypeEntity(&m)
 	}
 	return types, nil
 }
@@ -784,7 +960,7 @@ func (r *PostgresRepository) GetEventStatusByID(ctx context.Context, id string) 
 		}
 		return nil, err
 	}
-	return ToDomainEventStatusEntity(&model), nil
+	return toDomainEventStatusEntity(&model), nil
 }
 
 func (r *PostgresRepository) GetEventStatusByName(ctx context.Context, name string) (*domain.EventStatus, error) {
@@ -796,7 +972,7 @@ func (r *PostgresRepository) GetEventStatusByName(ctx context.Context, name stri
 		}
 		return nil, err
 	}
-	return ToDomainEventStatusEntity(&model), nil
+	return toDomainEventStatusEntity(&model), nil
 }
 
 func (r *PostgresRepository) GetEventStatusBySlug(ctx context.Context, slug string) (*domain.EventStatus, error) {
@@ -808,7 +984,7 @@ func (r *PostgresRepository) GetEventStatusBySlug(ctx context.Context, slug stri
 		}
 		return nil, err
 	}
-	return ToDomainEventStatusEntity(&model), nil
+	return toDomainEventStatusEntity(&model), nil
 }
 
 func (r *PostgresRepository) GetAllEventStatuses(ctx context.Context) ([]*domain.EventStatus, error) {
@@ -822,7 +998,91 @@ func (r *PostgresRepository) GetAllEventStatuses(ctx context.Context) ([]*domain
 
 	statuses := make([]*domain.EventStatus, len(models))
 	for i, m := range models {
-		statuses[i] = ToDomainEventStatusEntity(&m)
+		statuses[i] = toDomainEventStatusEntity(&m)
 	}
 	return statuses, nil
+}
+
+// ============================================================
+// CHILD ENTITY HELPERS
+// ============================================================
+
+func (r *PostgresRepository) loadChildEntities(ctx context.Context, event *domain.Event) error {
+	// Load schedules
+	var scheduleModels []EventScheduleModel
+	if err := r.db.WithContext(ctx).Where("event_id = ? AND deleted_at IS NULL", event.ID).Find(&scheduleModels).Error; err != nil {
+		return err
+	}
+	event.Schedules = toDomainSchedules(scheduleModels)
+
+	// Load tickets
+	var ticketModels []EventTicketModel
+	if err := r.db.WithContext(ctx).Where("event_id = ? AND deleted_at IS NULL", event.ID).Find(&ticketModels).Error; err != nil {
+		return err
+	}
+	event.Tickets = toDomainTickets(ticketModels)
+
+	// Load speakers
+	var speakerModels []EventSpeakerModel
+	if err := r.db.WithContext(ctx).Where("event_id = ? AND deleted_at IS NULL", event.ID).Find(&speakerModels).Error; err != nil {
+		return err
+	}
+	event.Speakers = toDomainSpeakers(speakerModels)
+
+	// Load materials
+	var materialModels []EventMaterialModel
+	if err := r.db.WithContext(ctx).Where("event_id = ? AND deleted_at IS NULL", event.ID).Find(&materialModels).Error; err != nil {
+		return err
+	}
+	event.Materials = toDomainMaterials(materialModels)
+
+	return nil
+}
+
+func (r *PostgresRepository) saveSchedules(ctx context.Context, eventID string, schedules []domain.EventSchedule) error {
+	if len(schedules) == 0 {
+		return nil
+	}
+	models := toModelSchedules(eventID, schedules)
+	return r.db.WithContext(ctx).Create(&models).Error
+}
+
+func (r *PostgresRepository) deleteSchedules(ctx context.Context, eventID string) error {
+	return r.db.WithContext(ctx).Where("event_id = ?", eventID).Delete(&EventScheduleModel{}).Error
+}
+
+func (r *PostgresRepository) saveTickets(ctx context.Context, eventID string, tickets []domain.EventTicket) error {
+	if len(tickets) == 0 {
+		return nil
+	}
+	models := toModelTickets(eventID, tickets)
+	return r.db.WithContext(ctx).Create(&models).Error
+}
+
+func (r *PostgresRepository) deleteTickets(ctx context.Context, eventID string) error {
+	return r.db.WithContext(ctx).Where("event_id = ?", eventID).Delete(&EventTicketModel{}).Error
+}
+
+func (r *PostgresRepository) saveSpeakers(ctx context.Context, eventID string, speakers []domain.EventSpeaker) error {
+	if len(speakers) == 0 {
+		return nil
+	}
+	models := toModelSpeakers(eventID, speakers)
+	return r.db.WithContext(ctx).Create(&models).Error
+}
+
+func (r *PostgresRepository) deleteSpeakers(ctx context.Context, eventID string) error {
+	return r.db.WithContext(ctx).Where("event_id = ?", eventID).Delete(&EventSpeakerModel{}).Error
+}
+
+func (r *PostgresRepository) saveMaterials(ctx context.Context, eventID string, materials []domain.EventMaterial) error {
+	if len(materials) == 0 {
+		return nil
+	}
+	models := toModelMaterials(eventID, materials)
+	return r.db.WithContext(ctx).Create(&models).Error
+}
+
+func (r *PostgresRepository) deleteMaterials(ctx context.Context, eventID string) error {
+	return r.db.WithContext(ctx).Where("event_id = ?", eventID).Delete(&EventMaterialModel{}).Error
 }

@@ -91,16 +91,4 @@ func (u *UserInfo) HasInstitution() bool {
 	return u.InstitutionID != ""
 }
 
-// ============================================================
-// DEPRECATED - Keep for backward compatibility during migration
-// ============================================================
 
-// AccountInfo is deprecated. Use UserInfo instead.
-// Deprecated: Renamed to UserInfo to align with users table
-type AccountInfo = UserInfo
-
-// NewAccountInfo is deprecated. Use NewUserInfo instead.
-// Deprecated: Renamed to NewUserInfo to align with users table
-func NewAccountInfo(id, name, email string) *AccountInfo {
-	return NewUserInfo(id, name, email)
-}

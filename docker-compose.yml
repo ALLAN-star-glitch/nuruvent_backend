@@ -20,7 +20,7 @@ services:
       - .:/app
       - /app/bin
       - /app/tmp
-      - /app/vendor
+     # - /app/vendor
     depends_on:
       postgres:
         condition: service_healthy

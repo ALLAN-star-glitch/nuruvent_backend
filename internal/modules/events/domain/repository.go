@@ -108,22 +108,28 @@ type Repository interface {
 // ============================================================
 
 type ListEventsFilters struct {
-    InstitutionID  string // Filter by institution
-    UserID         string // Filter by user (creator)
-    EventTypeID    string
-    EventStatusID  string
-    IncludeDeleted bool
-    OnlyDeleted    bool
-    Limit          int
-    Offset         int
+	InstitutionID  string // Filter by institution
+	UserID         string // Filter by user (creator)
+	EventTypeID    string
+	EventStatusID  string
+	CategoryID     string // Filter by category
+	IncludeDeleted bool
+	OnlyDeleted    bool
+	Limit          int
+	Offset         int
+	SortBy         string // Field to sort by (e.g., "created_at", "start_date", "name")
+	SortOrder      string // "asc" or "desc"
+	Visibility     string // ✅ ADDED: Filter by visibility ("public", "private", "unlisted")
 }
 
 type SearchFilters struct {
-    InstitutionID  string // Filter by institution
-    UserID         string // Filter by user (creator)
-    EventTypeID    string
-    IncludeDeleted bool
-    OnlyDeleted    bool
-    Limit          int
-    Offset         int
+	InstitutionID  string // Filter by institution
+	UserID         string // Filter by user (creator)
+	EventTypeID    string
+	CategoryID     string // Filter by category
+	IncludeDeleted bool
+	OnlyDeleted    bool
+	Limit          int
+	Offset         int
+	Visibility     string // ✅ ADDED: Filter by visibility ("public", "private", "unlisted")
 }

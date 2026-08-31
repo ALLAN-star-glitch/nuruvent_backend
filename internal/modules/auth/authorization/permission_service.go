@@ -450,8 +450,18 @@ func (s *Service) CanManageTeam(ctx context.Context, teamID, userID string) bool
 
 // IsPersonalTeamAdmin checks if user is admin of a personal team
 func (s *Service) IsPersonalTeamAdmin(ctx context.Context, userID, teamOwnerID string) bool {
-	domain := authdomain.PersonalTeamDomain(teamOwnerID)
-	return s.enforcer.HasRoleForUserInDomain(userID, authdomain.RoleAccountAdmin.String(), domain)
+    domain := authdomain.PersonalTeamDomain(teamOwnerID)
+    
+    // ✅ ADD DEBUG LOGGING
+    log.Printf("🔍 DEBUG: IsPersonalTeamAdmin - userID=%s, teamOwnerID=%s, domain=%s", userID, teamOwnerID, domain)
+    
+    roles := s.enforcer.GetRolesForUserInDomain(userID, domain)
+    log.Printf("🔍 DEBUG: IsPersonalTeamAdmin - roles for user %s in domain %s: %v", userID, domain, roles)
+    
+    result := s.enforcer.HasRoleForUserInDomain(userID, authdomain.RoleAccountAdmin.String(), domain)
+    log.Printf("🔍 DEBUG: IsPersonalTeamAdmin - result=%v", result)
+    
+    return result
 }
 
 // IsInstitutionTeamAdmin checks if user is admin of an institution team

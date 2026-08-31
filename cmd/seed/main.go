@@ -70,18 +70,20 @@ func main() {
 
 	// Define seeders with dependencies
 	seedersList := []SeederInfo{
+		// ============================================================
+		// AUTH SEEDERS
+		// ============================================================
 		{
 			Name:        "permissions",
 			Fn:          authseeder.SeedPermissions,
 			Description: "Seed platform permissions (Casbin policies)",
 			Deps:        []string{},
 		},
-
 		{
-		Name:        "account_types",
-		Fn:          authseeder.SeedAccountTypes,
-		Description: "Seed account types (personal, institution)",
-		Deps:        []string{},
+			Name:        "account_types",
+			Fn:          authseeder.SeedAccountTypes,
+			Description: "Seed account types (personal, institution)",
+			Deps:        []string{},
 		},
 		{
 			Name:        "professional_types",
@@ -96,31 +98,83 @@ func main() {
 			Deps:        []string{},
 		},
 
-		{
-			Name:        "event_types",
-			Fn:          eventseeder.SeedEventTypes,
-			Description: "Seed event types ",
-			Deps:        []string{},
-		},
-		{
-			Name:        "event_statuses",
-			Fn:          eventseeder.SeedEventStatuses,
-			Description: "Seed event statuses",
-			Deps:        []string{},
-		},
+		// ============================================================
+		// MEDIA SEEDERS
+		// ============================================================
 		{
 			Name:        "media_types",
 			Fn:          mediaseeder.SeedMediaTypes,
 			Description: "Seed media types (event, business, profile, certificate, recording)",
 			Deps:        []string{},
 		},
+
+		// ============================================================
+		// EVENT SEEDERS - Lookup Data
+		// ============================================================
+		{
+			Name:        "event_types",
+			Fn:          eventseeder.SeedEventTypes,
+			Description: "Seed event types (workshop, webinar, meetup, bootcamp, uncategorized)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "event_statuses",
+			Fn:          eventseeder.SeedEventStatuses,
+			Description: "Seed event statuses (draft, published, cancelled, completed)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "event_formats",
+			Fn:          eventseeder.SeedEventFormats,
+			Description: "Seed event formats (virtual, in-person, hybrid)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "categories",
+			Fn:          eventseeder.SeedCategories,
+			Description: "Seed event categories (technology, business, health, education, finance, science, arts, sports)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "recurrence_patterns",
+			Fn:          eventseeder.SeedRecurrencePatterns,
+			Description: "Seed recurrence patterns (daily, weekly, monthly, custom)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "certificate_templates",
+			Fn:          eventseeder.SeedCertificateTemplates,
+			Description: "Seed certificate templates (default, professional, premium)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "certificate_types",
+			Fn:          eventseeder.SeedCertificateTypes,
+			Description: "Seed certificate types (event, course, cpd)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "material_types",
+			Fn:          eventseeder.SeedMaterialTypes,
+			Description: "Seed material types (pdf, video, link, document)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "ticket_types",
+			Fn:          eventseeder.SeedTicketTypes,
+			Description: "Seed ticket types (general, early-bird, vip, group)",
+			Deps:        []string{},
+		},
+
+		// ============================================================
+		// FUTURE SEEDERS (Commented out for now)
+		// ============================================================
 		// {
-		// 	Name:        "attendance_statuses",
-		// 	Fn:          eventseeder.SeedAttendanceStatuses,
-		// 	Description: "Seed attendance statuses (registered, joined, partial, full, confirmed, no_show)",
-		// 	Deps:        []string{},
+		//     Name:        "attendance_statuses",
+		//     Fn:          eventseeder.SeedAttendanceStatuses,
+		//     Description: "Seed attendance statuses (registered, joined, partial, full, confirmed, no_show)",
+		//     Deps:        []string{},
 		// },
-		// Add more seeders here as they are created
 		// {
 		//     Name:        "super_admin",
 		//     Fn:          coreseeder.SeedSuperAdmin,
@@ -345,16 +399,37 @@ func printHelp() {
 	fmt.Println("  -skip-confirm   Skip confirmation prompts (for CI/CD)")
 	fmt.Println("  -help            Show this help message")
 	fmt.Println("\nAvailable Seeders:")
-	fmt.Println("  permissions     Seed platform permissions (Casbin policies)")
+	fmt.Println("  Auth Seeders:")
+	fmt.Println("    permissions         Seed platform permissions (Casbin policies)")
+	fmt.Println("    account_types       Seed account types (personal, institution)")
+	fmt.Println("    professional_types  Seed professional types (trainer, professional, student, other)")
+	fmt.Println("    institution_types   Seed institution types (training_institute, college, professional_body, ngo, corporate, government)")
+	fmt.Println("")
+	fmt.Println("  Media Seeders:")
+	fmt.Println("    media_types         Seed media types (event, business, profile, certificate, recording)")
+	fmt.Println("")
+	fmt.Println("  Event Seeders:")
+	fmt.Println("    event_types         Seed event types (workshop, webinar, meetup, bootcamp, uncategorized)")
+	fmt.Println("    event_statuses      Seed event statuses (draft, published, cancelled, completed)")
+	fmt.Println("    event_formats       Seed event formats (virtual, in-person, hybrid)")
+	fmt.Println("    categories          Seed event categories (technology, business, health, education, finance, science, arts, sports)")
+	fmt.Println("    recurrence_patterns Seed recurrence patterns (daily, weekly, monthly, custom)")
+	fmt.Println("    certificate_templates Seed certificate templates (default, professional, premium)")
+	fmt.Println("    certificate_types   Seed certificate types (event, course, cpd)")
+	fmt.Println("    material_types      Seed material types (pdf, video, link, document)")
+	fmt.Println("    ticket_types        Seed ticket types (general, early-bird, vip, group)")
 	fmt.Println("\nExamples:")
 	fmt.Println("  # Run all seeders in development")
 	fmt.Println("  go run cmd/seed/main.go")
 	fmt.Println("")
-	fmt.Println("  # Run only permissions seeder")
-	fmt.Println("  go run cmd/seed/main.go -only=permissions")
+	fmt.Println("  # Run only event_types seeder")
+	fmt.Println("  go run cmd/seed/main.go -only=event_types")
 	fmt.Println("")
 	fmt.Println("  # Preview what would be seeded")
 	fmt.Println("  go run cmd/seed/main.go -dry-run")
+	fmt.Println("")
+	fmt.Println("  # Force re-seed in production")
+	fmt.Println("  go run cmd/seed/main.go -env=production -force")
 }
 
 func printAvailableSeeders(seeders []SeederInfo) {

@@ -1,59 +1,5 @@
 basePath: /
 definitions:
-  acchandler.AccountResponse:
-    properties:
-      account_type_id:
-        type: string
-      created_at:
-        type: string
-      display_name:
-        type: string
-      email:
-        type: string
-      email_verified:
-        type: boolean
-      id:
-        type: string
-      identity_verified:
-        type: boolean
-      institution_id:
-        type: string
-      is_active:
-        type: boolean
-      name:
-        type: string
-      phone:
-        type: string
-      professional_type_id:
-        type: string
-      slug:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  acchandler.UpdateAccountRequest:
-    properties:
-      display_name:
-        type: string
-      name:
-        type: string
-      phone:
-        type: string
-    type: object
-  acchandler.UpdateProfessionalTypeRequest:
-    properties:
-      professional_type_id:
-        type: string
-    type: object
-  acchandler.UpdateProfileRequest:
-    properties:
-      display_name:
-        type: string
-      name:
-        type: string
-      phone:
-        type: string
-    type: object
   authhandler.AuthResponse:
     properties:
       institution:
@@ -243,113 +189,6 @@ definitions:
       otp:
         type: string
     type: object
-  domain.AccountInfo:
-    properties:
-      account_type:
-        type: string
-      created_at:
-        type: string
-      display_name:
-        type: string
-      email:
-        type: string
-      id:
-        type: string
-      institution_id:
-        type: string
-      institution_name:
-        type: string
-      is_active:
-        type: boolean
-      name:
-        type: string
-      phone:
-        type: string
-      slug:
-        type: string
-      updated_at:
-        type: string
-      username:
-        type: string
-    type: object
-  domain.Event:
-    properties:
-      certificatePrice:
-        format: float64
-        type: number
-      createdAt:
-        type: string
-      createdBy:
-        description: ✅ User ID who created this event
-        type: string
-      creator:
-        $ref: '#/definitions/domain.AccountInfo'
-      currentAttendees:
-        type: integer
-      date:
-        description: Event details
-        type: string
-      deletedAt:
-        description: Soft delete fields
-        type: string
-      deletedBy:
-        type: string
-      description:
-        type: string
-      displayName:
-        type: string
-      duration:
-        type: integer
-      eventStatusID:
-        type: string
-      eventTypeID:
-        description: Relations
-        type: string
-      id:
-        description: Core fields
-        type: string
-      imageURL:
-        description: Media
-        type: string
-      institutionID:
-        description: '✅ NEW: Institution this event belongs to'
-        type: string
-      isActive:
-        description: Audit fields
-        type: boolean
-      isFeatured:
-        description: Feature flags
-        type: boolean
-      isPrivate:
-        type: boolean
-      isVirtual:
-        type: boolean
-      location:
-        type: string
-      maxAttendees:
-        type: integer
-      meetLink:
-        type: string
-      name:
-        type: string
-      price:
-        format: float64
-        type: number
-      restoredAt:
-        type: string
-      restoredBy:
-        type: string
-      slug:
-        type: string
-      thumbnailURL:
-        type: string
-      time:
-        type: string
-      updatedAt:
-        type: string
-      zoomLink:
-        type: string
-    type: object
   domain.EventStatus:
     properties:
       color:
@@ -412,21 +251,6 @@ definitions:
       updatedAt:
         type: string
     type: object
-  domain.MediaInfo:
-    properties:
-      createdAt:
-        type: string
-      entityID:
-        type: string
-      id:
-        type: string
-      mediaType:
-        type: string
-      uploadedBy:
-        type: string
-      url:
-        type: string
-    type: object
   eventhandler.BulkDuplicateRequest:
     properties:
       date_offset_days:
@@ -453,17 +277,282 @@ definitions:
     required:
     - ids
     type: object
+  eventhandler.CategoryDTO:
+    properties:
+      color:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      slug:
+        type: string
+    type: object
+  eventhandler.CertificateTemplateDTO:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      preview_url:
+        type: string
+      slug:
+        type: string
+    type: object
+  eventhandler.CreateDraftRequest:
+    properties:
+      capacity:
+        type: integer
+      category_id:
+        type: string
+      certificate_enabled:
+        type: boolean
+      certificate_price:
+        type: number
+      certificate_template_id:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      event_type_id:
+        type: string
+      image_url:
+        description: Image URL (no file upload)
+        type: string
+      in_person_location:
+        type: string
+      institution_id:
+        description: Required if owner_type = "institution"
+        type: string
+      invite_only:
+        type: boolean
+      invited_emails:
+        items:
+          type: string
+        type: array
+      is_featured:
+        description: Monetization
+        type: boolean
+      is_free:
+        description: Tickets
+        type: boolean
+      is_hybrid:
+        type: boolean
+      is_multi_day:
+        type: boolean
+      is_recurring:
+        type: boolean
+      is_virtual:
+        description: Venue
+        type: boolean
+      language:
+        type: string
+      materials:
+        description: Materials
+        items:
+          $ref: '#/definitions/eventhandler.MaterialRequest'
+        type: array
+      meet_link:
+        type: string
+      name:
+        description: Basic Information
+        type: string
+      owner_type:
+        description: Ownership
+        type: string
+      password:
+        type: string
+      recurrence:
+        $ref: '#/definitions/eventhandler.RecurrenceRequest'
+      schedules:
+        description: Schedule
+        items:
+          $ref: '#/definitions/eventhandler.ScheduleRequest'
+        type: array
+      seo:
+        allOf:
+        - $ref: '#/definitions/eventhandler.SEORequest'
+        description: SEO
+      short_description:
+        type: string
+      speakers:
+        description: Speakers
+        items:
+          $ref: '#/definitions/eventhandler.SpeakerRequest'
+        type: array
+      tags:
+        items:
+          type: string
+        type: array
+      tickets:
+        items:
+          $ref: '#/definitions/eventhandler.TicketRequest'
+        type: array
+      venue_address:
+        type: string
+      venue_city:
+        type: string
+      venue_country:
+        type: string
+      venue_name:
+        type: string
+      virtual_platform:
+        type: string
+      virtual_platform_url:
+        type: string
+      visibility:
+        description: Access & Privacy
+        type: string
+      zoom_link:
+        type: string
+    type: object
+  eventhandler.CreateEventRequest:
+    properties:
+      capacity:
+        type: integer
+      category_id:
+        type: string
+      certificate_enabled:
+        type: boolean
+      certificate_price:
+        type: number
+      certificate_template_id:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      event_type_id:
+        type: string
+      image_url:
+        description: Image URL (no file upload)
+        type: string
+      in_person_location:
+        type: string
+      institution_id:
+        description: Required if owner_type = "institution"
+        type: string
+      invite_only:
+        type: boolean
+      invited_emails:
+        items:
+          type: string
+        type: array
+      is_featured:
+        description: Monetization
+        type: boolean
+      is_free:
+        description: Tickets - Required
+        type: boolean
+      is_hybrid:
+        type: boolean
+      is_multi_day:
+        type: boolean
+      is_recurring:
+        type: boolean
+      is_virtual:
+        description: Venue - Required
+        type: boolean
+      language:
+        type: string
+      materials:
+        description: Materials
+        items:
+          $ref: '#/definitions/eventhandler.MaterialRequest'
+        type: array
+      meet_link:
+        type: string
+      name:
+        description: Basic Information - Required
+        type: string
+      owner_type:
+        description: Ownership - Required
+        enum:
+        - personal
+        - institution
+        type: string
+      password:
+        type: string
+      recurrence:
+        $ref: '#/definitions/eventhandler.RecurrenceRequest'
+      schedules:
+        description: Schedule - Required
+        items:
+          $ref: '#/definitions/eventhandler.ScheduleRequest'
+        minItems: 1
+        type: array
+      seo:
+        allOf:
+        - $ref: '#/definitions/eventhandler.SEORequest'
+        description: SEO
+      short_description:
+        type: string
+      speakers:
+        description: Speakers
+        items:
+          $ref: '#/definitions/eventhandler.SpeakerRequest'
+        type: array
+      tags:
+        items:
+          type: string
+        type: array
+      tickets:
+        items:
+          $ref: '#/definitions/eventhandler.TicketRequest'
+        minItems: 1
+        type: array
+      venue_address:
+        type: string
+      venue_city:
+        type: string
+      venue_country:
+        type: string
+      venue_name:
+        type: string
+      virtual_platform:
+        type: string
+      virtual_platform_url:
+        type: string
+      visibility:
+        description: Access & Privacy - Required
+        enum:
+        - public
+        - private
+        - unlisted
+        type: string
+      waitlist_enabled:
+        type: boolean
+      zoom_link:
+        type: string
+    required:
+    - description
+    - event_type_id
+    - name
+    - owner_type
+    - schedules
+    - tickets
+    - visibility
+    type: object
   eventhandler.CreatorDTO:
     properties:
-      account_type:
+      avatar:
         type: string
       display_name:
         type: string
       email:
         type: string
       id:
-        type: string
-      institution_name:
         type: string
       name:
         type: string
@@ -479,45 +568,397 @@ definitions:
       name:
         type: string
     type: object
+  eventhandler.EventFormatDTO:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      slug:
+        type: string
+    type: object
   eventhandler.EventResponse:
     properties:
+      capacity:
+        type: integer
+      category:
+        $ref: '#/definitions/eventhandler.CategoryDTO'
+      certificate_enabled:
+        type: boolean
       certificate_price:
         type: number
+      certificate_template:
+        $ref: '#/definitions/eventhandler.CertificateTemplateDTO'
       created_at:
         type: string
       creator:
         $ref: '#/definitions/eventhandler.CreatorDTO'
       current_attendees:
         type: integer
-      date:
-        type: string
       deleted_at:
-        type: string
-      deleted_by:
         type: string
       description:
         type: string
       display_name:
         type: string
-      duration:
-        type: integer
-      event_status_id:
+      end_date:
         type: string
-      event_type_id:
-        type: string
+      event_format:
+        $ref: '#/definitions/eventhandler.EventFormatDTO'
+      event_status:
+        $ref: '#/definitions/eventhandler.EventStatusDTO'
+      event_type:
+        allOf:
+        - $ref: '#/definitions/eventhandler.EventTypeDTO'
+        description: Relations
+      has_livestream:
+        type: boolean
       id:
         type: string
       image_url:
+        description: Media
+        type: string
+      in_person_location:
         type: string
       institution_id:
-        description: ✅ NULL for personal events
         type: string
+      invite_only:
+        type: boolean
+      invited_emails:
+        items:
+          type: string
+        type: array
       is_active:
+        description: Audit
         type: boolean
       is_featured:
+        description: Monetization
+        type: boolean
+      is_free:
+        description: Tickets
+        type: boolean
+      is_hybrid:
+        type: boolean
+      is_multi_day:
         type: boolean
       is_private:
         type: boolean
+      is_recurring:
+        type: boolean
+      is_virtual:
+        type: boolean
+      language:
+        type: string
+      last_published_at:
+        type: string
+      livestream_url:
+        type: string
+      materials:
+        items:
+          $ref: '#/definitions/eventhandler.MaterialDTO'
+        type: array
+      max_tickets_per_order:
+        type: integer
+      meet_link:
+        type: string
+      min_tickets_per_order:
+        type: integer
+      name:
+        type: string
+      owner_type:
+        description: Ownership
+        type: string
+      published_at:
+        type: string
+      recording_available:
+        type: boolean
+      recording_url:
+        type: string
+      recurrence:
+        $ref: '#/definitions/eventhandler.RecurrenceDTO'
+      scheduled_publish_at:
+        type: string
+      schedules:
+        items:
+          $ref: '#/definitions/eventhandler.ScheduleDTO'
+        type: array
+      schema_org:
+        additionalProperties: true
+        type: object
+      seo:
+        allOf:
+        - $ref: '#/definitions/eventhandler.SEODTO'
+        description: SEO
+      short_description:
+        type: string
+      slug:
+        type: string
+      social_links:
+        additionalProperties:
+          type: string
+        description: Social
+        type: object
+      speakers:
+        description: Speakers & Materials
+        items:
+          $ref: '#/definitions/eventhandler.SpeakerDTO'
+        type: array
+      start_date:
+        description: Schedule
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      thumbnail_url:
+        type: string
+      tickets:
+        items:
+          $ref: '#/definitions/eventhandler.TicketDTO'
+        type: array
+      updated_at:
+        type: string
+      venue:
+        allOf:
+        - $ref: '#/definitions/eventhandler.VenueDTO'
+        description: Venue
+      version:
+        description: Metadata
+        type: integer
+      virtual_platform:
+        type: string
+      virtual_platform_url:
+        type: string
+      visibility:
+        description: Access & Privacy
+        type: string
+      waitlist_capacity:
+        type: integer
+      waitlist_enabled:
+        type: boolean
+      zoom_link:
+        type: string
+    type: object
+  eventhandler.EventStatusDTO:
+    properties:
+      color:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      is_final:
+        type: boolean
+      name:
+        type: string
+      slug:
+        type: string
+    type: object
+  eventhandler.EventTypeDTO:
+    properties:
+      color:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      icon:
+        type: string
+      id:
+        type: string
+      max_duration:
+        type: integer
+      min_duration:
+        type: integer
+      name:
+        type: string
+      slug:
+        type: string
+      supports_certificate:
+        type: boolean
+    type: object
+  eventhandler.MaterialDTO:
+    properties:
+      description:
+        type: string
+      id:
+        type: string
+      is_pre_event:
+        type: boolean
+      sort_order:
+        type: integer
+      title:
+        type: string
+      type:
+        type: string
+      url:
+        type: string
+    type: object
+  eventhandler.MaterialRequest:
+    properties:
+      description:
+        type: string
+      id:
+        type: string
+      is_pre_event:
+        type: boolean
+      material_type_id:
+        type: string
+      sort_order:
+        type: integer
+      title:
+        type: string
+      url:
+        type: string
+    required:
+    - material_type_id
+    - title
+    - url
+    type: object
+  eventhandler.MediaInfoResponse:
+    properties:
+      created_at:
+        type: string
+      entity_id:
+        type: string
+      id:
+        type: string
+      media_type:
+        type: string
+      uploaded_by:
+        type: string
+      url:
+        type: string
+    type: object
+  eventhandler.RecurrenceDTO:
+    properties:
+      day_of_month:
+        type: integer
+      days_of_week:
+        items:
+          type: string
+        type: array
+      ends_on:
+        type: string
+      interval:
+        type: integer
+      occurrences:
+        type: integer
+      pattern:
+        type: string
+      week_of_month:
+        type: string
+    type: object
+  eventhandler.RecurrenceRequest:
+    properties:
+      day_of_month:
+        type: integer
+      days_of_week:
+        items:
+          type: string
+        type: array
+      ends_on:
+        type: string
+      interval:
+        type: integer
+      occurrences:
+        type: integer
+      pattern:
+        enum:
+        - daily
+        - weekly
+        - monthly
+        - custom
+        type: string
+      week_of_month:
+        type: string
+    required:
+    - pattern
+    type: object
+  eventhandler.SEODTO:
+    properties:
+      canonical_url:
+        type: string
+      meta_description:
+        type: string
+      meta_keywords:
+        items:
+          type: string
+        type: array
+      meta_title:
+        type: string
+      noindex:
+        type: boolean
+      og_description:
+        type: string
+      og_image_url:
+        type: string
+      og_title:
+        type: string
+      og_type:
+        type: string
+      robots:
+        type: string
+      twitter_card:
+        type: string
+      twitter_description:
+        type: string
+      twitter_image_url:
+        type: string
+      twitter_title:
+        type: string
+    type: object
+  eventhandler.SEORequest:
+    properties:
+      canonical_url:
+        type: string
+      meta_description:
+        type: string
+      meta_keywords:
+        items:
+          type: string
+        type: array
+      meta_title:
+        type: string
+      noindex:
+        type: boolean
+      og_description:
+        type: string
+      og_image_url:
+        type: string
+      og_title:
+        type: string
+      og_type:
+        type: string
+      robots:
+        type: string
+      twitter_card:
+        type: string
+      twitter_description:
+        type: string
+      twitter_image_url:
+        type: string
+      twitter_title:
+        type: string
+    type: object
+  eventhandler.ScheduleDTO:
+    properties:
+      end_date:
+        type: string
+      end_time:
+        type: string
+      id:
+        type: string
       is_virtual:
         type: boolean
       location:
@@ -526,48 +967,27 @@ definitions:
         type: integer
       meet_link:
         type: string
-      name:
+      session_name:
         type: string
-      price:
-        type: number
-      restored_at:
+      session_number:
+        type: integer
+      start_date:
         type: string
-      restored_by:
+      start_time:
         type: string
-      slug:
-        type: string
-      team_type:
-        description: '✅ NEW: "personal" or "institution"'
-        type: string
-      thumbnail_url:
-        type: string
-      time:
-        type: string
-      updated_at:
+      timezone:
         type: string
       zoom_link:
         type: string
     type: object
-  eventhandler.UpdateEventRequest:
+  eventhandler.ScheduleRequest:
     properties:
-      certificate_price:
-        type: number
-      date:
+      end_date:
         type: string
-      description:
+      end_time:
         type: string
-      display_name:
+      id:
         type: string
-      duration:
-        type: integer
-      event_status_id:
-        type: string
-      event_type_id:
-        type: string
-      is_featured:
-        type: boolean
-      is_private:
-        type: boolean
       is_virtual:
         type: boolean
       location:
@@ -576,13 +996,252 @@ definitions:
         type: integer
       meet_link:
         type: string
+      session_name:
+        type: string
+      session_number:
+        type: integer
+      start_date:
+        type: string
+      start_time:
+        type: string
+      timezone:
+        type: string
+      zoom_link:
+        type: string
+    required:
+    - end_time
+    - start_date
+    - start_time
+    type: object
+  eventhandler.SpeakerDTO:
+    properties:
+      bio:
+        type: string
+      id:
+        type: string
+      is_keynote:
+        type: boolean
+      name:
+        type: string
+      photo_url:
+        type: string
+      social_links:
+        additionalProperties:
+          type: string
+        type: object
+      sort_order:
+        type: integer
+      title:
+        type: string
+    type: object
+  eventhandler.SpeakerRequest:
+    properties:
+      bio:
+        type: string
+      id:
+        type: string
+      is_keynote:
+        type: boolean
+      name:
+        type: string
+      photo_url:
+        type: string
+      social_links:
+        additionalProperties:
+          type: string
+        type: object
+      sort_order:
+        type: integer
+      title:
+        type: string
+    required:
+    - name
+    type: object
+  eventhandler.TicketDTO:
+    properties:
+      description:
+        type: string
+      early_bird_deadline:
+        type: string
+      group_discount:
+        type: number
+      group_min_attendees:
+        type: integer
+      id:
+        type: string
+      is_active:
+        type: boolean
+      max_per_person:
+        type: integer
       name:
         type: string
       price:
         type: number
-      time:
+      quantity:
+        type: integer
+      sort_order:
+        type: integer
+      ticket_type:
+        $ref: '#/definitions/eventhandler.TicketTypeDTO'
+    type: object
+  eventhandler.TicketRequest:
+    properties:
+      description:
         type: string
+      early_bird_deadline:
+        type: string
+      group_discount:
+        type: number
+      group_min_attendees:
+        type: integer
+      id:
+        type: string
+      max_per_person:
+        type: integer
+      name:
+        type: string
+      price:
+        minimum: 0
+        type: number
+      quantity:
+        minimum: 1
+        type: integer
+      ticket_type_id:
+        type: string
+    required:
+    - ticket_type_id
+    type: object
+  eventhandler.TicketTypeDTO:
+    properties:
+      description:
+        type: string
+      display_name:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      slug:
+        type: string
+    type: object
+  eventhandler.UpdateEventRequest:
+    properties:
+      capacity:
+        type: integer
+      category_id:
+        type: string
+      certificate_enabled:
+        type: boolean
+      certificate_price:
+        type: number
+      certificate_template_id:
+        type: string
+      description:
+        type: string
+      display_name:
+        type: string
+      event_type_id:
+        type: string
+      image_url:
+        description: Image
+        type: string
+      in_person_location:
+        type: string
+      invite_only:
+        type: boolean
+      invited_emails:
+        items:
+          type: string
+        type: array
+      is_featured:
+        description: Monetization
+        type: boolean
+      is_free:
+        description: Tickets
+        type: boolean
+      is_hybrid:
+        type: boolean
+      is_multi_day:
+        type: boolean
+      is_recurring:
+        type: boolean
+      is_virtual:
+        description: Venue
+        type: boolean
+      language:
+        type: string
+      materials:
+        description: Materials
+        items:
+          $ref: '#/definitions/eventhandler.MaterialRequest'
+        type: array
+      meet_link:
+        type: string
+      name:
+        description: Basic Information
+        type: string
+      password:
+        type: string
+      recurrence:
+        $ref: '#/definitions/eventhandler.RecurrenceRequest'
+      schedules:
+        description: Schedule
+        items:
+          $ref: '#/definitions/eventhandler.ScheduleRequest'
+        type: array
+      seo:
+        allOf:
+        - $ref: '#/definitions/eventhandler.SEORequest'
+        description: SEO
+      short_description:
+        type: string
+      speakers:
+        description: Speakers
+        items:
+          $ref: '#/definitions/eventhandler.SpeakerRequest'
+        type: array
+      tags:
+        items:
+          type: string
+        type: array
+      tickets:
+        items:
+          $ref: '#/definitions/eventhandler.TicketRequest'
+        type: array
+      venue_address:
+        type: string
+      venue_city:
+        type: string
+      venue_country:
+        type: string
+      venue_name:
+        type: string
+      virtual_platform:
+        type: string
+      virtual_platform_url:
+        type: string
+      visibility:
+        description: Access & Privacy
+        type: string
+      waitlist_enabled:
+        type: boolean
       zoom_link:
+        type: string
+    type: object
+  eventhandler.VenueDTO:
+    properties:
+      address:
+        type: string
+      city:
+        type: string
+      coordinates:
+        additionalProperties:
+          format: float64
+          type: number
+        type: object
+      country:
+        type: string
+      name:
         type: string
     type: object
   response.BaseResponse:
@@ -675,366 +1334,6 @@ info:
   title: Nuruvent API
   version: 1.0.0
 paths:
-  /api/v1/accounts/{id}:
-    delete:
-      consumes:
-      - application/json
-      description: Soft delete an account
-      parameters:
-      - description: Account ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Delete account
-      tags:
-      - Accounts
-    get:
-      consumes:
-      - application/json
-      description: Get account details by ID
-      parameters:
-      - description: Account ID
-        in: path
-        name: id
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/acchandler.AccountResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Get account by ID
-      tags:
-      - Accounts
-    put:
-      consumes:
-      - application/json
-      description: Update account details
-      parameters:
-      - description: Account ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Update account request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/acchandler.UpdateAccountRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/acchandler.AccountResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Update account
-      tags:
-      - Accounts
-  /api/v1/accounts/{id}/professional-type:
-    put:
-      consumes:
-      - application/json
-      description: Update account professional type
-      parameters:
-      - description: Account ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Update professional type request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/acchandler.UpdateProfessionalTypeRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/acchandler.AccountResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Update professional type
-      tags:
-      - Accounts
-  /api/v1/accounts/{id}/profile:
-    put:
-      consumes:
-      - application/json
-      description: Update account profile (name, phone, display name)
-      parameters:
-      - description: Account ID
-        in: path
-        name: id
-        required: true
-        type: string
-      - description: Update profile request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/acchandler.UpdateProfileRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/acchandler.AccountResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Update profile
-      tags:
-      - Accounts
-  /api/v1/accounts/email/{email}:
-    get:
-      consumes:
-      - application/json
-      description: Get account details by email address
-      parameters:
-      - description: Email address
-        in: path
-        name: email
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/acchandler.AccountResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "404":
-          description: Not Found
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Get account by email
-      tags:
-      - Accounts
-  /api/v1/accounts/me:
-    get:
-      description: Get the currently authenticated user's account
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/acchandler.AccountResponse'
-              type: object
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Get current account
-      tags:
-      - Accounts
-    put:
-      consumes:
-      - application/json
-      description: Update the currently authenticated user's account
-      parameters:
-      - description: Update account request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/acchandler.UpdateAccountRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/acchandler.AccountResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Update current account
-      tags:
-      - Accounts
-  /api/v1/accounts/me/profile:
-    put:
-      consumes:
-      - application/json
-      description: Update the currently authenticated user's profile
-      parameters:
-      - description: Update profile request
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/acchandler.UpdateProfileRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            allOf:
-            - $ref: '#/definitions/response.BaseResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/acchandler.AccountResponse'
-              type: object
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
-      summary: Update current profile
-      tags:
-      - Accounts
   /api/v1/auth/forgot-password:
     post:
       consumes:
@@ -1394,6 +1693,10 @@ paths:
         in: query
         name: event_status_id
         type: string
+      - description: Category ID
+        in: query
+        name: category_id
+        type: string
       - description: Include soft-deleted events
         in: query
         name: include_deleted
@@ -1412,6 +1715,16 @@ paths:
         in: query
         name: offset
         type: integer
+      - default: created_at
+        description: Sort by field (created_at, start_date, name)
+        in: query
+        name: sort_by
+        type: string
+      - default: desc
+        description: Sort order (asc, desc)
+        in: query
+        name: sort_order
+        type: string
       produces:
       - application/json
       responses:
@@ -1495,7 +1808,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -1538,7 +1851,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -1584,7 +1897,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -1630,7 +1943,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -1683,7 +1996,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -1770,7 +2083,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -1816,7 +2129,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -1845,7 +2158,8 @@ paths:
       - Events
   /api/v1/events/{id}/with-creator:
     get:
-      description: Get event details by ID with full creator information
+      description: Get event details by ID with full creator information (requires
+        auth)
       parameters:
       - description: Event ID
         in: path
@@ -1868,6 +2182,14 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
         "404":
           description: Not Found
           schema:
@@ -1876,6 +2198,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
       summary: Get event by ID with creator details
       tags:
       - Events
@@ -2214,7 +2538,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/domain.Event'
+                    $ref: '#/definitions/eventhandler.EventResponse'
                   type: array
               type: object
         "500":
@@ -2243,6 +2567,10 @@ paths:
       - description: Event Type ID
         in: query
         name: event_type_id
+        type: string
+      - description: Category ID
+        in: query
+        name: category_id
         type: string
       - description: Include soft-deleted events
         in: query
@@ -2305,7 +2633,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -2324,7 +2652,8 @@ paths:
       - Events
   /api/v1/events/slug/{slug}/with-creator:
     get:
-      description: Get event details by slug with full creator information
+      description: Get event details by slug with full creator information (requires
+        auth)
       parameters:
       - description: Event Slug
         in: path
@@ -2347,6 +2676,14 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/response.BaseResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
         "404":
           description: Not Found
           schema:
@@ -2355,6 +2692,8 @@ paths:
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
       summary: Get event by slug with creator details
       tags:
       - Events
@@ -2474,7 +2813,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/domain.Event'
+                    $ref: '#/definitions/eventhandler.EventResponse'
                   type: array
               type: object
         "500":
@@ -2487,6 +2826,7 @@ paths:
   /api/v1/events/upcoming/with-creator:
     get:
       description: Get all upcoming published events with full creator information
+        (requires auth)
       parameters:
       - default: 10
         description: Number of events to return
@@ -2507,16 +2847,22 @@ paths:
                     $ref: '#/definitions/eventhandler.EventResponse'
                   type: array
               type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.BaseResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.BaseResponse'
+      security:
+      - BearerAuth: []
       summary: Get upcoming events with creator details
       tags:
       - Events
   /api/v1/institutions/{institutionId}/events:
     get:
-      description: Get all events for an institution
+      description: Get all events for an institution (public - filters private events)
       parameters:
       - description: Institution ID
         in: path
@@ -2550,26 +2896,16 @@ paths:
           description: Bad Request
           schema:
             $ref: '#/definitions/response.BaseResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
-        "403":
-          description: Forbidden
-          schema:
-            $ref: '#/definitions/response.BaseResponse'
         "500":
           description: Internal Server Error
           schema:
             $ref: '#/definitions/response.BaseResponse'
-      security:
-      - BearerAuth: []
       summary: Get events by institution
       tags:
       - Events
     post:
       consumes:
-      - multipart/form-data
+      - application/json
       description: Create a published event for institution account (institution ID
         required)
       parameters:
@@ -2578,76 +2914,12 @@ paths:
         name: institutionId
         required: true
         type: string
-      - description: Event name
-        in: formData
-        name: name
+      - description: Event details
+        in: body
+        name: request
         required: true
-        type: string
-      - description: Event description
-        in: formData
-        name: description
-        type: string
-      - description: Event Type ID
-        in: formData
-        name: event_type_id
-        required: true
-        type: string
-      - description: Event date (YYYY-MM-DD)
-        in: formData
-        name: date
-        required: true
-        type: string
-      - description: Event time (HH:MM)
-        in: formData
-        name: time
-        required: true
-        type: string
-      - description: Event duration in minutes
-        in: formData
-        name: duration
-        required: true
-        type: integer
-      - description: Event price
-        in: formData
-        name: price
-        type: number
-      - description: Certificate price
-        in: formData
-        name: certificate_price
-        type: number
-      - description: Event location (required for in-person)
-        in: formData
-        name: location
-        type: string
-      - default: true
-        description: Is virtual event
-        in: formData
-        name: is_virtual
-        type: boolean
-      - description: Is featured event
-        in: formData
-        name: is_featured
-        type: boolean
-      - description: Is private event
-        in: formData
-        name: is_private
-        type: boolean
-      - description: Zoom link (required for virtual)
-        in: formData
-        name: zoom_link
-        type: string
-      - description: Meet link (required for virtual)
-        in: formData
-        name: meet_link
-        type: string
-      - description: Maximum attendees
-        in: formData
-        name: max_attendees
-        type: integer
-      - description: Event image
-        in: formData
-        name: image
-        type: file
+        schema:
+          $ref: '#/definitions/eventhandler.CreateEventRequest'
       produces:
       - application/json
       responses:
@@ -2658,7 +2930,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -2757,7 +3029,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.MediaInfo'
+                  $ref: '#/definitions/eventhandler.MediaInfoResponse'
               type: object
         "400":
           description: Bad Request
@@ -2860,7 +3132,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.MediaInfo'
+                  $ref: '#/definitions/eventhandler.MediaInfoResponse'
               type: object
         "400":
           description: Bad Request
@@ -2986,7 +3258,7 @@ paths:
   /api/v1/institutions/{institutionId}/events/draft:
     post:
       consumes:
-      - multipart/form-data
+      - application/json
       description: Create a draft event for institution account (institution ID required)
       parameters:
       - description: Institution ID
@@ -2994,65 +3266,12 @@ paths:
         name: institutionId
         required: true
         type: string
-      - default: Untitled Event
-        description: Event name
-        in: formData
-        name: name
-        type: string
-      - description: Event description
-        in: formData
-        name: description
-        type: string
-      - description: Event Type ID
-        in: formData
-        name: event_type_id
-        type: string
-      - description: Event date (YYYY-MM-DD)
-        in: formData
-        name: date
-        type: string
-      - description: Event time (HH:MM)
-        in: formData
-        name: time
-        type: string
-      - default: 60
-        description: Event duration in minutes
-        in: formData
-        name: duration
-        type: integer
-      - description: Event price
-        in: formData
-        name: price
-        type: number
-      - description: Certificate price
-        in: formData
-        name: certificate_price
-        type: number
-      - description: Event location
-        in: formData
-        name: location
-        type: string
-      - default: true
-        description: Is virtual event
-        in: formData
-        name: is_virtual
-        type: boolean
-      - description: Zoom link
-        in: formData
-        name: zoom_link
-        type: string
-      - description: Meet link
-        in: formData
-        name: meet_link
-        type: string
-      - description: Maximum attendees
-        in: formData
-        name: max_attendees
-        type: integer
-      - description: Event image
-        in: formData
-        name: image
-        type: file
+      - description: Draft event details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.CreateDraftRequest'
       produces:
       - application/json
       responses:
@@ -3063,7 +3282,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -3089,6 +3308,7 @@ paths:
   /api/v1/institutions/{institutionId}/events/with-creator:
     get:
       description: Get all events for an institution with full creator information
+        (requires team admin)
       parameters:
       - description: Institution ID
         in: path
@@ -3142,6 +3362,7 @@ paths:
   /api/v1/users/{userId}/events/with-creator:
     get:
       description: Get all events created by a specific user with full creator information
+        (requires auth)
       parameters:
       - description: User ID
         in: path
@@ -3238,79 +3459,15 @@ paths:
       - Events
     post:
       consumes:
-      - multipart/form-data
+      - application/json
       description: Create a published event for personal account (no institution required)
       parameters:
-      - description: Event name
-        in: formData
-        name: name
+      - description: Event details
+        in: body
+        name: request
         required: true
-        type: string
-      - description: Event description
-        in: formData
-        name: description
-        type: string
-      - description: Event Type ID
-        in: formData
-        name: event_type_id
-        required: true
-        type: string
-      - description: Event date (YYYY-MM-DD)
-        in: formData
-        name: date
-        required: true
-        type: string
-      - description: Event time (HH:MM)
-        in: formData
-        name: time
-        required: true
-        type: string
-      - description: Event duration in minutes
-        in: formData
-        name: duration
-        required: true
-        type: integer
-      - description: Event price
-        in: formData
-        name: price
-        type: number
-      - description: Certificate price
-        in: formData
-        name: certificate_price
-        type: number
-      - description: Event location (required for in-person)
-        in: formData
-        name: location
-        type: string
-      - default: true
-        description: Is virtual event
-        in: formData
-        name: is_virtual
-        type: boolean
-      - description: Is featured event
-        in: formData
-        name: is_featured
-        type: boolean
-      - description: Is private event
-        in: formData
-        name: is_private
-        type: boolean
-      - description: Zoom link (required for virtual)
-        in: formData
-        name: zoom_link
-        type: string
-      - description: Meet link (required for virtual)
-        in: formData
-        name: meet_link
-        type: string
-      - description: Maximum attendees
-        in: formData
-        name: max_attendees
-        type: integer
-      - description: Event image
-        in: formData
-        name: image
-        type: file
+        schema:
+          $ref: '#/definitions/eventhandler.CreateEventRequest'
       produces:
       - application/json
       responses:
@@ -3321,7 +3478,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -3347,68 +3504,15 @@ paths:
   /api/v1/users/me/events/draft:
     post:
       consumes:
-      - multipart/form-data
+      - application/json
       description: Create a draft event for personal account (no institution required)
       parameters:
-      - default: Untitled Event
-        description: Event name
-        in: formData
-        name: name
-        type: string
-      - description: Event description
-        in: formData
-        name: description
-        type: string
-      - description: Event Type ID
-        in: formData
-        name: event_type_id
-        type: string
-      - description: Event date (YYYY-MM-DD)
-        in: formData
-        name: date
-        type: string
-      - description: Event time (HH:MM)
-        in: formData
-        name: time
-        type: string
-      - default: 60
-        description: Event duration in minutes
-        in: formData
-        name: duration
-        type: integer
-      - description: Event price
-        in: formData
-        name: price
-        type: number
-      - description: Certificate price
-        in: formData
-        name: certificate_price
-        type: number
-      - description: Event location
-        in: formData
-        name: location
-        type: string
-      - default: true
-        description: Is virtual event
-        in: formData
-        name: is_virtual
-        type: boolean
-      - description: Zoom link
-        in: formData
-        name: zoom_link
-        type: string
-      - description: Meet link
-        in: formData
-        name: meet_link
-        type: string
-      - description: Maximum attendees
-        in: formData
-        name: max_attendees
-        type: integer
-      - description: Event image
-        in: formData
-        name: image
-        type: file
+      - description: Draft event details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/eventhandler.CreateDraftRequest'
       produces:
       - application/json
       responses:
@@ -3419,7 +3523,7 @@ paths:
             - $ref: '#/definitions/response.BaseResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/domain.Event'
+                  $ref: '#/definitions/eventhandler.EventResponse'
               type: object
         "400":
           description: Bad Request
@@ -3445,6 +3549,7 @@ paths:
   /api/v1/users/me/events/with-creator:
     get:
       description: Get all events created by the authenticated user with creator info
+        (same as GetMyEvents)
       parameters:
       - default: 1
         description: Page number

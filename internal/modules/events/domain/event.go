@@ -11,120 +11,336 @@ import (
 	"github.com/google/uuid"
 )
 
-// Default UUID for drafts when no event type is provided
-const DefaultEventTypeID = "00000000-0000-0000-0000-000000000000"
 
-// Event entity
+const (
+	// VisibilityPublic - Anyone can view the event
+	VisibilityPublic = "public"
+	
+	// VisibilityPrivate - Only team members can view the event
+	VisibilityPrivate = "private"
+	
+	// VisibilityUnlisted - Anyone with the direct link can view
+	VisibilityUnlisted = "unlisted"
+)
+
+// ============================================================
+// EVENT - Aggregate Root
+// ============================================================
+
+// Event is the main aggregate root for the events module
 type Event struct {
-	// Core fields
-	ID          string
-	Slug        string
-	Name        string
-	DisplayName string
-	Description string
+	// ============================================================
+	// Core Identity
+	// ============================================================
+	ID               string
+	Slug             string
+	Name             string
+	DisplayName      string
+	Description      string
+	ShortDescription string
+	Tags             []string
+	Language         string
 
-	// Relations
-	EventTypeID   string
-	EventStatusID string
-	InstitutionID string // ✅ NEW: Institution this event belongs to
-	CreatedBy     string // ✅ User ID who created this event
-	Creator       *AccountInfo
+	// ============================================================
+	// Relations (Seeded Lookup Data)
+	// ============================================================
+	EventTypeID          string
+	EventStatusID        string
+	CategoryID           *string
+	EventFormatID        *string
+	CertificateTemplateID *string
 
+	// ============================================================
+	// Ownership
+	// ============================================================
+	InstitutionID *string // NULL for personal events
+	CreatedBy     string  // User ID who created this event
+	Creator       *UserInfo
+
+	// ============================================================
+	// Schedule & Venue
+	// ============================================================
+	StartDate   time.Time
+	EndDate     *time.Time
+	IsMultiDay  bool
+	IsRecurring bool
+
+	// Recurrence
+	RecurrencePatternID   *string
+	RecurrenceInterval    int
+	RecurrenceEndsOn      *time.Time
+	RecurrenceOccurrences *int
+	RecurrenceDaysOfWeek  []string
+	RecurrenceDayOfMonth  *int
+	RecurrenceWeekOfMonth *string
+
+	// Venue
+	VenueName          string
+	VenueAddress       string
+	VenueCity          string
+	VenueCountry       string
+	VenueCoordinates   map[string]float64 // JSONB
+	IsVirtual          bool
+	IsHybrid           bool
+	VirtualPlatform    string
+	VirtualPlatformURL string
+	InPersonLocation   string
+	ZoomLink           string
+	MeetLink           string
+
+	// ============================================================
+	// Ticketing & Capacity
+	// ============================================================
+	IsFreeEvent        bool // Renamed to avoid conflict with IsFree() method
+	Capacity           *int
+	CurrentAttendees   int
+	WaitlistEnabled    bool
+	WaitlistCapacity   *int
+	TicketSalesStart   *time.Time
+	TicketSalesEnd     *time.Time
+	MinTicketsPerOrder int
+	MaxTicketsPerOrder *int
+
+	// ============================================================
+	// Access & Privacy
+	// ============================================================
+	Visibility          string // "public", "private", "unlisted"
+	Password            *string
+	InviteOnly          bool
+	InvitedEmails       []string
+	RequiresApproval    bool
+	ApprovalRequiredFor []string // ["everyone", "new_users", "unverified"]
+
+	// ============================================================
+	// Monetization & Add-ons
+	// ============================================================
+	IsFeatured          bool
+	FeaturedUntil       *time.Time
+	CertificateEnabled  bool
+	CertificatePrice    float64
+	EarlyBirdDiscountPercentage *int
+	GroupDiscountPercentage *int
+	GroupMinAttendees   *int
+
+	// ============================================================
+	// Child Entities (Value Objects - will be loaded separately)
+	// ============================================================
+	Schedules   []EventSchedule   // Multi-day schedules
+	Tickets     []EventTicket     // Ticket types
+	Speakers    []EventSpeaker    // Speakers/presenters
+	Materials   []EventMaterial   // Event materials
+	Invitations []EventInvitation // Invite-only tracking
+
+	// ============================================================
+	// SEO & Marketing
+	// ============================================================
+	SEO struct {
+		Title         string
+		Description   string
+		Keywords      []string
+		CanonicalURL  string
+		Robots        string
+		NoIndex       bool
+	}
+	OpenGraph struct {
+		Title       string
+		Description string
+		ImageURL    string
+		Type        string // "event"
+	}
+	Twitter struct {
+		Card        string // "summary_large_image"
+		Title       string
+		Description string
+		ImageURL    string
+	}
+	SchemaOrg map[string]interface{} // JSON-LD
+
+	// ============================================================
 	// Media
+	// ============================================================
 	ImageURL     string
 	ThumbnailURL string
 
-	// Event details
-	Date             time.Time
-	Time             string
-	Duration         int
-	Price            float64
-	CertificatePrice float64
-	Location         string
-	IsVirtual        bool
-	ZoomLink         string
-	MeetLink         string
-	MaxAttendees     int
-	CurrentAttendees int
+	// ============================================================
+	// Social & Engagement
+	// ============================================================
+	SocialLinks        map[string]string // LinkedIn, Twitter, etc.
+	HasLivestream      bool
+	LivestreamURL      string
+	RecordingAvailable bool
+	RecordingURL       string
 
-	// Audit fields
+	// ============================================================
+	// Metadata & Versioning
+	// ============================================================
+	Metadata           map[string]interface{}
+	Version            int
+	PublishedAt        *time.Time
+	ScheduledPublishAt *time.Time
+	LastPublishedAt    *time.Time
+
+	// ============================================================
+	// Audit Fields
+	// ============================================================
 	IsActive  bool
 	CreatedAt time.Time
 	UpdatedAt time.Time
 
-	// Soft delete fields
+	// Soft delete
 	DeletedAt  *time.Time
-	DeletedBy  string
+	DeletedBy  *string
 	RestoredAt *time.Time
-	RestoredBy string
+	RestoredBy *string
+}
 
-	// Feature flags
-	IsFeatured bool
-	IsPrivate  bool
+// ============================================================
+// CHILD ENTITY DEFINITIONS
+// ============================================================
 
-	// ✅ DEPRECATED - Use InstitutionID instead
-	// AccountID string // Keep for backward compatibility during migration
+// EventSchedule represents a schedule for multi-day events
+type EventSchedule struct {
+	ID           string
+	EventID      string
+	SessionName  string
+	SessionNumber int
+	StartDate    time.Time
+	EndDate      *time.Time
+	StartTime    string
+	EndTime      string
+	Timezone     string
+	Location     string
+	IsVirtual    bool
+	ZoomLink     string
+	MeetLink     string
+	MaxAttendees *int
+}
+
+// EventTicket represents a ticket type for an event
+type EventTicket struct {
+	ID                 string
+	EventID            string
+	TicketTypeID       string
+	Name               string
+	Description        string
+	Price              float64
+	Quantity           int
+	MaxPerPerson       *int
+	EarlyBirdDeadline  *time.Time
+	GroupMinAttendees  *int
+	GroupDiscount      *float64
+	SortOrder          int
+	IsActive           bool
+}
+
+// EventSpeaker represents a speaker for an event
+type EventSpeaker struct {
+	ID          string
+	EventID     string
+	Name        string
+	Title       string
+	Bio         string
+	PhotoURL    string
+	SocialLinks map[string]string
+	SortOrder   int
+	IsKeynote   bool
+}
+
+// EventMaterial represents a material for an event
+type EventMaterial struct {
+	ID             string
+	EventID        string
+	MaterialTypeID string
+	Title          string
+	Description    string
+	URL            string
+	IsPreEvent     bool
+	SortOrder      int
+	FileSize       *int64
+	MimeType       string
+}
+
+// EventInvitation represents an invitation for invite-only events
+type EventInvitation struct {
+	ID         string
+	EventID    string
+	Email      string
+	Name       string
+	InvitedBy  *string
+	InvitedAt  time.Time
+	AcceptedAt *time.Time
+	DeclinedAt *time.Time
+	Token      string
+	ExpiresAt  *time.Time
 }
 
 // ============================================================
 // FACTORY METHODS
 // ============================================================
 
-// NewEvent creates a new event with all required fields
+// NewEvent creates a new event with required fields
 func NewEvent(
-	name, displayName, slug, description,
-	eventTypeID, institutionID, createdBy string,
+	name, displayName, description string,
+	eventTypeID, createdBy string,
 ) (*Event, error) {
 	if name == "" {
-		return nil, errors.New("event name is required")
+		return nil, ErrInvalidEventName
 	}
 	if displayName == "" {
 		return nil, errors.New("event display name is required")
 	}
-	if slug == "" {
-		return nil, errors.New("event slug is required")
-	}
-	if institutionID == "" {
-		return nil, errors.New("institution ID is required")
+	if eventTypeID == "" {
+		return nil, ErrInvalidEventType
 	}
 	if createdBy == "" {
 		return nil, errors.New("created by is required")
 	}
 
 	now := time.Now()
+	slug := generateSlug(displayName)
 
 	return &Event{
-		ID:               uuid.New().String(),
-		Slug:             slug,
-		Name:             name,
-		DisplayName:      displayName,
-		Description:      description,
-		EventTypeID:      eventTypeID,
-		EventStatusID:    "",
-		InstitutionID:    institutionID,
-		CreatedBy:        createdBy,
-		ImageURL:         "",
-		ThumbnailURL:     "",
-		Date:             time.Time{},
-		Time:             "",
-		Duration:         0,
-		Price:            0,
-		CertificatePrice: 0,
-		Location:         "",
-		IsVirtual:        true,
-		ZoomLink:         "",
-		MeetLink:         "",
-		MaxAttendees:     0,
-		CurrentAttendees: 0,
-		IsActive:         true,
-		CreatedAt:        now,
-		UpdatedAt:        now,
-		DeletedAt:        nil,
-		DeletedBy:        "",
-		RestoredAt:       nil,
-		RestoredBy:       "",
-		IsFeatured:       false,
-		IsPrivate:        false,
+		ID:          uuid.New().String(),
+		Slug:        slug,
+		Name:        name,
+		DisplayName: displayName,
+		Description: description,
+		EventTypeID: eventTypeID,
+		EventStatusID: "", // Default to draft
+		CreatedBy:   createdBy,
+		IsVirtual:   true,
+		Visibility:  "public",
+		Language:    "en",
+		Version:     1,
+		IsActive:    true,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		Tags:        []string{},
+		InvitedEmails: []string{},
+		SocialLinks: make(map[string]string),
+		Metadata:    make(map[string]interface{}),
+		SchemaOrg:   make(map[string]interface{}),
+		OpenGraph: struct {
+			Title       string
+			Description string
+			ImageURL    string
+			Type        string
+		}{
+			Type: "event",
+		},
+		Twitter: struct {
+			Card        string
+			Title       string
+			Description string
+			ImageURL    string
+		}{
+			Card: "summary_large_image",
+		},
+		Schedules:   []EventSchedule{},
+		Tickets:     []EventTicket{},
+		Speakers:    []EventSpeaker{},
+		Materials:   []EventMaterial{},
+		Invitations: []EventInvitation{},
 	}, nil
 }
 
@@ -132,197 +348,274 @@ func NewEvent(
 // VALIDATION METHODS
 // ============================================================
 
-// ValidateForPublish - Validate event before publishing
+// ValidateForPublish validates event before publishing
 func (e *Event) ValidateForPublish() error {
 	var validationErrors []string
 
+	// ============================================================
+	// 1. BASIC CHECKS
+	// ============================================================
 	if e.IsDeleted() {
-		validationErrors = append(validationErrors, ErrEventValidationFailed.Error()+": cannot publish a deleted event")
+		validationErrors = append(validationErrors, "cannot publish a deleted event")
 	}
 	if e.Name == "" {
-		validationErrors = append(validationErrors, ErrEventNameRequired.Error())
+		validationErrors = append(validationErrors, ErrInvalidEventName.Error())
 	}
-	if e.DisplayName == "" {
-		validationErrors = append(validationErrors, ErrEventDisplayNameRequired.Error())
+	if e.Description == "" {
+		validationErrors = append(validationErrors, "description is required for published events")
 	}
-	if e.Slug == "" {
-		validationErrors = append(validationErrors, ErrEventSlugRequired.Error())
+	if e.EventTypeID == "" {
+		validationErrors = append(validationErrors, "event type is required for published events")
 	}
-	if e.EventTypeID == "" || e.EventTypeID == DefaultEventTypeID {
-		validationErrors = append(validationErrors, ErrEventTypeRequired.Error())
+
+	// ============================================================
+	// 2. DATE & TIME CHECKS
+	// ============================================================
+	if e.StartDate.IsZero() {
+		validationErrors = append(validationErrors, "start date is required for published events")
 	}
-	if e.InstitutionID == "" {
-		validationErrors = append(validationErrors, "institution ID is required")
+	if !e.StartDate.IsZero() && e.StartDate.Before(time.Now()) {
+		validationErrors = append(validationErrors, "start date cannot be in the past")
 	}
-	if e.CreatedBy == "" {
-		validationErrors = append(validationErrors, "created by is required")
+
+	// ============================================================
+	// 3. SCHEDULE CHECKS
+	// ============================================================
+	if len(e.Schedules) == 0 {
+		validationErrors = append(validationErrors, "at least one schedule is required for published events")
+	} else {
+		// Validate each schedule
+		for i, schedule := range e.Schedules {
+			if schedule.StartDate.IsZero() {
+				validationErrors = append(validationErrors, fmt.Sprintf("schedule %d: start date is required", i+1))
+			}
+			if schedule.StartTime == "" {
+				validationErrors = append(validationErrors, fmt.Sprintf("schedule %d: start time is required", i+1))
+			}
+			if schedule.EndTime == "" {
+				validationErrors = append(validationErrors, fmt.Sprintf("schedule %d: end time is required", i+1))
+			}
+		}
 	}
-	if e.Date.IsZero() {
-		validationErrors = append(validationErrors, ErrEventDateRequired.Error())
+
+	// ============================================================
+	// 4. VENUE & MEETING LINK CHECKS (IMPROVED)
+	// ============================================================
+	
+	// Check event-level meeting links
+	hasEventLevelLink := e.VirtualPlatformURL != "" || e.ZoomLink != "" || e.MeetLink != ""
+	
+	// Check schedule-level meeting links
+	hasScheduleLevelLink := false
+	if len(e.Schedules) > 0 {
+		for _, schedule := range e.Schedules {
+			if schedule.ZoomLink != "" || schedule.MeetLink != "" {
+				hasScheduleLevelLink = true
+				break
+			}
+		}
 	}
-	if !e.Date.IsZero() && e.Date.Before(time.Now()) {
-		validationErrors = append(validationErrors, ErrEventPastDate.Error())
+	
+	// Determine if meeting link exists at any level
+	hasMeetingLink := hasEventLevelLink || hasScheduleLevelLink
+
+	if e.IsVirtual && !hasMeetingLink {
+		validationErrors = append(validationErrors, 
+			"meeting link is required for virtual events. Provide zoom_link or meet_link at event level or in at least one schedule")
 	}
-	if e.Time == "" {
-		validationErrors = append(validationErrors, ErrEventTimeRequired.Error())
+
+	// For in-person events (non-virtual, non-hybrid)
+	if !e.IsVirtual && !e.IsHybrid && e.InPersonLocation == "" {
+		validationErrors = append(validationErrors, "location is required for in-person events")
 	}
-	if e.Duration <= 0 {
-		validationErrors = append(validationErrors, ErrEventDurationRequired.Error())
+
+	// For hybrid events
+	if e.IsHybrid {
+		// Need both virtual and in-person
+		if !hasMeetingLink {
+			validationErrors = append(validationErrors, 
+				"meeting link is required for hybrid events (virtual component)")
+		}
+		if e.InPersonLocation == "" {
+			validationErrors = append(validationErrors, 
+				"in-person location is required for hybrid events")
+		}
 	}
-	if e.Duration > 0 && e.Duration < 15 {
-		validationErrors = append(validationErrors, ErrEventDurationTooShort.Error())
+
+	// ============================================================
+	// 5. TICKET CHECKS
+	// ============================================================
+	if len(e.Tickets) == 0 {
+		validationErrors = append(validationErrors, "at least one ticket is required for published events")
+	} else {
+		totalQuantity := 0
+		for i, ticket := range e.Tickets {
+			if ticket.TicketTypeID == "" {
+				validationErrors = append(validationErrors, fmt.Sprintf("ticket %d: ticket type is required", i+1))
+			}
+			if ticket.Quantity <= 0 {
+				validationErrors = append(validationErrors, fmt.Sprintf("ticket %d: quantity must be greater than 0", i+1))
+			}
+			if ticket.Price < 0 {
+				validationErrors = append(validationErrors, fmt.Sprintf("ticket %d: price cannot be negative", i+1))
+			}
+			totalQuantity += ticket.Quantity
+		}
+		
+		// Validate capacity against total tickets
+		if e.Capacity != nil && *e.Capacity > 0 && totalQuantity > *e.Capacity {
+			validationErrors = append(validationErrors, 
+				fmt.Sprintf("total ticket quantity (%d) exceeds capacity (%d)", totalQuantity, *e.Capacity))
+		}
 	}
-	if e.Duration > 1440 {
-		validationErrors = append(validationErrors, ErrEventDurationTooLong.Error())
+
+	// ============================================================
+	// 6. CAPACITY CHECKS
+	// ============================================================
+	if e.Capacity != nil && *e.Capacity < 0 {
+		validationErrors = append(validationErrors, "capacity cannot be negative")
 	}
-	if !e.IsVirtual && e.Location == "" {
-		validationErrors = append(validationErrors, ErrEventLocationRequired.Error())
+
+	// ============================================================
+	// 7. WAITLIST CHECKS
+	// ============================================================
+	if e.WaitlistEnabled && (e.Capacity == nil || *e.Capacity == 0) {
+		validationErrors = append(validationErrors, "waitlist can only be enabled if capacity is set")
 	}
-	if e.IsVirtual && e.ZoomLink == "" && e.MeetLink == "" {
-		validationErrors = append(validationErrors, ErrEventMeetingLinkRequired.Error())
+	if e.WaitlistCapacity != nil && e.WaitlistEnabled && *e.WaitlistCapacity < 0 {
+		validationErrors = append(validationErrors, "waitlist capacity cannot be negative")
 	}
-	if e.Price < 0 {
-		validationErrors = append(validationErrors, "price cannot be negative")
-	}
+
+	// ============================================================
+	// 8. PRICE CHECKS
+	// ============================================================
 	if e.CertificatePrice < 0 {
 		validationErrors = append(validationErrors, "certificate price cannot be negative")
 	}
-	if e.MaxAttendees < 0 {
-		validationErrors = append(validationErrors, "maximum attendees cannot be negative")
+	if e.CertificateEnabled && e.CertificatePrice < 0 {
+		validationErrors = append(validationErrors, "certificate price cannot be negative when certificate is enabled")
 	}
 
+	// ============================================================
+	// 9. RECURRENCE CHECKS
+	// ============================================================
+	if e.IsRecurring {
+		if e.RecurrencePatternID == nil || *e.RecurrencePatternID == "" {
+			validationErrors = append(validationErrors, "recurrence pattern is required for recurring events")
+		}
+		
+		// Validate based on pattern
+		if e.RecurrencePatternID != nil {
+			switch *e.RecurrencePatternID {
+			case "weekly":
+				if len(e.RecurrenceDaysOfWeek) == 0 {
+					validationErrors = append(validationErrors, "days of week are required for weekly recurrence")
+				}
+			case "monthly":
+				if e.RecurrenceDayOfMonth == nil && e.RecurrenceWeekOfMonth == nil {
+					validationErrors = append(validationErrors, "day of month or week of month is required for monthly recurrence")
+				}
+			}
+		}
+		
+		// Check recurrence end
+		if e.RecurrenceEndsOn == nil && e.RecurrenceOccurrences == nil {
+			validationErrors = append(validationErrors, "recurrence must have an end date or number of occurrences")
+		}
+	}
+
+	// ============================================================
+	// 10. ACCESS & PRIVACY CHECKS
+	// ============================================================
+	if e.Visibility == "" {
+		validationErrors = append(validationErrors, "visibility is required (public, private, unlisted)")
+	}
+	if e.InviteOnly && len(e.InvitedEmails) == 0 {
+		validationErrors = append(validationErrors, "invited emails are required for invite-only events")
+	}
+
+	// ============================================================
+	// 11. RETURN ERRORS
+	// ============================================================
 	if len(validationErrors) > 0 {
 		return fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
 	}
 	return nil
 }
 
-// ValidateForUpdate - Validate event before update
+// ValidateForDraft validates draft event
+func (e *Event) ValidateForDraft() error {
+	if e.IsDeleted() {
+		return errors.New("cannot modify a deleted event")
+	}
+	if len(e.Name) > 255 {
+		return errors.New("event name must be less than 255 characters")
+	}
+	if len(e.DisplayName) > 150 {
+		return errors.New("display name must be less than 150 characters")
+	}
+	return nil
+}
+
+// ValidateForUpdate validates event before update
 func (e *Event) ValidateForUpdate() error {
 	if e.IsDeleted() {
 		return errors.New("cannot update a deleted event")
 	}
 	if e.Name == "" {
-		return errors.New("event name is required")
+		return ErrInvalidEventName
 	}
 	if e.DisplayName == "" {
-		return errors.New("event display name is required")
-	}
-	if e.Slug == "" {
-		return errors.New("event slug is required")
-	}
-	if e.EventTypeID == "" || e.EventTypeID == DefaultEventTypeID {
-		return errors.New("valid event type is required")
-	}
-	if e.InstitutionID == "" {
-		return errors.New("institution ID is required")
-	}
-	if e.CreatedBy == "" {
-		return errors.New("created by is required")
-	}
-	if e.Date.IsZero() {
-		return errors.New("event date is required")
-	}
-	if e.Time == "" {
-		return errors.New("event time is required")
-	}
-	if e.Duration <= 0 {
-		return errors.New("event duration must be greater than 0")
-	}
-	if e.Duration < 15 {
-		return errors.New("duration must be at least 15 minutes")
-	}
-	if e.Duration > 1440 {
-		return errors.New("duration cannot exceed 1440 minutes (24 hours)")
-	}
-	if !e.IsVirtual && e.Location == "" {
-		return errors.New("location is required for in-person events")
-	}
-	if e.IsVirtual && e.ZoomLink == "" && e.MeetLink == "" {
-		return errors.New("at least one meeting link is required for virtual events")
-	}
-	if e.Price < 0 {
-		return errors.New("price cannot be negative")
-	}
-	if e.CertificatePrice < 0 {
-		return errors.New("certificate price cannot be negative")
-	}
-	if e.MaxAttendees < 0 {
-		return errors.New("maximum attendees cannot be negative")
-	}
-	return nil
-}
-
-// ValidateForDraft - Validate draft fields
-func (e *Event) ValidateForDraft() error {
-	if e.IsDeleted() {
-		return errors.New("cannot modify a deleted event")
-	}
-	if len(e.Name) > 100 {
-		return errors.New("event name must be less than 100 characters")
-	}
-	if len(e.DisplayName) > 200 {
-		return errors.New("display name must be less than 200 characters")
-	}
-	if e.Duration < 0 {
-		return errors.New("duration cannot be negative")
-	}
-	if e.Duration > 1440 {
-		return errors.New("duration cannot exceed 1440 minutes (24 hours)")
-	}
-	if e.Price < 0 {
-		return errors.New("price cannot be negative")
-	}
-	if e.CertificatePrice < 0 {
-		return errors.New("certificate price cannot be negative")
-	}
-	if e.MaxAttendees < 0 {
-		return errors.New("maximum attendees cannot be negative")
+		return errors.New("display name is required")
 	}
 	return nil
 }
 
 // ============================================================
-// STATUS METHODS
+// DOMAIN BEHAVIORS
 // ============================================================
 
-// Publish - Validate and publish the event
+// Publish validates and publishes the event
 func (e *Event) Publish() error {
 	if err := e.ValidateForPublish(); err != nil {
 		return err
 	}
+	now := time.Now()
+	e.PublishedAt = &now
+	e.LastPublishedAt = &now
+	e.UpdatedAt = now
+	return nil
+}
+
+// Unpublish unpublishes the event
+func (e *Event) Unpublish() error {
+	if e.IsDeleted() {
+		return errors.New("cannot unpublish a deleted event")
+	}
+	e.PublishedAt = nil
 	e.UpdatedAt = time.Now()
 	return nil
 }
 
-// Cancel - Cancel the event
+// Cancel cancels the event
 func (e *Event) Cancel() error {
-	if e.EventStatusID == "" {
-		return errors.New("cannot cancel event without status")
-	}
 	if e.IsDeleted() {
 		return errors.New("cannot cancel a deleted event")
 	}
-	if e.IsPublished() && e.Date.Before(time.Now()) {
+	if e.IsPast() {
 		return errors.New("cannot cancel a past event")
 	}
 	e.UpdatedAt = time.Now()
 	return nil
 }
 
-// Complete - Mark the event as completed
+// Complete marks the event as completed
 func (e *Event) Complete() error {
-	if e.EventStatusID == "" {
-		return errors.New("cannot complete event without status")
-	}
-	if e.Date.IsZero() || e.Date.After(time.Now()) {
-		return errors.New("cannot complete future event")
-	}
 	if e.IsDeleted() {
 		return errors.New("cannot complete a deleted event")
 	}
-	if !e.IsPublished() {
-		return errors.New("only published events can be completed")
+	if !e.IsPast() {
+		return errors.New("cannot complete a future event")
 	}
 	e.UpdatedAt = time.Now()
 	return nil
@@ -332,7 +625,6 @@ func (e *Event) Complete() error {
 // SOFT DELETE METHODS
 // ============================================================
 
-// SoftDelete - Soft delete the event
 func (e *Event) SoftDelete(deletedBy string) error {
 	if e.IsDeleted() {
 		return errors.New("event is already deleted")
@@ -342,13 +634,12 @@ func (e *Event) SoftDelete(deletedBy string) error {
 	}
 	now := time.Now()
 	e.DeletedAt = &now
-	e.DeletedBy = deletedBy
+	e.DeletedBy = &deletedBy
 	e.UpdatedAt = now
 	e.IsActive = false
 	return nil
 }
 
-// Restore - Restore a soft-deleted event
 func (e *Event) Restore(restoredBy string) error {
 	if !e.IsDeleted() {
 		return errors.New("event is not deleted")
@@ -358,12 +649,117 @@ func (e *Event) Restore(restoredBy string) error {
 	}
 	now := time.Now()
 	e.DeletedAt = nil
-	e.DeletedBy = ""
+	e.DeletedBy = nil
 	e.RestoredAt = &now
-	e.RestoredBy = restoredBy
+	e.RestoredBy = &restoredBy
 	e.UpdatedAt = now
 	e.IsActive = true
 	return nil
+}
+
+// ============================================================
+// CAPACITY METHODS
+// ============================================================
+
+func (e *Event) IsFull() bool {
+	if e.Capacity == nil || *e.Capacity == 0 {
+		return false
+	}
+	return e.CurrentAttendees >= *e.Capacity
+}
+
+func (e *Event) HasCapacity() bool {
+	if e.Capacity == nil || *e.Capacity == 0 {
+		return true
+	}
+	return e.CurrentAttendees < *e.Capacity
+}
+
+func (e *Event) AvailableSpots() int {
+	if e.Capacity == nil || *e.Capacity == 0 {
+		return -1 // Unlimited
+	}
+	available := *e.Capacity - e.CurrentAttendees
+	if available < 0 {
+		return 0
+	}
+	return available
+}
+
+// ============================================================
+// TICKET METHODS
+// ============================================================
+
+func (e *Event) AddTicket(ticket EventTicket) {
+	e.Tickets = append(e.Tickets, ticket)
+	e.UpdatedAt = time.Now()
+}
+
+func (e *Event) RemoveTicket(ticketID string) {
+	for i, t := range e.Tickets {
+		if t.ID == ticketID {
+			e.Tickets = append(e.Tickets[:i], e.Tickets[i+1:]...)
+			e.UpdatedAt = time.Now()
+			return
+		}
+	}
+}
+
+// ============================================================
+// SCHEDULE METHODS
+// ============================================================
+
+func (e *Event) AddSchedule(schedule EventSchedule) {
+	e.Schedules = append(e.Schedules, schedule)
+	e.UpdatedAt = time.Now()
+}
+
+func (e *Event) RemoveSchedule(scheduleID string) {
+	for i, s := range e.Schedules {
+		if s.ID == scheduleID {
+			e.Schedules = append(e.Schedules[:i], e.Schedules[i+1:]...)
+			e.UpdatedAt = time.Now()
+			return
+		}
+	}
+}
+
+// ============================================================
+// SPEAKER METHODS
+// ============================================================
+
+func (e *Event) AddSpeaker(speaker EventSpeaker) {
+	e.Speakers = append(e.Speakers, speaker)
+	e.UpdatedAt = time.Now()
+}
+
+func (e *Event) RemoveSpeaker(speakerID string) {
+	for i, s := range e.Speakers {
+		if s.ID == speakerID {
+			e.Speakers = append(e.Speakers[:i], e.Speakers[i+1:]...)
+			e.UpdatedAt = time.Now()
+			return
+		}
+	}
+}
+
+// ============================================================
+// MATERIAL METHODS
+// ============================================================
+
+func (e *Event) AddMaterial(material EventMaterial) {
+	e.Materials = append(e.Materials, material)
+	e.UpdatedAt = time.Now()
+}
+
+func (e *Event) RemoveMaterial(materialID string) {
+	for i, m := range e.Materials {
+		if m.ID == materialID {
+			e.Materials = append(e.Materials[:i], e.Materials[i+1:]...)
+			e.UpdatedAt = time.Now()
+			return
+		}
+	}
 }
 
 // ============================================================
@@ -375,83 +771,75 @@ func (e *Event) IsDeleted() bool {
 }
 
 func (e *Event) IsDraft() bool {
-	return e.EventStatusID == ""
+	return e.PublishedAt == nil
 }
 
 func (e *Event) IsPublished() bool {
-	// Will be handled by service layer with status lookup
-	return false
-}
-
-func (e *Event) IsCancelled() bool {
-	return false // Will be handled by service
-}
-
-func (e *Event) IsCompleted() bool {
-	return false // Will be handled by service
-}
-
-func (e *Event) IsFull() bool {
-	return e.MaxAttendees > 0 && e.CurrentAttendees >= e.MaxAttendees
-}
-
-func (e *Event) HasCapacity() bool {
-	if e.MaxAttendees == 0 {
-		return true
-	}
-	return e.CurrentAttendees < e.MaxAttendees
-}
-
-func (e *Event) AvailableSpots() int {
-	if e.MaxAttendees == 0 {
-		return -1
-	}
-	available := e.MaxAttendees - e.CurrentAttendees
-	if available < 0 {
-		return 0
-	}
-	return available
-}
-
-func (e *Event) IsUpcoming() bool {
-	return e.Date.After(time.Now())
+	return e.PublishedAt != nil && !e.PublishedAt.IsZero()
 }
 
 func (e *Event) IsPast() bool {
-	return e.Date.Before(time.Now())
+	return !e.StartDate.IsZero() && e.StartDate.Before(time.Now())
+}
+
+func (e *Event) IsUpcoming() bool {
+	return !e.StartDate.IsZero() && e.StartDate.After(time.Now())
 }
 
 func (e *Event) IsPublic() bool {
-	return !e.IsPrivate
+	return e.Visibility == "public"
 }
 
-// IsVisibleToUser - Check if event is visible to a specific user
+func (e *Event) IsPrivate() bool {
+	return e.Visibility == "private"
+}
+
+func (e *Event) IsUnlisted() bool {
+	return e.Visibility == "unlisted"
+}
+
+func (e *Event) IsFree() bool {
+	return e.IsFreeEvent
+}
+
+// ============================================================
+// PERMISSION METHODS
+// ============================================================
+
 func (e *Event) IsVisibleToUser(userID string) bool {
-	if !e.IsPrivate {
+	if e.IsPublic() || e.IsUnlisted() {
 		return true
 	}
-	return e.CreatedBy == userID || e.InstitutionID == userID
+	return e.CreatedBy == userID || (e.InstitutionID != nil && *e.InstitutionID == userID)
+}
+
+func (e *Event) CanEdit(userID string) bool {
+	return e.CreatedBy == userID || (e.InstitutionID != nil && *e.InstitutionID == userID)
+}
+
+func (e *Event) CanDelete(userID string) bool {
+	return e.CreatedBy == userID
 }
 
 // ============================================================
-// SETTERS
+// HELPERS
 // ============================================================
 
-func (e *Event) SetFeatured(featured bool) {
-	e.IsFeatured = featured
-	e.UpdatedAt = time.Now()
+func generateSlug(displayName string) string {
+	slug := strings.ToLower(displayName)
+	slug = strings.ReplaceAll(slug, " ", "-")
+	slug = strings.ReplaceAll(slug, "_", "-")
+	// Remove special characters
+	slug = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			return r
+		}
+		return -1
+	}, slug)
+	// Add timestamp for uniqueness
+	if slug == "" {
+		slug = "event"
+	}
+	return fmt.Sprintf("%s-%d", slug, time.Now().Unix())
 }
 
-func (e *Event) SetPrivate(private bool) {
-	e.IsPrivate = private
-	e.UpdatedAt = time.Now()
-}
-
-func (e *Event) UpdateTimestamps() {
-	e.UpdatedAt = time.Now()
-}
-
-func (e *Event) WithCreator(creator *AccountInfo) *Event {
-	e.Creator = creator
-	return e
-}

@@ -95,8 +95,8 @@ type Service interface {
 	// MEDIA - Upload
 	// ============================================================
 
-	UploadEventImage(ctx context.Context, cmd UploadEventImageCommand) (*domain.MediaInfo, error)
-	UploadCertificateTemplate(ctx context.Context, cmd UploadCertificateCommand) (*domain.MediaInfo, error)
+	UploadEventImage(ctx context.Context, cmd UploadEventImageCommand) (*MediaInfo, error)
+	UploadCertificateTemplate(ctx context.Context, cmd UploadCertificateCommand) (*MediaInfo, error)
 
 	// ============================================================
 	// MEDIA - Delete Single
@@ -125,33 +125,68 @@ type Service interface {
 // ============================================================
 
 type CreateDraftCommand struct {
-	// Required
-	InstitutionID *string // ✅ Can be NULL for personal events
-	CreatedBy     string  // ✅ The user (human) creating the event
-	TeamType      string  // ✅ "personal" or "institution"
+	// Required - User Input
+	Name string // User types this - raw input
 
-	// User input - what they type in the form
-	Name string
+	// System fields (auto-generated)
+	CreatedBy     string
+	OwnerType     string // "personal" or "institution"
+	InstitutionID *string
 
-	// Optional
+	// Optional Fields
 	Description      string
+	ShortDescription string
 	EventTypeID      string
-	Date             string
-	Time             string
-	Duration         int
-	Price            float64
-	CertificatePrice float64
-	Location         string
-	IsVirtual        bool
-	ZoomLink         string
-	MeetLink         string
-	MaxAttendees     int
-	IsFeatured       bool
-	IsPrivate        bool
+	CategoryID       *string
+	Tags             []string
+	Language         string
 
-	ImageData   []byte
-	ImageName   string
-	ContentType string
+	// Schedule
+	Schedules   []ScheduleInput
+	IsMultiDay  bool
+	IsRecurring bool
+	Recurrence  *RecurrenceInput
+
+	// Venue
+	IsVirtual          bool
+	IsHybrid           bool
+	InPersonLocation   string
+	VirtualPlatform    string
+	VirtualPlatformURL string
+	ZoomLink           string
+	MeetLink           string
+	VenueName          string
+	VenueAddress       string
+	VenueCity          string
+	VenueCountry       string
+
+	// Tickets
+	IsFree   bool
+	Capacity *int
+	Tickets  []TicketInput
+
+	// Access & Privacy
+	Visibility    string // "public", "private", "unlisted"
+	Password      *string
+	InviteOnly    bool
+	InvitedEmails []string
+
+	// Monetization
+	IsFeatured          bool
+	CertificateEnabled  bool
+	CertificatePrice    float64
+	CertificateTemplateID *string
+
+	// Speakers
+	Speakers []SpeakerInput
+
+	// Materials
+	Materials []MaterialInput
+
+	// SEO
+	SEO *SEOInput
+
+	ImageURL string 
 }
 
 // ============================================================
@@ -159,31 +194,68 @@ type CreateDraftCommand struct {
 // ============================================================
 
 type CreateEventCommand struct {
-	// Required
-	Name          string  // User input - what they type
-	InstitutionID *string // ✅ Can be NULL for personal events
-	CreatedBy     string  // ✅ The user (human) creating the event
-	TeamType      string  // ✅ "personal" or "institution"
-	Date          string
-	Time          string
-	Duration      int
+	// Required - User Input
+	Name string // User types this - raw input
 
-	// Optional
-	Description      string
-	EventTypeID      string
-	Price            float64
-	CertificatePrice float64
-	Location         string
-	IsVirtual        bool
-	ZoomLink         string
-	MeetLink         string
-	MaxAttendees     int
-	IsFeatured       bool
-	IsPrivate        bool
+	// System fields (auto-generated)
+	CreatedBy     string
+	OwnerType     string // "personal" or "institution"
+	InstitutionID *string
+	EventTypeID   string
+	Description   string
 
-	ImageData   []byte
-	ImageName   string
-	ContentType string
+	// Schedule - Required for published events
+	Schedules   []ScheduleInput
+	IsMultiDay  bool
+	IsRecurring bool
+	Recurrence  *RecurrenceInput
+
+	// Tickets - Required for published events
+	IsFree   bool
+	Capacity *int
+	Waitlist bool
+	Tickets  []TicketInput
+
+	// Venue - Required for published events
+	IsVirtual          bool
+	IsHybrid           bool
+	InPersonLocation   string
+	VirtualPlatform    string
+	VirtualPlatformURL string
+	ZoomLink           string
+	MeetLink           string
+	VenueName          string
+	VenueAddress       string
+	VenueCity          string
+	VenueCountry       string
+
+	// Optional Fields
+	ShortDescription string
+	CategoryID       *string
+	Tags             []string
+	Language         string
+
+	// Access & Privacy
+	Visibility    string // "public", "private", "unlisted"
+	Password      *string
+	InviteOnly    bool
+	InvitedEmails []string
+
+	// Monetization
+	IsFeatured          bool
+	CertificateEnabled  bool
+	CertificatePrice    float64
+	CertificateTemplateID *string
+
+	// Speakers
+	Speakers []SpeakerInput
+
+	// Materials
+	Materials []MaterialInput
+
+	// SEO
+	SEO *SEOInput
+
 }
 
 // ============================================================
@@ -192,26 +264,65 @@ type CreateEventCommand struct {
 
 type UpdateEventCommand struct {
 	ID        string
-	UpdatedBy string // ✅ The user (human) updating the event
+	UpdatedBy string
 
-	// Use pointers for optional fields
+	// Basic Information (pointers for optional updates)
 	Name             *string
-	DisplayName      *string
+	DisplayName      *string // If provided, update display name
 	Description      *string
+	ShortDescription *string
 	EventTypeID      *string
-	EventStatusID    *string
-	Date             *string
-	Time             *string
-	Duration         *int
-	Price            *float64
-	CertificatePrice *float64
-	Location         *string
-	IsVirtual        *bool
-	ZoomLink         *string
-	MeetLink         *string
-	MaxAttendees     *int
-	IsFeatured       *bool
-	IsPrivate        *bool
+	CategoryID       *string
+	Tags             []string
+	Language         *string
+
+	// Schedule
+	Schedules   []ScheduleInput
+	IsMultiDay  *bool
+	IsRecurring *bool
+	Recurrence  *RecurrenceInput
+
+	// Venue
+	IsVirtual          *bool
+	IsHybrid           *bool
+	InPersonLocation   *string
+	VirtualPlatform    *string
+	VirtualPlatformURL *string
+	ZoomLink           *string
+	MeetLink           *string
+	VenueName          *string
+	VenueAddress       *string
+	VenueCity          *string
+	VenueCountry       *string
+
+	// Tickets
+	IsFree   *bool
+	Capacity *int
+	Waitlist *bool
+	Tickets  []TicketInput
+
+	// Access & Privacy
+	Visibility    *string
+	Password      *string
+	InviteOnly    *bool
+	InvitedEmails []string
+
+	// Monetization
+	IsFeatured          *bool
+	CertificateEnabled  *bool
+	CertificatePrice    *float64
+	CertificateTemplateID *string
+
+	// Speakers
+	Speakers []SpeakerInput
+
+	// Materials
+	Materials []MaterialInput
+
+	// SEO
+	SEO *SEOInput
+
+	ImageURL string 
 }
 
 // ============================================================
@@ -256,23 +367,110 @@ type UploadCertificateCommand struct {
 
 type ListEventsFilters struct {
 	InstitutionID  string // Filter by institution
-	UserID         string // ✅ NEW: Filter by user (creator)
+	UserID         string // Filter by user (creator)
 	EventTypeID    string
 	EventStatusID  string
+	CategoryID     string // Filter by category
 	IncludeDeleted bool
 	OnlyDeleted    bool
 	Limit          int
 	Offset         int
+	SortBy         string // Field to sort by (e.g., "created_at", "start_date", "name")
+	SortOrder      string // "asc" or "desc"
+	Visibility     string // ✅ ADDED: Filter by visibility ("public", "private", "unlisted")
 }
 
 type SearchFilters struct {
 	InstitutionID  string // Filter by institution
-	UserID         string // ✅ NEW: Filter by user (creator)
+	UserID         string // Filter by user (creator)
 	EventTypeID    string
+	CategoryID     string // Filter by category
 	IncludeDeleted bool
 	OnlyDeleted    bool
 	Limit          int
 	Offset         int
+	Visibility     string // ✅ ADDED: Filter by visibility ("public", "private", "unlisted")
+}
+
+// ============================================================
+// INPUT TYPES (Shared across commands)
+// ============================================================
+
+type ScheduleInput struct {
+	ID           *string // For updates
+	StartDate    string
+	EndDate      *string
+	StartTime    string
+	EndTime      string
+	Timezone     string
+	SessionName  string
+	SessionNumber int
+	Location     string
+	IsVirtual    bool
+	ZoomLink     string
+	MeetLink     string
+	MaxAttendees *int
+}
+
+type RecurrenceInput struct {
+	Pattern     string // "daily", "weekly", "monthly", "custom"
+	Interval    int
+	DaysOfWeek  []string
+	DayOfMonth  *int
+	WeekOfMonth *string
+	EndsOn      *string
+	Occurrences *int
+}
+
+type TicketInput struct {
+	ID                 *string // For updates
+	TicketTypeID       string
+	Name               string
+	Description        string
+	Price              float64
+	Quantity           int
+	MaxPerPerson       *int
+	EarlyBirdDeadline  *string
+	GroupMinAttendees  *int
+	GroupDiscount      *float64
+}
+
+type SpeakerInput struct {
+	ID          *string // For updates
+	Name        string
+	Title       string
+	Bio         string
+	PhotoURL    string
+	SocialLinks map[string]string
+	IsKeynote   bool
+	SortOrder   int
+}
+
+type MaterialInput struct {
+	ID          *string // For updates
+	Title       string
+	MaterialTypeID string // "pdf", "video", "link", "document"
+	URL         string
+	Description string
+	IsPreEvent  bool
+	SortOrder   int
+}
+
+type SEOInput struct {
+	MetaTitle       string
+	MetaDescription string
+	MetaKeywords    []string
+	CanonicalURL    string
+	Robots          string
+	NoIndex         bool
+	OGTitle         string
+	OGDescription   string
+	OGImageURL      string
+	OGType          string
+	TwitterCard     string
+	TwitterTitle    string
+	TwitterDescription string
+	TwitterImageURL string
 }
 
 // ============================================================
@@ -308,4 +506,17 @@ type DuplicatedEvent struct {
 	ID   string
 	Name string
 	Slug string
+}
+
+// ============================================================
+// MEDIA INFO (Response Type)
+// ============================================================
+
+type MediaInfo struct {
+	ID          string
+	URL         string
+	Filename    string
+	Size        int64
+	ContentType string
+	UploadedAt  string
 }

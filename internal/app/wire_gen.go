@@ -67,7 +67,7 @@ func InitializeApp() (*AppDependencies, error) {
 	mediaService := NewEventsMediaAdapter(service5)
 	service6 := service4.NewService(domainRepository, permissionChecker, mediaService)
 	authHandler := authhandler.NewAuthHandler(serviceService, configConfig)
-	eventHandler := eventhandler.NewEventHandler(service6)
+	eventHandler := eventhandler.NewEventHandler(service6, enforcer)
 	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, serviceService, tokenService, service6, service5, authHandler, eventHandler)
 	return appDependencies, nil
 }
