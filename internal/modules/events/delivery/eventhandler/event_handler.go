@@ -1210,6 +1210,7 @@ func (h *EventHandler) PermanentlyDeleteEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
+	
 	userID, err := getUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
