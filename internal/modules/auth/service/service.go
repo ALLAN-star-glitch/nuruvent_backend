@@ -84,10 +84,8 @@ type Service interface {
 	
 	GetProfessionalTypeBySlug(ctx context.Context, slug string) (*authdomain.ProfessionalType, error)
 	ListProfessionalTypes(ctx context.Context) ([]*authdomain.ProfessionalType, error)
-
-
 	GetAccountTypeByID(ctx context.Context, id string) (*authdomain.AccountType, error)
-    GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error)
+	GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error)
 }
 
 // ============================================================
@@ -100,16 +98,16 @@ type RegisterRequest struct {
 	Password       string `json:"password" validate:"required,min=8"`
 	Name           string `json:"name" validate:"required"`
 	Phone          string `json:"phone" validate:"required"`
-	AccountType    string `json:"account_type" validate:"required,oneof=personal institution"` // personal or institution
+	AccountType    string `json:"account_type" validate:"required,oneof=personal institution"`
 	
 	// Professional Type (for personal accounts)
-	ProfessionalType string `json:"professional_type,omitempty"` // trainer, coach, consultant, freelancer
+	ProfessionalType string `json:"professional_type,omitempty"`
 
 	// Institution fields (for institution accounts)
 	InstitutionName  string `json:"institution_name,omitempty"`
 	InstitutionEmail string `json:"institution_email,omitempty"`
 	InstitutionPhone string `json:"institution_phone,omitempty"`
-	InstitutionType  string `json:"institution_type,omitempty"` // university, company, institute, association, school
+	InstitutionType  string `json:"institution_type,omitempty"`
 }
 
 // ============================================================
@@ -117,14 +115,16 @@ type RegisterRequest struct {
 // ============================================================
 
 type service struct {
-	repo        authdomain.Repository
-	config      *config.Config
-	redisClient *sharedRedis.Client
-	queue       authdomain.QueueService
-	permService authdomain.PermissionService
-	tokenSvc    authdomain.TokenService
-	notifSvc    authdomain.NotificationService
-	enforcer    *authorization.Enforcer
+	repo          authdomain.Repository
+	config        *config.Config
+	redisClient   *sharedRedis.Client
+	queue         authdomain.QueueService
+	permChecker   authdomain.PermissionChecker
+	roleManager   authdomain.RoleManager
+	policyManager authdomain.PolicyManager
+	tokenSvc      authdomain.TokenService
+	notifSvc      authdomain.NotificationService
+	enforcer      *authorization.Enforcer
 }
 
 func NewService(
@@ -132,20 +132,24 @@ func NewService(
 	cfg *config.Config,
 	redisClient *sharedRedis.Client,
 	queueClient authdomain.QueueService,
-	permService authdomain.PermissionService,
+	permChecker authdomain.PermissionChecker,
+	roleManager authdomain.RoleManager,
+	policyManager authdomain.PolicyManager,
 	tokenSvc authdomain.TokenService,
 	notifSvc authdomain.NotificationService,
 	enforcer *authorization.Enforcer,
 ) Service {
 	return &service{
-		repo:        repo,
-		config:      cfg,
-		redisClient: redisClient,
-		queue:       queueClient,
-		permService: permService,
-		tokenSvc:    tokenSvc,
-		notifSvc:    notifSvc,
-		enforcer:    enforcer,
+		repo:          repo,
+		config:        cfg,
+		redisClient:   redisClient,
+		queue:         queueClient,
+		permChecker:   permChecker,
+		roleManager:   roleManager,
+		policyManager: policyManager,
+		tokenSvc:      tokenSvc,
+		notifSvc:      notifSvc,
+		enforcer:      enforcer,
 	}
 }
 
@@ -155,23 +159,21 @@ func NewService(
 
 // GetProfessionalTypeBySlug gets a professional type by slug
 func (s *service) GetProfessionalTypeBySlug(ctx context.Context, slug string) (*authdomain.ProfessionalType, error) {
-	// This would call the repository method
-	// return s.repo.GetProfessionalTypeBySlug(ctx, slug)
-	return nil, nil
+	// Repository doesn't take context, but we keep it for interface consistency
+	return s.repo.GetProfessionalTypeBySlug(slug)
 }
 
 // ListProfessionalTypes lists all professional types
 func (s *service) ListProfessionalTypes(ctx context.Context) ([]*authdomain.ProfessionalType, error) {
-	// This would call the repository method
-	// return s.repo.ListProfessionalTypes(ctx)
-	return nil, nil
+	return s.repo.ListProfessionalTypes(ctx)
 }
 
+// GetAccountTypeByID gets an account type by ID
 func (s *service) GetAccountTypeByID(ctx context.Context, id string) (*authdomain.AccountType, error) {
-    return s.repo.GetAccountTypeByID(id)
+	return s.repo.GetAccountTypeByID(id)
 }
 
 // GetProfessionalTypeByID gets a professional type by ID
 func (s *service) GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error) {
-    return s.repo.GetProfessionalTypeByID(id)
+	return s.repo.GetProfessionalTypeByID(id)
 }

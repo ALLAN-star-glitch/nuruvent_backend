@@ -24,6 +24,7 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
 	}
 
 	// 1. Get event and check permissions
+	// ✅ Reuses getEventAndCheckUpdatePermission from media.go
 	event, err := s.getEventAndCheckUpdatePermission(ctx, cmd.ID, cmd.UpdatedBy)
 	if err != nil {
 		return nil, err

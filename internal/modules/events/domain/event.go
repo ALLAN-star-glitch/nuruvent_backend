@@ -11,16 +11,17 @@ import (
 	"github.com/google/uuid"
 )
 
+type Visibility string
 
 const (
 	// VisibilityPublic - Anyone can view the event
-	VisibilityPublic = "public"
+	VisibilityPublic Visibility = "public"
 	
 	// VisibilityPrivate - Only team members can view the event
-	VisibilityPrivate = "private"
+	VisibilityPrivate Visibility = "private"
 	
 	// VisibilityUnlisted - Anyone with the direct link can view
-	VisibilityUnlisted = "unlisted"
+	VisibilityUnlisted Visibility = "unlisted"
 )
 
 // ============================================================
@@ -786,17 +787,34 @@ func (e *Event) IsUpcoming() bool {
 	return !e.StartDate.IsZero() && e.StartDate.After(time.Now())
 }
 
+// ============================================================
+// VISIBILITY HELPER METHODS ON EVENT
+// ============================================================
+
+// String returns the string representation of Visibility
+func (v Visibility) String() string {
+    return string(v)
+}
+// IsPublic checks if the event is public
 func (e *Event) IsPublic() bool {
-	return e.Visibility == "public"
+    return e.Visibility == string(VisibilityPublic)
 }
 
+// IsPrivate checks if the event is private
 func (e *Event) IsPrivate() bool {
-	return e.Visibility == "private"
+    return e.Visibility == string(VisibilityPrivate)
 }
 
+// IsUnlisted checks if the event is unlisted
 func (e *Event) IsUnlisted() bool {
-	return e.Visibility == "unlisted"
+    return e.Visibility == string(VisibilityUnlisted)
 }
+
+// GetVisibility returns the visibility as a Visibility type
+func (e *Event) GetVisibility() Visibility {
+    return Visibility(e.Visibility)
+}
+
 
 func (e *Event) IsFree() bool {
 	return e.IsFreeEvent
@@ -805,13 +823,6 @@ func (e *Event) IsFree() bool {
 // ============================================================
 // PERMISSION METHODS
 // ============================================================
-
-func (e *Event) IsVisibleToUser(userID string) bool {
-	if e.IsPublic() || e.IsUnlisted() {
-		return true
-	}
-	return e.CreatedBy == userID || (e.InstitutionID != nil && *e.InstitutionID == userID)
-}
 
 func (e *Event) CanEdit(userID string) bool {
 	return e.CreatedBy == userID || (e.InstitutionID != nil && *e.InstitutionID == userID)

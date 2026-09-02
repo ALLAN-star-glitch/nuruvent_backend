@@ -193,14 +193,16 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	// ============================================================
 	
 	if accountTypeName == types.AccountTypePersonalName {
-		// 10. Assign account_admin role for user's personal team
-		if err := s.permService.AssignPersonalTeamAdmin(ctx, user.ID); err != nil {
-			log.Printf("⚠️ Failed to assign personal team admin role: %v", err)
+		scope := authdomain.NewPersonalTeamScope(user.ID)
+
+		// 10. Add default policies for the user's personal team
+		if err := s.policyManager.AddTeamPolicies(ctx, scope); err != nil {
+			log.Printf("⚠️ Failed to add personal team policies: %v", err)
 		}
 
-		// 11. Add default policies for the user's personal team
-		if err := s.permService.AddPersonalTeamPolicies(ctx, user.ID); err != nil {
-			log.Printf("⚠️ Failed to add personal team policies: %v", err)
+		// 11. Assign account_admin role for user's personal team
+		if err := s.roleManager.AssignRole(ctx, scope, user.ID, authdomain.RoleAccountAdmin.String()); err != nil {
+			log.Printf("⚠️ Failed to assign personal team admin role: %v", err)
 		}
 
 		// 12. Add user to team_members table for their personal team
@@ -215,20 +217,20 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	// ✅ CREATE INSTITUTION (if institution account)
 	// ============================================================
 	if accountTypeName == types.AccountTypeInstitutionName {
-    if err := s.createInstitution(ctx, user.ID, userData, institutionTypeID); err != nil {
-        return nil, nil, fmt.Errorf("failed to create institution: %w", err)
-    }
-    log.Printf("✅ Institution created successfully for user: %s", user.ID)
-    
-    // ✅ Refresh user to get the updated InstitutionID
-    updatedUser, err := s.repo.GetUserByID(user.ID)
-    if err != nil {
-        log.Printf("⚠️ Failed to refresh user: %v", err)
-    } else if updatedUser != nil {
-        user = updatedUser
-        log.Printf("✅ User refreshed with InstitutionID: %v", user.InstitutionID)
-    }
-}
+		if err := s.createInstitution(ctx, user.ID, userData, institutionTypeID); err != nil {
+			return nil, nil, fmt.Errorf("failed to create institution: %w", err)
+		}
+		log.Printf("✅ Institution created successfully for user: %s", user.ID)
+		
+		// ✅ Refresh user to get the updated InstitutionID
+		updatedUser, err := s.repo.GetUserByID(user.ID)
+		if err != nil {
+			log.Printf("⚠️ Failed to refresh user: %v", err)
+		} else if updatedUser != nil {
+			user = updatedUser
+			log.Printf("✅ User refreshed with InstitutionID: %v", user.InstitutionID)
+		}
+	}
 
 	// ============================================================
 	// ✅ GENERATE TOKENS
@@ -391,14 +393,16 @@ func (s *service) createInstitution(ctx context.Context, userID string, userData
 	// ============================================================
 	// ✅ ASSIGN INSTITUTION ADMIN ROLE VIA CASBIN
 	// ============================================================
-	// Domain: team:{institution_id}
-	if err := s.permService.AssignInstitutionAdminRole(ctx, institution.ID, userID); err != nil {
-		log.Printf("⚠️ Failed to assign institution admin role: %v", err)
+	scope := authdomain.NewInstitutionTeamScope(institution.ID)
+	
+	// Add institution policies
+	if err := s.policyManager.AddTeamPolicies(ctx, scope); err != nil {
+		log.Printf("⚠️ Failed to add institution policies: %v", err)
 	}
 
-	// Add institution policies
-	if err := s.permService.AddInstitutionPolicies(ctx, institution.ID); err != nil {
-		log.Printf("⚠️ Failed to add institution policies: %v", err)
+	// Assign account_admin role
+	if err := s.roleManager.AssignRole(ctx, scope, userID, authdomain.RoleAccountAdmin.String()); err != nil {
+		log.Printf("⚠️ Failed to assign institution admin role: %v", err)
 	}
 
 	log.Printf("✅ Institution team created for institution: %s", institution.ID)

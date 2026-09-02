@@ -165,18 +165,23 @@ func (s *service) determineRoleAndTeamType(ctx context.Context, user *authdomain
 	// Domain: personal:team:{user_id}
 	// ============================================================
 
+	scope := authdomain.NewPersonalTeamScope(user.ID)
+
 	// Check account_admin role in personal team
-	if s.permService.IsPersonalTeamAdmin(ctx, user.ID, user.ID) {
+	isAdmin, _ := s.permChecker.IsTeamAdmin(ctx, user.ID, scope)
+	if isAdmin {
 		return authdomain.RoleAccountAdmin.String(), "personal-team", user.ID
 	}
 
 	// Check event_manager role in personal team
-	if s.permService.IsPersonalTeamEventManager(ctx, user.ID, user.ID) {
+	isEventManager, _ := s.permChecker.IsEventManager(ctx, user.ID, scope)
+	if isEventManager {
 		return authdomain.RoleEventManager.String(), "personal-team", user.ID
 	}
 
 	// Check team_member role in personal team
-	if s.permService.IsPersonalTeamMember(ctx, user.ID, user.ID) {
+	isMember, _ := s.permChecker.IsTeamMember(ctx, user.ID, scope)
+	if isMember {
 		return authdomain.RoleTeamMember.String(), "personal-team", user.ID
 	}
 
@@ -187,19 +192,23 @@ func (s *service) determineRoleAndTeamType(ctx context.Context, user *authdomain
 
 	if user.InstitutionID != nil && *user.InstitutionID != "" {
 		institutionID := *user.InstitutionID
+		scope := authdomain.NewInstitutionTeamScope(institutionID)
 
 		// Check account_admin role in institution
-		if s.permService.IsInstitutionTeamAdmin(ctx, user.ID, institutionID) {
+		isAdmin, _ := s.permChecker.IsTeamAdmin(ctx, user.ID, scope)
+		if isAdmin {
 			return authdomain.RoleAccountAdmin.String(), "institution-team", institutionID
 		}
 
 		// Check event_manager role in institution
-		if s.permService.IsInstitutionTeamEventManager(ctx, user.ID, institutionID) {
+		isEventManager, _ := s.permChecker.IsEventManager(ctx, user.ID, scope)
+		if isEventManager {
 			return authdomain.RoleEventManager.String(), "institution-team", institutionID
 		}
 
 		// Check team_member role in institution
-		if s.permService.IsInstitutionTeamMember(ctx, user.ID, institutionID) {
+		isMember, _ := s.permChecker.IsTeamMember(ctx, user.ID, scope)
+		if isMember {
 			return authdomain.RoleTeamMember.String(), "institution-team", institutionID
 		}
 	}
@@ -208,14 +217,15 @@ func (s *service) determineRoleAndTeamType(ctx context.Context, user *authdomain
 	// 4. CHECK IF USER HAS ANY TEAM ACCESS (via Casbin)
 	// ============================================================
 
-	if s.permService.HasTeamAccess(ctx, user.ID) {
+	hasAccess, _ := s.permChecker.HasTeamAccess(ctx, user.ID)
+	if hasAccess {
 		// Get user's teams and determine type
-		personalTeams := s.permService.GetUserPersonalTeamIDs(ctx, user.ID)
+		personalTeams, _ := s.permChecker.GetUserPersonalTeamIDs(ctx, user.ID)
 		if len(personalTeams) > 0 {
 			return authdomain.RoleTeamMember.String(), "personal-team", personalTeams[0]
 		}
 
-		institutionTeams := s.permService.GetUserInstitutionTeamIDs(ctx, user.ID)
+		institutionTeams, _ := s.permChecker.GetUserInstitutionTeamIDs(ctx, user.ID)
 		if len(institutionTeams) > 0 {
 			return authdomain.RoleTeamMember.String(), "institution-team", institutionTeams[0]
 		}
@@ -233,19 +243,20 @@ func (s *service) determineRoleAndTeamType(ctx context.Context, user *authdomain
 
 // GetUserRolesForDomain gets all roles for a user in a specific domain
 func (s *service) GetUserRolesForDomain(ctx context.Context, userID, domain string) ([]string, error) {
-	return s.permService.GetUserRoles(ctx, userID, domain)
+	scope := authdomain.FromDomain(domain)
+	return s.permChecker.GetUserRoles(ctx, userID, scope)
 }
 
 // GetUserTeamRoles returns all roles for a user in a specific team
 func (s *service) GetUserTeamRoles(ctx context.Context, userID, teamID string) ([]string, error) {
 	// Try personal team domain first
-	personalDomain := authdomain.PersonalTeamDomain(teamID)
-	roles, err := s.permService.GetUserRoles(ctx, userID, personalDomain)
+	scope := authdomain.NewPersonalTeamScope(teamID)
+	roles, err := s.permChecker.GetUserRoles(ctx, userID, scope)
 	if err == nil && len(roles) > 0 {
 		return roles, nil
 	}
 
 	// Try institution team domain
-	institutionDomain := authdomain.InstitutionTeamDomain(teamID)
-	return s.permService.GetUserRoles(ctx, userID, institutionDomain)
+	scope = authdomain.NewInstitutionTeamScope(teamID)
+	return s.permChecker.GetUserRoles(ctx, userID, scope)
 }

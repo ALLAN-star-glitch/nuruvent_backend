@@ -10,7 +10,6 @@ import (
 	"github.com/google/wire"
 	"gorm.io/gorm"
 
-
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth"
 	authHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
@@ -35,20 +34,24 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
 )
 
+// AppDependencies holds all application dependencies
 type AppDependencies struct {
-	Config           *config.Config
-	DB               *gorm.DB
-	App              *fiber.App
-	StorageClient    *storage.Client
-	RedisClient      *redis.Client
-	Enforcer         *authorization.Enforcer
-	AuthTokenService authdomain.TokenService 
-	Notification     notificationdomain.NotificationService
-	AuthService      authService.Service
-	EventsService    eventsService.Service
-	MediaService     mediaService.Service
-	AuthHandler      *authHandler.AuthHandler
-	EventsHandler    *eventsHandler.EventHandler
+	Config            *config.Config
+	DB                *gorm.DB
+	App               *fiber.App
+	StorageClient     *storage.Client
+	RedisClient       *redis.Client
+	Enforcer          *authorization.Enforcer
+	PermissionChecker authdomain.PermissionChecker
+	RoleManager       authdomain.RoleManager
+	PolicyManager     authdomain.PolicyManager
+	AuthTokenService  authdomain.TokenService
+	Notification      notificationdomain.NotificationService
+	AuthService       authService.Service
+	EventsService     eventsService.Service
+	MediaService      mediaService.Service
+	AuthHandler       *authHandler.AuthHandler
+	EventsHandler     *eventsHandler.EventHandler
 }
 
 func InitializeApp() (*AppDependencies, error) {
@@ -71,10 +74,10 @@ func InitializeApp() (*AppDependencies, error) {
 		// ============================================================
 		// MODULES
 		// ============================================================
-		notification.ProviderSet,
 		auth.ProviderSet,
 		events.ProviderSet,
 		media.ProviderSet,
+		notification.ProviderSet,
 
 		// ============================================================
 		// CROSS-MODULE ADAPTERS

@@ -3,18 +3,25 @@
 package service
 
 import (
+	"context"
+	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
 
 // ============================================================
-// CONVERTER FUNCTIONS
+// CONVERTER HELPERS
 // ============================================================
 
-// convertSchedules converts ScheduleInput to domain.EventSchedule
+// convertSchedules converts schedule inputs to domain schedules
 func (s *eventService) convertSchedules(inputs []ScheduleInput) ([]domain.EventSchedule, error) {
+	if len(inputs) == 0 {
+		return nil, nil
+	}
+
 	schedules := make([]domain.EventSchedule, len(inputs))
 	for i, input := range inputs {
 		startDate, err := time.Parse("2006-01-02", input.StartDate)
@@ -24,20 +31,14 @@ func (s *eventService) convertSchedules(inputs []ScheduleInput) ([]domain.EventS
 
 		var endDate *time.Time
 		if input.EndDate != nil && *input.EndDate != "" {
-			d, err := time.Parse("2006-01-02", *input.EndDate)
-			if err == nil {
-				endDate = &d
+			parsed, err := time.Parse("2006-01-02", *input.EndDate)
+			if err != nil {
+				return nil, fmt.Errorf("invalid end_date format: %w", err)
 			}
-		}
-
-		// Handle pointer to string for ID
-		var id string
-		if input.ID != nil {
-			id = *input.ID
+			endDate = &parsed
 		}
 
 		schedules[i] = domain.EventSchedule{
-			ID:            id,
 			SessionName:   input.SessionName,
 			SessionNumber: input.SessionNumber,
 			StartDate:     startDate,
@@ -55,52 +56,48 @@ func (s *eventService) convertSchedules(inputs []ScheduleInput) ([]domain.EventS
 	return schedules, nil
 }
 
-// convertTickets converts TicketInput to domain.EventTicket
+// convertTickets converts ticket inputs to domain tickets
 func (s *eventService) convertTickets(inputs []TicketInput) ([]domain.EventTicket, error) {
+	if len(inputs) == 0 {
+		return nil, nil
+	}
+
 	tickets := make([]domain.EventTicket, len(inputs))
 	for i, input := range inputs {
 		var earlyBirdDeadline *time.Time
 		if input.EarlyBirdDeadline != nil && *input.EarlyBirdDeadline != "" {
-			d, err := time.Parse(time.RFC3339, *input.EarlyBirdDeadline)
-			if err == nil {
-				earlyBirdDeadline = &d
+			parsed, err := time.Parse(time.RFC3339, *input.EarlyBirdDeadline)
+			if err != nil {
+				return nil, fmt.Errorf("invalid early_bird_deadline format: %w", err)
 			}
-		}
-
-		// Handle pointer to string for ID
-		var id string
-		if input.ID != nil {
-			id = *input.ID
+			earlyBirdDeadline = &parsed
 		}
 
 		tickets[i] = domain.EventTicket{
-			ID:                 id,
-			TicketTypeID:       input.TicketTypeID,
-			Name:               input.Name,
-			Description:        input.Description,
-			Price:              input.Price,
-			Quantity:           input.Quantity,
-			MaxPerPerson:       input.MaxPerPerson,
-			EarlyBirdDeadline:  earlyBirdDeadline,
-			GroupMinAttendees:  input.GroupMinAttendees,
-			GroupDiscount:      input.GroupDiscount,
+			TicketTypeID:      input.TicketTypeID,
+			Name:              input.Name,
+			Description:       input.Description,
+			Price:             input.Price,
+			Quantity:          input.Quantity,
+			MaxPerPerson:      input.MaxPerPerson,
+			EarlyBirdDeadline: earlyBirdDeadline,
+			GroupMinAttendees: input.GroupMinAttendees,
+			GroupDiscount:     input.GroupDiscount,
+			IsActive:          true,
 		}
 	}
 	return tickets, nil
 }
 
-// convertSpeakers converts SpeakerInput to domain.EventSpeaker
+// convertSpeakers converts speaker inputs to domain speakers
 func (s *eventService) convertSpeakers(inputs []SpeakerInput) ([]domain.EventSpeaker, error) {
+	if len(inputs) == 0 {
+		return nil, nil
+	}
+
 	speakers := make([]domain.EventSpeaker, len(inputs))
 	for i, input := range inputs {
-		// Handle pointer to string for ID
-		var id string
-		if input.ID != nil {
-			id = *input.ID
-		}
-
 		speakers[i] = domain.EventSpeaker{
-			ID:          id,
 			Name:        input.Name,
 			Title:       input.Title,
 			Bio:         input.Bio,
@@ -113,60 +110,53 @@ func (s *eventService) convertSpeakers(inputs []SpeakerInput) ([]domain.EventSpe
 	return speakers, nil
 }
 
-// convertMaterials converts MaterialInput to domain.EventMaterial
-func (s *eventService) convertMaterials(materials []MaterialInput) ([]domain.EventMaterial, error) {
-    result := make([]domain.EventMaterial, len(materials))
-    for i, m := range materials {
-        result[i] = domain.EventMaterial{
-            Title:          m.Title,
-            MaterialTypeID: m.MaterialTypeID,  // ✅ Make sure this is being set
-            URL:            m.URL,
-            Description:    m.Description,
-            IsPreEvent:     m.IsPreEvent,
-            SortOrder:      m.SortOrder,
-        }
-    }
-    return result, nil
+// convertMaterials converts material inputs to domain materials
+func (s *eventService) convertMaterials(inputs []MaterialInput) ([]domain.EventMaterial, error) {
+	if len(inputs) == 0 {
+		return nil, nil
+	}
+
+	materials := make([]domain.EventMaterial, len(inputs))
+	for i, input := range inputs {
+		materials[i] = domain.EventMaterial{
+			Title:          input.Title,
+			MaterialTypeID: input.MaterialTypeID,
+			URL:            input.URL,
+			Description:    input.Description,
+			IsPreEvent:     input.IsPreEvent,
+			SortOrder:      input.SortOrder,
+		}
+	}
+	return materials, nil
 }
 
-// ============================================================
-// APPLICATION FUNCTIONS
-// ============================================================
-
-// applyRecurrence applies recurrence settings to an event
-func (s *eventService) applyRecurrence(event *domain.Event, input *RecurrenceInput) error {
+// applyRecurrence applies recurrence to an event
+func (s *eventService) applyRecurrence(event *domain.Event, input *RecurrenceInput) {
 	if input == nil {
-		return nil
+		return
 	}
 
 	event.IsRecurring = true
 	event.RecurrencePatternID = &input.Pattern
 	event.RecurrenceInterval = input.Interval
-	if input.Interval == 0 {
-		event.RecurrenceInterval = 1
-	}
 	event.RecurrenceDaysOfWeek = input.DaysOfWeek
 	event.RecurrenceDayOfMonth = input.DayOfMonth
 	event.RecurrenceWeekOfMonth = input.WeekOfMonth
 
 	if input.EndsOn != nil && *input.EndsOn != "" {
-		endDate, err := time.Parse("2006-01-02", *input.EndsOn)
-		if err == nil {
-			event.RecurrenceEndsOn = &endDate
+		if endsOn, err := time.Parse("2006-01-02", *input.EndsOn); err == nil {
+			event.RecurrenceEndsOn = &endsOn
 		}
 	}
 	event.RecurrenceOccurrences = input.Occurrences
-
-	return nil
 }
 
-// applySEO applies SEO settings to an event
+// applySEO applies SEO to an event
 func (s *eventService) applySEO(event *domain.Event, input *SEOInput) {
 	if input == nil {
 		return
 	}
 
-	// Meta
 	event.SEO.Title = input.MetaTitle
 	event.SEO.Description = input.MetaDescription
 	event.SEO.Keywords = input.MetaKeywords
@@ -174,17 +164,83 @@ func (s *eventService) applySEO(event *domain.Event, input *SEOInput) {
 	event.SEO.Robots = input.Robots
 	event.SEO.NoIndex = input.NoIndex
 
-	// Open Graph
 	event.OpenGraph.Title = input.OGTitle
 	event.OpenGraph.Description = input.OGDescription
 	event.OpenGraph.ImageURL = input.OGImageURL
-	if input.OGType != "" {
-		event.OpenGraph.Type = input.OGType
-	}
+	event.OpenGraph.Type = input.OGType
 
-	// Twitter
 	event.Twitter.Card = input.TwitterCard
 	event.Twitter.Title = input.TwitterTitle
 	event.Twitter.Description = input.TwitterDescription
 	event.Twitter.ImageURL = input.TwitterImageURL
+}
+
+// ============================================================
+// PERMISSION HELPERS (Shared across services)
+// ============================================================
+
+// getEventAndCheckUpdatePermission gets event and checks update permission using Scope
+func (s *eventService) getEventAndCheckUpdatePermission(ctx context.Context, eventID, userID string) (*domain.Event, error) {
+	event, err := s.repo.GetEventByID(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	if event == nil {
+		return nil, domain.ErrEventNotFound
+	}
+
+	// Create scope from event
+	scope := s.getScopeFromEvent(event)
+
+	// Check if user can update events in this scope
+	allowed, err := s.permChecker.CanUpdateEvent(ctx, userID, scope)
+	if err != nil {
+		return nil, fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
+		return nil, errors.New("insufficient permissions to update this event")
+	}
+
+	return event, nil
+}
+
+// getEventAndCheckDeletePermission gets event and checks delete permission using Scope
+func (s *eventService) getEventAndCheckDeletePermission(ctx context.Context, eventID, userID string) (*domain.Event, error) {
+	event, err := s.repo.GetEventByID(ctx, eventID)
+	if err != nil {
+		return nil, err
+	}
+	if event == nil {
+		return nil, domain.ErrEventNotFound
+	}
+
+	// Create scope from event
+	scope := s.getScopeFromEvent(event)
+
+	// Check if user can delete events in this scope
+	allowed, err := s.permChecker.CanDeleteEvent(ctx, userID, scope)
+	if err != nil {
+		return nil, fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
+		return nil, errors.New("insufficient permissions to delete this event")
+	}
+
+	return event, nil
+}
+
+// ============================================================
+// LOGGING HELPERS
+// ============================================================
+
+// logBulkStatusResult logs the result of a bulk status operation
+func (s *eventService) logBulkStatusResult(operation string, result *BulkStatusResult, total int) {
+	if result.ProcessedCount == total {
+		log.Printf("✅ Bulk %s complete: %d events processed", operation, result.ProcessedCount)
+	} else if result.ProcessedCount > 0 {
+		log.Printf("⚠️ Bulk %s partial: %d succeeded, %d failed",
+			operation, result.ProcessedCount, len(result.FailedIDs))
+	} else {
+		log.Printf("❌ Bulk %s failed: all %d events failed", operation, total)
+	}
 }

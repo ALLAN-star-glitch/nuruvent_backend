@@ -21,9 +21,11 @@ var ProviderSet = wire.NewSet(
 	// Repository - implements authdomain.Repository
 	postgres.NewPostgresRepository,
 
-	// Authorization - implements authdomain.PermissionService
+	// Authorization - implements authdomain.PermissionChecker, RoleManager, PolicyManager
 	authorization.NewEnforcer,
-	authorization.NewService,
+	authorization.NewPermissionChecker,
+	authorization.NewRoleManager,
+	authorization.NewPolicyManager,
 
 	// Token Service - implements authdomain.TokenService
 	jwt.NewTokenService,
@@ -34,7 +36,8 @@ var ProviderSet = wire.NewSet(
 
 	// Auth Service - implements service.Service interface
 	// Depends on: authdomain.Repository, *config.Config, *redis.Client,
-	// authdomain.QueueService, authdomain.PermissionService,
+	// authdomain.QueueService, authdomain.PermissionChecker,
+	// authdomain.RoleManager, authdomain.PolicyManager,
 	// authdomain.TokenService, authdomain.NotificationService
 	service.NewService,
 

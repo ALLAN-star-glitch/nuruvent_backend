@@ -20,8 +20,8 @@ import (
 func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
 	log.Printf("📤 Publishing event: %s", id)
 
-	// 1. Get event and check permissions
-	event, err := s.getEventAndCheckUpdatePermission(ctx, id, publishedBy)
+	// 1. Get event and check permissions using Scope
+	event, err := s.getEventAndCheckPublishPermission(ctx, id, publishedBy)
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,8 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 
 // CancelEvent cancels a single event
 func (s *eventService) CancelEvent(ctx context.Context, id, cancelledBy string) (*domain.Event, error) {
-	// 1. Get event and check permissions
+	// 1. Get event and check permissions using Scope
+	// ✅ Reuses getEventAndCheckUpdatePermission from media.go
 	event, err := s.getEventAndCheckUpdatePermission(ctx, id, cancelledBy)
 	if err != nil {
 		return nil, err
@@ -183,6 +184,31 @@ func (s *eventService) BulkCompleteEvents(ctx context.Context, ids []string) (*B
 // PRIVATE HELPER FUNCTIONS
 // ============================================================
 
+// getEventAndCheckPublishPermission gets event and checks publish permission using Scope
+func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
+	event, err := s.repo.GetEventByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if event == nil {
+		return nil, domain.ErrEventNotFound
+	}
+
+	// Create scope from event
+	scope := s.getScopeFromEvent(event)
+
+	// Check if user can publish events in this scope
+	allowed, err := s.permChecker.CanPublishEvent(ctx, publishedBy, scope)
+	if err != nil {
+		return nil, fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
+		return nil, errors.New("insufficient permissions to publish this event")
+	}
+
+	return event, nil
+}
+
 // getEventStatusBySlug retrieves an event status by slug
 func (s *eventService) getEventStatusBySlug(ctx context.Context, slug string) (*domain.EventStatus, error) {
 	status, err := s.repo.GetEventStatusBySlug(ctx, slug)
@@ -195,16 +221,4 @@ func (s *eventService) getEventStatusBySlug(ctx context.Context, slug string) (*
 		return nil, domain.ErrEventStatusNotFound
 	}
 	return status, nil
-}
-
-// logBulkStatusResult logs the result of a bulk status operation
-func (s *eventService) logBulkStatusResult(operation string, result *BulkStatusResult, total int) {
-	if result.ProcessedCount == total {
-		log.Printf("✅ Bulk %s complete: %d events processed", operation, result.ProcessedCount)
-	} else if result.ProcessedCount > 0 {
-		log.Printf("⚠️ Bulk %s partial: %d succeeded, %d failed",
-			operation, result.ProcessedCount, len(result.FailedIDs))
-	} else {
-		log.Printf("❌ Bulk %s failed: all %d events failed", operation, total)
-	}
 }

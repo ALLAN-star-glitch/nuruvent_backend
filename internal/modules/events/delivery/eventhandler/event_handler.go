@@ -5,7 +5,6 @@ package eventhandler
 import (
 	"errors"
 	"io"
-	"log"
 	"strconv"
 
 	"github.com/gofiber/fiber/v3"
@@ -23,7 +22,6 @@ import (
 // EVENT HANDLER
 // ============================================================
 
-
 type EventHandler struct {
 	svc      service.Service
 	enforcer *authorization.Enforcer
@@ -32,9 +30,9 @@ type EventHandler struct {
 
 func NewEventHandler(svc service.Service, enforcer *authorization.Enforcer) *EventHandler {
 	decoder := schema.NewDecoder()
-	decoder.SetAliasTag("form") // Use the form tag
+	decoder.SetAliasTag("form")
 	decoder.IgnoreUnknownKeys(true)
-	
+
 	return &EventHandler{
 		svc:      svc,
 		enforcer: enforcer,
@@ -78,6 +76,15 @@ func getUserID(c fiber.Ctx) (string, error) {
 	return userIDStr, nil
 }
 
+func getUserIDOptional(c fiber.Ctx) string {
+	if user := c.Locals(authdomain.ContextKeyUserID); user != nil {
+		if id, ok := user.(string); ok {
+			return id
+		}
+	}
+	return ""
+}
+
 // canViewCreatorInfo checks if a user has permission to view creator info
 func (h *EventHandler) canViewCreatorInfo(c fiber.Ctx, userID string, event *domain.Event) bool {
 	if event.CreatedBy == userID {
@@ -108,8 +115,36 @@ func (h *EventHandler) canViewCreatorInfo(c fiber.Ctx, userID string, event *dom
 	return false
 }
 
+// buildTeamFilter builds a TeamFilter from parameters
+func buildTeamFilter(id, typ string) domain.TeamFilter {
+	if id == "" || typ == "" {
+		return domain.TeamFilter{}
+	}
+	return domain.TeamFilter{
+		ID:   id,
+		Type: typ,
+	}
+}
+
+// buildEventResponses builds EventResponse slices with appropriate creator info
+func (h *EventHandler) buildEventResponses(c fiber.Ctx, userID string, events []*domain.Event) []EventResponse {
+	if len(events) == 0 {
+		return []EventResponse{}
+	}
+
+	responses := make([]EventResponse, len(events))
+	for i, event := range events {
+		if userID != "" && h.canViewCreatorInfo(c, userID, event) {
+			responses[i] = NewEventResponseFromEventWithCreator(event)
+		} else {
+			responses[i] = NewEventResponseFromEvent(event)
+		}
+	}
+	return responses
+}
+
 // ============================================================
-// PUBLIC HANDLERS
+// PUBLIC HANDLERS (No Auth Required)
 // ============================================================
 
 // GetEvent godoc
@@ -141,6 +176,11 @@ func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 
 	if event == nil {
 		return response.NotFound(c, "Event not found", nil)
+	}
+
+	userID := getUserIDOptional(c)
+	if userID != "" && h.canViewCreatorInfo(c, userID, event) {
+		return response.Success(c, "Event retrieved successfully", NewEventResponseFromEventWithCreator(event))
 	}
 
 	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
@@ -177,6 +217,11 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
+	userID := getUserIDOptional(c)
+	if userID != "" && h.canViewCreatorInfo(c, userID, event) {
+		return response.Success(c, "Event retrieved successfully", NewEventResponseFromEventWithCreator(event))
+	}
+
 	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
 }
 
@@ -195,14 +240,17 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 		limit = 50
 	}
 
-	events, err := h.svc.GetUpcomingEvents(c.Context(), limit)
+	events, err := h.svc.GetUpcomingEvents(c.Context(), domain.TeamFilter{}, limit)
 	if err != nil {
 		return response.InternalError(c, "Failed to get upcoming events", fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	return response.Success(c, "Upcoming events retrieved successfully", NewEventResponseFromEvents(events))
+	userID := getUserIDOptional(c)
+	responses := h.buildEventResponses(c, userID, events)
+
+	return response.Success(c, "Upcoming events retrieved successfully", responses)
 }
 
 // ListEvents godoc
@@ -221,56 +269,78 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 // @Param offset query int false "Offset" default(0)
 // @Param sort_by query string false "Sort by field (created_at, start_date, name)" default(created_at)
 // @Param sort_order query string false "Sort order (asc, desc)" default(desc)
+// @Param visibility query string false "Visibility (public, private, unlisted)"
 // @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events [get]
 func (h *EventHandler) ListEvents(c fiber.Ctx) error {
-	institutionID := getQueryString(c, "institution_id", "")
-	userID := getQueryString(c, "user_id", "")
-	eventTypeID := getQueryString(c, "event_type_id", "")
-	eventStatusID := getQueryString(c, "event_status_id", "")
-	categoryID := getQueryString(c, "category_id", "")
-	includeDeleted := c.Query("include_deleted") == "true"
-	onlyDeleted := c.Query("only_deleted") == "true"
-	limit := getQueryInt(c, "limit", 20)
-	offset := getQueryInt(c, "offset", 0)
-	sortBy := getQueryString(c, "sort_by", "created_at")
-	sortOrder := getQueryString(c, "sort_order", "desc")
-
-	if limit > 100 {
-		limit = 100
-	}
-
-	filters := service.ListEventsFilters{
-		InstitutionID:  institutionID,
-		UserID:         userID,
-		EventTypeID:    eventTypeID,
-		EventStatusID:  eventStatusID,
-		CategoryID:     categoryID,
-		IncludeDeleted: includeDeleted,
-		OnlyDeleted:    onlyDeleted,
-		Limit:          limit,
-		Offset:         offset,
-		SortBy:         sortBy,
-		SortOrder:      sortOrder,
-	}
-
-	events, total, err := h.svc.ListEvents(c.Context(), filters)
-	if err != nil {
-		return response.InternalError(c, "Failed to list events", fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return response.Success(c, "Events retrieved successfully", fiber.Map{
-		"data":        NewEventResponseFromEvents(events),
-		"total":       total,
-		"limit":       limit,
-		"offset":      offset,
-		"sort_by":     sortBy,
-		"sort_order":  sortOrder,
-	})
+    // Parse request
+    var req ListEventsRequest
+    if err := c.Bind().Query(&req); err != nil {
+        return response.BadRequest(c, "Invalid query parameters", nil)
+    }
+    
+    // Set defaults
+    if req.Limit <= 0 {
+        req.Limit = 20
+    }
+    if req.Limit > 100 {
+        req.Limit = 100
+    }
+    if req.SortBy == "" {
+        req.SortBy = "created_at"
+    }
+    if req.SortOrder == "" {
+        req.SortOrder = "desc"
+    }
+    
+    // Build TeamFilter from request
+    team := domain.TeamFilter{}
+    if req.TeamID != "" && req.TeamType != "" {
+        team = domain.TeamFilter{
+            ID:   req.TeamID,
+            Type: req.TeamType, // "personal" or "institution"
+        }
+    }
+    
+    // Build filters
+    filters := service.ListEventsFilters{
+        Team:           team,
+        UserID:         req.UserID,
+        EventTypeID:    req.EventTypeID,
+        EventStatusID:  req.EventStatusID,
+        CategoryID:     req.CategoryID,
+        IncludeDeleted: req.IncludeDeleted,
+        OnlyDeleted:    req.OnlyDeleted,
+        IncludeCreator: req.IncludeCreator,
+        Limit:          req.Limit,
+        Offset:         req.Offset,
+        SortBy:         req.SortBy,
+        SortOrder:      req.SortOrder,
+        Visibility:     req.Visibility,
+    }
+    
+    // Get events
+    events, total, err := h.svc.ListEvents(c.Context(), filters)
+    if err != nil {
+        return response.InternalError(c, "Failed to list events", fiber.Map{
+            "error": err.Error(),
+        })
+    }
+    
+    // Build response
+    userID := getUserIDOptional(c)
+    responses := h.buildEventResponses(c, userID, events)
+    
+    return response.Success(c, "Events retrieved successfully", fiber.Map{
+        "data":        responses,
+        "total":       total,
+        "limit":       req.Limit,
+        "offset":      req.Offset,
+        "sort_by":     req.SortBy,
+        "sort_order":  req.SortOrder,
+    })
 }
 
 // GetEventsByType godoc
@@ -278,7 +348,7 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 // @Description Get all events of a specific type
 // @Tags Events
 // @Produce json
-// @Param type path string true "Event Type" Enums(workshop, webinar, meetup, bootcamp)
+// @Param type path string true "Event Type Slug"
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
 // @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
@@ -286,8 +356,8 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/type/{type} [get]
 func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
-	eventType := c.Params("type")
-	if eventType == "" {
+	eventTypeSlug := c.Params("type")
+	if eventTypeSlug == "" {
 		return response.BadRequest(c, "Event type is required", nil)
 	}
 
@@ -297,15 +367,18 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 		pageSize = 100
 	}
 
-	events, total, err := h.svc.GetEventsByType(c.Context(), eventType, page, pageSize)
+	events, total, err := h.svc.GetEventsByType(c.Context(), eventTypeSlug, page, pageSize)
 	if err != nil {
 		return response.InternalError(c, "Failed to get events", fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
+	userID := getUserIDOptional(c)
+	responses := h.buildEventResponses(c, userID, events)
+
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
-		"data":        NewEventResponseFromEvents(events),
+		"data":        responses,
 		"total":       total,
 		"page":        page,
 		"page_size":   pageSize,
@@ -328,14 +401,17 @@ func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
 		limit = 50
 	}
 
-	events, err := h.svc.GetPastEvents(c.Context(), limit)
+	events, err := h.svc.GetPastEvents(c.Context(), domain.TeamFilter{}, limit)
 	if err != nil {
 		return response.InternalError(c, "Failed to get past events", fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	return response.Success(c, "Past events retrieved successfully", NewEventResponseFromEvents(events))
+	userID := getUserIDOptional(c)
+	responses := h.buildEventResponses(c, userID, events)
+
+	return response.Success(c, "Past events retrieved successfully", responses)
 }
 
 // GetEventTypes godoc
@@ -390,12 +466,17 @@ func (h *EventHandler) GetEventStatuses(c fiber.Ctx) error {
 // @Param only_deleted query bool false "Show ONLY soft-deleted events"
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
+// @Param visibility query string false "Visibility (public, private, unlisted)"
 // @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/search [get]
 func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 	query := getQueryString(c, "q", "")
+	if query == "" {
+		return response.BadRequest(c, "Search query is required", nil)
+	}
+
 	institutionID := getQueryString(c, "institution_id", "")
 	userID := getQueryString(c, "user_id", "")
 	eventTypeID := getQueryString(c, "event_type_id", "")
@@ -404,13 +485,21 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 	onlyDeleted := c.Query("only_deleted") == "true"
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
+	visibility := getQueryString(c, "visibility", "")
 
 	if pageSize > 100 {
 		pageSize = 100
 	}
 
+	team := domain.TeamFilter{}
+	if institutionID != "" {
+		team = domain.TeamFilter{ID: institutionID, Type: "institution"}
+	} else if userID != "" {
+		team = domain.TeamFilter{ID: userID, Type: "personal"}
+	}
+
 	filters := service.SearchFilters{
-		InstitutionID:  institutionID,
+		Team:           team,
 		UserID:         userID,
 		EventTypeID:    eventTypeID,
 		CategoryID:     categoryID,
@@ -418,6 +507,7 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 		OnlyDeleted:    onlyDeleted,
 		Limit:          pageSize,
 		Offset:         (page - 1) * pageSize,
+		Visibility:     visibility,
 	}
 
 	events, total, err := h.svc.SearchEvents(c.Context(), query, filters)
@@ -427,8 +517,11 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 		})
 	}
 
+	currentUserID := getUserIDOptional(c)
+	responses := h.buildEventResponses(c, currentUserID, events)
+
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
-		"data":        NewEventResponseFromEvents(events),
+		"data":        responses,
 		"total":       total,
 		"page":        page,
 		"page_size":   pageSize,
@@ -437,213 +530,73 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 }
 
 // ============================================================
-// PUBLIC HANDLERS WITH CREATOR INFO (Auth Required)
-// ============================================================
-
-// GetUpcomingEventsWithCreator godoc
-// @Summary Get upcoming events with creator details
-// @Description Get all upcoming published events with full creator information (requires auth)
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param limit query int false "Number of events to return" default(10)
-// @Success 200 {object} response.BaseResponse{data=[]EventResponse}
-// @Failure 401 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/upcoming/with-creator [get]
-func (h *EventHandler) GetUpcomingEventsWithCreator(c fiber.Ctx) error {
-	userID, err := getUserID(c)
-	if err != nil {
-		return response.Unauthorized(c, "User not authenticated", nil)
-	}
-
-	limit := getQueryInt(c, "limit", 10)
-	if limit > 50 {
-		limit = 50
-	}
-
-	events, err := h.svc.GetUpcomingEventsWithCreator(c.Context(), limit)
-	if err != nil {
-		return response.InternalError(c, "Failed to get upcoming events", fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	responses := make([]EventResponse, len(events))
-	for i, event := range events {
-		if h.canViewCreatorInfo(c, userID, event) {
-			responses[i] = NewEventResponseFromEventWithCreator(event)
-		} else {
-			responses[i] = NewEventResponseFromEvent(event)
-		}
-	}
-
-	return response.Success(c, "Upcoming events retrieved successfully", responses)
-}
-
-// GetEventBySlugWithCreator godoc
-// @Summary Get event by slug with creator details
-// @Description Get event details by slug with full creator information (requires auth)
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param slug path string true "Event Slug"
-// @Success 200 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/slug/{slug}/with-creator [get]
-func (h *EventHandler) GetEventBySlugWithCreator(c fiber.Ctx) error {
-	userID, err := getUserID(c)
-	if err != nil {
-		return response.Unauthorized(c, "User not authenticated", nil)
-	}
-
-	slug := c.Params("slug")
-	if slug == "" {
-		return response.BadRequest(c, "Event slug is required", nil)
-	}
-
-	event, err := h.svc.GetEventBySlugWithCreator(c.Context(), slug)
-	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		return response.InternalError(c, "Failed to get event", fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	if event == nil {
-		return response.NotFound(c, "Event not found", nil)
-	}
-
-	if h.canViewCreatorInfo(c, userID, event) {
-		return response.Success(c, "Event retrieved successfully", NewEventResponseFromEventWithCreator(event))
-	}
-
-	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
-}
-
-// GetEventByIDWithCreator godoc
-// @Summary Get event by ID with creator details
-// @Description Get event details by ID with full creator information (requires auth)
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/with-creator [get]
-func (h *EventHandler) GetEventByIDWithCreator(c fiber.Ctx) error {
-	userID, err := getUserID(c)
-	if err != nil {
-		return response.Unauthorized(c, "User not authenticated", nil)
-	}
-
-	id := c.Params("id")
-	if id == "" {
-		return response.BadRequest(c, "Event ID is required", nil)
-	}
-
-	event, err := h.svc.GetEventByIDWithCreator(c.Context(), id)
-	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		return response.InternalError(c, "Failed to get event", fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	if event == nil {
-		return response.NotFound(c, "Event not found", nil)
-	}
-
-	if h.canViewCreatorInfo(c, userID, event) {
-		return response.Success(c, "Event retrieved successfully", NewEventResponseFromEventWithCreator(event))
-	}
-
-	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
-}
-
-// ============================================================
 // PROTECTED HANDLERS (Auth Required)
 // ============================================================
 
 // GetEventsByInstitution godoc
 // @Summary Get events by institution
-// @Description Get all events for an institution (public - filters private events)
+// @Description Get all events for an institution (requires auth)
 // @Tags Events
 // @Produce json
+// @Security BearerAuth
 // @Param institutionId path string true "Institution ID"
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
 // @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
 // @Failure 400 {object} response.BaseResponse
+// @Failure 401 {object} response.BaseResponse
+// @Failure 403 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/institutions/{institutionId}/events [get]
 func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
-    institutionID := c.Params("institutionId")
-    if institutionID == "" {
-        return response.BadRequest(c, "Institution ID is required", nil)
-    }
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
 
-    // ✅ Auth is OPTIONAL - user may or may not be logged in
-    var userID string
-    if user := c.Locals(authdomain.ContextKeyUserID); user != nil {
-        if id, ok := user.(string); ok {
-            userID = id
-        }
-    }
+	institutionID := c.Params("institutionId")
+	if institutionID == "" {
+		return response.BadRequest(c, "Institution ID is required", nil)
+	}
 
-    page := getQueryInt(c, "page", 1)
-    pageSize := getQueryInt(c, "page_size", 20)
-    if pageSize > 100 {
-        pageSize = 100
-    }
+	page := getQueryInt(c, "page", 1)
+	pageSize := getQueryInt(c, "page_size", 20)
+	if pageSize > 100 {
+		pageSize = 100
+	}
 
-    events, total, err := h.svc.GetEventsByInstitution(c.Context(), institutionID, page, pageSize)
-    if err != nil {
-        return response.InternalError(c, "Failed to get events", fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	limit, offset := pageSize, (page-1)*pageSize
 
-    // If user is authenticated, check permissions for each event
-    var responses []EventResponse
-    if userID != "" {
-        responses = make([]EventResponse, len(events))
-        for i, event := range events {
-            if h.canViewCreatorInfo(c, userID, event) {
-                responses[i] = NewEventResponseFromEventWithCreator(event)
-            } else {
-                responses[i] = NewEventResponseFromEvent(event)
-            }
-        }
-    } else {
-        // Not authenticated - return events without creator info
-        responses = NewEventResponseFromEvents(events)
-    }
+	filters := service.ListEventsFilters{
+		Team: domain.TeamFilter{
+			ID:   institutionID,
+			Type: "institution",
+		},
+		Limit:  limit,
+		Offset: offset,
+	}
 
-    return response.Success(c, "Events retrieved successfully", fiber.Map{
-        "data":        responses,
-        "total":       total,
-        "page":        page,
-        "page_size":   pageSize,
-        "total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
-    })
+	events, total, err := h.svc.ListEvents(c.Context(), filters)
+	if err != nil {
+		return response.InternalError(c, "Failed to get events", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	responses := h.buildEventResponses(c, userID, events)
+
+	return response.Success(c, "Events retrieved successfully", fiber.Map{
+		"data":        responses,
+		"total":       total,
+		"page":        page,
+		"page_size":   pageSize,
+		"total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
+	})
 }
 
 // GetEventsByInstitutionWithCreator godoc
 // @Summary Get events by institution with creator details
-// @Description Get all events for an institution with full creator information (requires team admin)
+// @Description Get all events for an institution with full creator information (requires auth)
 // @Tags Events
 // @Produce json
 // @Security BearerAuth
@@ -673,64 +626,18 @@ func (h *EventHandler) GetEventsByInstitutionWithCreator(c fiber.Ctx) error {
 		pageSize = 100
 	}
 
-	events, total, err := h.svc.GetEventsByInstitutionWithCreator(c.Context(), institutionID, page, pageSize)
-	if err != nil {
-		return response.InternalError(c, "Failed to get events", fiber.Map{
-			"error": err.Error(),
-		})
+	limit, offset := pageSize, (page-1)*pageSize
+
+	filters := service.ListEventsFilters{
+		Team: domain.TeamFilter{
+			ID:   institutionID,
+			Type: "institution",
+		},
+		Limit:  limit,
+		Offset: offset,
 	}
 
-	responses := make([]EventResponse, len(events))
-	for i, event := range events {
-		if h.canViewCreatorInfo(c, userID, event) {
-			responses[i] = NewEventResponseFromEventWithCreator(event)
-		} else {
-			responses[i] = NewEventResponseFromEvent(event)
-		}
-	}
-
-	return response.Success(c, "Events retrieved successfully", fiber.Map{
-		"data":        responses,
-		"page":        page,
-		"page_size":   pageSize,
-		"total":       total,
-		"total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
-	})
-}
-
-// GetEventsByUserWithCreator godoc
-// @Summary Get events by user with creator details
-// @Description Get all events created by a specific user with full creator information (requires auth)
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param userId path string true "User ID"
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/users/{userId}/events/with-creator [get]
-func (h *EventHandler) GetEventsByUserWithCreator(c fiber.Ctx) error {
-	userID, err := getUserID(c)
-	if err != nil {
-		return response.Unauthorized(c, "User not authenticated", nil)
-	}
-
-	targetUserID := c.Params("userId")
-	if targetUserID == "" {
-		return response.BadRequest(c, "User ID is required", nil)
-	}
-
-	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "page_size", 20)
-	if pageSize > 100 {
-		pageSize = 100
-	}
-
-	events, total, err := h.svc.GetEventsByUserWithCreator(c.Context(), targetUserID, page, pageSize)
+	events, total, err := h.svc.ListEvents(c.Context(), filters)
 	if err != nil {
 		return response.InternalError(c, "Failed to get events", fiber.Map{
 			"error": err.Error(),
@@ -780,7 +687,19 @@ func (h *EventHandler) GetMyEvents(c fiber.Ctx) error {
 		pageSize = 100
 	}
 
-	events, total, err := h.svc.GetEventsByUser(c.Context(), userID, page, pageSize)
+	limit, offset := pageSize, (page-1)*pageSize
+
+	filters := service.ListEventsFilters{
+		Team: domain.TeamFilter{
+			ID:   userID,
+			Type: "personal",
+		},
+		UserID: userID,
+		Limit:  limit,
+		Offset: offset,
+	}
+
+	events, total, err := h.svc.ListEvents(c.Context(), filters)
 	if err != nil {
 		return response.InternalError(c, "Failed to get events", fiber.Map{
 			"error": err.Error(),
@@ -822,10 +741,6 @@ func (h *EventHandler) GetMyEventsWithCreator(c fiber.Ctx) error {
 // CREATE DRAFT - Personal
 // ============================================================
 
-// ============================================================
-// CREATE DRAFT - Personal
-// ============================================================
-
 // CreatePersonalDraft godoc
 // @Summary Create a personal draft event
 // @Description Create a draft event for personal account (no institution required)
@@ -846,7 +761,6 @@ func (h *EventHandler) CreatePersonalDraft(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	// Bind JSON request
 	var req CreateDraftRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{
@@ -854,8 +768,6 @@ func (h *EventHandler) CreatePersonalDraft(c fiber.Ctx) error {
 		})
 	}
 
-	// ✅ Convert to command - set owner_type from URL context
-	// Personal endpoint = "personal", no institution ID
 	cmd := ConvertCreateDraftRequestToCommand(req, userID, "personal", "")
 
 	event, err := h.svc.CreateDraft(c.Context(), cmd)
@@ -873,12 +785,6 @@ func (h *EventHandler) CreatePersonalDraft(c fiber.Ctx) error {
 
 	return response.Created(c, "Draft created successfully", NewEventResponseFromEventWithCreator(event))
 }
-
-// ============================================================
-// CREATE DRAFT - Institution
-// ============================================================
-
-// internal/modules/events/handler/eventhandler.go
 
 // ============================================================
 // CREATE DRAFT - Institution
@@ -910,7 +816,6 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	// Bind JSON request
 	var req CreateDraftRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{
@@ -918,8 +823,6 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 		})
 	}
 
-	// ✅ Convert to command - set owner_type from URL context
-	// Institution endpoint = "institution", institution ID from URL
 	cmd := ConvertCreateDraftRequestToCommand(req, userID, "institution", institutionID)
 
 	event, err := h.svc.CreateDraft(c.Context(), cmd)
@@ -937,10 +840,6 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 
 	return response.Created(c, "Draft created successfully", NewEventResponseFromEventWithCreator(event))
 }
-
-// ============================================================
-// CREATE PUBLISHED EVENT - Personal
-// ============================================================
 
 // ============================================================
 // CREATE PUBLISHED EVENT - Personal
@@ -966,7 +865,6 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	// Bind JSON request
 	var req CreateEventRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{
@@ -974,7 +872,6 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 		})
 	}
 
-	// Strict validation for published events
 	if req.Name == "" {
 		return response.BadRequest(c, "Event name is required", nil)
 	}
@@ -994,8 +891,6 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Visibility is required (public, private, unlisted)", nil)
 	}
 
-	// ✅ Convert to command - set owner_type from URL context
-	// Personal endpoint = "personal", no institution ID
 	cmd := ConvertCreateEventRequestToCommand(req, userID, "personal", "")
 
 	event, err := h.svc.CreateEvent(c.Context(), cmd)
@@ -1018,10 +913,6 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 // CREATE PUBLISHED EVENT - Institution
 // ============================================================
 
-// ============================================================
-// CREATE PUBLISHED EVENT - Institution
-// ============================================================
-
 // CreateEvent godoc
 // @Summary Create a published event for institution
 // @Description Create a published event for institution account (institution ID required)
@@ -1038,61 +929,59 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/institutions/{institutionId}/events [post]
 func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
-    institutionID := c.Params("institutionId")
-    if institutionID == "" {
-        return response.BadRequest(c, "Institution ID is required", nil)
-    }
+	institutionID := c.Params("institutionId")
+	if institutionID == "" {
+		return response.BadRequest(c, "Institution ID is required", nil)
+	}
 
-    userID, err := getUserID(c)
-    if err != nil {
-        return response.Unauthorized(c, "User not authenticated", nil)
-    }
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
 
-    var req CreateEventRequest
-    if err := c.Bind().Body(&req); err != nil {
-        return response.BadRequest(c, "Invalid request", fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	var req CreateEventRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-    // ✅ ADD DEBUG LOGGING
-    log.Printf("🔍 DEBUG: Request - Name='%s', EventTypeID='%s', Tickets count=%d", 
-        req.Name, req.EventTypeID, len(req.Tickets))
-    for i, ticket := range req.Tickets {
-        log.Printf("🔍 DEBUG: Ticket %d - TypeID='%s', Name='%s', Price=%f, Quantity=%d", 
-            i, ticket.TicketTypeID, ticket.Name, ticket.Price, ticket.Quantity)
-    }
+	if req.Name == "" {
+		return response.BadRequest(c, "Event name is required", nil)
+	}
+	if req.EventTypeID == "" {
+		return response.BadRequest(c, "Event type is required", nil)
+	}
+	if req.Description == "" {
+		return response.BadRequest(c, "Description is required for published events", nil)
+	}
+	if len(req.Schedules) == 0 {
+		return response.BadRequest(c, "At least one schedule is required", nil)
+	}
+	if len(req.Tickets) == 0 {
+		return response.BadRequest(c, "At least one ticket is required", nil)
+	}
+	if req.Visibility == "" {
+		return response.BadRequest(c, "Visibility is required (public, private, unlisted)", nil)
+	}
 
-    // ✅ Convert to command - set owner_type from URL context
-    cmd := ConvertCreateEventRequestToCommand(req, userID, "institution", institutionID)
+	cmd := ConvertCreateEventRequestToCommand(req, userID, "institution", institutionID)
 
-    // ✅ ADD DEBUG LOGGING FOR COMMAND
-    log.Printf("🔍 DEBUG: Command - OwnerType='%s', InstitutionID='%s', Tickets count=%d", 
-        cmd.OwnerType, cmd.InstitutionID, len(cmd.Tickets))
-    for i, ticket := range cmd.Tickets {
-        log.Printf("🔍 DEBUG: Command Ticket %d - TypeID='%s', Name='%s', Price=%f, Quantity=%d", 
-            i, ticket.TicketTypeID, ticket.Name, ticket.Price, ticket.Quantity)
-    }
+	event, err := h.svc.CreateEvent(c.Context(), cmd)
+	if err != nil {
+		if errors.Is(err, domain.ErrEventStatusNotFound) {
+			return response.BadRequest(c, "Invalid event status", nil)
+		}
+		if errors.Is(err, domain.ErrEventTypeNotFound) {
+			return response.BadRequest(c, "Invalid event type", nil)
+		}
+		return response.InternalError(c, "Failed to create event", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-    event, err := h.svc.CreateEvent(c.Context(), cmd)
-    if err != nil {
-        if errors.Is(err, domain.ErrEventStatusNotFound) {
-            return response.BadRequest(c, "Invalid event status", nil)
-        }
-        if errors.Is(err, domain.ErrEventTypeNotFound) {
-            return response.BadRequest(c, "Invalid event type", nil)
-        }
-        return response.InternalError(c, "Failed to create event", fiber.Map{
-            "error": err.Error(),
-        })
-    }
-
-    return response.Created(c, "Event created successfully", NewEventResponseFromEventWithCreator(event))
+	return response.Created(c, "Event created successfully", NewEventResponseFromEventWithCreator(event))
 }
-
-// ============================================================
-// UPDATE EVENT
-// ============================================================
 
 // ============================================================
 // UPDATE EVENT
@@ -1115,38 +1004,36 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/{id} [put]
 func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
-    id := c.Params("id")
-    if id == "" {
-        return response.BadRequest(c, "Event ID is required", nil)
-    }
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c, "Event ID is required", nil)
+	}
 
-    userID, err := getUserID(c)
-    if err != nil {
-        return response.Unauthorized(c, "User not authenticated", nil)
-    }
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
 
-    var req UpdateEventRequest
-    if err := c.Bind().Body(&req); err != nil {
-        return response.BadRequest(c, "Invalid request", fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	var req UpdateEventRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-    // ✅ Convert to command - no owner_type needed
-    // The service will determine owner_type from the existing event
-    cmd := ConvertUpdateEventRequestToCommand(req, id, userID)
+	cmd := ConvertUpdateEventRequestToCommand(req, id, userID)
 
-    event, err := h.svc.UpdateEvent(c.Context(), cmd)
-    if err != nil {
-        if errors.Is(err, domain.ErrEventNotFound) {
-            return response.NotFound(c, "Event not found", nil)
-        }
-        return response.InternalError(c, "Failed to update event", fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	event, err := h.svc.UpdateEvent(c.Context(), cmd)
+	if err != nil {
+		if errors.Is(err, domain.ErrEventNotFound) {
+			return response.NotFound(c, "Event not found", nil)
+		}
+		return response.InternalError(c, "Failed to update event", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-    return response.Success(c, "Event updated successfully", NewEventResponseFromEventWithCreator(event))
+	return response.Success(c, "Event updated successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // ============================================================
@@ -1210,7 +1097,6 @@ func (h *EventHandler) PermanentlyDeleteEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	
 	userID, err := getUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
@@ -1786,7 +1672,6 @@ func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	// Get file
 	imageFile, err := c.FormFile("image")
 	if err != nil {
 		return response.BadRequest(c, "Image file is required", nil)
@@ -1852,7 +1737,6 @@ func (h *EventHandler) UploadCertificateTemplate(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	// Get file
 	certFile, err := c.FormFile("certificate")
 	if err != nil {
 		return response.BadRequest(c, "Certificate file is required", nil)
@@ -2062,3 +1946,4 @@ func (h *EventHandler) BulkDeleteEventMedia(c fiber.Ctx) error {
 
 	return response.Success(c, "Media deleted successfully", result)
 }
+

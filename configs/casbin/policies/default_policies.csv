@@ -19,9 +19,10 @@ p, admin, platform, user, delete
 p, admin, platform, institution, read
 p, admin, platform, institution, update
 p, admin, platform, institution, delete
-p, admin, platform, event, read
-p, admin, platform, event, update
-p, admin, platform, event, delete
+p, admin, platform, event, read_all
+p, admin, platform, event, update_all
+p, admin, platform, event, delete_all
+p, admin, platform, event, manage
 p, admin, platform, analytics, read
 p, admin, platform, payment, read
 p, admin, platform, certificate, read
@@ -43,9 +44,10 @@ p, admin, platform, team, delete
 # ACCOUNT ADMIN - Full personal team management
 # ============================================================
 p, account_admin, personal:team:{user_id}, event, create
-p, account_admin, personal:team:{user_id}, event, read
-p, account_admin, personal:team:{user_id}, event, update
-p, account_admin, personal:team:{user_id}, event, delete
+p, account_admin, personal:team:{user_id}, event, read_all
+p, account_admin, personal:team:{user_id}, event, update_all
+p, account_admin, personal:team:{user_id}, event, delete_all
+p, account_admin, personal:team:{user_id}, event, publish_all
 p, account_admin, personal:team:{user_id}, event, manage
 p, account_admin, personal:team:{user_id}, certificate, create
 p, account_admin, personal:team:{user_id}, certificate, read
@@ -75,15 +77,17 @@ p, account_admin, personal:team:{user_id}, team, delete
 # EVENT MANAGER - Manage events and attendees in personal team
 # ============================================================
 p, event_manager, personal:team:{user_id}, event, create
-p, event_manager, personal:team:{user_id}, event, read
-p, event_manager, personal:team:{user_id}, event, update
-p, event_manager, personal:team:{user_id}, event, delete
+p, event_manager, personal:team:{user_id}, event, read_all
+p, event_manager, personal:team:{user_id}, event, update_all
+p, event_manager, personal:team:{user_id}, event, delete_all
+p, event_manager, personal:team:{user_id}, event, publish_all
 p, event_manager, personal:team:{user_id}, attendee, read
 p, event_manager, personal:team:{user_id}, attendee, update
 p, event_manager, personal:team:{user_id}, attendee, export
 p, event_manager, personal:team:{user_id}, certificate, create
 p, event_manager, personal:team:{user_id}, certificate, read
 p, event_manager, personal:team:{user_id}, certificate, issue
+p, event_manager, personal:team:{user_id}, certificate, delete
 p, event_manager, personal:team:{user_id}, payment, read
 p, event_manager, personal:team:{user_id}, dashboard, read
 p, event_manager, personal:team:{user_id}, team, read
@@ -91,8 +95,12 @@ p, event_manager, personal:team:{user_id}, team, read
 # ============================================================
 # TEAM MEMBER - View-only access in personal team
 # ============================================================
-p, team_member, personal:team:{user_id}, event, read
+p, team_member, personal:team:{user_id}, event, read_own
+p, team_member, personal:team:{user_id}, event, update_own
+p, team_member, personal:team:{user_id}, event, delete_own
+p, team_member, personal:team:{user_id}, event, publish_own
 p, team_member, personal:team:{user_id}, attendee, read
+p, team_member, personal:team:{user_id}, attendee, update_own
 p, team_member, personal:team:{user_id}, certificate, read
 p, team_member, personal:team:{user_id}, dashboard, read
 p, team_member, personal:team:{user_id}, team, read
@@ -107,9 +115,10 @@ p, team_member, personal:team:{user_id}, team, read
 # ACCOUNT ADMIN - Full institution team management
 # ============================================================
 p, account_admin, institution:team:{institution_id}, event, create
-p, account_admin, institution:team:{institution_id}, event, read
-p, account_admin, institution:team:{institution_id}, event, update
-p, account_admin, institution:team:{institution_id}, event, delete
+p, account_admin, institution:team:{institution_id}, event, read_all
+p, account_admin, institution:team:{institution_id}, event, update_all
+p, account_admin, institution:team:{institution_id}, event, delete_all
+p, account_admin, institution:team:{institution_id}, event, publish_all
 p, account_admin, institution:team:{institution_id}, event, manage
 p, account_admin, institution:team:{institution_id}, certificate, create
 p, account_admin, institution:team:{institution_id}, certificate, read
@@ -142,15 +151,17 @@ p, account_admin, institution:team:{institution_id}, team, delete
 # EVENT MANAGER - Manage events and attendees in institution team
 # ============================================================
 p, event_manager, institution:team:{institution_id}, event, create
-p, event_manager, institution:team:{institution_id}, event, read
-p, event_manager, institution:team:{institution_id}, event, update
-p, event_manager, institution:team:{institution_id}, event, delete
+p, event_manager, institution:team:{institution_id}, event, read_all
+p, event_manager, institution:team:{institution_id}, event, update_all
+p, event_manager, institution:team:{institution_id}, event, delete_all
+p, event_manager, institution:team:{institution_id}, event, publish_all
 p, event_manager, institution:team:{institution_id}, attendee, read
 p, event_manager, institution:team:{institution_id}, attendee, update
 p, event_manager, institution:team:{institution_id}, attendee, export
 p, event_manager, institution:team:{institution_id}, certificate, create
 p, event_manager, institution:team:{institution_id}, certificate, read
 p, event_manager, institution:team:{institution_id}, certificate, issue
+p, event_manager, institution:team:{institution_id}, certificate, delete
 p, event_manager, institution:team:{institution_id}, payment, read
 p, event_manager, institution:team:{institution_id}, dashboard, read
 p, event_manager, institution:team:{institution_id}, team, read
@@ -158,8 +169,12 @@ p, event_manager, institution:team:{institution_id}, team, read
 # ============================================================
 # TEAM MEMBER - View-only access in institution team
 # ============================================================
-p, team_member, institution:team:{institution_id}, event, read
+p, team_member, institution:team:{institution_id}, event, read_own
+p, team_member, institution:team:{institution_id}, event, update_own
+p, team_member, institution:team:{institution_id}, event, delete_own
+p, team_member, institution:team:{institution_id}, event, publish_own
 p, team_member, institution:team:{institution_id}, attendee, read
+p, team_member, institution:team:{institution_id}, attendee, update_own
 p, team_member, institution:team:{institution_id}, certificate, read
 p, team_member, institution:team:{institution_id}, dashboard, read
 p, team_member, institution:team:{institution_id}, team, read

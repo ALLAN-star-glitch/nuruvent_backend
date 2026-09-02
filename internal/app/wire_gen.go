@@ -48,10 +48,12 @@ func InitializeApp() (*AppDependencies, error) {
 	if err != nil {
 		return nil, err
 	}
+	permissionChecker := authorization.NewPermissionChecker(enforcer)
+	roleManager := authorization.NewRoleManager(enforcer)
+	policyManager := authorization.NewPolicyManager(enforcer)
 	repository := postgres.NewPostgresRepository(db)
 	taskQueue := queue.NewClient(configConfig)
 	queueService := NewQueueAdapter(taskQueue)
-	permissionService := authorization.NewService(enforcer)
 	tokenService := jwt.NewTokenService(configConfig)
 	taskEnqueuer := service.NewTaskEnqueuer(taskQueue)
 	emailChannelConfig := notification.NewEmailConfig(configConfig)
@@ -59,33 +61,37 @@ func InitializeApp() (*AppDependencies, error) {
 	v := notification.NewEmailChannels(channel)
 	notificationService := service.NewNotificationServiceWithQueue(taskEnqueuer, v...)
 	authdomainNotificationService := NewAuthNotificationAdapter(notificationService)
-	serviceService := service2.NewService(repository, configConfig, redisClient, queueService, permissionService, tokenService, authdomainNotificationService, enforcer)
+	serviceService := service2.NewService(repository, configConfig, redisClient, queueService, permissionChecker, roleManager, policyManager, tokenService, authdomainNotificationService, enforcer)
 	domainRepository := postgres2.NewPostgresRepository(db)
-	permissionChecker := NewEventsPermissionAdapter(permissionService)
+	domainPermissionChecker := NewEventsPermissionAdapter(permissionChecker)
 	repository2 := postgres3.NewPostgresRepository(db)
 	service5 := service3.NewService(repository2, client)
 	mediaService := NewEventsMediaAdapter(service5)
-	service6 := service4.NewService(domainRepository, permissionChecker, mediaService)
+	service6 := service4.NewService(domainRepository, domainPermissionChecker, mediaService)
 	authHandler := authhandler.NewAuthHandler(serviceService, configConfig)
 	eventHandler := eventhandler.NewEventHandler(service6, enforcer)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, serviceService, tokenService, service6, service5, authHandler, eventHandler)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, permissionChecker, roleManager, policyManager, serviceService, tokenService, service6, service5, authHandler, eventHandler)
 	return appDependencies, nil
 }
 
 // wire.go:
 
+// AppDependencies holds all application dependencies
 type AppDependencies struct {
-	Config           *config.Config
-	DB               *gorm.DB
-	App              *fiber.App
-	StorageClient    *storage.Client
-	RedisClient      *redis.Client
-	Enforcer         *authorization.Enforcer
-	AuthTokenService authdomain.TokenService
-	Notification     notificationdomain.NotificationService
-	AuthService      service2.Service
-	EventsService    service4.Service
-	MediaService     service3.Service
-	AuthHandler      *authhandler.AuthHandler
-	EventsHandler    *eventhandler.EventHandler
+	Config            *config.Config
+	DB                *gorm.DB
+	App               *fiber.App
+	StorageClient     *storage.Client
+	RedisClient       *redis.Client
+	Enforcer          *authorization.Enforcer
+	PermissionChecker authdomain.PermissionChecker
+	RoleManager       authdomain.RoleManager
+	PolicyManager     authdomain.PolicyManager
+	AuthTokenService  authdomain.TokenService
+	Notification      notificationdomain.NotificationService
+	AuthService       service2.Service
+	EventsService     service4.Service
+	MediaService      service3.Service
+	AuthHandler       *authhandler.AuthHandler
+	EventsHandler     *eventhandler.EventHandler
 }

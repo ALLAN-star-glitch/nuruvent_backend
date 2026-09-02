@@ -10,7 +10,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/server"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
-	"github.com/gofiber/fiber/v3/middleware/cors" // ✅ Import CORS
+	"github.com/gofiber/fiber/v3/middleware/cors"
 )
 
 // App wraps the application dependencies
@@ -20,14 +20,14 @@ type App struct {
 
 // NewApp creates and initializes the application
 func NewApp() (*App, error) {
-	// Wire handles ALL initialization (config, database, redis, etc.)
+	// Wire handles ALL initialization
 	deps, err := InitializeApp()
 	if err != nil {
 		return nil, err
 	}
 	log.Println("✅ Application dependencies initialized successfully")
 
-	// ✅ Add CORS middleware to the Fiber app
+	// Add CORS middleware to the Fiber app
 	app := deps.App
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: []string{
@@ -47,12 +47,10 @@ func NewApp() (*App, error) {
 			"Cookie",
 			"Set-Cookie",
 		},
-		AllowCredentials: true, // ✅ Required for cookies
-		ExposeHeaders:    []string{"Set-Cookie", "Content-Length", "Content-Type"}, // ✅ Add Content-Length
+		AllowCredentials: true,
+		ExposeHeaders:    []string{"Set-Cookie", "Content-Length", "Content-Type"},
 		MaxAge:           86400,
 	}))
-
-	
 
 	return &App{AppDependencies: deps}, nil
 }
@@ -80,10 +78,12 @@ func (app *App) Init(ctx context.Context) error {
 func (app *App) SetupRoutes() {
 	// Get token service from app dependencies
 	tokenSvc := app.AuthTokenService
-	
-	// Create middleware with token service
+
+	// Create auth middleware
 	authMiddleware := authmiddleware.AuthMiddleware(tokenSvc)
-	authzMiddleware := authorization.AuthorizationMiddleware(app.Enforcer)
+
+	// ✅ Use the injected permission checker
+	authzMiddleware := authorization.AuthorizationMiddleware(app.PermissionChecker)
 
 	server.SetupRoutes(
 		app.App,
@@ -105,21 +105,20 @@ func (app *App) Run() error {
 // Close gracefully shuts down the application
 func (app *App) Close() {
 	log.Println("Shutting down application...")
-	
+
 	if app.Enforcer != nil {
 		app.Enforcer.Close()
 	}
-	
+
 	if err := database.Close(); err != nil {
 		log.Printf("Error closing database: %v", err)
 	}
-	
-	// Close Redis using the injected client
+
 	if app.RedisClient != nil {
 		if err := app.RedisClient.Close(); err != nil {
 			log.Printf("Error closing Redis: %v", err)
 		}
 	}
-	
+
 	log.Println("Application closed successfully")
 }

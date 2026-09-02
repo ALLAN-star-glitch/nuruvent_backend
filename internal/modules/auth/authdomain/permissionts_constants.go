@@ -62,6 +62,7 @@ const (
 type Action string
 
 const (
+	// Standard actions
 	ActionCreate   Action = "create"
 	ActionRead     Action = "read"
 	ActionUpdate   Action = "update"
@@ -73,6 +74,26 @@ const (
 	ActionRefund   Action = "refund"   // Refund payments
 	ActionDownload Action = "download" // Download certificates/replays
 	ActionInvite   Action = "invite"   // Invite team members
+
+	// ============================================================
+	// ✅ NEW: OWN vs ALL Actions for Team Resources
+	// ============================================================
+	
+	// READ - ALL vs OWN
+	ActionReadAll  Action = "read_all"  // Read ALL resources in the team
+	ActionReadOwn  Action = "read_own"  // Read ONLY OWN resources in the team
+	
+	// UPDATE - ALL vs OWN
+	ActionUpdateAll Action = "update_all" // Update ALL resources in the team
+	ActionUpdateOwn Action = "update_own" // Update ONLY OWN resources in the team
+	
+	// DELETE - ALL vs OWN
+	ActionDeleteAll Action = "delete_all" // Delete ALL resources in the team
+	ActionDeleteOwn Action = "delete_own" // Delete ONLY OWN resources in the team
+	
+	// PUBLISH - ALL vs OWN
+	ActionPublishAll Action = "publish_all" // Publish ALL resources in the team
+	ActionPublishOwn Action = "publish_own" // Publish ONLY OWN resources in the team
 )
 
 // Domain constants
@@ -100,6 +121,62 @@ func (r Resource) String() string {
 
 func (a Action) String() string {
 	return string(a)
+}
+
+// ============================================================
+// ACTION HELPER METHODS
+// ============================================================
+
+// IsOwnAction checks if the action is an "own" action
+func (a Action) IsOwnAction() bool {
+	switch a {
+	case ActionReadOwn, ActionUpdateOwn, ActionDeleteOwn, ActionPublishOwn:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsAllAction checks if the action is an "all" action
+func (a Action) IsAllAction() bool {
+	switch a {
+	case ActionReadAll, ActionUpdateAll, ActionDeleteAll, ActionPublishAll:
+		return true
+	default:
+		return false
+	}
+}
+
+// GetOwnAction returns the corresponding "own" action for an action
+func (a Action) GetOwnAction() Action {
+	switch a {
+	case ActionRead:
+		return ActionReadOwn
+	case ActionUpdate:
+		return ActionUpdateOwn
+	case ActionDelete:
+		return ActionDeleteOwn
+	case ActionPublishAll:
+		return ActionPublishOwn
+	default:
+		return a
+	}
+}
+
+// GetAllAction returns the corresponding "all" action for an action
+func (a Action) GetAllAction() Action {
+	switch a {
+	case ActionRead:
+		return ActionReadAll
+	case ActionUpdate:
+		return ActionUpdateAll
+	case ActionDelete:
+		return ActionDeleteAll
+	case ActionPublishOwn:
+		return ActionPublishAll
+	default:
+		return a
+	}
 }
 
 // ============================================================
@@ -296,6 +373,14 @@ func GetAllActions() []Action {
 		ActionRefund,
 		ActionDownload,
 		ActionInvite,
+		ActionReadAll,
+		ActionReadOwn,
+		ActionUpdateAll,
+		ActionUpdateOwn,
+		ActionDeleteAll,
+		ActionDeleteOwn,
+		ActionPublishAll,
+		ActionPublishOwn,
 	}
 }
 
@@ -315,9 +400,9 @@ func DefaultPlatformPermissions() map[Role][]string {
 			"institution:read",
 			"institution:update",
 			"institution:delete",
-			"event:read",
-			"event:update",
-			"event:delete",
+			"event:read_all",
+			"event:update_all",
+			"event:delete_all",
 			"team:read",
 			"team:update",
 			"team:delete",
@@ -334,9 +419,10 @@ func DefaultTeamPermissions() map[Role][]string {
 	return map[Role][]string{
 		RoleAccountAdmin: {
 			"event:create",
-			"event:read",
-			"event:update",
-			"event:delete",
+			"event:read_all",
+			"event:update_all",
+			"event:delete_all",
+			"event:publish_all",
 			"event:manage",
 			"certificate:create",
 			"certificate:read",
@@ -366,22 +452,28 @@ func DefaultTeamPermissions() map[Role][]string {
 		},
 		RoleEventManager: {
 			"event:create",
-			"event:read",
-			"event:update",
-			"event:delete",
+			"event:read_all",
+			"event:update_all",
+			"event:delete_all",
+			"event:publish_all",
 			"attendee:read",
 			"attendee:update",
 			"attendee:export",
 			"certificate:create",
 			"certificate:read",
 			"certificate:issue",
+			"certificate:delete",
 			"payment:read",
 			"dashboard:read",
 			"team:read",
 		},
 		RoleTeamMember: {
-			"event:read",
+			"event:read_own",
+			"event:update_own",
+			"event:delete_own",
+			"event:publish_own",
 			"attendee:read",
+			"attendee:update_own",
 			"certificate:read",
 			"dashboard:read",
 			"team:read",

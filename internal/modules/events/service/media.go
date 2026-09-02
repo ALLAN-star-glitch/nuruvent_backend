@@ -204,27 +204,6 @@ func (s *eventService) BulkDeleteEventMedia(ctx context.Context, eventIDs []stri
 	return result, nil
 }
 
-// ============================================================
-// PRIVATE HELPER FUNCTIONS
-// ============================================================
-
-// getEventAndCheckUpdatePermission gets event and checks update permission
-func (s *eventService) getEventAndCheckUpdatePermission(ctx context.Context, eventID, userID string) (*domain.Event, error) {
-	event, err := s.repo.GetEventByID(ctx, eventID)
-	if err != nil {
-		return nil, err
-	}
-	if event == nil {
-		return nil, domain.ErrEventNotFound
-	}
-
-	institutionID := s.getInstitutionIDFromEvent(event)
-	if !s.permChecker.CanUpdateEvent(ctx, userID, institutionID) {
-		return nil, errors.New("insufficient permissions to update this event")
-	}
-
-	return event, nil
-}
 
 // uploadMedia uploads a file to the media service
 func (s *eventService) uploadMedia(ctx context.Context, cmd domain.UploadMediaCommand) (*domain.MediaInfo, error) {
@@ -253,4 +232,16 @@ func (s *eventService) clearEventImageURL(ctx context.Context, event *domain.Eve
 		return fmt.Errorf("failed to update event after image deletion: %w", err)
 	}
 	return nil
+}
+
+// ============================================================
+// DEPRECATED HELPERS (Keep for backward compatibility)
+// ============================================================
+
+// getInstitutionIDFromEvent is deprecated - use getScopeFromEvent
+func (s *eventService) getInstitutionIDFromEvent(event *domain.Event) string {
+	if event.InstitutionID != nil {
+		return *event.InstitutionID
+	}
+	return ""
 }

@@ -13,7 +13,7 @@ import (
 )
 
 // ============================================================
-// PUBLIC METHOD - Entry Point (30 lines)
+// PUBLIC METHOD - Entry Point
 // ============================================================
 
 // CreateEvent creates a published event
@@ -22,7 +22,7 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 	institutionID := s.extractInstitutionIDFromEvent(cmd)
 	s.logCreateEvent(cmd, institutionID)
 
-	// 2. Check permissions
+	// 2. Check permissions using the new Scope-based approach
 	if err := s.validateEventPermissions(ctx, cmd, institutionID); err != nil {
 		return nil, err
 	}
@@ -33,10 +33,10 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 	}
 
 	// 4. Generate identifiers
-	displayName, name, slug := s.generateEventIdentifiers(ctx, cmd.Name)
+	displayName, name, slug := s.generateEventIdentifiersForPublished(ctx, cmd.Name)
 
 	// 5. Validate event type
-	eventTypeID, err := s.validateEventType(ctx, cmd.EventTypeID)
+	eventTypeID, err := s.validateEventTypeForPublished(ctx, cmd.EventTypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -57,7 +57,7 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 }
 
 // ============================================================
-// HELPER FUNCTIONS (< 20 lines each)
+// HELPER FUNCTIONS
 // ============================================================
 
 // extractInstitutionIDFromEvent extracts institution ID from command
@@ -74,35 +74,46 @@ func (s *eventService) logCreateEvent(cmd CreateEventCommand, institutionID stri
 		cmd.Name, cmd.EventTypeID, institutionID, cmd.OwnerType)
 }
 
-// validateEventPermissions checks if user has permission to create event
+// validateEventPermissions checks if user has permission to create event using Scope
 func (s *eventService) validateEventPermissions(ctx context.Context, cmd CreateEventCommand, institutionID string) error {
+	var scope domain.Scope
+
 	if cmd.OwnerType == "personal" {
-		return s.validatePersonalEventPermission(ctx, cmd.CreatedBy)
-	}
-	return s.validateInstitutionEventPermission(ctx, cmd.CreatedBy, institutionID)
-}
+		if cmd.CreatedBy == "" {
+			return errors.New("user ID is required for personal events")
+		}
+		scope = domain.NewPersonalTeamScope(cmd.CreatedBy)
 
-// validatePersonalEventPermission checks personal event permissions
-func (s *eventService) validatePersonalEventPermission(ctx context.Context, userID string) error {
-	if userID == "" {
-		return errors.New("user ID is required for personal events")
+		allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, scope)
+		if err != nil {
+			return fmt.Errorf("permission check failed: %w", err)
+		}
+		if !allowed {
+			log.Printf("❌ Permission denied: user %s cannot create personal published events", cmd.CreatedBy)
+			return errors.New("insufficient permissions to create personal event")
+		}
+		return nil
 	}
-	if !s.permChecker.CanManagePersonalEvent(ctx, userID) {
-		log.Printf("❌ Permission denied: user %s cannot create personal events", userID)
-		return errors.New("insufficient permissions to create personal event")
-	}
-	return nil
-}
 
-// validateInstitutionEventPermission checks institution event permissions
-func (s *eventService) validateInstitutionEventPermission(ctx context.Context, userID, institutionID string) error {
+	// Institution event
 	if institutionID == "" {
 		return errors.New("institution ID is required for institution events")
 	}
-	if !s.permChecker.CanManageEvent(ctx, userID, institutionID) {
-		log.Printf("❌ Permission denied for user %s on institution %s", userID, institutionID)
+	if cmd.CreatedBy == "" {
+		return errors.New("user ID is required")
+	}
+
+	scope = domain.NewInstitutionTeamScope(institutionID)
+
+	allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, scope)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
+		log.Printf("❌ Permission denied: user %s cannot create events for institution %s", cmd.CreatedBy, institutionID)
 		return errors.New("insufficient permissions to create events for this institution")
 	}
+
 	return nil
 }
 
@@ -127,6 +138,64 @@ func (s *eventService) validatePublishedEventFields(cmd CreateEventCommand) erro
 		return errors.New("visibility is required (public, private, unlisted)")
 	}
 	return nil
+}
+
+//  generateEventIdentifiersForPublished creates name, display name, and slug from user input
+func (s *eventService) generateEventIdentifiersForPublished(ctx context.Context, rawInput string) (string, string, string) {
+	if rawInput == "" {
+		rawInput = "Untitled Event"
+	}
+	log.Printf("📝 User input: '%s'", rawInput)
+
+	displayName := s.validator.Sanitize.DisplayName(rawInput)
+	if displayName == "" {
+		displayName = "Untitled Event"
+	}
+	log.Printf("📝 Display name (preserved): '%s'", displayName)
+
+	name := s.validator.Sanitize.Name(rawInput)
+	if name == "" {
+		name = "untitled_event"
+	}
+	log.Printf("📝 Internal name (sanitized): '%s'", name)
+
+	baseSlug := s.validator.Sanitize.GenerateSlugFromName(rawInput)
+	if baseSlug == "" {
+		baseSlug = "untitled"
+	}
+	log.Printf("📝 Base slug: '%s'", baseSlug)
+
+	uniqueSlug := s.validator.Sanitize.GenerateUniqueSlug(
+		baseSlug,
+		"",
+		func(slug string, excludeID string) bool {
+			existing, err := s.repo.GetEventBySlug(ctx, slug)
+			if err != nil {
+				log.Printf("⚠️ Error checking slug existence: %v", err)
+				return false
+			}
+			return existing != nil
+		},
+	)
+	log.Printf("📝 Unique slug: '%s'", uniqueSlug)
+
+	return displayName, name, uniqueSlug
+}
+
+// ✅ validateEventTypeForPublished validates that the event type exists
+func (s *eventService) validateEventTypeForPublished(ctx context.Context, eventTypeID string) (string, error) {
+	log.Printf("🔍 Validating event type: %s", eventTypeID)
+	eventType, err := s.repo.GetEventTypeByID(ctx, eventTypeID)
+	if err != nil {
+		log.Printf("❌ Failed to get event type: %v", err)
+		return "", fmt.Errorf("failed to get event type: %w", err)
+	}
+	if eventType == nil {
+		log.Printf("❌ Event type not found: %s", eventTypeID)
+		return "", domain.ErrEventTypeNotFound
+	}
+	log.Printf("✅ Event type validated: %s", eventType.Name)
+	return eventType.ID, nil
 }
 
 // buildPublishedEvent creates and populates the domain entity
@@ -173,7 +242,6 @@ func (s *eventService) buildPublishedEvent(
 	return event, nil
 }
 
-
 // populatePublishedEventFields fills all non-schedule fields for published events
 func (s *eventService) populatePublishedEventFields(event *domain.Event, cmd CreateEventCommand) {
 	event.ShortDescription = cmd.ShortDescription
@@ -206,18 +274,14 @@ func (s *eventService) populatePublishedEventFields(event *domain.Event, cmd Cre
 	event.Capacity = cmd.Capacity
 	event.WaitlistEnabled = cmd.Waitlist
 
-	// ✅ FIX: Convert and set tickets
 	if len(cmd.Tickets) > 0 {
 		tickets, err := s.convertTickets(cmd.Tickets)
 		if err != nil {
-			// Log error but don't fail - validation will catch empty tickets
 			log.Printf("⚠️ Failed to convert tickets: %v", err)
 		} else {
 			event.Tickets = tickets
-			log.Printf("🔍 DEBUG: Set %d tickets on event", len(tickets))
+			log.Printf("🔍 Set %d tickets on event", len(tickets))
 		}
-	} else {
-		log.Printf("🔍 DEBUG: No tickets to set on event")
 	}
 
 	// Access & Privacy
@@ -252,7 +316,6 @@ func (s *eventService) populateEventSchedules(ctx context.Context, event *domain
 	}
 	event.Schedules = converted
 
-	// Set start date from first schedule
 	startDate, err := time.Parse("2006-01-02", schedules[0].StartDate)
 	if err == nil {
 		event.StartDate = startDate
@@ -275,13 +338,11 @@ func (s *eventService) setPublishedStatusAndSave(ctx context.Context, event *dom
 	event.EventStatusID = status.ID
 	log.Printf("✅ Status set: %s (%s)", status.Name, status.ID)
 
-	// Validate for publish
 	if err := event.ValidateForPublish(); err != nil {
 		log.Printf("❌ Publish validation failed: %v", err)
 		return err
 	}
 
-	// Publish event
 	if err := event.Publish(); err != nil {
 		log.Printf("❌ Failed to publish event: %v", err)
 		return err

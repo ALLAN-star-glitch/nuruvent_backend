@@ -28,28 +28,33 @@ type Service interface {
 	BulkDuplicateEvents(ctx context.Context, ids []string, cmd BulkDuplicateCommand) (*BulkDuplicateResult, error)
 
 	// ============================================================
-	// READ - Basic (No Creator Info)
+	// READ - One method to rule them all
 	// ============================================================
 
+	// GetEventByID retrieves a single event by ID
 	GetEventByID(ctx context.Context, id string) (*domain.Event, error)
+
+	// GetEventBySlug retrieves a single event by slug
 	GetEventBySlug(ctx context.Context, slug string) (*domain.Event, error)
+
+	// ListEvents is the PRIMARY query method - handles ALL list/filter scenarios
+	// Use TeamFilter to filter by team (personal or institution)
+	// Use EventTypeID, EventStatusID, CategoryID for additional filters
+	// Use IncludeCreator to populate creator info
+	// Use IncludeDeleted/OnlyDeleted for soft-delete filtering
 	ListEvents(ctx context.Context, filters ListEventsFilters) ([]*domain.Event, int64, error)
+
+	// GetEventsByType retrieves events by event type slug
 	GetEventsByType(ctx context.Context, eventTypeSlug string, page, pageSize int) ([]*domain.Event, int64, error)
-	GetEventsByInstitution(ctx context.Context, institutionID string, page, pageSize int) ([]*domain.Event, int64, error)
-	GetEventsByUser(ctx context.Context, userID string, page, pageSize int) ([]*domain.Event, int64, error)
-	GetUpcomingEvents(ctx context.Context, limit int) ([]*domain.Event, error)
-	GetPastEvents(ctx context.Context, limit int) ([]*domain.Event, error)
+
+	// GetUpcomingEvents is a convenience method for homepage/upcoming section
+	GetUpcomingEvents(ctx context.Context, team domain.TeamFilter, limit int) ([]*domain.Event, error)
+
+	// GetPastEvents is a convenience method for archives/past section
+	GetPastEvents(ctx context.Context, team domain.TeamFilter, limit int) ([]*domain.Event, error)
+
+	// SearchEvents for full-text search
 	SearchEvents(ctx context.Context, query string, filters SearchFilters) ([]*domain.Event, int64, error)
-
-	// ============================================================
-	// READ - With Creator Info
-	// ============================================================
-
-	GetUpcomingEventsWithCreator(ctx context.Context, limit int) ([]*domain.Event, error)
-	GetEventBySlugWithCreator(ctx context.Context, slug string) (*domain.Event, error)
-	GetEventByIDWithCreator(ctx context.Context, id string) (*domain.Event, error)
-	GetEventsByInstitutionWithCreator(ctx context.Context, institutionID string, page, pageSize int) ([]*domain.Event, int64, error)
-	GetEventsByUserWithCreator(ctx context.Context, userID string, page, pageSize int) ([]*domain.Event, int64, error)
 
 	// ============================================================
 	// UPDATE
@@ -69,11 +74,14 @@ type Service interface {
 	// DELETE - Bulk
 	// ============================================================
 
+	// DeleteEvents soft deletes multiple events by IDs
 	DeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error)
+
+	// PermanentlyDeleteEvents hard deletes multiple events by IDs
 	PermanentlyDeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error)
+
+	// RestoreEvents restores multiple soft-deleted events by IDs
 	RestoreEvents(ctx context.Context, ids []string, restoredBy string) (*BulkRestoreResult, error)
-	DeleteEventsByInstitution(ctx context.Context, institutionID string, deletedBy string) (*BulkDeleteResult, error)
-	PermanentlyDeleteEventsByInstitution(ctx context.Context, institutionID string, deletedBy string) (*BulkDeleteResult, error)
 
 	// ============================================================
 	// STATUS - Single
@@ -113,7 +121,7 @@ type Service interface {
 	BulkDeleteEventMedia(ctx context.Context, eventIDs []string, deletedBy string) (*BulkDeleteResult, error)
 
 	// ============================================================
-	// EVENT TYPES & STATUSES
+	// EVENT TYPES & STATUSES (Value Objects)
 	// ============================================================
 
 	GetEventTypes(ctx context.Context) ([]*domain.EventType, error)
@@ -125,21 +133,19 @@ type Service interface {
 // ============================================================
 
 type CreateDraftCommand struct {
-	// Required - User Input
-	Name string // User types this - raw input
-
-	// System fields (auto-generated)
-	CreatedBy     string
-	OwnerType     string // "personal" or "institution"
-	InstitutionID *string
-
-	// Optional Fields
+	// Basic Information
+	Name             string
 	Description      string
 	ShortDescription string
 	EventTypeID      string
 	CategoryID       *string
 	Tags             []string
 	Language         string
+
+	// Ownership - determines the scope
+	CreatedBy     string  // User ID (required)
+	OwnerType     string  // "personal" or "institution" (required)
+	InstitutionID *string // Set if OwnerType is "institution"
 
 	// Schedule
 	Schedules   []ScheduleInput
@@ -166,7 +172,7 @@ type CreateDraftCommand struct {
 	Tickets  []TicketInput
 
 	// Access & Privacy
-	Visibility    string // "public", "private", "unlisted"
+	Visibility    string
 	Password      *string
 	InviteOnly    bool
 	InvitedEmails []string
@@ -185,8 +191,6 @@ type CreateDraftCommand struct {
 
 	// SEO
 	SEO *SEOInput
-
-	ImageURL string 
 }
 
 // ============================================================
@@ -194,15 +198,19 @@ type CreateDraftCommand struct {
 // ============================================================
 
 type CreateEventCommand struct {
-	// Required - User Input
-	Name string // User types this - raw input
+	// Basic Information
+	Name             string
+	Description      string
+	ShortDescription string
+	EventTypeID      string
+	CategoryID       *string
+	Tags             []string
+	Language         string
 
-	// System fields (auto-generated)
-	CreatedBy     string
-	OwnerType     string // "personal" or "institution"
-	InstitutionID *string
-	EventTypeID   string
-	Description   string
+	// Ownership - determines the scope
+	CreatedBy     string  // User ID (required)
+	OwnerType     string  // "personal" or "institution" (required)
+	InstitutionID *string // Set if OwnerType is "institution"
 
 	// Schedule - Required for published events
 	Schedules   []ScheduleInput
@@ -229,14 +237,8 @@ type CreateEventCommand struct {
 	VenueCity          string
 	VenueCountry       string
 
-	// Optional Fields
-	ShortDescription string
-	CategoryID       *string
-	Tags             []string
-	Language         string
-
 	// Access & Privacy
-	Visibility    string // "public", "private", "unlisted"
+	Visibility    string
 	Password      *string
 	InviteOnly    bool
 	InvitedEmails []string
@@ -255,7 +257,6 @@ type CreateEventCommand struct {
 
 	// SEO
 	SEO *SEOInput
-
 }
 
 // ============================================================
@@ -268,7 +269,7 @@ type UpdateEventCommand struct {
 
 	// Basic Information (pointers for optional updates)
 	Name             *string
-	DisplayName      *string // If provided, update display name
+	DisplayName      *string
 	Description      *string
 	ShortDescription *string
 	EventTypeID      *string
@@ -321,8 +322,6 @@ type UpdateEventCommand struct {
 
 	// SEO
 	SEO *SEOInput
-
-	ImageURL string 
 }
 
 // ============================================================
@@ -365,31 +364,76 @@ type UploadCertificateCommand struct {
 // FILTERS
 // ============================================================
 
+// ListEventsFilters provides comprehensive filtering for ListEvents
 type ListEventsFilters struct {
-	InstitutionID  string // Filter by institution
-	UserID         string // Filter by user (creator)
-	EventTypeID    string
-	EventStatusID  string
-	CategoryID     string // Filter by category
+	// TeamFilter filters events by team (personal or institution)
+	Team domain.TeamFilter
+
+	// UserID filters events by the creator (created_by)
+	UserID string
+
+	// EventTypeID filters events by their type
+	EventTypeID string
+
+	// EventStatusID filters events by their status
+	EventStatusID string
+
+	// CategoryID filters events by their category
+	CategoryID string
+
+	// IncludeDeleted controls whether soft-deleted events are included
 	IncludeDeleted bool
-	OnlyDeleted    bool
-	Limit          int
-	Offset         int
-	SortBy         string // Field to sort by (e.g., "created_at", "start_date", "name")
-	SortOrder      string // "asc" or "desc"
-	Visibility     string // ✅ ADDED: Filter by visibility ("public", "private", "unlisted")
+
+	// OnlyDeleted controls whether ONLY soft-deleted events are returned
+	OnlyDeleted bool
+
+	// IncludeCreator controls whether creator user info is populated
+	IncludeCreator bool
+
+	// Limit controls the maximum number of events returned
+	Limit int
+
+	// Offset controls pagination offset
+	Offset int
+
+	// SortBy specifies the field to sort by
+	SortBy string
+
+	// SortOrder specifies the sort direction
+	SortOrder string
+
+	// Visibility filters events by their visibility level
+	Visibility string
 }
 
+// SearchFilters provides filtering for the SearchEvents method
 type SearchFilters struct {
-	InstitutionID  string // Filter by institution
-	UserID         string // Filter by user (creator)
-	EventTypeID    string
-	CategoryID     string // Filter by category
+	// TeamFilter filters search results by team
+	Team domain.TeamFilter
+
+	// UserID filters search results by creator
+	UserID string
+
+	// EventTypeID filters search results by event type
+	EventTypeID string
+
+	// CategoryID filters search results by category
+	CategoryID string
+
+	// IncludeDeleted controls whether soft-deleted events are included in search
 	IncludeDeleted bool
-	OnlyDeleted    bool
-	Limit          int
-	Offset         int
-	Visibility     string // ✅ ADDED: Filter by visibility ("public", "private", "unlisted")
+
+	// OnlyDeleted controls whether ONLY soft-deleted events are returned in search
+	OnlyDeleted bool
+
+	// Limit controls the maximum number of search results
+	Limit int
+
+	// Offset controls pagination offset for search results
+	Offset int
+
+	// Visibility filters search results by visibility level
+	Visibility string
 }
 
 // ============================================================
@@ -397,23 +441,23 @@ type SearchFilters struct {
 // ============================================================
 
 type ScheduleInput struct {
-	ID           *string // For updates
-	StartDate    string
-	EndDate      *string
-	StartTime    string
-	EndTime      string
-	Timezone     string
-	SessionName  string
+	ID            *string
+	StartDate     string
+	EndDate       *string
+	StartTime     string
+	EndTime       string
+	Timezone      string
+	SessionName   string
 	SessionNumber int
-	Location     string
-	IsVirtual    bool
-	ZoomLink     string
-	MeetLink     string
-	MaxAttendees *int
+	Location      string
+	IsVirtual     bool
+	ZoomLink      string
+	MeetLink      string
+	MaxAttendees  *int
 }
 
 type RecurrenceInput struct {
-	Pattern     string // "daily", "weekly", "monthly", "custom"
+	Pattern     string
 	Interval    int
 	DaysOfWeek  []string
 	DayOfMonth  *int
@@ -423,7 +467,7 @@ type RecurrenceInput struct {
 }
 
 type TicketInput struct {
-	ID                 *string // For updates
+	ID                 *string
 	TicketTypeID       string
 	Name               string
 	Description        string
@@ -436,7 +480,7 @@ type TicketInput struct {
 }
 
 type SpeakerInput struct {
-	ID          *string // For updates
+	ID          *string
 	Name        string
 	Title       string
 	Bio         string
@@ -447,30 +491,30 @@ type SpeakerInput struct {
 }
 
 type MaterialInput struct {
-	ID          *string // For updates
-	Title       string
-	MaterialTypeID string // "pdf", "video", "link", "document"
-	URL         string
-	Description string
-	IsPreEvent  bool
-	SortOrder   int
+	ID             *string
+	Title          string
+	MaterialTypeID string
+	URL            string
+	Description    string
+	IsPreEvent     bool
+	SortOrder      int
 }
 
 type SEOInput struct {
-	MetaTitle       string
-	MetaDescription string
-	MetaKeywords    []string
-	CanonicalURL    string
-	Robots          string
-	NoIndex         bool
-	OGTitle         string
-	OGDescription   string
-	OGImageURL      string
-	OGType          string
-	TwitterCard     string
-	TwitterTitle    string
+	MetaTitle          string
+	MetaDescription    string
+	MetaKeywords       []string
+	CanonicalURL       string
+	Robots             string
+	NoIndex            bool
+	OGTitle            string
+	OGDescription      string
+	OGImageURL         string
+	OGType             string
+	TwitterCard        string
+	TwitterTitle       string
 	TwitterDescription string
-	TwitterImageURL string
+	TwitterImageURL    string
 }
 
 // ============================================================

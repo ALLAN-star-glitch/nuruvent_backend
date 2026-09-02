@@ -26,7 +26,7 @@ func (s *eventService) DuplicateEvent(ctx context.Context, id string, cmd Duplic
 		return nil, err
 	}
 
-	// 2. Check permissions
+	// 2. Check permissions using Scope
 	if err := s.checkDuplicatePermission(ctx, original); err != nil {
 		return nil, err
 	}
@@ -106,14 +106,20 @@ func (s *eventService) getOriginalEvent(ctx context.Context, id string) (*domain
 	return original, nil
 }
 
-// checkDuplicatePermission checks if user has permission to duplicate
+// checkDuplicatePermission checks if user has permission to duplicate using Scope
 func (s *eventService) checkDuplicatePermission(ctx context.Context, original *domain.Event) error {
 	// TODO: Get user ID from context
 	userID := "" // Will need to be passed in or extracted from context
-	
-	institutionID := s.getInstitutionIDFromEvent(original)
-	
-	if !s.permChecker.CanManageEvent(ctx, userID, institutionID) {
+
+	// Create scope based on event
+	scope := s.getScopeFromEvent(original)
+
+	// Check if user can manage events in this scope
+	allowed, err := s.permChecker.CanManageEvent(ctx, userID, scope)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
 		return errors.New("insufficient permissions to duplicate this event")
 	}
 	return nil

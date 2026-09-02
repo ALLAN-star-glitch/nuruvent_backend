@@ -288,6 +288,33 @@ type SEORequest struct {
 	TwitterImageURL string   `json:"twitter_image_url,omitempty"`
 }
 
+
+type ListEventsRequest struct {
+    // Team Filter (from query params)
+    TeamID   string `json:"team_id" query:"team_id"`
+    TeamType string `json:"team_type" query:"team_type"` // "personal" or "institution"
+    
+    // Event Filters
+    EventTypeID    string `json:"event_type_id" query:"event_type_id"`
+    EventStatusID  string `json:"event_status_id" query:"event_status_id"`
+    CategoryID     string `json:"category_id" query:"category_id"`
+    UserID         string `json:"user_id" query:"user_id"` // Filter by creator
+    Visibility     string `json:"visibility" query:"visibility"` // public, private, unlisted
+    
+    // Deletion Filters
+    IncludeDeleted bool `json:"include_deleted" query:"include_deleted"`
+    OnlyDeleted    bool `json:"only_deleted" query:"only_deleted"`
+    IncludeCreator bool `json:"include_creator" query:"include_creator"`
+    
+    // Pagination
+    Limit  int `json:"limit" query:"limit"`
+    Offset int `json:"offset" query:"offset"`
+    
+    // Sorting
+    SortBy    string `json:"sort_by" query:"sort_by"`
+    SortOrder string `json:"sort_order" query:"sort_order"` // asc, desc
+}
+
 // ============================================================
 // BULK REQUEST TYPES
 // ============================================================

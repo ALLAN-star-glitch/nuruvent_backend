@@ -12,181 +12,160 @@ func (h *EventHandler) RegisterRoutes(
 	authzMiddleware fiber.Handler,
 ) {
 	// ============================================================
-	// PUBLIC ROUTES (No auth required)
+	// 1. PUBLIC ROUTES - Accessible without authentication
+	//    Purpose: Public event discovery, SEO, sharing, and metadata
 	// ============================================================
 	public := router.Group("/events")
 	{
-		// ✅ MOST SPECIFIC FIRST: Search
-		public.Get("/search", h.SearchEvents)
-		
-		// ✅ Static routes (no parameters)
-		public.Get("/upcoming", h.GetUpcomingEvents)
-		public.Get("/past", h.GetPastEvents)
-		public.Get("/types", h.GetEventTypes)
-		public.Get("/statuses", h.GetEventStatuses)
+		// Unified event listing with filters (team_id, team_type, status, etc.)
+		// Used by: Team switcher, advanced search, public listings
 		public.Get("/", h.ListEvents)
-		
-		// ✅ With creator info - require auth
-		public.Get("/upcoming/with-creator", authMiddleware, h.GetUpcomingEventsWithCreator)
-		
-		// ✅ Routes with specific parameter patterns
-		public.Get("/slug/:slug", h.GetEventBySlug)
-		public.Get("/slug/:slug/with-creator", authMiddleware, h.GetEventBySlugWithCreator)
-		
-		// ✅ Type routes
-		public.Get("/type/:type", h.GetEventsByType)
-		
-		// ✅ LEAST SPECIFIC: ID routes (MUST BE LAST!)
-		public.Get("/:id", h.GetEvent)
-		public.Get("/:id/with-creator", authMiddleware, h.GetEventByIDWithCreator)
+
+		// Full-text search across events
+		public.Get("/search", h.SearchEvents)
+
+		// Convenience endpoints for common queries
+		public.Get("/upcoming", h.GetUpcomingEvents) // Events happening soon
+		public.Get("/past", h.GetPastEvents)         // Events that have ended
+
+		// Reference data (no team/scope needed)
+		public.Get("/types", h.GetEventTypes)       // All event types (workshop, webinar, etc.)
+		public.Get("/statuses", h.GetEventStatuses) // All statuses (draft, published, etc.)
+
+		// Single event access (public visibility)
+		public.Get("/slug/:slug", h.GetEventBySlug) // SEO-friendly URLs
+		public.Get("/type/:type", h.GetEventsByType) // All events of a specific type
+
+		// MUST BE LAST - catches any /events/{id} requests
+		public.Get("/:id", h.GetEvent) // Get event by UUID
 	}
 
 	// ============================================================
-	// PERSONAL ROUTES - User's own personal team events
+	// 2. PERSONAL TEAM ROUTES - User's own team
+	//    Purpose: Full CRUD operations for user's personal team
+	//    Scope: personal:team:{user_id}
 	// ============================================================
 	personal := router.Group("/users/me/events")
-	personal.Use(authMiddleware)
-	personal.Use(authzMiddleware)
+	personal.Use(authMiddleware)  // User must be logged in
+	personal.Use(authzMiddleware) // User must have permission
 	{
-		// READ
-		personal.Get("/", h.GetMyEvents)
-		personal.Get("/with-creator", h.GetMyEventsWithCreator)
-		
-		// CREATE
-		personal.Post("/draft", h.CreatePersonalDraft)
-		personal.Post("/", h.CreatePersonalEvent)
-		
-		// ✅ BULK OPERATIONS (MUST come before /:id)
-		personal.Delete("/bulk", h.BulkDeleteEvents)
-		personal.Delete("/bulk/permanent", h.BulkPermanentlyDeleteEvents)
-		personal.Post("/bulk/restore", h.BulkRestoreEvents)
-		personal.Post("/bulk/publish", h.BulkPublishEvents)
-		personal.Post("/bulk/cancel", h.BulkCancelEvents)
-		personal.Post("/bulk/complete", h.BulkCompleteEvents)
-		personal.Post("/bulk/duplicate", h.BulkDuplicateEvents)
-		personal.Delete("/bulk/media", h.BulkDeleteEventMedia)
-		
-		// ✅ MEDIA (MUST come before /:id)
-		personal.Post("/:eventId/image", h.UploadEventImage)
-		personal.Post("/:eventId/certificate", h.UploadCertificateTemplate)
-		personal.Delete("/:eventId/image", h.DeleteEventImage)
-		personal.Delete("/:eventId/certificate", h.DeleteEventCertificate)
-		personal.Delete("/:eventId/media", h.DeleteAllEventMedia)
-		
-		// ✅ SINGLE EVENT OPERATIONS (MUST be LAST)
-		personal.Put("/:id", h.UpdateEvent)
-		personal.Delete("/:id", h.DeleteEvent)
-		personal.Delete("/:id/permanent", h.PermanentlyDeleteEvent)
-		personal.Post("/:id/restore", h.RestoreEvent)
-		personal.Post("/:id/publish", h.PublishEvent)
-		personal.Post("/:id/cancel", h.CancelEvent)
-		personal.Post("/:id/complete", h.CompleteEvent)
-		personal.Post("/:id/duplicate", h.DuplicateEvent)
+		// ---- READ ----
+		personal.Get("/", h.GetMyEvents)                      // List personal team events
+		personal.Get("/with-creator", h.GetMyEventsWithCreator) // Include creator details
+
+		// ---- CREATE ----
+		personal.Post("/", h.CreatePersonalEvent)   // Create published event
+		personal.Post("/draft", h.CreatePersonalDraft) // Create draft event
+
+		// ---- BULK OPERATIONS ----
+		personal.Delete("/bulk", h.BulkDeleteEvents)                  // Soft delete multiple events
+		personal.Delete("/bulk/permanent", h.BulkPermanentlyDeleteEvents) // Hard delete
+		personal.Post("/bulk/restore", h.BulkRestoreEvents)           // Restore soft-deleted
+		personal.Post("/bulk/publish", h.BulkPublishEvents)           // Publish multiple
+		personal.Post("/bulk/cancel", h.BulkCancelEvents)             // Cancel multiple
+		personal.Post("/bulk/complete", h.BulkCompleteEvents)         // Complete multiple
+		personal.Post("/bulk/duplicate", h.BulkDuplicateEvents)       // Duplicate multiple
+		personal.Delete("/bulk/media", h.BulkDeleteEventMedia)        // Delete media for multiple
+
+		// ---- MEDIA OPERATIONS ----
+		personal.Post("/:eventId/image", h.UploadEventImage)           // Upload event image
+		personal.Post("/:eventId/certificate", h.UploadCertificateTemplate) // Upload cert template
+		personal.Delete("/:eventId/image", h.DeleteEventImage)         // Delete event image
+		personal.Delete("/:eventId/certificate", h.DeleteEventCertificate) // Delete cert
+		personal.Delete("/:eventId/media", h.DeleteAllEventMedia)      // Delete all media
+
+		// ---- SINGLE EVENT OPERATIONS ----
+		personal.Put("/:id", h.UpdateEvent)                   // Update event
+		personal.Delete("/:id", h.DeleteEvent)                // Soft delete
+		personal.Delete("/:id/permanent", h.PermanentlyDeleteEvent) // Hard delete
+		personal.Post("/:id/restore", h.RestoreEvent)         // Restore
+		personal.Post("/:id/publish", h.PublishEvent)         // Publish
+		personal.Post("/:id/cancel", h.CancelEvent)           // Cancel
+		personal.Post("/:id/complete", h.CompleteEvent)       // Complete
+		personal.Post("/:id/duplicate", h.DuplicateEvent)     // Duplicate
 	}
 
 	// ============================================================
-	// USER ROUTES - View events by specific user's personal team
+	// 3. INSTITUTION TEAM ROUTES - Institution's team
+	//    Purpose: Full CRUD operations for institution team
+	//    Scope: institution:team:{institution_id}
+	//    Same operations as personal team, but for institution
 	// ============================================================
-	userRoutes := router.Group("/users/:userId/events")
-	userRoutes.Use(authMiddleware)
-	userRoutes.Use(authzMiddleware)
+	institution := router.Group("/institutions/:institutionId/events")
+	institution.Use(authMiddleware)
+	institution.Use(authzMiddleware)
 	{
-		userRoutes.Get("/with-creator", h.GetEventsByUserWithCreator)
+		// ---- READ ----
+		institution.Get("/", h.GetEventsByInstitution)
+		institution.Get("/with-creator", h.GetEventsByInstitutionWithCreator)
+
+		// ---- CREATE ----
+		institution.Post("/", h.CreateEvent)
+		institution.Post("/draft", h.CreateDraft)
+
+		// ---- BULK OPERATIONS ----
+		institution.Delete("/bulk", h.BulkDeleteEvents)
+		institution.Delete("/bulk/permanent", h.BulkPermanentlyDeleteEvents)
+		institution.Post("/bulk/restore", h.BulkRestoreEvents)
+		institution.Post("/bulk/publish", h.BulkPublishEvents)
+		institution.Post("/bulk/cancel", h.BulkCancelEvents)
+		institution.Post("/bulk/complete", h.BulkCompleteEvents)
+		institution.Post("/bulk/duplicate", h.BulkDuplicateEvents)
+		institution.Delete("/bulk/media", h.BulkDeleteEventMedia)
+
+		// ---- MEDIA OPERATIONS ----
+		institution.Post("/:eventId/image", h.UploadEventImage)
+		institution.Post("/:eventId/certificate", h.UploadCertificateTemplate)
+		institution.Delete("/:eventId/image", h.DeleteEventImage)
+		institution.Delete("/:eventId/certificate", h.DeleteEventCertificate)
+		institution.Delete("/:eventId/media", h.DeleteAllEventMedia)
+
+		// ---- SINGLE EVENT OPERATIONS ----
+		institution.Put("/:id", h.UpdateEvent)
+		institution.Delete("/:id", h.DeleteEvent)
+		institution.Delete("/:id/permanent", h.PermanentlyDeleteEvent)
+		institution.Post("/:id/restore", h.RestoreEvent)
+		institution.Post("/:id/publish", h.PublishEvent)
+		institution.Post("/:id/cancel", h.CancelEvent)
+		institution.Post("/:id/complete", h.CompleteEvent)
+		institution.Post("/:id/duplicate", h.DuplicateEvent)
 	}
 
 	// ============================================================
-	// INSTITUTION ROUTES - Public viewing (no auth required for basic info)
+	// 4. BULK OPERATIONS - Cross-team bulk actions
+	//    Purpose: Perform bulk operations on events across any team
+	//    Used when user has permission across multiple teams
 	// ============================================================
-	institutionRoutes := router.Group("/institutions/:institutionId/events")
+	bulk := router.Group("/events/bulk")
+	bulk.Use(authMiddleware)
+	bulk.Use(authzMiddleware)
 	{
-		institutionRoutes.Get("/", h.GetEventsByInstitution)
-		institutionRoutes.Get("/with-creator", authMiddleware, h.GetEventsByInstitutionWithCreator)
+		bulk.Delete("/", h.BulkDeleteEvents)                  // Soft delete
+		bulk.Delete("/permanent", h.BulkPermanentlyDeleteEvents) // Hard delete
+		bulk.Post("/restore", h.BulkRestoreEvents)           // Restore
+		bulk.Post("/publish", h.BulkPublishEvents)           // Publish
+		bulk.Post("/cancel", h.BulkCancelEvents)             // Cancel
+		bulk.Post("/complete", h.BulkCompleteEvents)         // Complete
+		bulk.Post("/duplicate", h.BulkDuplicateEvents)       // Duplicate
+		bulk.Delete("/media", h.BulkDeleteEventMedia)        // Delete media
 	}
 
 	// ============================================================
-	// INSTITUTION MANAGEMENT - Protected (Auth + Authz required)
-	// FULL CRUD - Same as personal team!
+	// 5. SINGLE EVENT OPERATIONS - Cross-team single event actions
+	//    Purpose: Perform operations on a single event regardless of team
+	//    Used when user has permission to manage the specific event
 	// ============================================================
-	institutionManagement := router.Group("/institutions/:institutionId/events")
-	institutionManagement.Use(authMiddleware)
-	institutionManagement.Use(authzMiddleware)
+	single := router.Group("/events")
+	single.Use(authMiddleware)
+	single.Use(authzMiddleware)
 	{
-		// READ
-		institutionManagement.Get("/", h.GetEventsByInstitution)
-		institutionManagement.Get("/with-creator", h.GetEventsByInstitutionWithCreator)
-		
-		// CREATE
-		institutionManagement.Post("/draft", h.CreateDraft)
-		institutionManagement.Post("/", h.CreateEvent)
-		
-		// ✅ BULK OPERATIONS (MUST come before /:id)
-		institutionManagement.Delete("/bulk", h.BulkDeleteEvents)
-		institutionManagement.Delete("/bulk/permanent", h.BulkPermanentlyDeleteEvents)
-		institutionManagement.Post("/bulk/restore", h.BulkRestoreEvents)
-		institutionManagement.Post("/bulk/publish", h.BulkPublishEvents)
-		institutionManagement.Post("/bulk/cancel", h.BulkCancelEvents)
-		institutionManagement.Post("/bulk/complete", h.BulkCompleteEvents)
-		institutionManagement.Post("/bulk/duplicate", h.BulkDuplicateEvents)
-		institutionManagement.Delete("/bulk/media", h.BulkDeleteEventMedia)
-		
-		// ✅ MEDIA (MUST come before /:id)
-		institutionManagement.Post("/:eventId/image", h.UploadEventImage)
-		institutionManagement.Post("/:eventId/certificate", h.UploadCertificateTemplate)
-		institutionManagement.Delete("/:eventId/image", h.DeleteEventImage)
-		institutionManagement.Delete("/:eventId/certificate", h.DeleteEventCertificate)
-		institutionManagement.Delete("/:eventId/media", h.DeleteAllEventMedia)
-		
-		// ✅ SINGLE EVENT OPERATIONS (MUST be LAST)
-		institutionManagement.Put("/:id", h.UpdateEvent)
-		institutionManagement.Delete("/:id", h.DeleteEvent)
-		institutionManagement.Delete("/:id/permanent", h.PermanentlyDeleteEvent)
-		institutionManagement.Post("/:id/restore", h.RestoreEvent)
-		institutionManagement.Post("/:id/publish", h.PublishEvent)
-		institutionManagement.Post("/:id/cancel", h.CancelEvent)
-		institutionManagement.Post("/:id/complete", h.CompleteEvent)
-		institutionManagement.Post("/:id/duplicate", h.DuplicateEvent)
-	}
-
-	// ============================================================
-	// BULK OPERATIONS - For any team (Auth + Authz required)
-	// ============================================================
-	bulkRoutes := router.Group("/events/bulk")
-	bulkRoutes.Use(authMiddleware)
-	bulkRoutes.Use(authzMiddleware)
-	{
-		bulkRoutes.Delete("/", h.BulkDeleteEvents)
-		bulkRoutes.Delete("/permanent", h.BulkPermanentlyDeleteEvents)
-		bulkRoutes.Post("/restore", h.BulkRestoreEvents)
-		bulkRoutes.Post("/publish", h.BulkPublishEvents)
-		bulkRoutes.Post("/cancel", h.BulkCancelEvents)
-		bulkRoutes.Post("/complete", h.BulkCompleteEvents)
-		bulkRoutes.Post("/duplicate", h.BulkDuplicateEvents)
-	}
-
-	// ============================================================
-	// SINGLE EVENT MANAGEMENT - For any team (Auth + Authz required)
-	// ============================================================
-	eventRoutes := router.Group("/events")
-	eventRoutes.Use(authMiddleware)
-	eventRoutes.Use(authzMiddleware)
-	{
-		// ✅ BULK OPERATIONS (MUST come before /:id)
-		eventRoutes.Delete("/bulk", h.BulkDeleteEvents)
-		eventRoutes.Delete("/bulk/permanent", h.BulkPermanentlyDeleteEvents)
-		eventRoutes.Post("/bulk/restore", h.BulkRestoreEvents)
-		eventRoutes.Post("/bulk/publish", h.BulkPublishEvents)
-		eventRoutes.Post("/bulk/cancel", h.BulkCancelEvents)
-		eventRoutes.Post("/bulk/complete", h.BulkCompleteEvents)
-		eventRoutes.Post("/bulk/duplicate", h.BulkDuplicateEvents)
-		
-		// ✅ SINGLE EVENT OPERATIONS (MUST be LAST)
-		eventRoutes.Put("/:id", h.UpdateEvent)
-		eventRoutes.Delete("/:id", h.DeleteEvent)
-		eventRoutes.Delete("/:id/permanent", h.PermanentlyDeleteEvent)
-		eventRoutes.Post("/:id/restore", h.RestoreEvent)
-		eventRoutes.Post("/:id/publish", h.PublishEvent)
-		eventRoutes.Post("/:id/cancel", h.CancelEvent)
-		eventRoutes.Post("/:id/complete", h.CompleteEvent)
-		eventRoutes.Post("/:id/duplicate", h.DuplicateEvent)
+		single.Put("/:id", h.UpdateEvent)                   // Update
+		single.Delete("/:id", h.DeleteEvent)                // Soft delete
+		single.Delete("/:id/permanent", h.PermanentlyDeleteEvent) // Hard delete
+		single.Post("/:id/restore", h.RestoreEvent)         // Restore
+		single.Post("/:id/publish", h.PublishEvent)         // Publish
+		single.Post("/:id/cancel", h.CancelEvent)           // Cancel
+		single.Post("/:id/complete", h.CompleteEvent)       // Complete
+		single.Post("/:id/duplicate", h.DuplicateEvent)     // Duplicate
 	}
 }

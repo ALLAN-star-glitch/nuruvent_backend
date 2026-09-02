@@ -11,52 +11,123 @@ import "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/auth
 // GetPersonalTeamPolicies returns all policies for a personal team
 // domain should be "personal:team:{user_id}"
 func GetPersonalTeamPolicies(domain string) [][]string {
-	role := authdomain.RoleAccountAdmin.String()
+	accountAdmin := authdomain.RoleAccountAdmin.String()
+	eventManager := authdomain.RoleEventManager.String()
+	teamMember := authdomain.RoleTeamMember.String()
 
-	return [][]string{
-		// Event permissions
-		{role, domain, "event", "create"},
-		{role, domain, "event", "read"},
-		{role, domain, "event", "update"},
-		{role, domain, "event", "delete"},
-		{role, domain, "event", "manage"},
+	var policies [][]string
+
+	// ============================================================
+	// ACCOUNT ADMIN - Full access (ALL)
+	// ============================================================
+	accountAdminPolicies := [][]string{
+		// Event permissions - ALL
+		{accountAdmin, domain, "event", "create"},
+		{accountAdmin, domain, "event", "read_all"},
+		{accountAdmin, domain, "event", "update_all"},
+		{accountAdmin, domain, "event", "delete_all"},
+		{accountAdmin, domain, "event", "publish_all"},
+		{accountAdmin, domain, "event", "manage"},
 
 		// Certificate permissions
-		{role, domain, "certificate", "create"},
-		{role, domain, "certificate", "read"},
-		{role, domain, "certificate", "update"},
-		{role, domain, "certificate", "issue"},
-		{role, domain, "certificate", "delete"},
+		{accountAdmin, domain, "certificate", "create"},
+		{accountAdmin, domain, "certificate", "read"},
+		{accountAdmin, domain, "certificate", "update"},
+		{accountAdmin, domain, "certificate", "issue"},
+		{accountAdmin, domain, "certificate", "delete"},
 
 		// Attendee permissions
-		{role, domain, "attendee", "read"},
-		{role, domain, "attendee", "update"},
-		{role, domain, "attendee", "export"},
+		{accountAdmin, domain, "attendee", "read"},
+		{accountAdmin, domain, "attendee", "update"},
+		{accountAdmin, domain, "attendee", "export"},
 
 		// Payment permissions
-		{role, domain, "payment", "read"},
-		{role, domain, "payment", "create"},
-		{role, domain, "payment", "refund"},
+		{accountAdmin, domain, "payment", "read"},
+		{accountAdmin, domain, "payment", "create"},
+		{accountAdmin, domain, "payment", "refund"},
 
 		// Member permissions
-		{role, domain, "member", "create"},
-		{role, domain, "member", "read"},
-		{role, domain, "member", "update"},
-		{role, domain, "member", "delete"},
-		{role, domain, "member", "invite"},
+		{accountAdmin, domain, "member", "create"},
+		{accountAdmin, domain, "member", "read"},
+		{accountAdmin, domain, "member", "update"},
+		{accountAdmin, domain, "member", "delete"},
+		{accountAdmin, domain, "member", "invite"},
 
 		// Institution permissions (limited for personal)
-		{role, domain, "institution", "read"},
+		{accountAdmin, domain, "institution", "read"},
 
 		// Team permissions
-		{role, domain, "team", "read"},
-		{role, domain, "team", "update"},
+		{accountAdmin, domain, "team", "read"},
+		{accountAdmin, domain, "team", "update"},
+		{accountAdmin, domain, "team", "delete"},
 
 		// Dashboard and profile
-		{role, domain, "dashboard", "read"},
-		{role, domain, "profile", "read"},
-		{role, domain, "profile", "update"},
+		{accountAdmin, domain, "dashboard", "read"},
+		{accountAdmin, domain, "profile", "read"},
+		{accountAdmin, domain, "profile", "update"},
 	}
+	policies = append(policies, accountAdminPolicies...)
+
+	// ============================================================
+	// EVENT MANAGER - Full event management (ALL)
+	// ============================================================
+	eventManagerPolicies := [][]string{
+		// Event permissions - ALL
+		{eventManager, domain, "event", "create"},
+		{eventManager, domain, "event", "read_all"},
+		{eventManager, domain, "event", "update_all"},
+		{eventManager, domain, "event", "delete_all"},
+		{eventManager, domain, "event", "publish_all"},
+		{eventManager, domain, "event", "manage"},
+
+		// Attendee permissions
+		{eventManager, domain, "attendee", "read"},
+		{eventManager, domain, "attendee", "update"},
+		{eventManager, domain, "attendee", "export"},
+
+		// Certificate permissions
+		{eventManager, domain, "certificate", "create"},
+		{eventManager, domain, "certificate", "read"},
+		{eventManager, domain, "certificate", "issue"},
+		{eventManager, domain, "certificate", "delete"},
+
+		// Payment - Read only
+		{eventManager, domain, "payment", "read"},
+
+		// Dashboard
+		{eventManager, domain, "dashboard", "read"},
+
+		// Team - Read only
+		{eventManager, domain, "team", "read"},
+	}
+	policies = append(policies, eventManagerPolicies...)
+
+	// ============================================================
+	// TEAM MEMBER - Own access only (OWN)
+	// ============================================================
+	teamMemberPolicies := [][]string{
+		// Event permissions - OWN only
+		{teamMember, domain, "event", "read_own"},
+		{teamMember, domain, "event", "update_own"},
+		{teamMember, domain, "event", "delete_own"},
+		{teamMember, domain, "event", "publish_own"},
+
+		// Attendee permissions
+		{teamMember, domain, "attendee", "read"},
+		{teamMember, domain, "attendee", "update_own"},
+
+		// Certificate - Read only
+		{teamMember, domain, "certificate", "read"},
+
+		// Dashboard
+		{teamMember, domain, "dashboard", "read"},
+
+		// Team - Read only
+		{teamMember, domain, "team", "read"},
+	}
+	policies = append(policies, teamMemberPolicies...)
+
+	return policies
 }
 
 // ============================================================
@@ -66,56 +137,126 @@ func GetPersonalTeamPolicies(domain string) [][]string {
 // GetInstitutionTeamPolicies returns all policies for an institution team
 // domain should be "institution:team:{institution_id}"
 func GetInstitutionTeamPolicies(domain string) [][]string {
-	role := authdomain.RoleAccountAdmin.String()
+	accountAdmin := authdomain.RoleAccountAdmin.String()
+	eventManager := authdomain.RoleEventManager.String()
+	teamMember := authdomain.RoleTeamMember.String()
 
-	return [][]string{
-		// Event permissions
-		{role, domain, "event", "create"},
-		{role, domain, "event", "read"},
-		{role, domain, "event", "update"},
-		{role, domain, "event", "delete"},
-		{role, domain, "event", "manage"},
+	var policies [][]string
+
+	// ============================================================
+	// ACCOUNT ADMIN - Full access (ALL)
+	// ============================================================
+	accountAdminPolicies := [][]string{
+		// Event permissions - ALL
+		{accountAdmin, domain, "event", "create"},
+		{accountAdmin, domain, "event", "read_all"},
+		{accountAdmin, domain, "event", "update_all"},
+		{accountAdmin, domain, "event", "delete_all"},
+		{accountAdmin, domain, "event", "publish_all"},
+		{accountAdmin, domain, "event", "manage"},
 
 		// Certificate permissions
-		{role, domain, "certificate", "create"},
-		{role, domain, "certificate", "read"},
-		{role, domain, "certificate", "update"},
-		{role, domain, "certificate", "issue"},
-		{role, domain, "certificate", "delete"},
+		{accountAdmin, domain, "certificate", "create"},
+		{accountAdmin, domain, "certificate", "read"},
+		{accountAdmin, domain, "certificate", "update"},
+		{accountAdmin, domain, "certificate", "issue"},
+		{accountAdmin, domain, "certificate", "delete"},
 
 		// Attendee permissions
-		{role, domain, "attendee", "read"},
-		{role, domain, "attendee", "update"},
-		{role, domain, "attendee", "export"},
+		{accountAdmin, domain, "attendee", "read"},
+		{accountAdmin, domain, "attendee", "update"},
+		{accountAdmin, domain, "attendee", "export"},
 
 		// Payment permissions
-		{role, domain, "payment", "read"},
-		{role, domain, "payment", "create"},
-		{role, domain, "payment", "refund"},
+		{accountAdmin, domain, "payment", "read"},
+		{accountAdmin, domain, "payment", "create"},
+		{accountAdmin, domain, "payment", "refund"},
 
 		// Member permissions
-		{role, domain, "member", "create"},
-		{role, domain, "member", "read"},
-		{role, domain, "member", "update"},
-		{role, domain, "member", "delete"},
-		{role, domain, "member", "invite"},
+		{accountAdmin, domain, "member", "create"},
+		{accountAdmin, domain, "member", "read"},
+		{accountAdmin, domain, "member", "update"},
+		{accountAdmin, domain, "member", "delete"},
+		{accountAdmin, domain, "member", "invite"},
 
 		// Institution permissions (full for institution)
-		{role, domain, "institution", "read"},
-		{role, domain, "institution", "update"},
-		{role, domain, "institution", "manage"},
+		{accountAdmin, domain, "institution", "read"},
+		{accountAdmin, domain, "institution", "update"},
+		{accountAdmin, domain, "institution", "manage"},
 
 		// Team permissions
-		{role, domain, "team", "create"},
-		{role, domain, "team", "read"},
-		{role, domain, "team", "update"},
-		{role, domain, "team", "delete"},
+		{accountAdmin, domain, "team", "create"},
+		{accountAdmin, domain, "team", "read"},
+		{accountAdmin, domain, "team", "update"},
+		{accountAdmin, domain, "team", "delete"},
 
 		// Dashboard and profile
-		{role, domain, "dashboard", "read"},
-		{role, domain, "profile", "read"},
-		{role, domain, "profile", "update"},
+		{accountAdmin, domain, "dashboard", "read"},
+		{accountAdmin, domain, "profile", "read"},
+		{accountAdmin, domain, "profile", "update"},
 	}
+	policies = append(policies, accountAdminPolicies...)
+
+	// ============================================================
+	// EVENT MANAGER - Full event management (ALL)
+	// ============================================================
+	eventManagerPolicies := [][]string{
+		// Event permissions - ALL
+		{eventManager, domain, "event", "create"},
+		{eventManager, domain, "event", "read_all"},
+		{eventManager, domain, "event", "update_all"},
+		{eventManager, domain, "event", "delete_all"},
+		{eventManager, domain, "event", "publish_all"},
+		{eventManager, domain, "event", "manage"},
+
+		// Attendee permissions
+		{eventManager, domain, "attendee", "read"},
+		{eventManager, domain, "attendee", "update"},
+		{eventManager, domain, "attendee", "export"},
+
+		// Certificate permissions
+		{eventManager, domain, "certificate", "create"},
+		{eventManager, domain, "certificate", "read"},
+		{eventManager, domain, "certificate", "issue"},
+		{eventManager, domain, "certificate", "delete"},
+
+		// Payment - Read only
+		{eventManager, domain, "payment", "read"},
+
+		// Dashboard
+		{eventManager, domain, "dashboard", "read"},
+
+		// Team - Read only
+		{eventManager, domain, "team", "read"},
+	}
+	policies = append(policies, eventManagerPolicies...)
+
+	// ============================================================
+	// TEAM MEMBER - Own access only (OWN)
+	// ============================================================
+	teamMemberPolicies := [][]string{
+		// Event permissions - OWN only
+		{teamMember, domain, "event", "read_own"},
+		{teamMember, domain, "event", "update_own"},
+		{teamMember, domain, "event", "delete_own"},
+		{teamMember, domain, "event", "publish_own"},
+
+		// Attendee permissions
+		{teamMember, domain, "attendee", "read"},
+		{teamMember, domain, "attendee", "update_own"},
+
+		// Certificate - Read only
+		{teamMember, domain, "certificate", "read"},
+
+		// Dashboard
+		{teamMember, domain, "dashboard", "read"},
+
+		// Team - Read only
+		{teamMember, domain, "team", "read"},
+	}
+	policies = append(policies, teamMemberPolicies...)
+
+	return policies
 }
 
 // ============================================================
@@ -216,17 +357,19 @@ func GetPlatformRoleHierarchy() [][]string {
 // GetEventManagerPolicies returns policies for event_manager
 func GetEventManagerPolicies(domain string) [][]string {
 	return [][]string{
-		// Event management
+		// Event management - ALL
 		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionCreate.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionUpdate.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionDelete.String()},
+		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionReadAll.String()},
+		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionUpdateAll.String()},
+		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionDeleteAll.String()},
+		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionPublishAll.String()},
 		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionManage.String()},
 
 		// Certificate management
 		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceCertificate.String(), authdomain.ActionCreate.String()},
 		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceCertificate.String(), authdomain.ActionRead.String()},
 		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceCertificate.String(), authdomain.ActionIssue.String()},
+		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceCertificate.String(), authdomain.ActionDelete.String()},
 
 		// Attendee management
 		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceAttendee.String(), authdomain.ActionRead.String()},
@@ -252,18 +395,33 @@ func GetEventManagerPolicies(domain string) [][]string {
 }
 
 // ============================================================
-// TEAM MEMBER POLICIES (View-only)
+// TEAM MEMBER POLICIES (OWN access only)
 // ============================================================
 
-// GetTeamMemberPolicies returns policies for team_member (view-only)
+// GetTeamMemberPolicies returns policies for team_member (OWN access only)
 func GetTeamMemberPolicies(domain string) [][]string {
 	return [][]string{
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionRead.String()},
+		// Event permissions - OWN only
+		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionReadOwn.String()},
+		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionUpdateOwn.String()},
+		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionDeleteOwn.String()},
+		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionPublishOwn.String()},
+
+		// Attendee - Read and update own
+		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceAttendee.String(), authdomain.ActionRead.String()},
+		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceAttendee.String(), authdomain.ActionUpdateOwn.String()},
+
+		// Certificate - Read only
 		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceCertificate.String(), authdomain.ActionRead.String()},
+
+		// Dashboard - Read only
 		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceDashboard.String(), authdomain.ActionRead.String()},
 		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceAnalytics.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceAttendee.String(), authdomain.ActionRead.String()},
+
+		// Media - Read only
 		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceMedia.String(), authdomain.ActionRead.String()},
+
+		// Team - Read only
 		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
 	}
 }

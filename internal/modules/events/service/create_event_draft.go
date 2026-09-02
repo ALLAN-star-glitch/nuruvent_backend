@@ -13,7 +13,7 @@ import (
 )
 
 // ============================================================
-// PUBLIC METHOD - Entry Point (25 lines)
+// PUBLIC METHOD - Entry Point
 // ============================================================
 
 // CreateDraft creates a draft event
@@ -22,7 +22,7 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 	institutionID := s.extractInstitutionID(cmd)
 	s.logCreateDraft(cmd, institutionID)
 
-	// 2. Check permissions
+	// 2. Check permissions using Scope
 	if err := s.validateDraftPermissions(ctx, cmd, institutionID); err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 }
 
 // ============================================================
-// HELPER FUNCTIONS (< 20 lines each)
+// HELPER FUNCTIONS
 // ============================================================
 
 // extractInstitutionID extracts institution ID from command
@@ -69,35 +69,43 @@ func (s *eventService) logCreateDraft(cmd CreateDraftCommand, institutionID stri
 		cmd.Name, cmd.EventTypeID, institutionID, cmd.OwnerType)
 }
 
-// validateDraftPermissions checks if user has permission to create draft
+// validateDraftPermissions checks if user has permission to create draft using Scope
 func (s *eventService) validateDraftPermissions(ctx context.Context, cmd CreateDraftCommand, institutionID string) error {
+	// Create the appropriate scope based on OwnerType using events domain Scope
+	var scope domain.Scope
+
 	if cmd.OwnerType == "personal" {
-		return s.validatePersonalDraftPermission(ctx, cmd.CreatedBy)
+		scope = domain.NewPersonalTeamScope(cmd.CreatedBy)
+		
+		// Check if user can create events in their personal team
+		allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, scope)
+		if err != nil {
+			return fmt.Errorf("permission check failed: %w", err)
+		}
+		if !allowed {
+			log.Printf("❌ Permission denied: user %s cannot create personal draft events", cmd.CreatedBy)
+			return errors.New("insufficient permissions to create personal draft event")
+		}
+		return nil
 	}
-	return s.validateInstitutionDraftPermission(ctx, cmd.CreatedBy, institutionID)
-}
 
-// validatePersonalDraftPermission checks personal event permissions
-func (s *eventService) validatePersonalDraftPermission(ctx context.Context, userID string) error {
-	if userID == "" {
-		return errors.New("user ID is required for personal events")
-	}
-	if !s.permChecker.CanManagePersonalEvent(ctx, userID) {
-		log.Printf("❌ Permission denied: user %s cannot create personal draft events", userID)
-		return errors.New("insufficient permissions to create personal draft event")
-	}
-	return nil
-}
-
-// validateInstitutionDraftPermission checks institution event permissions
-func (s *eventService) validateInstitutionDraftPermission(ctx context.Context, userID, institutionID string) error {
+	// Institution event
 	if institutionID == "" {
 		return errors.New("institution ID is required for institution events")
 	}
-	if !s.permChecker.CanManageEvent(ctx, userID, institutionID) {
-		log.Printf("❌ Permission denied for user %s on institution %s", userID, institutionID)
+
+	scope = domain.NewInstitutionTeamScope(institutionID)
+
+	// Check if user can create events in this institution
+	allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, scope)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
+		log.Printf("❌ Permission denied: user %s cannot create events for institution %s", cmd.CreatedBy, institutionID)
 		return errors.New("insufficient permissions to create events for this institution")
 	}
+
 	return nil
 }
 
@@ -259,14 +267,14 @@ func (s *eventService) populateEventFields(event *domain.Event, cmd CreateDraftC
 	event.IsFreeEvent = cmd.IsFree
 	event.Capacity = cmd.Capacity
 
-	// ✅ FIX: Convert and set tickets for draft
+	// Convert and set tickets for draft
 	if len(cmd.Tickets) > 0 {
 		tickets, err := s.convertTickets(cmd.Tickets)
 		if err != nil {
 			log.Printf("⚠️ Failed to convert tickets for draft: %v", err)
 		} else {
 			event.Tickets = tickets
-			log.Printf("🔍 DEBUG: Set %d tickets on draft event", len(tickets))
+			log.Printf("🔍 Set %d tickets on draft event", len(tickets))
 		}
 	}
 

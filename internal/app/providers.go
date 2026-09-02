@@ -82,6 +82,9 @@ func provideAppDependencies(
 	storageClient *storage.Client,
 	redisClient *redis.Client,
 	enforcer *authorization.Enforcer,
+	permChecker authDomain.PermissionChecker,
+	roleManager authDomain.RoleManager,
+	policyManager authDomain.PolicyManager,
 	authService authService.Service,
 	authTokenService authDomain.TokenService,
 	eventsService eventsService.Service,
@@ -90,18 +93,21 @@ func provideAppDependencies(
 	eventsHandler *eventsHandler.EventHandler,
 ) *AppDependencies {
 	return &AppDependencies{
-		Config:           cfg,
-		DB:               db,
-		App:              app,
-		StorageClient:    storageClient,
-		RedisClient:      redisClient,
-		Enforcer:         enforcer,
-		AuthService:      authService,
-		AuthTokenService: authTokenService,
-		EventsService:    eventsService,
-		MediaService:     mediaService,
-		AuthHandler:      authHandler,
-		EventsHandler:    eventsHandler,
+		Config:            cfg,
+		DB:                db,
+		App:               app,
+		StorageClient:     storageClient,
+		RedisClient:       redisClient,
+		Enforcer:          enforcer,
+		PermissionChecker: permChecker,
+		RoleManager:       roleManager,
+		PolicyManager:     policyManager,
+		AuthService:       authService,
+		AuthTokenService:  authTokenService,
+		EventsService:     eventsService,
+		MediaService:      mediaService,
+		AuthHandler:       authHandler,
+		EventsHandler:     eventsHandler,
 	}
 }
 
@@ -134,49 +140,216 @@ func (a *QueueAdapter) EnqueueDelayed(ctx context.Context, task string, payload 
 	return a.queue.EnqueueDelayed(ctx, task, data, delaySeconds)
 }
 
-
 // ============================================================
-// EVENTS PERMISSION ADAPTER - Updated for new team-based auth
+// EVENTS PERMISSION ADAPTER - Implements eventsDomain.PermissionChecker
 // ============================================================
 
 type EventsPermissionAdapter struct {
-    permSvc authDomain.PermissionService
+	permSvc authDomain.PermissionChecker
 }
 
-func NewEventsPermissionAdapter(permSvc authDomain.PermissionService) eventsDomain.PermissionChecker {
-    return &EventsPermissionAdapter{permSvc: permSvc}
+func NewEventsPermissionAdapter(permSvc authDomain.PermissionChecker) eventsDomain.PermissionChecker {
+	return &EventsPermissionAdapter{permSvc: permSvc}
 }
 
-// ✅ CanManagePersonalEvent - checks if user can manage their own personal events
-func (a *EventsPermissionAdapter) CanManagePersonalEvent(ctx context.Context, userID string) bool {
-    // User can manage their own personal events if they are the account admin
-    return a.permSvc.IsPersonalTeamAdmin(ctx, userID, userID)
+// ============================================================
+// CORE PERMISSION METHODS
+// ============================================================
+
+// HasPermission checks if a user has a specific permission in a scope
+func (a *EventsPermissionAdapter) HasPermission(ctx context.Context, userID string, scope eventsDomain.Scope, resource, action string) (bool, error) {
+	// Convert eventsDomain.Scope to authDomain.Scope
+	authScope := a.convertScope(scope)
+
+	// Use authDomain.PermissionChecker to check permission
+	return a.permSvc.HasPermission(ctx, userID, authScope, resource, action)
 }
 
-func (a *EventsPermissionAdapter) CanManageEvent(ctx context.Context, userID, teamID string) bool {
-    return a.permSvc.CanManageTeamEvent(ctx, teamID, userID)
+// HasAnyPermission checks if a user has any of the given permissions in a scope
+func (a *EventsPermissionAdapter) HasAnyPermission(ctx context.Context, userID string, scope eventsDomain.Scope, resource string, actions ...string) (bool, error) {
+	authScope := a.convertScope(scope)
+
+	for _, action := range actions {
+		allowed, err := a.permSvc.HasPermission(ctx, userID, authScope, resource, action)
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
-func (a *EventsPermissionAdapter) CanUpdateEvent(ctx context.Context, userID, teamID string) bool {
-    // Try personal team first
-    if a.permSvc.HasPersonalTeamPermission(ctx, userID, teamID, "event", "update") {
-        return true
-    }
-    return a.permSvc.HasInstitutionTeamPermission(ctx, userID, teamID, "event", "update")
+// HasAllPermissions checks if a user has all of the given permissions in a scope
+func (a *EventsPermissionAdapter) HasAllPermissions(ctx context.Context, userID string, scope eventsDomain.Scope, resource string, actions ...string) (bool, error) {
+	authScope := a.convertScope(scope)
+
+	for _, action := range actions {
+		allowed, err := a.permSvc.HasPermission(ctx, userID, authScope, resource, action)
+		if err != nil {
+			return false, err
+		}
+		if !allowed {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
-func (a *EventsPermissionAdapter) CanDeleteEvent(ctx context.Context, userID, teamID string) bool {
-    if a.permSvc.HasPersonalTeamPermission(ctx, userID, teamID, "event", "delete") {
-        return true
-    }
-    return a.permSvc.HasInstitutionTeamPermission(ctx, userID, teamID, "event", "delete")
+// ============================================================
+// CONVENIENCE METHODS - CREATE
+// ============================================================
+
+// CanCreateEvent checks if user can create events in a scope
+func (a *EventsPermissionAdapter) CanCreateEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	return a.HasPermission(ctx, userID, scope, "event", "create")
 }
 
-func (a *EventsPermissionAdapter) CanViewEvent(ctx context.Context, userID, teamID string) bool {
-    if a.permSvc.HasPersonalTeamPermission(ctx, userID, teamID, "event", "read") {
-        return true
-    }
-    return a.permSvc.HasInstitutionTeamPermission(ctx, userID, teamID, "event", "read")
+// ============================================================
+// CONVENIENCE METHODS - READ
+// ============================================================
+
+// CanReadAllEvents checks if user can read ALL events in a scope
+func (a *EventsPermissionAdapter) CanReadAllEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	return a.HasPermission(ctx, userID, scope, "event", "read_all")
+}
+
+// CanReadOwnEvents checks if user can read OWN events in a scope
+func (a *EventsPermissionAdapter) CanReadOwnEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	return a.HasPermission(ctx, userID, scope, "event", "read_own")
+}
+
+// CanReadEvent checks if user can read events in a scope (ALL or OWN)
+func (a *EventsPermissionAdapter) CanReadEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	allowed, err := a.CanReadAllEvents(ctx, userID, scope)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return true, nil
+	}
+	return a.CanReadOwnEvents(ctx, userID, scope)
+}
+
+// ============================================================
+// CONVENIENCE METHODS - UPDATE
+// ============================================================
+
+// CanUpdateAllEvents checks if user can update ALL events in a scope
+func (a *EventsPermissionAdapter) CanUpdateAllEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	return a.HasPermission(ctx, userID, scope, "event", "update_all")
+}
+
+// CanUpdateOwnEvents checks if user can update OWN events in a scope
+func (a *EventsPermissionAdapter) CanUpdateOwnEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	return a.HasPermission(ctx, userID, scope, "event", "update_own")
+}
+
+// CanUpdateEvent checks if user can update events in a scope (ALL or OWN)
+func (a *EventsPermissionAdapter) CanUpdateEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	allowed, err := a.CanUpdateAllEvents(ctx, userID, scope)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return true, nil
+	}
+	return a.CanUpdateOwnEvents(ctx, userID, scope)
+}
+
+// ============================================================
+// CONVENIENCE METHODS - DELETE
+// ============================================================
+
+// CanDeleteAllEvents checks if user can delete ALL events in a scope
+func (a *EventsPermissionAdapter) CanDeleteAllEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	return a.HasPermission(ctx, userID, scope, "event", "delete_all")
+}
+
+// CanDeleteOwnEvents checks if user can delete OWN events in a scope
+func (a *EventsPermissionAdapter) CanDeleteOwnEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	return a.HasPermission(ctx, userID, scope, "event", "delete_own")
+}
+
+// CanDeleteEvent checks if user can delete events in a scope (ALL or OWN)
+func (a *EventsPermissionAdapter) CanDeleteEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	allowed, err := a.CanDeleteAllEvents(ctx, userID, scope)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return true, nil
+	}
+	return a.CanDeleteOwnEvents(ctx, userID, scope)
+}
+
+// ============================================================
+// CONVENIENCE METHODS - PUBLISH
+// ============================================================
+
+// CanPublishAllEvents checks if user can publish ALL events in a scope
+func (a *EventsPermissionAdapter) CanPublishAllEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	return a.HasPermission(ctx, userID, scope, "event", "publish_all")
+}
+
+// CanPublishOwnEvents checks if user can publish OWN events in a scope
+func (a *EventsPermissionAdapter) CanPublishOwnEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	return a.HasPermission(ctx, userID, scope, "event", "publish_own")
+}
+
+// CanPublishEvent checks if user can publish events in a scope (ALL or OWN)
+func (a *EventsPermissionAdapter) CanPublishEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	allowed, err := a.CanPublishAllEvents(ctx, userID, scope)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return true, nil
+	}
+	return a.CanPublishOwnEvents(ctx, userID, scope)
+}
+
+// ============================================================
+// CONVENIENCE METHODS - MANAGEMENT
+// ============================================================
+
+// CanManageEvent checks if user can manage events in a scope (Admin/Manager only)
+func (a *EventsPermissionAdapter) CanManageEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	return a.HasAnyPermission(ctx, userID, scope, "event",
+		"update_all", "delete_all", "manage")
+}
+
+// CanViewEvent checks if user can view events in a scope (ALL or OWN)
+func (a *EventsPermissionAdapter) CanViewEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+	allowed, err := a.CanReadAllEvents(ctx, userID, scope)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return true, nil
+	}
+	return a.CanReadOwnEvents(ctx, userID, scope)
+}
+
+// ============================================================
+// HELPER METHODS
+// ============================================================
+
+// convertScope converts eventsDomain.Scope to authDomain.Scope
+func (a *EventsPermissionAdapter) convertScope(scope eventsDomain.Scope) authDomain.Scope {
+	// Check if it's a personal team scope
+	if scope.IsPersonal() {
+		return authDomain.NewPersonalTeamScope(scope.ID)
+	}
+
+	// Check if it's an institution team scope
+	if scope.IsInstitution() {
+		return authDomain.NewInstitutionTeamScope(scope.ID)
+	}
+
+	// Default to platform scope
+	return authDomain.NewPlatformScope()
 }
 
 // ============================================================

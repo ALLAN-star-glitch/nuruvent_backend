@@ -169,68 +169,9 @@ func (s *eventService) RestoreEvents(ctx context.Context, ids []string, restored
 	return result, nil
 }
 
-// DeleteEventsByInstitution soft deletes all events for an institution
-func (s *eventService) DeleteEventsByInstitution(ctx context.Context, institutionID string, deletedBy string) (*BulkDeleteResult, error) {
-	if institutionID == "" {
-		return nil, errors.New("institution ID is required")
-	}
 
-	events, err := s.getEventsByInstitution(ctx, institutionID)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(events) == 0 {
-		return &BulkDeleteResult{DeletedCount: 0}, nil
-	}
-
-	ids := s.extractEventIDs(events)
-	return s.DeleteEvents(ctx, ids, deletedBy)
-}
-
-// PermanentlyDeleteEventsByInstitution hard deletes all events for an institution
-func (s *eventService) PermanentlyDeleteEventsByInstitution(ctx context.Context, institutionID string, deletedBy string) (*BulkDeleteResult, error) {
-	if institutionID == "" {
-		return nil, errors.New("institution ID is required")
-	}
-
-	events, err := s.getEventsByInstitution(ctx, institutionID)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(events) == 0 {
-		return &BulkDeleteResult{DeletedCount: 0}, nil
-	}
-
-	ids := s.extractEventIDs(events)
-	return s.PermanentlyDeleteEvents(ctx, ids, deletedBy)
-}
-
-// ============================================================
-// PRIVATE HELPER FUNCTIONS
-// ============================================================
-
-// getEventAndCheckDeletePermission gets event and checks delete permission
-func (s *eventService) getEventAndCheckDeletePermission(ctx context.Context, id, deletedBy string) (*domain.Event, error) {
-	event, err := s.repo.GetEventByID(ctx, id)
-	if err != nil {
-		return nil, err
-	}
-	if event == nil {
-		return nil, domain.ErrEventNotFound
-	}
-
-	institutionID := s.getInstitutionIDFromEvent(event)
-	if !s.permChecker.CanDeleteEvent(ctx, deletedBy, institutionID) {
-		return nil, errors.New("insufficient permissions to delete this event")
-	}
-
-	return event, nil
-}
 
 // checkDeletePermissionForEvent checks if user has permission to delete an event
-// (doesn't return the event, only checks permission)
 func (s *eventService) checkDeletePermissionForEvent(ctx context.Context, id, deletedBy string) error {
 	event, err := s.repo.GetEventByID(ctx, id)
 	if err != nil {
@@ -240,8 +181,13 @@ func (s *eventService) checkDeletePermissionForEvent(ctx context.Context, id, de
 		return domain.ErrEventNotFound
 	}
 
-	institutionID := s.getInstitutionIDFromEvent(event)
-	if !s.permChecker.CanDeleteEvent(ctx, deletedBy, institutionID) {
+	scope := s.getScopeFromEvent(event)
+
+	allowed, err := s.permChecker.CanDeleteEvent(ctx, deletedBy, scope)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
 		return errors.New("insufficient permissions to delete this event")
 	}
 
@@ -249,36 +195,57 @@ func (s *eventService) checkDeletePermissionForEvent(ctx context.Context, id, de
 }
 
 // getEventAndCheckUpdatePermissionIncludingDeleted gets event (including soft-deleted) and checks update permission
+// ✅ FIXED: Uses ListEvents with IncludeDeleted filter instead of GetEventByIDIncludingDeleted
 func (s *eventService) getEventAndCheckUpdatePermissionIncludingDeleted(ctx context.Context, id, restoredBy string) (*domain.Event, error) {
-	event, err := s.repo.GetEventByIDIncludingDeleted(ctx, id)
+	// Use ListEvents with IncludeDeleted and OnlyDeleted filters to get the event
+	filters := domain.ListEventsFilters{
+		IncludeDeleted: true,
+		Limit:          1,
+		Offset:         0,
+	}
+
+	// We need to find the event by ID - we'll filter after getting results
+	events, _, err := s.repo.ListEvents(ctx, filters)
 	if err != nil {
 		return nil, err
 	}
+
+	// Find the event with the matching ID
+	var event *domain.Event
+	for _, e := range events {
+		if e.ID == id {
+			event = e
+			break
+		}
+	}
+
 	if event == nil {
 		return nil, domain.ErrEventNotFound
 	}
 
-	institutionID := s.getInstitutionIDFromEvent(event)
-	if !s.permChecker.CanUpdateEvent(ctx, restoredBy, institutionID) {
+	scope := s.getScopeFromEvent(event)
+
+	allowed, err := s.permChecker.CanUpdateEvent(ctx, restoredBy, scope)
+	if err != nil {
+		return nil, fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
 		return nil, errors.New("insufficient permissions to restore this event")
 	}
 
 	return event, nil
 }
 
-// getInstitutionIDFromEvent extracts institution ID from event
-func (s *eventService) getInstitutionIDFromEvent(event *domain.Event) string {
-	if event.InstitutionID != nil {
-		return *event.InstitutionID
-	}
-	return ""
-}
 
-// getEventsByInstitution gets all events for an institution
-func (s *eventService) getEventsByInstitution(ctx context.Context, institutionID string) ([]*domain.Event, error) {
-	events, _, err := s.repo.GetEventsByInstitution(ctx, institutionID, 0, 0)
+// getEventsByTeam gets all events for a team (personal or institution)
+func (s *eventService) getEventsByTeam(ctx context.Context, team domain.TeamFilter) ([]*domain.Event, error) {
+	events, _, err := s.repo.ListEvents(ctx, domain.ListEventsFilters{
+		Team:  team,
+		Limit: 0,
+		Offset: 0,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to get events for institution: %w", err)
+		return nil, fmt.Errorf("failed to get events for team: %w", err)
 	}
 	return events, nil
 }
