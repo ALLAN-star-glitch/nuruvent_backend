@@ -306,7 +306,8 @@ type ListEventsRequest struct {
     OnlyDeleted    bool `json:"only_deleted" query:"only_deleted"`
     IncludeCreator bool `json:"include_creator" query:"include_creator"`
     
-    // Pagination
+	
+    // Pagination 
     Limit  int `json:"limit" query:"limit"`
     Offset int `json:"offset" query:"offset"`
     

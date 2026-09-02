@@ -78,6 +78,9 @@ type Repository interface {
     GetEventStatusByID(ctx context.Context, id string) (*EventStatus, error)
     GetEventStatusBySlug(ctx context.Context, slug string) (*EventStatus, error)
     GetAllEventStatuses(ctx context.Context) ([]*EventStatus, error)
+
+     // GetEventByIDIncludingDeleted gets an event by ID including soft-deleted ones
+    GetEventByIDIncludingDeleted(ctx context.Context, id string) (*Event, error)
 }
 
 // ============================================================

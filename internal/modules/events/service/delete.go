@@ -47,7 +47,7 @@ func (s *eventService) PermanentlyDeleteEvent(ctx context.Context, id, deletedBy
 		return errors.New("event ID is required")
 	}
 
-	// 2. Check permissions (we don't need the event object)
+	// 2. Get event including soft-deleted and check permissions
 	if err := s.checkDeletePermissionForEvent(ctx, id, deletedBy); err != nil {
 		return err
 	}
@@ -170,10 +170,11 @@ func (s *eventService) RestoreEvents(ctx context.Context, ids []string, restored
 }
 
 
-
 // checkDeletePermissionForEvent checks if user has permission to delete an event
+// Uses GetEventByIDIncludingDeleted to find soft-deleted events
 func (s *eventService) checkDeletePermissionForEvent(ctx context.Context, id, deletedBy string) error {
-	event, err := s.repo.GetEventByID(ctx, id)
+	// ✅ Use GetEventByIDIncludingDeleted to include soft-deleted events
+	event, err := s.repo.GetEventByIDIncludingDeleted(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -195,30 +196,13 @@ func (s *eventService) checkDeletePermissionForEvent(ctx context.Context, id, de
 }
 
 // getEventAndCheckUpdatePermissionIncludingDeleted gets event (including soft-deleted) and checks update permission
-// ✅ FIXED: Uses ListEvents with IncludeDeleted filter instead of GetEventByIDIncludingDeleted
+// ✅ Uses GetEventByIDIncludingDeleted to find soft-deleted events
 func (s *eventService) getEventAndCheckUpdatePermissionIncludingDeleted(ctx context.Context, id, restoredBy string) (*domain.Event, error) {
-	// Use ListEvents with IncludeDeleted and OnlyDeleted filters to get the event
-	filters := domain.ListEventsFilters{
-		IncludeDeleted: true,
-		Limit:          1,
-		Offset:         0,
-	}
-
-	// We need to find the event by ID - we'll filter after getting results
-	events, _, err := s.repo.ListEvents(ctx, filters)
+	// ✅ Use GetEventByIDIncludingDeleted to include soft-deleted events
+	event, err := s.repo.GetEventByIDIncludingDeleted(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-
-	// Find the event with the matching ID
-	var event *domain.Event
-	for _, e := range events {
-		if e.ID == id {
-			event = e
-			break
-		}
-	}
-
 	if event == nil {
 		return nil, domain.ErrEventNotFound
 	}
@@ -235,7 +219,6 @@ func (s *eventService) getEventAndCheckUpdatePermissionIncludingDeleted(ctx cont
 
 	return event, nil
 }
-
 
 // getEventsByTeam gets all events for a team (personal or institution)
 func (s *eventService) getEventsByTeam(ctx context.Context, team domain.TeamFilter) ([]*domain.Event, error) {

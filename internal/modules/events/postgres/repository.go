@@ -103,6 +103,34 @@ func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*doma
 	return event, nil
 }
 
+
+
+func (r *PostgresRepository) GetEventByIDIncludingDeleted(ctx context.Context, id string) (*domain.Event, error) {
+    var model EventModel
+    // Use Unscoped() to include soft-deleted records
+    err := r.db.WithContext(ctx).Unscoped().
+        Where("id = ?", id).
+        First(&model).Error
+    if err != nil {
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            return nil, nil
+        }
+        return nil, err
+    }
+
+    event := toDomainEvent(&model)
+    if event == nil {
+        return nil, nil
+    }
+
+    // Load child entities
+    if err := r.loadChildEntities(ctx, event); err != nil {
+        return nil, err
+    }
+
+    return event, nil
+}
+
 func (r *PostgresRepository) GetEventBySlug(ctx context.Context, slug string) (*domain.Event, error) {
 	var model EventModel
 	err := r.db.WithContext(ctx).Where("slug = ? AND deleted_at IS NULL", slug).First(&model).Error
@@ -210,13 +238,18 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 	var models []EventModel
 	var total int64
 
+	log.Printf("🔍 REPOSITORY: IncludeDeleted=%v, OnlyDeleted=%v", filters.IncludeDeleted, filters.OnlyDeleted)
+
+
 	query := r.db.WithContext(ctx).Unscoped().Model(&EventModel{})
 
 	// Handle deleted filter logic
 	if filters.OnlyDeleted {
 		query = query.Where("deleted_at IS NOT NULL")
+		log.Printf("🔍 REPOSITORY: OnlyDeleted=true - adding deleted_at IS NOT NULL")
 	} else if !filters.IncludeDeleted {
 		query = query.Where("deleted_at IS NULL")
+		log.Printf("🔍 REPOSITORY: IncludeDeleted=false - adding deleted_at IS NULL")
 	}
 
 	// Team filtering - unified approach

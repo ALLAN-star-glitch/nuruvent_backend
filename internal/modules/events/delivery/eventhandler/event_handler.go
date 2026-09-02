@@ -3,9 +3,12 @@
 package eventhandler
 
 import (
+	"context"
 	"errors"
 	"io"
+	"path/filepath"
 	"strconv"
+	"strings"
 
 	"github.com/gofiber/fiber/v3"
 
@@ -164,7 +167,10 @@ func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	event, err := h.svc.GetEventByID(c.Context(), id)
+	userID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	event, err := h.svc.GetEventByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
@@ -178,7 +184,6 @@ func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
-	userID := getUserIDOptional(c)
 	if userID != "" && h.canViewCreatorInfo(c, userID, event) {
 		return response.Success(c, "Event retrieved successfully", NewEventResponseFromEventWithCreator(event))
 	}
@@ -203,7 +208,10 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event slug is required", nil)
 	}
 
-	event, err := h.svc.GetEventBySlug(c.Context(), slug)
+	userID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	event, err := h.svc.GetEventBySlug(ctx, slug)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
@@ -217,7 +225,6 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
-	userID := getUserIDOptional(c)
 	if userID != "" && h.canViewCreatorInfo(c, userID, event) {
 		return response.Success(c, "Event retrieved successfully", NewEventResponseFromEventWithCreator(event))
 	}
@@ -240,14 +247,16 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 		limit = 50
 	}
 
-	events, err := h.svc.GetUpcomingEvents(c.Context(), domain.TeamFilter{}, limit)
+	userID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	events, err := h.svc.GetUpcomingEvents(ctx, domain.TeamFilter{}, limit)
 	if err != nil {
 		return response.InternalError(c, "Failed to get upcoming events", fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	userID := getUserIDOptional(c)
 	responses := h.buildEventResponses(c, userID, events)
 
 	return response.Success(c, "Upcoming events retrieved successfully", responses)
@@ -275,72 +284,72 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events [get]
 func (h *EventHandler) ListEvents(c fiber.Ctx) error {
-    // Parse request
-    var req ListEventsRequest
-    if err := c.Bind().Query(&req); err != nil {
-        return response.BadRequest(c, "Invalid query parameters", nil)
-    }
-    
-    // Set defaults
-    if req.Limit <= 0 {
-        req.Limit = 20
-    }
-    if req.Limit > 100 {
-        req.Limit = 100
-    }
-    if req.SortBy == "" {
-        req.SortBy = "created_at"
-    }
-    if req.SortOrder == "" {
-        req.SortOrder = "desc"
-    }
-    
-    // Build TeamFilter from request
-    team := domain.TeamFilter{}
-    if req.TeamID != "" && req.TeamType != "" {
-        team = domain.TeamFilter{
-            ID:   req.TeamID,
-            Type: req.TeamType, // "personal" or "institution"
-        }
-    }
-    
-    // Build filters
-    filters := service.ListEventsFilters{
-        Team:           team,
-        UserID:         req.UserID,
-        EventTypeID:    req.EventTypeID,
-        EventStatusID:  req.EventStatusID,
-        CategoryID:     req.CategoryID,
-        IncludeDeleted: req.IncludeDeleted,
-        OnlyDeleted:    req.OnlyDeleted,
-        IncludeCreator: req.IncludeCreator,
-        Limit:          req.Limit,
-        Offset:         req.Offset,
-        SortBy:         req.SortBy,
-        SortOrder:      req.SortOrder,
-        Visibility:     req.Visibility,
-    }
-    
-    // Get events
-    events, total, err := h.svc.ListEvents(c.Context(), filters)
-    if err != nil {
-        return response.InternalError(c, "Failed to list events", fiber.Map{
-            "error": err.Error(),
-        })
-    }
-    
-    // Build response
-    userID := getUserIDOptional(c)
-    responses := h.buildEventResponses(c, userID, events)
-    
-    return response.Success(c, "Events retrieved successfully", fiber.Map{
-        "data":        responses,
-        "total":       total,
-        "limit":       req.Limit,
-        "offset":      req.Offset,
-        "sort_by":     req.SortBy,
-        "sort_order":  req.SortOrder,
-    })
+	userID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	var req ListEventsRequest
+	if err := c.Bind().Query(&req); err != nil {
+		return response.BadRequest(c, "Invalid query parameters", nil)
+	}
+
+	includeDeleted := c.Query("include_deleted") == "true"
+	onlyDeleted := c.Query("only_deleted") == "true"
+	includeCreator := c.Query("include_creator") == "true"
+
+	if req.Limit <= 0 {
+		req.Limit = 20
+	}
+	if req.Limit > 100 {
+		req.Limit = 100
+	}
+	if req.SortBy == "" {
+		req.SortBy = "created_at"
+	}
+	if req.SortOrder == "" {
+		req.SortOrder = "desc"
+	}
+
+	team := domain.TeamFilter{}
+	if req.TeamID != "" && req.TeamType != "" {
+		team = domain.TeamFilter{
+			ID:   req.TeamID,
+			Type: req.TeamType,
+		}
+	}
+
+	filters := service.ListEventsFilters{
+		Team:           team,
+		UserID:         req.UserID,
+		EventTypeID:    req.EventTypeID,
+		EventStatusID:  req.EventStatusID,
+		CategoryID:     req.CategoryID,
+		IncludeDeleted: includeDeleted,
+		OnlyDeleted:    onlyDeleted,
+		IncludeCreator: includeCreator,
+		Limit:          req.Limit,
+		Offset:         req.Offset,
+		SortBy:         req.SortBy,
+		SortOrder:      req.SortOrder,
+		Visibility:     req.Visibility,
+	}
+
+	events, total, err := h.svc.ListEvents(ctx, filters)
+	if err != nil {
+		return response.InternalError(c, "Failed to list events", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	responses := h.buildEventResponses(c, userID, events)
+
+	return response.Success(c, "Events retrieved successfully", fiber.Map{
+		"data":        responses,
+		"total":       total,
+		"limit":       req.Limit,
+		"offset":      req.Offset,
+		"sort_by":     req.SortBy,
+		"sort_order":  req.SortOrder,
+	})
 }
 
 // GetEventsByType godoc
@@ -367,14 +376,16 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 		pageSize = 100
 	}
 
-	events, total, err := h.svc.GetEventsByType(c.Context(), eventTypeSlug, page, pageSize)
+	userID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	events, total, err := h.svc.GetEventsByType(ctx, eventTypeSlug, page, pageSize)
 	if err != nil {
 		return response.InternalError(c, "Failed to get events", fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	userID := getUserIDOptional(c)
 	responses := h.buildEventResponses(c, userID, events)
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
@@ -401,14 +412,16 @@ func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
 		limit = 50
 	}
 
-	events, err := h.svc.GetPastEvents(c.Context(), domain.TeamFilter{}, limit)
+	userID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	events, err := h.svc.GetPastEvents(ctx, domain.TeamFilter{}, limit)
 	if err != nil {
 		return response.InternalError(c, "Failed to get past events", fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	userID := getUserIDOptional(c)
 	responses := h.buildEventResponses(c, userID, events)
 
 	return response.Success(c, "Past events retrieved successfully", responses)
@@ -423,7 +436,10 @@ func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/types [get]
 func (h *EventHandler) GetEventTypes(c fiber.Ctx) error {
-	types, err := h.svc.GetEventTypes(c.Context())
+	userID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	types, err := h.svc.GetEventTypes(ctx)
 	if err != nil {
 		return response.InternalError(c, "Failed to get event types", fiber.Map{
 			"error": err.Error(),
@@ -442,7 +458,10 @@ func (h *EventHandler) GetEventTypes(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/statuses [get]
 func (h *EventHandler) GetEventStatuses(c fiber.Ctx) error {
-	statuses, err := h.svc.GetEventStatuses(c.Context())
+	userID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	statuses, err := h.svc.GetEventStatuses(ctx)
 	if err != nil {
 		return response.InternalError(c, "Failed to get event statuses", fiber.Map{
 			"error": err.Error(),
@@ -510,14 +529,16 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 		Visibility:     visibility,
 	}
 
-	events, total, err := h.svc.SearchEvents(c.Context(), query, filters)
+	currentUserID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", currentUserID)
+
+	events, total, err := h.svc.SearchEvents(ctx, query, filters)
 	if err != nil {
 		return response.InternalError(c, "Failed to search events", fiber.Map{
 			"error": err.Error(),
 		})
 	}
 
-	currentUserID := getUserIDOptional(c)
 	responses := h.buildEventResponses(c, currentUserID, events)
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
@@ -559,6 +580,8 @@ func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
 		return response.BadRequest(c, "Institution ID is required", nil)
 	}
 
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
 	if pageSize > 100 {
@@ -567,16 +590,21 @@ func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
 
 	limit, offset := pageSize, (page-1)*pageSize
 
+	includeDeleted := c.Query("include_deleted") == "true"
+	onlyDeleted := c.Query("only_deleted") == "true"
+
 	filters := service.ListEventsFilters{
 		Team: domain.TeamFilter{
 			ID:   institutionID,
 			Type: "institution",
 		},
-		Limit:  limit,
-		Offset: offset,
+		Limit:          limit,
+		Offset:         offset,
+		IncludeDeleted: includeDeleted,
+		OnlyDeleted:    onlyDeleted,
 	}
 
-	events, total, err := h.svc.ListEvents(c.Context(), filters)
+	events, total, err := h.svc.ListEvents(ctx, filters)
 	if err != nil {
 		return response.InternalError(c, "Failed to get events", fiber.Map{
 			"error": err.Error(),
@@ -620,6 +648,8 @@ func (h *EventHandler) GetEventsByInstitutionWithCreator(c fiber.Ctx) error {
 		return response.BadRequest(c, "Institution ID is required", nil)
 	}
 
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
 	if pageSize > 100 {
@@ -628,16 +658,21 @@ func (h *EventHandler) GetEventsByInstitutionWithCreator(c fiber.Ctx) error {
 
 	limit, offset := pageSize, (page-1)*pageSize
 
+	includeDeleted := c.Query("include_deleted") == "true"
+	onlyDeleted := c.Query("only_deleted") == "true"
+
 	filters := service.ListEventsFilters{
 		Team: domain.TeamFilter{
 			ID:   institutionID,
 			Type: "institution",
 		},
-		Limit:  limit,
-		Offset: offset,
+		Limit:          limit,
+		Offset:         offset,
+		IncludeDeleted: includeDeleted,
+		OnlyDeleted:    onlyDeleted,
 	}
 
-	events, total, err := h.svc.ListEvents(c.Context(), filters)
+	events, total, err := h.svc.ListEvents(ctx, filters)
 	if err != nil {
 		return response.InternalError(c, "Failed to get events", fiber.Map{
 			"error": err.Error(),
@@ -689,17 +724,26 @@ func (h *EventHandler) GetMyEvents(c fiber.Ctx) error {
 
 	limit, offset := pageSize, (page-1)*pageSize
 
+	includeDeleted := c.Query("include_deleted") == "true"
+	onlyDeleted := c.Query("only_deleted") == "true"
+	includeCreator := c.Query("include_creator") == "true"
+
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
 	filters := service.ListEventsFilters{
 		Team: domain.TeamFilter{
 			ID:   userID,
 			Type: "personal",
 		},
-		UserID: userID,
-		Limit:  limit,
-		Offset: offset,
+		UserID:         userID,
+		Limit:          limit,
+		Offset:         offset,
+		IncludeDeleted: includeDeleted,
+		OnlyDeleted:    onlyDeleted,
+		IncludeCreator: includeCreator,
 	}
 
-	events, total, err := h.svc.ListEvents(c.Context(), filters)
+	events, total, err := h.svc.ListEvents(ctx, filters)
 	if err != nil {
 		return response.InternalError(c, "Failed to get events", fiber.Map{
 			"error": err.Error(),
@@ -761,6 +805,8 @@ func (h *EventHandler) CreatePersonalDraft(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
 	var req CreateDraftRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{
@@ -770,7 +816,7 @@ func (h *EventHandler) CreatePersonalDraft(c fiber.Ctx) error {
 
 	cmd := ConvertCreateDraftRequestToCommand(req, userID, "personal", "")
 
-	event, err := h.svc.CreateDraft(c.Context(), cmd)
+	event, err := h.svc.CreateDraft(ctx, cmd)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventStatusNotFound) {
 			return response.BadRequest(c, "Invalid event status", nil)
@@ -816,6 +862,8 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
 	var req CreateDraftRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{
@@ -825,7 +873,7 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 
 	cmd := ConvertCreateDraftRequestToCommand(req, userID, "institution", institutionID)
 
-	event, err := h.svc.CreateDraft(c.Context(), cmd)
+	event, err := h.svc.CreateDraft(ctx, cmd)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventStatusNotFound) {
 			return response.BadRequest(c, "Invalid event status", nil)
@@ -865,6 +913,8 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
 	var req CreateEventRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{
@@ -893,7 +943,7 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 
 	cmd := ConvertCreateEventRequestToCommand(req, userID, "personal", "")
 
-	event, err := h.svc.CreateEvent(c.Context(), cmd)
+	event, err := h.svc.CreateEvent(ctx, cmd)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventStatusNotFound) {
 			return response.BadRequest(c, "Invalid event status", nil)
@@ -939,6 +989,8 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
 	var req CreateEventRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{
@@ -967,7 +1019,7 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 
 	cmd := ConvertCreateEventRequestToCommand(req, userID, "institution", institutionID)
 
-	event, err := h.svc.CreateEvent(c.Context(), cmd)
+	event, err := h.svc.CreateEvent(ctx, cmd)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventStatusNotFound) {
 			return response.BadRequest(c, "Invalid event status", nil)
@@ -1014,6 +1066,8 @@ func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
 	var req UpdateEventRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request", fiber.Map{
@@ -1023,7 +1077,7 @@ func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
 
 	cmd := ConvertUpdateEventRequestToCommand(req, id, userID)
 
-	event, err := h.svc.UpdateEvent(c.Context(), cmd)
+	event, err := h.svc.UpdateEvent(ctx, cmd)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
@@ -1065,7 +1119,9 @@ func (h *EventHandler) DeleteEvent(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	if err := h.svc.DeleteEvent(c.Context(), id, userID); err != nil {
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	if err := h.svc.DeleteEvent(ctx, id, userID); err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
 		}
@@ -1102,7 +1158,9 @@ func (h *EventHandler) PermanentlyDeleteEvent(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	if err := h.svc.PermanentlyDeleteEvent(c.Context(), id, userID); err != nil {
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	if err := h.svc.PermanentlyDeleteEvent(ctx, id, userID); err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
 		}
@@ -1139,7 +1197,9 @@ func (h *EventHandler) RestoreEvent(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	event, err := h.svc.RestoreEvent(c.Context(), id, userID)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	event, err := h.svc.RestoreEvent(ctx, id, userID)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
@@ -1191,7 +1251,9 @@ func (h *EventHandler) BulkDeleteEvents(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	result, err := h.svc.DeleteEvents(c.Context(), req.IDs, userID)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	result, err := h.svc.DeleteEvents(ctx, req.IDs, userID)
 	if err != nil {
 		return response.InternalError(c, "Failed to delete events", fiber.Map{
 			"error": err.Error(),
@@ -1236,7 +1298,9 @@ func (h *EventHandler) BulkPermanentlyDeleteEvents(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	result, err := h.svc.PermanentlyDeleteEvents(c.Context(), req.IDs, userID)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	result, err := h.svc.PermanentlyDeleteEvents(ctx, req.IDs, userID)
 	if err != nil {
 		return response.InternalError(c, "Failed to permanently delete events", fiber.Map{
 			"error": err.Error(),
@@ -1281,7 +1345,9 @@ func (h *EventHandler) BulkRestoreEvents(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	result, err := h.svc.RestoreEvents(c.Context(), req.IDs, userID)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	result, err := h.svc.RestoreEvents(ctx, req.IDs, userID)
 	if err != nil {
 		return response.InternalError(c, "Failed to restore events", fiber.Map{
 			"error": err.Error(),
@@ -1320,7 +1386,9 @@ func (h *EventHandler) PublishEvent(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	event, err := h.svc.PublishEvent(c.Context(), id, userID)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	event, err := h.svc.PublishEvent(ctx, id, userID)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
@@ -1358,7 +1426,9 @@ func (h *EventHandler) CancelEvent(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	event, err := h.svc.CancelEvent(c.Context(), id, userID)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	event, err := h.svc.CancelEvent(ctx, id, userID)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
@@ -1391,7 +1461,10 @@ func (h *EventHandler) CompleteEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	event, err := h.svc.CompleteEvent(c.Context(), id)
+	userID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	event, err := h.svc.CompleteEvent(ctx, id)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
@@ -1443,7 +1516,9 @@ func (h *EventHandler) BulkPublishEvents(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	result, err := h.svc.BulkPublishEvents(c.Context(), req.IDs, userID)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	result, err := h.svc.BulkPublishEvents(ctx, req.IDs, userID)
 	if err != nil {
 		return response.InternalError(c, "Failed to publish events", fiber.Map{
 			"error": err.Error(),
@@ -1488,7 +1563,9 @@ func (h *EventHandler) BulkCancelEvents(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	result, err := h.svc.BulkCancelEvents(c.Context(), req.IDs, userID)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	result, err := h.svc.BulkCancelEvents(ctx, req.IDs, userID)
 	if err != nil {
 		return response.InternalError(c, "Failed to cancel events", fiber.Map{
 			"error": err.Error(),
@@ -1528,7 +1605,10 @@ func (h *EventHandler) BulkCompleteEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "Maximum 100 events can be completed at once", nil)
 	}
 
-	result, err := h.svc.BulkCompleteEvents(c.Context(), req.IDs)
+	userID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	result, err := h.svc.BulkCompleteEvents(ctx, req.IDs)
 	if err != nil {
 		return response.InternalError(c, "Failed to complete events", fiber.Map{
 			"error": err.Error(),
@@ -1564,6 +1644,13 @@ func (h *EventHandler) DuplicateEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
 	var req DuplicateEventRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request body", fiber.Map{
@@ -1577,7 +1664,7 @@ func (h *EventHandler) DuplicateEvent(c fiber.Ctx) error {
 		IsDraft: req.IsDraft,
 	}
 
-	event, err := h.svc.DuplicateEvent(c.Context(), id, cmd)
+	event, err := h.svc.DuplicateEvent(ctx, id, cmd)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
@@ -1624,13 +1711,20 @@ func (h *EventHandler) BulkDuplicateEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "Maximum 100 events can be duplicated at once", nil)
 	}
 
+	userID, err := getUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
 	cmd := service.BulkDuplicateCommand{
 		NamePrefix:     req.NamePrefix,
 		DateOffsetDays: req.DateOffsetDays,
 		IsDraft:        req.IsDraft,
 	}
 
-	result, err := h.svc.BulkDuplicateEvents(c.Context(), req.IDs, cmd)
+	result, err := h.svc.BulkDuplicateEvents(ctx, req.IDs, cmd)
 	if err != nil {
 		return response.InternalError(c, "Failed to duplicate events", fiber.Map{
 			"error": err.Error(),
@@ -1661,6 +1755,7 @@ func (h *EventHandler) BulkDuplicateEvents(c fiber.Ctx) error {
 // @Failure 404 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/institutions/{institutionId}/events/{eventId}/image [post]
+// internal/modules/events/handler/eventhandler.go
 func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 	eventID := c.Params("eventId")
 	if eventID == "" {
@@ -1671,6 +1766,8 @@ func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
+
+	ctx := context.WithValue(c.Context(), "user_id", userID)
 
 	imageFile, err := c.FormFile("image")
 	if err != nil {
@@ -1688,15 +1785,22 @@ func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 		return response.InternalError(c, "Failed to read image file", nil)
 	}
 
+	// ✅ Detect MIME type from file content
+	contentType := imageFile.Header.Get("Content-Type")
+	if contentType == "application/octet-stream" || contentType == "" {
+		// Detect from file extension or magic bytes
+		contentType = detectMimeType(imageFile.Filename, imageData)
+	}
+
 	cmd := service.UploadEventImageCommand{
 		EventID:     eventID,
 		ImageData:   imageData,
 		ImageName:   imageFile.Filename,
-		ContentType: imageFile.Header.Get("Content-Type"),
+		ContentType: contentType,
 		UploadedBy:  userID,
 	}
 
-	media, err := h.svc.UploadEventImage(c.Context(), cmd)
+	media, err := h.svc.UploadEventImage(ctx, cmd)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
@@ -1707,6 +1811,49 @@ func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 	}
 
 	return response.Success(c, "Image uploaded successfully", media)
+}
+
+// detectMimeType detects MIME type from filename and file data
+func detectMimeType(filename string, data []byte) string {
+	// Check by file extension first
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".svg":
+		return "image/svg+xml"
+	case ".bmp":
+		return "image/bmp"
+	}
+
+	// Check magic bytes
+	if len(data) >= 4 {
+		// PNG: 89 50 4E 47
+		if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
+			return "image/png"
+		}
+		// JPEG: FF D8 FF
+		if data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
+			return "image/jpeg"
+		}
+		// GIF: 47 49 46
+		if data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 {
+			return "image/gif"
+		}
+		// WEBP: 52 49 46 46 ... 57 45 42 50
+		if len(data) >= 12 && data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
+			data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50 {
+			return "image/webp"
+		}
+	}
+
+	return "application/octet-stream"
 }
 
 // UploadCertificateTemplate godoc
@@ -1737,6 +1884,8 @@ func (h *EventHandler) UploadCertificateTemplate(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
 	certFile, err := c.FormFile("certificate")
 	if err != nil {
 		return response.BadRequest(c, "Certificate file is required", nil)
@@ -1761,7 +1910,7 @@ func (h *EventHandler) UploadCertificateTemplate(c fiber.Ctx) error {
 		UploadedBy:      userID,
 	}
 
-	media, err := h.svc.UploadCertificateTemplate(c.Context(), cmd)
+	media, err := h.svc.UploadCertificateTemplate(ctx, cmd)
 	if err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
@@ -1804,7 +1953,9 @@ func (h *EventHandler) DeleteEventImage(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	if err := h.svc.DeleteEventImage(c.Context(), eventID, userID); err != nil {
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	if err := h.svc.DeleteEventImage(ctx, eventID, userID); err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
 		}
@@ -1842,7 +1993,9 @@ func (h *EventHandler) DeleteEventCertificate(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	if err := h.svc.DeleteEventCertificate(c.Context(), eventID, userID); err != nil {
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	if err := h.svc.DeleteEventCertificate(ctx, eventID, userID); err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
 		}
@@ -1880,7 +2033,9 @@ func (h *EventHandler) DeleteAllEventMedia(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	if err := h.svc.DeleteAllEventMedia(c.Context(), eventID, userID); err != nil {
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	if err := h.svc.DeleteAllEventMedia(ctx, eventID, userID); err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
 			return response.NotFound(c, "Event not found", nil)
 		}
@@ -1937,7 +2092,9 @@ func (h *EventHandler) BulkDeleteEventMedia(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	result, err := h.svc.BulkDeleteEventMedia(c.Context(), req.IDs, userID)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	result, err := h.svc.BulkDeleteEventMedia(ctx, req.IDs, userID)
 	if err != nil {
 		return response.InternalError(c, "Failed to delete media", fiber.Map{
 			"error": err.Error(),
@@ -1946,4 +2103,3 @@ func (h *EventHandler) BulkDeleteEventMedia(c fiber.Ctx) error {
 
 	return response.Success(c, "Media deleted successfully", result)
 }
-

@@ -50,8 +50,8 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 		// Store scope for downstream
 		c.Locals("scope", scope)
 
-		// Check permission
-		allowed, err := checker.HasPermission(c.Context(), userIDStr, scope, resource, action)
+		// Check permission with fallback chain
+		allowed, err := checkPermissionWithFallback(c, checker, userIDStr, scope, resource, action)
 		if err != nil {
 			return response.InternalError(c, "Authorization error", fiber.Map{
 				"error": err.Error(),
@@ -71,6 +71,129 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 
 		return c.Next()
 	}
+}
+
+// checkPermissionWithFallback checks permissions with a fallback chain
+func checkPermissionWithFallback(
+	c fiber.Ctx,
+	checker authdomain.PermissionChecker,
+	userID string,
+	scope authdomain.Scope,
+	resource string,
+	action string,
+) (bool, error) {
+	ctx := c.Context()
+
+	// For read actions: read -> read_all -> read_own
+	if action == authdomain.ActionRead.String() {
+		// Try exact read permission
+		allowed, err := checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionRead.String())
+		if err == nil && allowed {
+			return true, nil
+		}
+
+		// Try read_all
+		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionReadAll.String())
+		if err == nil && allowed {
+			return true, nil
+		}
+
+		// Try read_own
+		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionReadOwn.String())
+		if err == nil && allowed {
+			return true, nil
+		}
+
+		if err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+
+	// For update actions: update -> update_all -> update_own
+	if action == authdomain.ActionUpdate.String() {
+		// Try exact update permission
+		allowed, err := checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionUpdate.String())
+		if err == nil && allowed {
+			return true, nil
+		}
+
+		// Try update_all
+		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionUpdateAll.String())
+		if err == nil && allowed {
+			return true, nil
+		}
+
+		// Try update_own
+		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionUpdateOwn.String())
+		if err == nil && allowed {
+			return true, nil
+		}
+
+		if err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+
+	// For delete actions: delete -> delete_all -> delete_own
+	if action == authdomain.ActionDelete.String() {
+		// Try exact delete permission
+		allowed, err := checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionDelete.String())
+		if err == nil && allowed {
+			return true, nil
+		}
+
+		// Try delete_all
+		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionDeleteAll.String())
+		if err == nil && allowed {
+			return true, nil
+		}
+
+		// Try delete_own
+		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionDeleteOwn.String())
+		if err == nil && allowed {
+			return true, nil
+		}
+
+		if err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+
+	// For publish actions: publish_all -> publish_own (no exact publish)
+	if action == authdomain.ActionPublishAll.String() || action == authdomain.ActionPublishOwn.String() {
+		// Try publish_all
+		allowed, err := checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionPublishAll.String())
+		if err == nil && allowed {
+			return true, nil
+		}
+
+		// Try publish_own
+		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionPublishOwn.String())
+		if err == nil && allowed {
+			return true, nil
+		}
+
+		if err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+
+	// For create actions: just check create
+	if action == authdomain.ActionCreate.String() {
+		return checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionCreate.String())
+	}
+
+	// For manage actions: just check manage
+	if action == authdomain.ActionManage.String() {
+		return checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionManage.String())
+	}
+
+	// For all other actions, check exact match
+	return checker.HasPermission(ctx, userID, scope, resource, action)
 }
 
 // ============================================================
@@ -151,6 +274,7 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 	return authdomain.NewPlatformScope()
 }
 
+
 // getResourceFromRequest extracts the resource from the request path
 func getResourceFromRequest(c fiber.Ctx) string {
 	path := strings.TrimPrefix(c.Path(), "/api/v1/")
@@ -160,34 +284,51 @@ func getResourceFromRequest(c fiber.Ctx) string {
 		switch seg {
 		case "users", "user":
 			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
-				return authdomain.ResourceEvent.String()
+				return authdomain.ResourceEvent.String() // "event"
 			}
-			return authdomain.ResourceUser.String()
+			return authdomain.ResourceUser.String() // "user"
 		case "institutions", "institution":
 			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
-				return authdomain.ResourceEvent.String()
+				return authdomain.ResourceEvent.String() // "event"
 			}
-			return authdomain.ResourceInstitution.String()
+			return authdomain.ResourceInstitution.String() // "institution"
 		case "teams", "team":
 			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
-				return authdomain.ResourceEvent.String()
+				return authdomain.ResourceEvent.String() // "event"
 			}
-			return authdomain.ResourceTeam.String()
+			return authdomain.ResourceTeam.String() // "team"
 		case "me":
 			if i+1 < len(segments) && (segments[i+1] == "events" || segments[i+1] == "event") {
-				return authdomain.ResourceEvent.String()
+				return authdomain.ResourceEvent.String() // "event"
 			}
 		}
 	}
 
-	// Check for direct matches
+	// Check for direct matches - use singular form
 	for _, seg := range segments {
 		switch seg {
-		case "profile", "events", "event", "certificates", "certificate",
-			"attendees", "attendee", "payments", "payment", "payouts", "payout",
-			"dashboard", "analytics", "notifications", "notification",
-			"media", "members", "member", "teams", "team", "team-types", "team-type":
-			return seg
+		case "profile":
+			return "profile"
+		case "events", "event":
+			return authdomain.ResourceEvent.String() // "event"
+		case "certificates", "certificate":
+			return authdomain.ResourceCertificate.String() // "certificate"
+		case "attendees", "attendee":
+			return authdomain.ResourceAttendee.String() // "attendee"
+		case "payments", "payment":
+			return authdomain.ResourcePayment.String() // "payment"
+		case "payouts", "payout":
+			return authdomain.ResourcePayout.String() // "payout"
+		case "members", "member":
+			return authdomain.ResourceMember.String() // "member"
+		case "dashboard":
+			return "dashboard"
+		case "analytics":
+			return "analytics"
+		case "notifications", "notification":
+			return "notification"
+		case "media":
+			return "media"
 		}
 	}
 

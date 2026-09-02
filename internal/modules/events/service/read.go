@@ -65,6 +65,8 @@ func (s *eventService) GetEventBySlug(ctx context.Context, slug string) (*domain
 func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters) ([]*domain.Event, int64, error) {
 	userID := s.getUserIDFromContext(ctx)
 
+	log.Printf("🔍 SERVICE: IncludeDeleted=%v, OnlyDeleted=%v", filters.IncludeDeleted, filters.OnlyDeleted)
+
 	// If user is not authenticated, only show public events
 	if userID == "" {
 		filters.Visibility = string(domain.VisibilityPublic)
@@ -111,13 +113,17 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 		Visibility:     domain.Visibility(filters.Visibility),
 	}
 
+	    log.Printf("🔍 DOMAIN FILTERS: IncludeDeleted=%v, OnlyDeleted=%v", domainFilters.IncludeDeleted, domainFilters.OnlyDeleted)
+
+
 	events, total, err := s.repo.ListEvents(ctx, domainFilters)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// Filter events by visibility permissions
-	filteredEvents := s.filterEventsByVisibility(ctx, userID, events)
+	// Filter events by visibility permissions (handles deleted events properly)
+	showDeleted := filters.IncludeDeleted || filters.OnlyDeleted
+	filteredEvents := s.filterEventsByVisibility(ctx, userID, events, showDeleted)
 	return filteredEvents, total, nil
 }
 
@@ -276,8 +282,9 @@ func (s *eventService) SearchEvents(ctx context.Context, query string, filters S
 		return nil, 0, err
 	}
 
-	// Filter events by visibility permissions
-	filteredEvents := s.filterEventsByVisibility(ctx, userID, events)
+	// Filter events by visibility permissions (handles deleted events properly)
+	showDeleted := filters.IncludeDeleted || filters.OnlyDeleted
+	filteredEvents := s.filterEventsByVisibility(ctx, userID, events, showDeleted)
 	return filteredEvents, total, nil
 }
 
@@ -301,7 +308,10 @@ func (s *eventService) GetEventStatuses(ctx context.Context) ([]*domain.EventSta
 
 // getUserIDFromContext extracts user ID from context
 func (s *eventService) getUserIDFromContext(ctx context.Context) string {
-	// TODO: Implement based on your auth system
+	// Get user ID from context (set by handler)
+	if userID, ok := ctx.Value("user_id").(string); ok {
+		return userID
+	}
 	return ""
 }
 
@@ -346,14 +356,51 @@ func (s *eventService) canViewEvent(ctx context.Context, userID string, event *d
 	return false
 }
 
+// canViewDeletedEvent checks if a user can view a soft-deleted event
+// Uses existing permission methods instead of explicit role checks
+func (s *eventService) canViewDeletedEvent(ctx context.Context, userID string, event *domain.Event) bool {
+	// Event creator can always view their own deleted events
+	if event.CreatedBy == userID {
+		return true
+	}
+
+	// Create scope from event
+	scope := s.getScopeFromEvent(event)
+
+	// Check if user can read ALL events in this scope (Account Admin or Event Manager)
+	canReadAll, err := s.permChecker.CanReadAllEvents(ctx, userID, scope)
+	if err == nil && canReadAll {
+		return true
+	}
+
+	// Check if user can read OWN events in this scope (Team Member)
+	canReadOwn, err := s.permChecker.CanReadOwnEvents(ctx, userID, scope)
+	if err == nil && canReadOwn {
+		// Team members can only see their own deleted events
+		return event.CreatedBy == userID
+	}
+
+	return false
+}
+
 // filterEventsByVisibility filters a list of events based on visibility permissions
-func (s *eventService) filterEventsByVisibility(ctx context.Context, userID string, events []*domain.Event) []*domain.Event {
+// showDeleted controls whether deleted events should be included (and checked separately)
+func (s *eventService) filterEventsByVisibility(ctx context.Context, userID string, events []*domain.Event, showDeleted bool) []*domain.Event {
 	if len(events) == 0 {
-		return events
+		return events 
 	}
 
 	filtered := make([]*domain.Event, 0, len(events))
 	for _, event := range events {
+		// For deleted events, check if user has permission to view them
+		if event.IsDeleted() {
+			if showDeleted && s.canViewDeletedEvent(ctx, userID, event) {
+				filtered = append(filtered, event)
+			}
+			continue
+		}
+
+		// For non-deleted events, check visibility (public, private, unlisted)
 		if s.canViewEvent(ctx, userID, event) {
 			filtered = append(filtered, event)
 		}
@@ -374,8 +421,6 @@ func (s *eventService) calculatePagination(page, pageSize int) (limit, offset in
 	}
 	return pageSize, (page - 1) * pageSize
 }
-
-
 
 // calculatePaginationWithDefaults calculates pagination with custom defaults
 func (s *eventService) calculatePaginationWithDefaults(page, pageSize, defaultLimit, maxLimit int) (limit, offset int) {
