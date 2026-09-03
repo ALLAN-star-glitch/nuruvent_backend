@@ -81,6 +81,8 @@ type Repository interface {
 
      // GetEventByIDIncludingDeleted gets an event by ID including soft-deleted ones
     GetEventByIDIncludingDeleted(ctx context.Context, id string) (*Event, error)
+
+    GetAllCategories(ctx context.Context) ([]*Category, error)
 }
 
 // ============================================================

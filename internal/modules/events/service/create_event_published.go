@@ -82,7 +82,7 @@ func (s *eventService) validateEventPermissions(ctx context.Context, cmd CreateE
 		if cmd.CreatedBy == "" {
 			return errors.New("user ID is required for personal events")
 		}
-		scope = domain.NewPersonalTeamScope(cmd.CreatedBy)
+		scope = domain.NewPersonalTeamScope(cmd.CreatedBy) // Personal events are scoped to the user
 
 		allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, scope)
 		if err != nil {

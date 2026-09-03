@@ -48,6 +48,9 @@ type Event struct {
 	EventTypeID          string
 	EventStatusID        string
 	CategoryID           *string
+	Category             *Category 
+	EventType		      *EventType
+	EventStatus				*EventStatus
 	EventFormatID        *string
 	CertificateTemplateID *string
 
@@ -57,6 +60,7 @@ type Event struct {
 	InstitutionID *string // NULL for personal events
 	CreatedBy     string  // User ID who created this event
 	Creator       *UserInfo
+	Organizer     *OrganizerInfo 
 
 	// ============================================================
 	// Schedule & Venue
@@ -175,7 +179,7 @@ type Event struct {
 	// ============================================================
 	// Metadata & Versioning
 	// ============================================================
-	Metadata           map[string]interface{}
+	Metadata           map[string]any
 	Version            int
 	PublishedAt        *time.Time
 	ScheduledPublishAt *time.Time
@@ -753,14 +757,22 @@ func (e *Event) AddMaterial(material EventMaterial) {
 	e.UpdatedAt = time.Now()
 }
 
-func (e *Event) RemoveMaterial(materialID string) {
-	for i, m := range e.Materials {
-		if m.ID == materialID {
-			e.Materials = append(e.Materials[:i], e.Materials[i+1:]...)
-			e.UpdatedAt = time.Now()
-			return
-		}
-	}
+func (e *Event) RemoveMaterial(materialID string) error {
+    // Validate state
+    if e.IsDeleted() {
+        return errors.New("cannot modify a deleted event")
+    }
+    
+    // Find and remove
+    for i, m := range e.Materials {
+        if m.ID == materialID {
+            e.Materials = append(e.Materials[:i], e.Materials[i+1:]...)
+            e.UpdatedAt = time.Now()
+            return nil
+        }
+    }
+    
+    return fmt.Errorf("material with ID %s not found", materialID)
 }
 
 // ============================================================

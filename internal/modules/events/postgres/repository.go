@@ -623,8 +623,50 @@ func (r *PostgresRepository) loadChildEntities(ctx context.Context, event *domai
 	}
 	event.Materials = toDomainMaterials(materialModels)
 
+	// ✅ Load EventType
+    if event.EventTypeID != "" {
+        var eventTypeModel EventTypeModel
+        if err := r.db.WithContext(ctx).Where("id = ?", event.EventTypeID).First(&eventTypeModel).Error; err == nil {
+            event.EventType = toDomainEventType(&eventTypeModel)
+        }
+    }
+
+    // ✅ Load EventStatus
+    if event.EventStatusID != "" {
+        var eventStatusModel EventStatusModel
+        if err := r.db.WithContext(ctx).Where("id = ?", event.EventStatusID).First(&eventStatusModel).Error; err == nil {
+            event.EventStatus = toDomainEventStatus(&eventStatusModel)
+        }
+    }
+
+	// ✅ Load Category
+	if event.CategoryID != nil && *event.CategoryID != "" {
+		var categoryModel CategoryModel
+		if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", *event.CategoryID).First(&categoryModel).Error; err == nil {
+			event.Category = toDomainCategory(&categoryModel)
+		}
+	}
+
 	return nil
 }
+
+func (r *PostgresRepository) GetAllCategories(ctx context.Context) ([]*domain.Category, error) {
+	var models []CategoryModel
+	err := r.db.WithContext(ctx).
+		Where("deleted_at IS NULL").
+		Order("sort_order ASC, display_name ASC").
+		Find(&models).Error
+	if err != nil {
+		return nil, err
+	}
+
+	categories := make([]*domain.Category, len(models))
+	for i, m := range models {
+		categories[i] = toDomainCategory(&m)
+	}
+	return categories, nil
+}
+
 
 // ============================================================
 // CHILD ENTITY SAVE/UPDATE HELPERS

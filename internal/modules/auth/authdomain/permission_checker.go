@@ -18,7 +18,7 @@ type PermissionChecker interface {
 	HasAllPermissions(ctx context.Context, userID string, scope Scope, resource string, actions ...string) (bool, error)
 
 	// ============================================================
-	// CONVENIENCE METHODS (Built on HasPermission)
+	// EVENT CONVENIENCE METHODS
 	// ============================================================
 
 	// CanReadAllEvents checks if user can read ALL events in a scope
@@ -48,6 +48,9 @@ type PermissionChecker interface {
 	// CanPublishOwnEvents checks if user can publish OWN events in a scope
 	CanPublishOwnEvents(ctx context.Context, userID string, scope Scope) (bool, error)
 
+	// CanViewCreator checks if user can view creator details
+	CanViewCreator(ctx context.Context, userID string, scope Scope) (bool, error)
+
 	// CanManageEvent checks if user can manage events in a scope
 	// (Combines CanUpdateAllEvents + CanDeleteAllEvents)
 	CanManageEvent(ctx context.Context, userID string, scope Scope) (bool, error)
@@ -55,6 +58,30 @@ type PermissionChecker interface {
 	// CanViewEvent checks if user can view events in a scope
 	// (Combines CanReadAllEvents + CanReadOwnEvents)
 	CanViewEvent(ctx context.Context, userID string, scope Scope) (bool, error)
+
+	// ============================================================
+	// ✅ PROFILE CONVENIENCE METHODS
+	// ============================================================
+
+	// CanReadAllProfiles checks if user can read ALL profiles in a scope
+	CanReadAllProfiles(ctx context.Context, userID string, scope Scope) (bool, error)
+
+	// CanReadOwnProfile checks if user can read OWN profile in a scope
+	CanReadOwnProfile(ctx context.Context, userID string, scope Scope) (bool, error)
+
+	// CanUpdateAllProfiles checks if user can update ALL profiles in a scope
+	CanUpdateAllProfiles(ctx context.Context, userID string, scope Scope) (bool, error)
+
+	// CanUpdateOwnProfile checks if user can update OWN profile in a scope
+	CanUpdateOwnProfile(ctx context.Context, userID string, scope Scope) (bool, error)
+
+	// CanViewProfile checks if user can view profiles in a scope
+	// (Combines CanReadAllProfiles + CanReadOwnProfile)
+	CanViewProfile(ctx context.Context, userID string, scope Scope) (bool, error)
+
+	// CanManageProfile checks if user can manage profiles in a scope
+	// (Combines CanUpdateAllProfiles)
+	CanManageProfile(ctx context.Context, userID string, scope Scope) (bool, error)
 
 	// ============================================================
 	// TEAM ROLE CHECKS (Built on HasPermission)

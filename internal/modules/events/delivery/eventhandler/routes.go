@@ -21,8 +21,9 @@ func (h *EventHandler) RegisterRoutes(
 		// Used by: Team switcher, advanced search, public listings
 		public.Get("/", h.ListEvents)
 
-		// Full-text search across events
-		public.Get("/search", h.SearchEvents)
+			// ---- SEARCH (Requires Auth + Authz) ----
+		// Authenticated users can search public + private events they have access to
+		public.Get("/search", authMiddleware, authzMiddleware, h.SearchEvents)
 
 		// Convenience endpoints for common queries
 		public.Get("/upcoming", h.GetUpcomingEvents) // Events happening soon
@@ -31,6 +32,7 @@ func (h *EventHandler) RegisterRoutes(
 		// Reference data (no team/scope needed)
 		public.Get("/types", h.GetEventTypes)       // All event types (workshop, webinar, etc.)
 		public.Get("/statuses", h.GetEventStatuses) // All statuses (draft, published, etc.)
+		public.Get("/categories", h.GetCategories)
 
 		// Single event access (public visibility)
 		public.Get("/slug/:slug", h.GetEventBySlug) // SEO-friendly URLs

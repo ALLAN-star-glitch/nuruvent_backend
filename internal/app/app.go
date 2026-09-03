@@ -92,6 +92,7 @@ func (app *App) SetupRoutes() {
 		authzMiddleware,
 		app.AuthHandler,
 		app.EventsHandler,
+		app.ProfileHandler,
 	)
 	log.Println("Routes registered successfully")
 }

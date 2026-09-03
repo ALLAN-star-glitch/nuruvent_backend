@@ -1,25 +1,25 @@
-// internal/modules/events/domain/account.go
+// internal/modules/events/domain/user.go
 
 package domain
 
 import "time"
 
 // UserInfo represents basic user information for event creators
-// (formerly AccountInfo)
 type UserInfo struct {
-	ID              string `json:"id"`
-	Name            string `json:"name"`
-	DisplayName     string `json:"display_name"`
-	Email           string `json:"email"`
-	Phone           string `json:"phone"`
-	Username        string `json:"username"`
-	AccountType     string `json:"account_type"`
-	InstitutionID   string `json:"institution_id"`
-	InstitutionName string `json:"institution_name"`
-	Slug            string `json:"slug"`
-	IsActive        bool   `json:"is_active"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ID              string
+	Name            string
+	DisplayName     string
+	Email           string
+	Phone           string
+	Username        string
+	AccountType     string
+	InstitutionID   string
+	InstitutionName string
+	Slug            string
+	AvatarURL       string // ✅ Added
+	IsActive        bool
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // NewUserInfo creates a new UserInfo instance
@@ -65,6 +65,12 @@ func (u *UserInfo) WithPhone(phone string) *UserInfo {
 	return u
 }
 
+// WithAvatarURL sets the avatar URL
+func (u *UserInfo) WithAvatarURL(avatarURL string) *UserInfo {
+	u.AvatarURL = avatarURL
+	return u
+}
+
 // IsInstitution checks if the user is an institution account
 func (u *UserInfo) IsInstitution() bool {
 	return u.AccountType == "account_type_institution"
@@ -91,4 +97,15 @@ func (u *UserInfo) HasInstitution() bool {
 	return u.InstitutionID != ""
 }
 
+// GetFullName returns the full name (or display name if available)
+func (u *UserInfo) GetFullName() string {
+	if u.DisplayName != "" {
+		return u.DisplayName
+	}
+	return u.Name
+}
 
+// GetAvatarURL returns the avatar URL or empty string if not set
+func (u *UserInfo) GetAvatarURL() string {
+	return u.AvatarURL
+}

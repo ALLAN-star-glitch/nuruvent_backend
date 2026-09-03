@@ -38,11 +38,14 @@ type Repository interface {
 	CreateInstitution(institution *Institution) error
 	GetInstitutionByID(id string) (*Institution, error)
 	GetInstitutionByUserID(userID string) (*Institution, error)
+	GetInstitutionByEmail(email string) (*Institution, error)
 	GetInstitutionTypeBySlug(slug string) (*InstitutionType, error)
 	GetInstitutionTypeByName(name string) (*InstitutionType, error)
 	UpdateInstitution(institution *Institution) error
 	InstitutionExists(id string) (bool, error)
 	GetInstitutionsByType(institutionTypeID string) ([]*Institution, error)
+	DeleteUser(userID string) error
+	ReactivateUser(userID string) error	
 
 	// ============================================================
 	// PROFESSIONAL TYPE OPERATIONS

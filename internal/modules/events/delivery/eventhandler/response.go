@@ -8,6 +8,10 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
 
+// ============================================================
+// BUILDER FUNCTIONS
+// ============================================================
+
 // NewEventResponseFromEvent converts a domain Event to EventResponse
 // This version does NOT include creator info - use NewEventResponseFromEventWithCreator for that
 func NewEventResponseFromEvent(event *domain.Event) EventResponse {
@@ -22,9 +26,18 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 		Tags:             event.Tags,
 		Language:         event.Language,
 
+		Category:    buildCategoryDTO(event.Category),
+		EventType:   buildEventTypeDTO(event.EventType),
+		EventStatus: buildEventStatusDTO(event.EventStatus),
+
 		// Ownership
 		InstitutionID: "",
-		OwnerType:     "personal", // Default, will be determined from InstitutionID
+		OwnerType:     "personal",
+
+		// Organizer (public-facing - always shown)
+		Organizer: buildOrganizerResponse(event.Organizer),
+
+		// Creator is nil by default (will be set by WithCreator function)
 
 		// Schedule
 		IsMultiDay:  event.IsMultiDay,
@@ -40,10 +53,10 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 		MeetLink:           event.MeetLink,
 
 		// Tickets
-		IsFree:            event.IsFreeEvent,
-		Capacity:          0,
-		CurrentAttendees:  event.CurrentAttendees,
-		WaitlistEnabled:   event.WaitlistEnabled,
+		IsFree:             event.IsFreeEvent,
+		Capacity:           0,
+		CurrentAttendees:   event.CurrentAttendees,
+		WaitlistEnabled:    event.WaitlistEnabled,
 		MinTicketsPerOrder: event.MinTicketsPerOrder,
 
 		// Access & Privacy
@@ -53,7 +66,7 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 		InvitedEmails: event.InvitedEmails,
 
 		// Monetization
-		IsFeatured:          event.IsFeatured,
+		IsFeatured:         event.IsFeatured,
 		CertificateEnabled:  event.CertificateEnabled,
 		CertificatePrice:    event.CertificatePrice,
 
@@ -81,8 +94,6 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 	if event.InstitutionID != nil && *event.InstitutionID != "" {
 		resp.InstitutionID = *event.InstitutionID
 		resp.OwnerType = "institution"
-	} else {
-		resp.OwnerType = "personal"
 	}
 
 	// Set Capacity
@@ -286,11 +297,9 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 }
 
 // NewEventResponseFromEventWithCreator converts a domain Event to EventResponse with creator info
-// This should only be used when the caller has permission to view creator info
 func NewEventResponseFromEventWithCreator(event *domain.Event) EventResponse {
 	resp := NewEventResponseFromEvent(event)
 
-	// Set Creator if available
 	if event.Creator != nil {
 		resp.Creator = &CreatorDTO{
 			ID:          event.Creator.ID,
@@ -305,7 +314,6 @@ func NewEventResponseFromEventWithCreator(event *domain.Event) EventResponse {
 }
 
 // NewEventResponseFromEvents converts multiple domain Events to EventResponse slice
-// This version does NOT include creator info
 func NewEventResponseFromEvents(events []*domain.Event) []EventResponse {
 	responses := make([]EventResponse, len(events))
 	for i, event := range events {
@@ -315,11 +323,81 @@ func NewEventResponseFromEvents(events []*domain.Event) []EventResponse {
 }
 
 // NewEventResponseFromEventsWithCreator converts multiple domain Events to EventResponse slice with creator info
-// This should only be used when the caller has permission to view creator info
 func NewEventResponseFromEventsWithCreator(events []*domain.Event) []EventResponse {
 	responses := make([]EventResponse, len(events))
 	for i, event := range events {
 		responses[i] = NewEventResponseFromEventWithCreator(event)
 	}
 	return responses
+}
+
+// ============================================================
+// BUILDER HELPERS
+// ============================================================
+
+// buildOrganizerResponse converts domain OrganizerInfo to OrganizerResponse
+func buildOrganizerResponse(organizer *domain.OrganizerInfo) *OrganizerResponse {
+	if organizer == nil {
+		return nil
+	}
+	return &OrganizerResponse{
+		ID:          organizer.ID,
+		Name:        organizer.Name,
+		DisplayName: organizer.DisplayName,
+		Type:        organizer.Type,
+		AvatarURL:   organizer.AvatarURL,
+		Slug:        organizer.Slug,
+	}
+}
+
+// buildCategoryDTO converts domain Category to CategoryDTO
+func buildCategoryDTO(category *domain.Category) *CategoryDTO {
+	if category == nil {
+		return nil
+	}
+	return &CategoryDTO{
+		ID:          category.ID,
+		Slug:        category.Slug,
+		Name:        category.Name,
+		DisplayName: category.DisplayName,
+		Description: category.Description,
+		Icon:        category.Icon,
+		Color:       category.Color,
+	}
+}
+
+// buildEventTypeDTO converts domain EventType to EventTypeDTO
+func buildEventTypeDTO(et *domain.EventType) *EventTypeDTO {
+	if et == nil {
+		return nil
+	}
+	return &EventTypeDTO{
+		ID:                  et.ID,
+		Slug:                et.Slug,
+		Name:                et.Name,
+		DisplayName:         et.DisplayName,
+		Description:         et.Description,
+		Icon:                et.Icon,
+		Color:               et.Color,
+		SupportsCertificate: et.SupportsCertificate,
+		MinDuration:         et.MinDuration,
+		MaxDuration:         et.MaxDuration,
+	}
+}
+
+// buildEventStatusDTO converts domain EventStatus to EventStatusDTO
+func buildEventStatusDTO(es *domain.EventStatus) *EventStatusDTO {
+	if es == nil {
+		return nil
+	}
+	return &EventStatusDTO{
+		ID:          es.ID,
+		Slug:        es.Slug,
+		Name:        es.Name,
+		DisplayName: es.DisplayName,
+		Description: es.Description,
+		Color:       es.Color,
+		Icon:        es.Icon,
+		IsFinal:     es.IsFinal,
+	}
 }

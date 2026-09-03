@@ -229,6 +229,96 @@ func (s *eventService) getEventAndCheckDeletePermission(ctx context.Context, eve
 	return event, nil
 }
 
+
+
+
+func (s *eventService) canViewCreatorInfo(ctx context.Context, userID string, event *domain.Event) bool {
+    // If no user, cannot view creator info
+    if userID == "" {
+        return false
+    }
+
+    // Event creator can always see their own info
+    if event.CreatedBy == userID {
+        return true
+    }
+
+    // Check if user has explicit view_creator permission
+    scope := s.getScopeFromEvent(event)
+    allowed, err := s.permChecker.CanViewCreator(ctx, userID, scope)
+    if err != nil {
+        log.Printf("⚠️ Failed to check view_creator permission: %v", err)
+        return false
+    }
+
+    return allowed
+}
+
+
+// getScopeFromEvent creates a Scope from an event
+func (s *eventService) getScopeFromEvent(event *domain.Event) domain.Scope {
+	if event.InstitutionID != nil && *event.InstitutionID != "" {
+		return domain.NewInstitutionTeamScope(*event.InstitutionID)
+	}
+	return domain.NewPersonalTeamScope(event.CreatedBy)
+}
+
+
+
+// getCreatorInfo fetches creator information using UserInfoProvider
+func (s *eventService) getCreatorInfo(ctx context.Context, userID string) *domain.UserInfo {
+	if userID == "" {
+		return nil
+	}
+
+	// Get full user details with email, phone, etc.
+	user, err := s.userInfo.GetUserByIDWithDetails(ctx, userID)
+	if err != nil {
+		log.Printf("⚠️ Failed to get user info for %s: %v", userID, err)
+		return nil
+	}
+	return user
+}
+
+// getOrganizerInfo returns the public-facing organizer info for an event
+func (s *eventService) getOrganizerInfo(ctx context.Context, event *domain.Event) (*domain.OrganizerInfo, error) {
+	if event.InstitutionID != nil && *event.InstitutionID != "" {
+		// Institution event - show institution name
+		institution, err := s.userInfo.GetInstitutionByID(ctx, *event.InstitutionID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get institution info: %w", err)
+		}
+		if institution == nil {
+			return nil, fmt.Errorf("institution not found: %s", *event.InstitutionID)
+		}
+		return &domain.OrganizerInfo{
+			ID:          institution.ID,
+			Name:        institution.Name,
+			DisplayName: institution.DisplayName,
+			Type:        "institution",
+			AvatarURL:   institution.LogoURL,
+			Slug:        institution.Slug,
+		}, nil
+	}
+
+	// Personal event - show user's name
+	user, err := s.userInfo.GetUserByID(ctx, event.CreatedBy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user info: %w", err)
+	}
+	if user == nil {
+		return nil, fmt.Errorf("user not found: %s", event.CreatedBy)
+	}
+	return &domain.OrganizerInfo{
+		ID:          user.ID,
+		Name:        user.Name,
+		DisplayName: user.DisplayName,
+		Type:        "personal",
+		AvatarURL:   user.AvatarURL,
+		Slug:        user.Slug,
+	}, nil
+}
+
 // ============================================================
 // LOGGING HELPERS
 // ============================================================
@@ -243,4 +333,9 @@ func (s *eventService) logBulkStatusResult(operation string, result *BulkStatusR
 	} else {
 		log.Printf("❌ Bulk %s failed: all %d events failed", operation, total)
 	}
+}
+
+
+func (s *eventService) isEmptyTeam(team domain.TeamFilter) bool {
+	return team.ID == "" || team.Type == ""
 }

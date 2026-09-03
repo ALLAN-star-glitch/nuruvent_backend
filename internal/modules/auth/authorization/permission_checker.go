@@ -66,7 +66,7 @@ func (c *PermissionChecker) HasAllPermissions(ctx context.Context, userID string
 }
 
 // ============================================================
-// CONVENIENCE METHODS - READ
+// CONVENIENCE METHODS - READ (EVENTS)
 // ============================================================
 
 // CanReadAllEvents checks if user can read ALL events in a scope
@@ -80,7 +80,7 @@ func (c *PermissionChecker) CanReadOwnEvents(ctx context.Context, userID string,
 }
 
 // ============================================================
-// CONVENIENCE METHODS - CREATE
+// CONVENIENCE METHODS - CREATE (EVENTS)
 // ============================================================
 
 // CanCreateEvent checks if user can create events in a scope
@@ -89,7 +89,7 @@ func (c *PermissionChecker) CanCreateEvent(ctx context.Context, userID string, s
 }
 
 // ============================================================
-// CONVENIENCE METHODS - UPDATE
+// CONVENIENCE METHODS - UPDATE (EVENTS)
 // ============================================================
 
 // CanUpdateAllEvents checks if user can update ALL events in a scope
@@ -97,13 +97,14 @@ func (c *PermissionChecker) CanUpdateAllEvents(ctx context.Context, userID strin
 	return c.HasPermission(ctx, userID, scope, authdomain.ResourceEvent.String(), authdomain.ActionUpdateAll.String())
 }
 
+
 // CanUpdateOwnEvents checks if user can update OWN events in a scope
 func (c *PermissionChecker) CanUpdateOwnEvents(ctx context.Context, userID string, scope authdomain.Scope) (bool, error) {
 	return c.HasPermission(ctx, userID, scope, authdomain.ResourceEvent.String(), authdomain.ActionUpdateOwn.String())
 }
 
 // ============================================================
-// CONVENIENCE METHODS - DELETE
+// CONVENIENCE METHODS - DELETE (EVENTS)
 // ============================================================
 
 // CanDeleteAllEvents checks if user can delete ALL events in a scope
@@ -117,7 +118,7 @@ func (c *PermissionChecker) CanDeleteOwnEvents(ctx context.Context, userID strin
 }
 
 // ============================================================
-// CONVENIENCE METHODS - PUBLISH
+// CONVENIENCE METHODS - PUBLISH (EVENTS)
 // ============================================================
 
 // CanPublishAllEvents checks if user can publish ALL events in a scope
@@ -131,7 +132,7 @@ func (c *PermissionChecker) CanPublishOwnEvents(ctx context.Context, userID stri
 }
 
 // ============================================================
-// CONVENIENCE METHODS - COMPOSITE
+// CONVENIENCE METHODS - COMPOSITE (EVENTS)
 // ============================================================
 
 // CanManageEvent checks if user can manage events in a scope
@@ -149,6 +150,48 @@ func (c *PermissionChecker) CanViewEvent(ctx context.Context, userID string, sco
 		authdomain.ActionReadAll.String(),
 		authdomain.ActionReadOwn.String(),
 	)
+}
+
+// CanViewCreator checks if user can view creator details
+func (p *PermissionChecker) CanViewCreator(ctx context.Context, userID string, scope authdomain.Scope) (bool, error) {
+	return p.HasPermission(ctx, userID, scope, "event", "view_creator")
+}
+
+// ============================================================
+// ✅ CONVENIENCE METHODS - PROFILE
+// ============================================================
+
+// CanReadAllProfiles checks if user can read ALL profiles in a scope
+func (c *PermissionChecker) CanReadAllProfiles(ctx context.Context, userID string, scope authdomain.Scope) (bool, error) {
+	return c.HasPermission(ctx, userID, scope, authdomain.ResourceProfile.String(), authdomain.ActionReadAll.String())
+}
+
+// CanReadOwnProfile checks if user can read OWN profile in a scope
+func (c *PermissionChecker) CanReadOwnProfile(ctx context.Context, userID string, scope authdomain.Scope) (bool, error) {
+	return c.HasPermission(ctx, userID, scope, authdomain.ResourceProfile.String(), authdomain.ActionReadOwn.String())
+}
+
+// CanUpdateAllProfiles checks if user can update ALL profiles in a scope
+func (c *PermissionChecker) CanUpdateAllProfiles(ctx context.Context, userID string, scope authdomain.Scope) (bool, error) {
+	return c.HasPermission(ctx, userID, scope, authdomain.ResourceProfile.String(), authdomain.ActionUpdateAll.String())
+}
+
+// CanUpdateOwnProfile checks if user can update OWN profile in a scope
+func (c *PermissionChecker) CanUpdateOwnProfile(ctx context.Context, userID string, scope authdomain.Scope) (bool, error) {
+	return c.HasPermission(ctx, userID, scope, authdomain.ResourceProfile.String(), authdomain.ActionUpdateOwn.String())
+}
+
+// CanViewProfile checks if user can view profiles in a scope (read_all OR read_own)
+func (c *PermissionChecker) CanViewProfile(ctx context.Context, userID string, scope authdomain.Scope) (bool, error) {
+	return c.HasAnyPermission(ctx, userID, scope, authdomain.ResourceProfile.String(),
+		authdomain.ActionReadAll.String(),
+		authdomain.ActionReadOwn.String(),
+	)
+}
+
+// CanManageProfile checks if user can manage profiles in a scope (update_all)
+func (c *PermissionChecker) CanManageProfile(ctx context.Context, userID string, scope authdomain.Scope) (bool, error) {
+	return c.HasPermission(ctx, userID, scope, authdomain.ResourceProfile.String(), authdomain.ActionUpdateAll.String())
 }
 
 // ============================================================

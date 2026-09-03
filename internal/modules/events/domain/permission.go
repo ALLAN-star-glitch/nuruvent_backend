@@ -41,4 +41,7 @@ type PermissionChecker interface {
     // --- MANAGEMENT (Convenience) ---
     CanManageEvent(ctx context.Context, userID string, scope Scope) (bool, error)
     CanViewEvent(ctx context.Context, userID string, scope Scope) (bool, error)
+
+
+    CanViewCreator(ctx context.Context, userID string, scope Scope) (bool, error)
 }

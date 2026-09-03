@@ -6,14 +6,12 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
-
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
@@ -27,18 +25,16 @@ import (
 
 type EventHandler struct {
 	svc      service.Service
-	enforcer *authorization.Enforcer
 	decoder  *schema.Decoder
 }
 
-func NewEventHandler(svc service.Service, enforcer *authorization.Enforcer) *EventHandler {
+func NewEventHandler(svc service.Service) *EventHandler {
 	decoder := schema.NewDecoder()
 	decoder.SetAliasTag("form")
 	decoder.IgnoreUnknownKeys(true)
 
 	return &EventHandler{
 		svc:      svc,
-		enforcer: enforcer,
 		decoder:  decoder,
 	}
 }
@@ -68,82 +64,47 @@ func getQueryString(c fiber.Ctx, key string, defaultValue string) string {
 }
 
 func getUserID(c fiber.Ctx) (string, error) {
-	userID := c.Locals(authdomain.ContextKeyUserID)
-	if userID == nil {
-		return "", errors.New("user not authenticated")
-	}
-	userIDStr, ok := userID.(string)
-	if !ok {
-		return "", errors.New("invalid user ID")
-	}
-	return userIDStr, nil
+    // ✅ Use events domain constant
+    userID := c.Locals(domain.ContextKeyUserID)
+    if userID == nil {
+        return "", errors.New("user not authenticated")
+    }
+    userIDStr, ok := userID.(string)
+    if !ok {
+        return "", errors.New("invalid user ID")
+    }
+    return userIDStr, nil
 }
+
 
 func getUserIDOptional(c fiber.Ctx) string {
-	if user := c.Locals(authdomain.ContextKeyUserID); user != nil {
-		if id, ok := user.(string); ok {
-			return id
-		}
-	}
-	return ""
+    // ✅ Use events domain constant
+    if user := c.Locals(domain.ContextKeyUserID); user != nil {
+        if id, ok := user.(string); ok {
+            return id
+        }
+    }
+    return ""
 }
 
-// canViewCreatorInfo checks if a user has permission to view creator info
-func (h *EventHandler) canViewCreatorInfo(c fiber.Ctx, userID string, event *domain.Event) bool {
-	if event.CreatedBy == userID {
-		return true
-	}
-
-	var teamDomain string
-	if event.InstitutionID != nil && *event.InstitutionID != "" {
-		teamDomain = authdomain.InstitutionTeamDomain(*event.InstitutionID)
-	} else {
-		teamDomain = authdomain.PersonalTeamDomain(event.CreatedBy)
-	}
-
-	roles := h.enforcer.GetRolesForUserInDomain(userID, teamDomain)
-	if len(roles) == 0 {
-		return false
-	}
-
-	for _, role := range roles {
-		switch role {
-		case authdomain.RoleAccountAdmin.String(),
-			authdomain.RoleEventManager.String(),
-			authdomain.RoleTeamMember.String():
-			return true
-		}
-	}
-
-	return false
-}
-
-// buildTeamFilter builds a TeamFilter from parameters
-func buildTeamFilter(id, typ string) domain.TeamFilter {
-	if id == "" || typ == "" {
-		return domain.TeamFilter{}
-	}
-	return domain.TeamFilter{
-		ID:   id,
-		Type: typ,
-	}
-}
 
 // buildEventResponses builds EventResponse slices with appropriate creator info
-func (h *EventHandler) buildEventResponses(c fiber.Ctx, userID string, events []*domain.Event) []EventResponse {
-	if len(events) == 0 {
-		return []EventResponse{}
-	}
+func (h *EventHandler) buildEventResponses(c fiber.Ctx, events []*domain.Event) []EventResponse {
+    if len(events) == 0 {
+        return []EventResponse{}
+    }
 
-	responses := make([]EventResponse, len(events))
-	for i, event := range events {
-		if userID != "" && h.canViewCreatorInfo(c, userID, event) {
-			responses[i] = NewEventResponseFromEventWithCreator(event)
-		} else {
-			responses[i] = NewEventResponseFromEvent(event)
-		}
-	}
-	return responses
+    responses := make([]EventResponse, len(events))
+    for i, event := range events {
+        //  Service already populated Creator if allowed
+        // Handler just checks if Creator exists
+        if event.Creator != nil {
+            responses[i] = NewEventResponseFromEventWithCreator(event)
+        } else {
+            responses[i] = NewEventResponseFromEvent(event)
+        }
+    }
+    return responses
 }
 
 // ============================================================
@@ -178,15 +139,12 @@ func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 		return response.InternalError(c, "Failed to get event", fiber.Map{
 			"error": err.Error(),
 		})
-	}
+	} 
 
 	if event == nil {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
-	if userID != "" && h.canViewCreatorInfo(c, userID, event) {
-		return response.Success(c, "Event retrieved successfully", NewEventResponseFromEventWithCreator(event))
-	}
 
 	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
 }
@@ -225,9 +183,6 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
-	if userID != "" && h.canViewCreatorInfo(c, userID, event) {
-		return response.Success(c, "Event retrieved successfully", NewEventResponseFromEventWithCreator(event))
-	}
 
 	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
 }
@@ -257,7 +212,7 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 		})
 	}
 
-	responses := h.buildEventResponses(c, userID, events)
+	responses := h.buildEventResponses(c, events)
 
 	return response.Success(c, "Upcoming events retrieved successfully", responses)
 }
@@ -340,7 +295,7 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 		})
 	}
 
-	responses := h.buildEventResponses(c, userID, events)
+	responses := h.buildEventResponses(c, events)
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
 		"data":        responses,
@@ -351,6 +306,7 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 		"sort_order":  req.SortOrder,
 	})
 }
+
 
 // GetEventsByType godoc
 // @Summary Get events by type
@@ -370,6 +326,14 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event type is required", nil)
 	}
 
+	// ✅ Normalize the slug - check both formats
+	// If the slug doesn't start with "event-type-", try with the prefix
+	normalizedSlug := eventTypeSlug
+	if !strings.HasPrefix(eventTypeSlug, "event-type-") {
+		// Try the prefixed version
+		normalizedSlug = "event-type-" + eventTypeSlug
+	}
+
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
 	if pageSize > 100 {
@@ -379,14 +343,21 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 	userID := getUserIDOptional(c)
 	ctx := context.WithValue(c.Context(), "user_id", userID)
 
-	events, total, err := h.svc.GetEventsByType(ctx, eventTypeSlug, page, pageSize)
+	// ✅ Try the normalized slug first, if not found, try the original
+	events, total, err := h.svc.GetEventsByType(ctx, normalizedSlug, page, pageSize)
 	if err != nil {
-		return response.InternalError(c, "Failed to get events", fiber.Map{
-			"error": err.Error(),
-		})
+		// If not found with normalized slug, try the original
+		if normalizedSlug != eventTypeSlug {
+			events, total, err = h.svc.GetEventsByType(ctx, eventTypeSlug, page, pageSize)
+		}
+		if err != nil {
+			return response.InternalError(c, "Failed to get events", fiber.Map{
+				"error": err.Error(),
+			})
+		}
 	}
 
-	responses := h.buildEventResponses(c, userID, events)
+	responses := h.buildEventResponses(c, events)
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
 		"data":        responses,
@@ -422,7 +393,7 @@ func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
 		})
 	}
 
-	responses := h.buildEventResponses(c, userID, events)
+	responses := h.buildEventResponses(c, events)
 
 	return response.Success(c, "Past events retrieved successfully", responses)
 }
@@ -471,6 +442,45 @@ func (h *EventHandler) GetEventStatuses(c fiber.Ctx) error {
 	return response.Success(c, "Event statuses retrieved successfully", statuses)
 }
 
+
+// internal/modules/events/handler/eventhandler.go
+
+// GetCategories godoc
+// @Summary Get all event categories
+// @Description Get list of all event categories (public)
+// @Tags Events
+// @Produce json
+// @Success 200 {object} response.BaseResponse{data=[]CategoryDTO}
+// @Failure 500 {object} response.BaseResponse
+// @Router /api/v1/events/categories [get]
+func (h *EventHandler) GetCategories(c fiber.Ctx) error {
+	userID := getUserIDOptional(c)
+	ctx := context.WithValue(c.Context(), "user_id", userID)
+
+	categories, err := h.svc.GetCategories(ctx)
+	if err != nil {
+		return response.InternalError(c, "Failed to get categories", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	// Convert to DTOs
+	categoryDTOs := make([]CategoryDTO, len(categories))
+	for i, cat := range categories {
+		categoryDTOs[i] = CategoryDTO{
+			ID:          cat.ID,
+			Slug:        cat.Slug,
+			Name:        cat.Name,
+			DisplayName: cat.DisplayName,
+			Description: cat.Description,
+			Icon:        cat.Icon,
+			Color:       cat.Color,
+		}
+	}
+
+	return response.Success(c, "Categories retrieved successfully", categoryDTOs)
+}
+
 // SearchEvents godoc
 // @Summary Search events
 // @Description Search events by title or description
@@ -505,6 +515,8 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
 	visibility := getQueryString(c, "visibility", "")
+	includeCreator := c.Query("include_creator") == "true"
+	log.Printf("🔍 SearchEvents: visibility=%s", visibility)
 
 	if pageSize > 100 {
 		pageSize = 100
@@ -523,6 +535,7 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 		EventTypeID:    eventTypeID,
 		CategoryID:     categoryID,
 		IncludeDeleted: includeDeleted,
+		IncludeCreator: includeCreator,
 		OnlyDeleted:    onlyDeleted,
 		Limit:          pageSize,
 		Offset:         (page - 1) * pageSize,
@@ -539,7 +552,7 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 		})
 	}
 
-	responses := h.buildEventResponses(c, currentUserID, events)
+	responses := h.buildEventResponses(c, events)
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
 		"data":        responses,
@@ -592,6 +605,7 @@ func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
 
 	includeDeleted := c.Query("include_deleted") == "true"
 	onlyDeleted := c.Query("only_deleted") == "true"
+	includeCreator := c.Query("include_creator") == "true"
 
 	filters := service.ListEventsFilters{
 		Team: domain.TeamFilter{
@@ -602,6 +616,7 @@ func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
 		Offset:         offset,
 		IncludeDeleted: includeDeleted,
 		OnlyDeleted:    onlyDeleted,
+		IncludeCreator: includeCreator, 
 	}
 
 	events, total, err := h.svc.ListEvents(ctx, filters)
@@ -611,7 +626,7 @@ func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
 		})
 	}
 
-	responses := h.buildEventResponses(c, userID, events)
+	responses := h.buildEventResponses(c, events)
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
 		"data":        responses,
@@ -638,63 +653,60 @@ func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/institutions/{institutionId}/events/with-creator [get]
 func (h *EventHandler) GetEventsByInstitutionWithCreator(c fiber.Ctx) error {
-	userID, err := getUserID(c)
-	if err != nil {
-		return response.Unauthorized(c, "User not authenticated", nil)
-	}
+    userID, err := getUserID(c)
+    if err != nil {
+        return response.Unauthorized(c, "User not authenticated", nil)
+    }
 
-	institutionID := c.Params("institutionId")
-	if institutionID == "" {
-		return response.BadRequest(c, "Institution ID is required", nil)
-	}
+    institutionID := c.Params("institutionId")
+    if institutionID == "" {
+        return response.BadRequest(c, "Institution ID is required", nil)
+    }
 
-	ctx := context.WithValue(c.Context(), "user_id", userID)
+    ctx := context.WithValue(c.Context(), "user_id", userID)
 
-	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "page_size", 20)
-	if pageSize > 100 {
-		pageSize = 100
-	}
+    page := getQueryInt(c, "page", 1)
+    pageSize := getQueryInt(c, "page_size", 20)
+    if pageSize > 100 {
+        pageSize = 100
+    }
 
-	limit, offset := pageSize, (page-1)*pageSize
+    limit, offset := pageSize, (page-1)*pageSize
 
-	includeDeleted := c.Query("include_deleted") == "true"
-	onlyDeleted := c.Query("only_deleted") == "true"
+    includeDeleted := c.Query("include_deleted") == "true"
+    onlyDeleted := c.Query("only_deleted") == "true"
+    // ✅ Always include creator for this endpoint
+    includeCreator := true
 
-	filters := service.ListEventsFilters{
-		Team: domain.TeamFilter{
-			ID:   institutionID,
-			Type: "institution",
-		},
-		Limit:          limit,
-		Offset:         offset,
-		IncludeDeleted: includeDeleted,
-		OnlyDeleted:    onlyDeleted,
-	}
+    filters := service.ListEventsFilters{
+        Team: domain.TeamFilter{
+            ID:   institutionID,
+            Type: "institution",
+        },
+        Limit:          limit,
+        Offset:         offset,
+        IncludeDeleted: includeDeleted,
+        OnlyDeleted:    onlyDeleted,
+        IncludeCreator: includeCreator,
+    }
 
-	events, total, err := h.svc.ListEvents(ctx, filters)
-	if err != nil {
-		return response.InternalError(c, "Failed to get events", fiber.Map{
-			"error": err.Error(),
-		})
-	}
+    events, total, err := h.svc.ListEvents(ctx, filters)
+    if err != nil {
+        return response.InternalError(c, "Failed to get events", fiber.Map{
+            "error": err.Error(),
+        })
+    }
 
-	responses := make([]EventResponse, len(events))
-	for i, event := range events {
-		if h.canViewCreatorInfo(c, userID, event) {
-			responses[i] = NewEventResponseFromEventWithCreator(event)
-		} else {
-			responses[i] = NewEventResponseFromEvent(event)
-		}
-	}
+    // ✅ Use buildEventResponses
+    responses := h.buildEventResponses(c, events)
 
-	return response.Success(c, "Events retrieved successfully", fiber.Map{
-		"data":        responses,
-		"page":        page,
-		"page_size":   pageSize,
-		"total":       total,
-		"total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
-	})
+    return response.Success(c, "Events retrieved successfully", fiber.Map{
+        "data":        responses,
+        "page":        page,
+        "page_size":   pageSize,
+        "total":       total,
+        "total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
+    })
 }
 
 // GetMyEvents godoc

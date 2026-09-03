@@ -14,13 +14,18 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
 	service2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
+	domain2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
-	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
-	postgres3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
-	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
+	service5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
+	postgres4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
+	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/domain"
+	postgres3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/infrastructure/postgres"
+	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
@@ -63,20 +68,24 @@ func InitializeApp() (*AppDependencies, error) {
 	authdomainNotificationService := NewAuthNotificationAdapter(notificationService)
 	serviceService := service2.NewService(repository, configConfig, redisClient, queueService, permissionChecker, roleManager, policyManager, tokenService, authdomainNotificationService, enforcer)
 	domainRepository := postgres2.NewPostgresRepository(db)
-	domainPermissionChecker := NewEventsPermissionAdapter(permissionChecker)
-	repository2 := postgres3.NewPostgresRepository(db)
-	service5 := service3.NewService(repository2, client)
-	mediaService := NewEventsMediaAdapter(service5)
-	service6 := service4.NewService(domainRepository, domainPermissionChecker, mediaService)
+	domainPermissionChecker := provideEventsPermissionAdapter(permissionChecker)
+	repository2 := postgres3.NewProfileRepository(db)
+	permissionChecker2 := provideProfilePermissionAdapter(permissionChecker)
+	domainService := service3.NewProfileService(repository2, permissionChecker2)
+	userInfoProvider := provideEventsProfileAdapter(domainService)
+	repository3 := postgres4.NewPostgresRepository(db)
+	service6 := service4.NewService(repository3, client)
+	mediaService := provideEventsMediaAdapter(service6)
+	service7 := service5.NewService(domainRepository, domainPermissionChecker, userInfoProvider, mediaService)
 	authHandler := authhandler.NewAuthHandler(serviceService, configConfig)
-	eventHandler := eventhandler.NewEventHandler(service6, enforcer)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, permissionChecker, roleManager, policyManager, serviceService, tokenService, service6, service5, authHandler, eventHandler)
+	eventHandler := eventhandler.NewEventHandler(service7)
+	profileHandler := handler.NewProfileHandler(domainService)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, permissionChecker, roleManager, policyManager, serviceService, tokenService, service7, domainService, service6, authHandler, eventHandler, profileHandler)
 	return appDependencies, nil
 }
 
 // wire.go:
 
-// AppDependencies holds all application dependencies
 type AppDependencies struct {
 	Config            *config.Config
 	DB                *gorm.DB
@@ -89,9 +98,31 @@ type AppDependencies struct {
 	PolicyManager     authdomain.PolicyManager
 	AuthTokenService  authdomain.TokenService
 	Notification      notificationdomain.NotificationService
+	ProfileService    domain.Service
 	AuthService       service2.Service
-	EventsService     service4.Service
-	MediaService      service3.Service
+	EventsService     service5.Service
+	MediaService      service4.Service
 	AuthHandler       *authhandler.AuthHandler
 	EventsHandler     *eventhandler.EventHandler
+	ProfileHandler    *handler.ProfileHandler
+}
+
+// provideEventsPermissionAdapter creates the events permission adapter
+func provideEventsPermissionAdapter(permChecker authdomain.PermissionChecker) domain2.PermissionChecker {
+	return NewEventsPermissionAdapter(permChecker)
+}
+
+// provideEventsProfileAdapter creates the events profile adapter
+func provideEventsProfileAdapter(profileSvc domain.Service) domain2.UserInfoProvider {
+	return NewEventsProfileAdapter(profileSvc)
+}
+
+// provideEventsMediaAdapter creates the events media adapter
+func provideEventsMediaAdapter(mediaSvc service4.Service) domain2.MediaService {
+	return NewEventsMediaAdapter(mediaSvc)
+}
+
+// ✅ provideProfilePermissionAdapter creates the profile permission adapter
+func provideProfilePermissionAdapter(permChecker authdomain.PermissionChecker) domain.PermissionChecker {
+	return NewProfilePermissionAdapter(permChecker)
 }

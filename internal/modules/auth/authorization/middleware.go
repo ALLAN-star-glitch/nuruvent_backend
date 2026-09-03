@@ -47,6 +47,14 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 		log.Printf("🔍 AUTHZ: user=%s, scope=%s, resource=%s, action=%s",
 			userIDStr, scope.String(), resource, action)
 
+		// ✅ SPECIAL CASE: /users/me/profile - always allow
+		// The service handles permission checks internally (viewerID == userID)
+		if isOwnProfileRequest(c) {
+			log.Printf("✅ AUTHZ BYPASS: /users/me/profile - allowing access")
+			c.Locals("scope", scope)
+			return c.Next()
+		}
+
 		// Store scope for downstream
 		c.Locals("scope", scope)
 
@@ -71,6 +79,13 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 
 		return c.Next()
 	}
+}
+
+// isOwnProfileRequest checks if this is a /users/me/profile request
+func isOwnProfileRequest(c fiber.Ctx) bool {
+	path := c.Path()
+	method := c.Method()
+	return method == http.MethodGet && strings.Contains(path, "/users/me/profile")
 }
 
 // checkPermissionWithFallback checks permissions with a fallback chain
@@ -211,6 +226,33 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 		}
 	}
 
+	// Check for profile endpoints
+	if strings.Contains(path, "/profile") {
+		// For /users/me/profile - use personal scope
+		if strings.Contains(path, "/users/me/profile") {
+			if uid := c.Locals(authdomain.ContextKeyUserID); uid != nil {
+				if uidStr, ok := uid.(string); ok && uidStr != "" {
+					return authdomain.NewPersonalTeamScope(uidStr)
+				}
+			}
+		}
+		// For /profile/organizer?scope=xxx - parse from query
+		if strings.Contains(path, "/profile/organizer") {
+			scopeParam := c.Query("scope")
+			if scopeParam != "" {
+				parts := strings.SplitN(scopeParam, ":", 2)
+				if len(parts) == 2 {
+					switch parts[0] {
+					case "personal":
+						return authdomain.NewPersonalTeamScope(parts[1])
+					case "institution":
+						return authdomain.NewInstitutionTeamScope(parts[1])
+					}
+				}
+			}
+		}
+	}
+
 	// Check path params
 	institutionID := c.Params("institutionId")
 	if institutionID != "" {
@@ -274,7 +316,6 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 	return authdomain.NewPlatformScope()
 }
 
-
 // getResourceFromRequest extracts the resource from the request path
 func getResourceFromRequest(c fiber.Ctx) string {
 	path := strings.TrimPrefix(c.Path(), "/api/v1/")
@@ -283,44 +324,59 @@ func getResourceFromRequest(c fiber.Ctx) string {
 	for i, seg := range segments {
 		switch seg {
 		case "users", "user":
-			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
-				return authdomain.ResourceEvent.String() // "event"
+			// Check if this is a profile endpoint
+			if i+1 < len(segments) && (segments[i+1] == "profile" || strings.Contains(segments[i+1], "profile")) {
+				return "profile"
 			}
-			return authdomain.ResourceUser.String() // "user"
+			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
+				return authdomain.ResourceEvent.String()
+			}
+			if i+2 < len(segments) && segments[i+2] == "profiles" {
+				return "profile"
+			}
+			return authdomain.ResourceUser.String()
+		case "profile":
+			return "profile"
 		case "institutions", "institution":
 			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
-				return authdomain.ResourceEvent.String() // "event"
+				return authdomain.ResourceEvent.String()
 			}
-			return authdomain.ResourceInstitution.String() // "institution"
+			if i+2 < len(segments) && segments[i+2] == "profile" {
+				return "profile"
+			}
+			return authdomain.ResourceInstitution.String()
 		case "teams", "team":
 			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
-				return authdomain.ResourceEvent.String() // "event"
+				return authdomain.ResourceEvent.String()
 			}
-			return authdomain.ResourceTeam.String() // "team"
+			return authdomain.ResourceTeam.String()
 		case "me":
 			if i+1 < len(segments) && (segments[i+1] == "events" || segments[i+1] == "event") {
-				return authdomain.ResourceEvent.String() // "event"
+				return authdomain.ResourceEvent.String()
+			}
+			if i+1 < len(segments) && segments[i+1] == "profile" {
+				return "profile"
 			}
 		}
 	}
 
-	// Check for direct matches - use singular form
+	// Check for direct matches
 	for _, seg := range segments {
 		switch seg {
 		case "profile":
 			return "profile"
 		case "events", "event":
-			return authdomain.ResourceEvent.String() // "event"
+			return authdomain.ResourceEvent.String()
 		case "certificates", "certificate":
-			return authdomain.ResourceCertificate.String() // "certificate"
+			return authdomain.ResourceCertificate.String()
 		case "attendees", "attendee":
-			return authdomain.ResourceAttendee.String() // "attendee"
+			return authdomain.ResourceAttendee.String()
 		case "payments", "payment":
-			return authdomain.ResourcePayment.String() // "payment"
+			return authdomain.ResourcePayment.String()
 		case "payouts", "payout":
-			return authdomain.ResourcePayout.String() // "payout"
+			return authdomain.ResourcePayout.String()
 		case "members", "member":
-			return authdomain.ResourceMember.String() // "member"
+			return authdomain.ResourceMember.String()
 		case "dashboard":
 			return "dashboard"
 		case "analytics":

@@ -126,6 +126,8 @@ type Service interface {
 
 	GetEventTypes(ctx context.Context) ([]*domain.EventType, error)
 	GetEventStatuses(ctx context.Context) ([]*domain.EventStatus, error)
+
+	GetCategories(ctx context.Context) ([]*domain.Category, error)
 }
 
 // ============================================================
@@ -434,6 +436,9 @@ type SearchFilters struct {
 
 	// Visibility filters search results by visibility level
 	Visibility string
+
+	// ✅ IncludeCreator controls whether creator user info is populated
+	IncludeCreator bool
 }
 
 // ============================================================

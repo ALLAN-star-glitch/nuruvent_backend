@@ -7,6 +7,7 @@ import (
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
+	profileHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler" // ✅ Add this import
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 )
@@ -19,6 +20,7 @@ func SetupRoutes(
 	authzMiddleware fiber.Handler,
 	authHandler *authhandler.AuthHandler,
 	eventsHandler *eventhandler.EventHandler,
+	profileHandler *profileHandler.ProfileHandler, // ✅ Add profile handler parameter
 ) {
 	// ================================================
 	// 1. SWAGGER - Must be FIRST to avoid 404
@@ -43,9 +45,11 @@ func SetupRoutes(
 	// Auth routes (public + protected)
 	authHandler.RegisterRoutes(api, authMiddleware)
 
-
 	// Events routes
 	eventsHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
+
+	// ✅ Profile routes
+	profileHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
 
 	// ================================================
 	// 4. 404 Handler - Must be LAST

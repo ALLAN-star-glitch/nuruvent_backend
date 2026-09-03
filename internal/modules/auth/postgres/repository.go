@@ -591,3 +591,35 @@ func (r *PostgresRepository) UpdateRefreshTokenContext(token, userAgent, ipAddre
 		Where("token = ?", token).
 		Updates(updates).Error
 }
+
+func (r *PostgresRepository) GetInstitutionByEmail(email string) (*authdomain.Institution, error) {
+	var model InstitutionModel
+	err := r.db.Where("email = ?", email).First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return ToAuthDomainInstitution(&model), nil
+}
+
+func (r *PostgresRepository) DeleteUser(userID string) error {
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return err
+	}
+	return r.db.Model(&UserModel{}).
+		Where("id = ?", userUUID).
+		Update("is_active", false).Error
+}
+
+func (r *PostgresRepository) ReactivateUser(userID string) error {
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return err
+	}
+	return r.db.Model(&UserModel{}).
+		Where("id = ?", userUUID).
+		Update("is_active", true).Error
+}	

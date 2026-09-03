@@ -19,7 +19,7 @@ import (
 // ============================================================
 
 // Current policy schema version - increment when policies change
-const CURRENT_POLICY_VERSION = "v4"
+const CURRENT_POLICY_VERSION = "v6"
 
 // ============================================================
 // POLICY VERSION TRACKING
@@ -214,31 +214,10 @@ func (s *permissionSeeder) cleanTeamPolicies() error {
 
 // cleanGroupingPolicies removes all grouping policies (role assignments) using direct SQL
 func (s *permissionSeeder) cleanGroupingPolicies() error {
-	// Get all grouping policies
-	allGrouping, err := s.enforcer.GetGroupingPolicy()
-	if err != nil {
-		return fmt.Errorf("failed to get all grouping policies: %w", err)
-	}
-
-	var teamGrouping [][]string
-	for _, group := range allGrouping {
-		if len(group) >= 3 {
-			domain := group[2]
-			// Check if it's a team domain
-			if authdomain.IsPersonalTeamDomain(domain) || authdomain.IsInstitutionTeamDomain(domain) {
-				teamGrouping = append(teamGrouping, group)
-			}
-		}
-	}
-
-	if len(teamGrouping) > 0 {
-		if _, err := s.enforcer.RemoveGroupingPolicies(teamGrouping); err != nil {
-			return fmt.Errorf("failed to remove team grouping policies: %w", err)
-		}
-		log.Printf("   ✅ Removed %d team grouping policies", len(teamGrouping))
-	}
-
-	return nil
+    // ✅ Best Option: Skip cleaning grouping policies to preserve user roles
+    log.Println("   ℹ️  Skipping grouping policy cleanup to preserve user roles")
+    log.Println("   ℹ️  User roles will be managed separately via team_members table")
+    return nil
 }
 
 // ============================================================

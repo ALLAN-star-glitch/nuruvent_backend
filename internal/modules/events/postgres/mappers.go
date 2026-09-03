@@ -299,6 +299,33 @@ func toModelEvent(event *domain.Event) *EventModel {
 	}
 }
 
+func toDomainCategory(model *CategoryModel) *domain.Category {
+	if model == nil {
+		return nil
+	}
+	
+	// Convert gorm.DeletedAt to *time.Time
+	var deletedAt *time.Time
+	if model.DeletedAt.Valid {
+		deletedAt = &model.DeletedAt.Time
+	}
+	
+	return &domain.Category{
+		ID:          model.ID,
+		Slug:        model.Slug,
+		Name:        model.Name,
+		DisplayName: model.DisplayName,
+		Description: model.Description,
+		Icon:        model.Icon,
+		Color:       model.Color,
+		SortOrder:   model.SortOrder,
+		IsActive:    model.IsActive,
+		CreatedAt:   model.CreatedAt,
+		UpdatedAt:   model.UpdatedAt,
+		DeletedAt:   deletedAt,
+	}
+}
+
 // toDomainEvent converts EventModel to domain.Event
 func toDomainEvent(model *EventModel) *domain.Event {
 	if model == nil {
@@ -737,4 +764,58 @@ func toDomainEventStatusEntity(model *EventStatusModel) *domain.EventStatus {
 		CreatedAt:   model.CreatedAt,
 		UpdatedAt:   model.UpdatedAt,
 	}
+}
+
+// internal/modules/events/infrastructure/postgres/mappers.go
+
+func toDomainEventType(model *EventTypeModel) *domain.EventType {
+    if model == nil {
+        return nil
+    }
+    return &domain.EventType{
+        ID:                  model.ID,
+        Slug:                model.Slug,
+        Name:                model.Name,
+        DisplayName:         model.DisplayName,
+        Description:         model.Description,
+        Icon:                model.Icon,
+        Color:               model.Color,
+        SortOrder:           model.SortOrder,
+        SupportsCertificate: model.SupportsCertificate,
+        MinDuration:         model.MinDuration,
+        MaxDuration:         model.MaxDuration,
+        IsActive:            model.IsActive,
+        CreatedAt:           model.CreatedAt,
+        UpdatedAt:           model.UpdatedAt,
+        DeletedAt:           convertDeletedAt(model.DeletedAt),
+    }
+}
+
+func toDomainEventStatus(model *EventStatusModel) *domain.EventStatus {
+    if model == nil {
+        return nil
+    }
+    return &domain.EventStatus{
+        ID:          model.ID,
+        Slug:        model.Slug,
+        Name:        model.Name,
+        DisplayName: model.DisplayName,
+        Description: model.Description,
+        Color:       model.Color,
+        Icon:        model.Icon,
+        SortOrder:   model.SortOrder,
+        IsFinal:     model.IsFinal,
+        IsActive:    model.IsActive,
+        CreatedAt:   model.CreatedAt,
+        UpdatedAt:   model.UpdatedAt,
+        DeletedAt:   convertDeletedAt(model.DeletedAt),
+    }
+}
+
+// convertDeletedAt converts gorm.DeletedAt to *time.Time
+func convertDeletedAt(d gorm.DeletedAt) *time.Time {
+	if d.Valid {
+		return &d.Time
+	}
+	return nil
 }

@@ -56,6 +56,7 @@ const (
 	ResourceAnalytics    Resource = "analytics"
 	ResourceNotification Resource = "notification"
 	ResourceMedia        Resource = "media"
+	
 )
 
 // Action represents an operation that can be performed
@@ -74,6 +75,7 @@ const (
 	ActionRefund   Action = "refund"   // Refund payments
 	ActionDownload Action = "download" // Download certificates/replays
 	ActionInvite   Action = "invite"   // Invite team members
+	ActionViewCreator Action = "view_creator"
 
 	// ============================================================
 	// ✅ NEW: OWN vs ALL Actions for Team Resources
@@ -411,6 +413,9 @@ func DefaultPlatformPermissions() map[Role][]string {
 			"certificate:read",
 			"member:read",
 			"member:delete",
+			// ✅ Profile permissions (platform-wide)
+			"profile:read_all",    // Can read ALL profiles
+			"profile:update_all",  // Can update ALL profiles
 		},
 	}
 }
@@ -423,6 +428,7 @@ func DefaultTeamPermissions() map[Role][]string {
 			"event:update_all",
 			"event:delete_all",
 			"event:publish_all",
+			"event:view_creator",
 			"event:manage",
 			"certificate:create",
 			"certificate:read",
@@ -449,6 +455,9 @@ func DefaultTeamPermissions() map[Role][]string {
 			"dashboard:read",
 			"profile:read",
 			"profile:update",
+			// ✅ Profile permissions - use read_all and update_all
+			"profile:read_all",    // Can read ALL profiles in the team
+			"profile:update_all",  // Can update ALL profiles in the team
 		},
 		RoleEventManager: {
 			"event:create",
@@ -456,6 +465,7 @@ func DefaultTeamPermissions() map[Role][]string {
 			"event:update_all",
 			"event:delete_all",
 			"event:publish_all",
+			"event:view_creator",
 			"attendee:read",
 			"attendee:update",
 			"attendee:export",
@@ -466,6 +476,9 @@ func DefaultTeamPermissions() map[Role][]string {
 			"payment:read",
 			"dashboard:read",
 			"team:read",
+			// ✅ Profile permissions - read_all only (can view, not update)
+			"profile:read_all",    // Can read ALL profiles in the team
+			// ❌ No profile:update_all - Event Managers cannot update profiles
 		},
 		RoleTeamMember: {
 			"event:read_own",
@@ -477,6 +490,10 @@ func DefaultTeamPermissions() map[Role][]string {
 			"certificate:read",
 			"dashboard:read",
 			"team:read",
+			// ✅ Profile permissions - read_own only
+			"profile:read_own",    // Can only read their own profile
+			// ❌ No profile:update_own - Team members cannot update profiles
+			// (Profile updates are handled by the user themselves or admins)
 		},
 	}
 }

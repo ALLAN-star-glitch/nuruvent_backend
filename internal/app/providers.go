@@ -32,6 +32,11 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
 
 	notificationdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
+
+
+    profileDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/domain"
+
+	profileHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
 )
 
 // ============================================================
@@ -88,9 +93,11 @@ func provideAppDependencies(
 	authService authService.Service,
 	authTokenService authDomain.TokenService,
 	eventsService eventsService.Service,
+	profileSvc profileDomain.Service,
 	mediaService mediaService.Service,
 	authHandler *authHandler.AuthHandler,
 	eventsHandler *eventsHandler.EventHandler,
+	profileHandler *profileHandler.ProfileHandler,
 ) *AppDependencies {
 	return &AppDependencies{
 		Config:            cfg,
@@ -105,9 +112,11 @@ func provideAppDependencies(
 		AuthService:       authService,
 		AuthTokenService:  authTokenService,
 		EventsService:     eventsService,
+		ProfileService:    profileSvc,
 		MediaService:      mediaService,
 		AuthHandler:       authHandler,
 		EventsHandler:     eventsHandler,
+		ProfileHandler: profileHandler,
 	}
 }
 
@@ -230,6 +239,11 @@ func (a *EventsPermissionAdapter) CanReadEvent(ctx context.Context, userID strin
 		return true, nil
 	}
 	return a.CanReadOwnEvents(ctx, userID, scope)
+}
+
+func (a *EventsPermissionAdapter) CanViewCreator(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
+    authScope := a.convertScope(scope)
+    return a.permSvc.HasPermission(ctx, userID, authScope, "event", "view_creator")
 }
 
 // ============================================================
@@ -585,4 +599,225 @@ func (a *AuthNotificationAdapter) SendLoginNotification(ctx context.Context, req
 		UserAgent: req.UserAgent,
 	}
 	return a.notifSvc.SendLoginNotification(ctx, notifReq)
+}
+
+// ============================================================
+// NEW: EVENTS PROFILE ADAPTER
+// ============================================================
+
+// EventsProfileAdapter adapts profile service to events domain UserInfoProvider
+type EventsProfileAdapter struct {
+    profileSvc profileDomain.Service
+}
+
+func NewEventsProfileAdapter(profileSvc profileDomain.Service) eventsDomain.UserInfoProvider {
+    return &EventsProfileAdapter{profileSvc: profileSvc}
+}
+
+func (a *EventsProfileAdapter) GetUserByID(ctx context.Context, userID string) (*eventsDomain.UserInfo, error) {
+    if userID == "" {
+        return nil, nil
+    }
+
+    user, err := a.profileSvc.GetUserProfile(ctx, userID)
+    if err != nil {
+        return nil, err
+    }
+    if user == nil {
+        return nil, nil
+    }
+
+    return &eventsDomain.UserInfo{
+        ID:          user.ID,
+        Name:        user.Name,
+        DisplayName: user.DisplayName,
+        AvatarURL:   user.AvatarURL,
+    }, nil
+}
+
+func (a *EventsProfileAdapter) GetUserByIDWithDetails(ctx context.Context, userID string) (*eventsDomain.UserInfo, error) {
+    if userID == "" {
+        return nil, nil
+    }
+
+    user, err := a.profileSvc.GetUserProfileWithDetails(ctx, userID)
+    if err != nil {
+        return nil, err
+    }
+    if user == nil {
+        return nil, nil
+    }
+
+    return &eventsDomain.UserInfo{
+        ID:          user.ID,
+        Name:        user.Name,
+        DisplayName: user.DisplayName,
+        Email:       user.Email,
+        Phone:       user.Phone,
+        AccountType: user.AccountType,
+        AvatarURL:   user.AvatarURL,
+    }, nil
+}
+
+func (a *EventsProfileAdapter) GetInstitutionByID(ctx context.Context, institutionID string) (*eventsDomain.InstitutionInfo, error) {
+    if institutionID == "" {
+        return nil, nil
+    }
+
+    institution, err := a.profileSvc.GetInstitutionProfile(ctx, institutionID)
+    if err != nil {
+        return nil, err
+    }
+    if institution == nil {
+        return nil, nil
+    }
+
+    return &eventsDomain.InstitutionInfo{
+        ID:          institution.ID,
+        Name:        institution.Name,
+        DisplayName: institution.DisplayName,
+        Slug:        institution.Slug,
+        LogoURL:     institution.LogoURL,
+    }, nil
+}
+
+
+// internal/app/providers.go
+
+// ============================================================
+// PROFILE PERMISSION ADAPTER
+// ============================================================
+
+// ProfilePermissionAdapter adapts auth domain permission checker to profile domain
+type ProfilePermissionAdapter struct {
+	permSvc authDomain.PermissionChecker
+}
+
+func NewProfilePermissionAdapter(permSvc authDomain.PermissionChecker) profileDomain.PermissionChecker {
+	return &ProfilePermissionAdapter{permSvc: permSvc}
+}
+
+// GetUserInstitutionTeamIDs returns all institution team IDs where a user has roles
+func (a *ProfilePermissionAdapter) GetUserInstitutionTeamIDs(ctx context.Context, userID string) ([]string, error) {
+    return a.permSvc.GetUserInstitutionTeamIDs(ctx, userID)
+}
+
+// GetUserPersonalTeamID returns the personal team ID for a user
+func (a *ProfilePermissionAdapter) GetUserPersonalTeamID(ctx context.Context, userID string) (string, error) {
+    return userID, nil // Personal team ID is the user ID
+}
+
+// ============================================================
+// CORE PERMISSION METHODS
+// ============================================================
+
+// HasPermission checks if a user has a specific permission in a scope
+func (a *ProfilePermissionAdapter) HasPermission(ctx context.Context, userID string, scope profileDomain.Scope, resource, action string) (bool, error) {
+	authScope := a.convertScope(scope)
+	return a.permSvc.HasPermission(ctx, userID, authScope, resource, action)
+}
+
+// HasAnyPermission checks if a user has any of the given permissions in a scope
+func (a *ProfilePermissionAdapter) HasAnyPermission(ctx context.Context, userID string, scope profileDomain.Scope, resource string, actions ...string) (bool, error) {
+	authScope := a.convertScope(scope)
+	return a.permSvc.HasAnyPermission(ctx, userID, authScope, resource, actions...)
+}
+
+// HasAllPermissions checks if a user has all of the given permissions in a scope
+func (a *ProfilePermissionAdapter) HasAllPermissions(ctx context.Context, userID string, scope profileDomain.Scope, resource string, actions ...string) (bool, error) {
+	authScope := a.convertScope(scope)
+	return a.permSvc.HasAllPermissions(ctx, userID, authScope, resource, actions...)
+}
+
+// ============================================================
+// PROFILE PERMISSIONS - READ
+// ============================================================
+
+// CanReadAllProfiles checks if user can read ALL profiles in a scope
+func (a *ProfilePermissionAdapter) CanReadAllProfiles(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
+	authScope := a.convertScope(scope)
+	return a.permSvc.HasPermission(ctx, userID, authScope, "profile", "read_all")
+}
+
+// CanReadOwnProfile checks if user can read OWN profile in a scope
+func (a *ProfilePermissionAdapter) CanReadOwnProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
+	authScope := a.convertScope(scope)
+	return a.permSvc.HasPermission(ctx, userID, authScope, "profile", "read_own")
+}
+
+// CanReadProfile checks if user can read profiles in a scope (ALL or OWN)
+func (a *ProfilePermissionAdapter) CanReadProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
+	allowed, err := a.CanReadAllProfiles(ctx, userID, scope)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return true, nil
+	}
+	return a.CanReadOwnProfile(ctx, userID, scope)
+}
+
+// ============================================================
+// PROFILE PERMISSIONS - UPDATE
+// ============================================================
+
+// CanUpdateAllProfiles checks if user can update ALL profiles in a scope
+func (a *ProfilePermissionAdapter) CanUpdateAllProfiles(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
+	authScope := a.convertScope(scope)
+	return a.permSvc.HasPermission(ctx, userID, authScope, "profile", "update_all")
+}
+
+// CanUpdateOwnProfile checks if user can update OWN profile in a scope
+func (a *ProfilePermissionAdapter) CanUpdateOwnProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
+	authScope := a.convertScope(scope)
+	return a.permSvc.HasPermission(ctx, userID, authScope, "profile", "update_own")
+}
+
+// CanUpdateProfile checks if user can update profiles in a scope (ALL or OWN)
+func (a *ProfilePermissionAdapter) CanUpdateProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
+	allowed, err := a.CanUpdateAllProfiles(ctx, userID, scope)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return true, nil
+	}
+	return a.CanUpdateOwnProfile(ctx, userID, scope)
+}
+
+// ============================================================
+// PROFILE PERMISSIONS - MANAGEMENT
+// ============================================================
+
+// CanManageProfile checks if user can manage profiles in a scope
+func (a *ProfilePermissionAdapter) CanManageProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
+	return a.HasAnyPermission(ctx, userID, scope, "profile",
+		"update_all", "delete_all", "manage")
+}
+
+// CanViewProfile checks if user can view profiles in a scope (ALL or OWN)
+func (a *ProfilePermissionAdapter) CanViewProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
+	allowed, err := a.CanReadAllProfiles(ctx, userID, scope)
+	if err != nil {
+		return false, err
+	}
+	if allowed {
+		return true, nil
+	}
+	return a.CanReadOwnProfile(ctx, userID, scope)
+}
+
+// ============================================================
+// HELPER METHODS
+// ============================================================
+
+// convertScope converts profileDomain.Scope to authDomain.Scope
+func (a *ProfilePermissionAdapter) convertScope(scope profileDomain.Scope) authDomain.Scope {
+	if scope.IsPersonal() {
+		return authDomain.NewPersonalTeamScope(scope.ID)
+	}
+	if scope.IsInstitution() {
+		return authDomain.NewInstitutionTeamScope(scope.ID)
+	}
+	return authDomain.NewPlatformScope()
 }

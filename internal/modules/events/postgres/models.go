@@ -14,8 +14,15 @@ import (
 // JSONB TYPE FOR GORM
 // ============================================================
 
-type JSONB map[string]interface{}
 
+// Defines JSONB as a map with string keys and any value type
+// Can store any JSON structure: objects, arrays, nested data
+type JSONB map[string]any // Custom type for JSONB fields in GORM
+
+
+// The Value method here is the writer
+// Value implements the driver.Valuer interface for JSONB
+// Purpose: Converts Go data → Database value (when INSERTING/UPDATEING)
 func (j JSONB) Value() (driver.Value, error) {
 	if j == nil {
 		return nil, nil
@@ -23,7 +30,11 @@ func (j JSONB) Value() (driver.Value, error) {
 	return json.Marshal(j)
 }
 
-func (j *JSONB) Scan(value interface{}) error {
+
+// The Scan method here is the reader
+// Scan implements the sql.Scanner interface for JSONB 
+// Purpose: Converts Database value → Go data (when SELECTING)
+func (j *JSONB) Scan(value any) error {
 	if value == nil {
 		*j = nil
 		return nil

@@ -20,6 +20,7 @@ func SeedAccountTypes(db *gorm.DB) error {
 		// ✅ info.Slug is already a string - no need for .String()
 		err := db.Where("slug = ?", info.Slug).First(&existing).Error
 
+		
 		if err == nil {
 			// Update existing
 			existing.Name = info.Name

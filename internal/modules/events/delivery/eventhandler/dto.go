@@ -300,6 +300,8 @@ type ListEventsRequest struct {
     CategoryID     string `json:"category_id" query:"category_id"`
     UserID         string `json:"user_id" query:"user_id"` // Filter by creator
     Visibility     string `json:"visibility" query:"visibility"` // public, private, unlisted
+
+	
     
     // Deletion Filters
     IncludeDeleted bool `json:"include_deleted" query:"include_deleted"`
@@ -344,15 +346,6 @@ type BulkDuplicateRequest struct {
 // RESPONSE DTOS
 // ============================================================
 
-// CreatorDTO - Creator information in API responses
-type CreatorDTO struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	DisplayName string `json:"display_name,omitempty"`
-	Email       string `json:"email"`
-	Phone       string `json:"phone,omitempty"`
-	Avatar      string `json:"avatar,omitempty"`
-}
 
 // EventTypeDTO - Event type information
 type EventTypeDTO struct {
@@ -514,6 +507,26 @@ type RecurrenceDTO struct {
 	Occurrences int      `json:"occurrences,omitempty"`
 }
 
+// OrganizerResponse - Public-facing organizer information
+type OrganizerResponse struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Type        string `json:"type"` // "institution" or "personal"
+	AvatarURL   string `json:"avatar_url,omitempty"`
+	Slug        string `json:"slug,omitempty"`
+}
+
+// CreatorDTO - Creator information in API responses (internal, only for authorized users)
+type CreatorDTO struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name,omitempty"`
+	Email       string `json:"email"`
+	Phone       string `json:"phone,omitempty"`
+	Avatar      string `json:"avatar,omitempty"`
+}
+
 // EventResponse - Complete event response
 type EventResponse struct {
 	ID               string `json:"id"`
@@ -535,7 +548,12 @@ type EventResponse struct {
 	// Ownership
 	OwnerType     string `json:"owner_type"` // "personal" or "institution"
 	InstitutionID string `json:"institution_id,omitempty"`
-	Creator       *CreatorDTO `json:"creator,omitempty"`
+	
+	// ✅ Organizer (public-facing - always shown)
+	Organizer *OrganizerResponse `json:"organizer"`
+	
+	// Creator (internal - only for authorized users)
+	Creator *CreatorDTO `json:"creator,omitempty"`
 
 	// Schedule
 	StartDate   string         `json:"start_date,omitempty"`
@@ -607,6 +625,7 @@ type EventResponse struct {
 	UpdatedAt string `json:"updated_at"`
 	DeletedAt *string `json:"deleted_at,omitempty"`
 }
+
 
 // ============================================================
 // BULK RESPONSE TYPES
