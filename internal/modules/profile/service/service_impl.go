@@ -3,22 +3,26 @@
 package service
 
 import (
-    "context"
-    "fmt"
-    "log"
+	"context"
+	"fmt"
+	"log"
+	"path/filepath"
+	"strings"
 
-    "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/domain"
 )
 
 type profileService struct {
     repo        domain.Repository
     permChecker domain.PermissionChecker
+    mediaSvc    domain.MediaService 
 }
 
-func NewProfileService(repo domain.Repository, permChecker domain.PermissionChecker) domain.Service {
+func NewProfileService(repo domain.Repository, permChecker domain.PermissionChecker, mediaSvc domain.MediaService,) domain.Service {
     return &profileService{
         repo:        repo,
         permChecker: permChecker,
+        mediaSvc:    mediaSvc,
     }
 }
 
@@ -522,6 +526,8 @@ func (s *profileService) getUserDetails(ctx context.Context, userID string) (*do
         Location:    user.Location,
         Website:     user.Website,
         SocialLinks: user.SocialLinks,
+        CreatedAt:   user.CreatedAt,  // ✅ Add this
+        UpdatedAt:   user.UpdatedAt,
     }, nil
 }
 
@@ -535,6 +541,7 @@ func (s *profileService) updateUser(ctx context.Context, userID string, updates 
         return nil, domain.ErrUserNotFound
     }
 
+    // ✅ Update all fields now
     if name, ok := updates["name"].(string); ok && name != "" {
         user.Name = name
     }
@@ -579,4 +586,387 @@ func (s *profileService) updateUser(ctx context.Context, userID string, updates 
         Website:     user.Website,
         SocialLinks: user.SocialLinks,
     }, nil
+}
+
+
+// ============================================================
+// MEDIA UPLOAD METHODS
+// ============================================================
+
+// uploadMedia uploads a file to the media service
+func (s *profileService) uploadMedia(ctx context.Context, cmd domain.UploadMediaCommand) (*domain.MediaInfo, error) {
+    media, err := s.mediaSvc.UploadFile(ctx, cmd)
+    if err != nil {
+        return nil, err
+    }
+    return media, nil
+}
+
+// internal/modules/profile/service/service_impl.go
+
+// UploadUserAvatar uploads an avatar for a user
+func (s *profileService) UploadUserAvatar(ctx context.Context, userID string, file []byte, filename, contentType string) (*domain.UserInfo, error) {
+    if userID == "" {
+        return nil, domain.ErrInvalidUserID
+    }
+
+    // 1. Validate file
+    if err := s.validateImageFile(file, filename, contentType); err != nil {
+        return nil, err
+    }
+
+    // 2. Check permission
+    viewerID := s.getUserIDFromContext(ctx)
+    if viewerID == "" {
+        return nil, domain.ErrPermissionDenied
+    }
+    if viewerID != userID {
+        scope := domain.NewPersonalTeamScope(viewerID)
+        allowed, err := s.permChecker.CanUpdateProfile(ctx, viewerID, scope)
+        if err != nil {
+            return nil, fmt.Errorf("permission check failed: %w", err)
+        }
+        if !allowed {
+            return nil, domain.ErrPermissionDenied
+        }
+    }
+
+    // 3. Get user
+    user, err := s.repo.GetUserByID(ctx, userID)
+    if err != nil {
+        return nil, err
+    }
+    if user == nil {
+        return nil, domain.ErrUserNotFound
+    }
+
+    // 4. Delete old avatar if exists
+    if user.AvatarURL != "" {
+        log.Printf("🗑️ Deleting old avatar: %s", user.AvatarURL)
+        mediaType, err := s.mediaSvc.GetMediaTypeByName(ctx, "media_type_profile")
+        if err != nil {
+            log.Printf("⚠️ Failed to get media type: %v", err)
+        } else if mediaType != nil {
+            if err := s.mediaSvc.DeleteFilesByEntityAndMediaType(ctx, userID, mediaType.ID); err != nil {
+                log.Printf("⚠️ Failed to delete old avatar: %v", err)
+            } else {
+                log.Printf("✅ Old avatar deleted")
+            }
+        }
+    }
+
+    // ✅ 5. Generate clean filename - just the user ID and extension
+    ext := filepath.Ext(filename)
+    if ext == "" {
+        // If no extension, use .jpg as default (but preserve original if possible)
+        ext = ".jpg"
+    }
+    
+    // Clean filename: just user_id + extension
+    // Example: 058dfcd9-d152-4634-8e2a-02e8315b5d4c.jpg
+    cleanFilename := userID + ext
+
+    // 6. Upload to storage
+    uploadCmd := domain.UploadMediaCommand{
+        File:          file,
+        FileName:      cleanFilename,  // ✅ Clean filename
+        ContentType:   contentType,
+        MediaTypeName: "media_type_profile",
+        EntityID:      userID,
+        UploadedBy:    viewerID,
+    }
+
+    mediaInfo, err := s.uploadMedia(ctx, uploadCmd)
+    if err != nil {
+        return nil, fmt.Errorf("failed to upload avatar: %w", err)
+    }
+
+    // 7. Update user with avatar URL
+    user.AvatarURL = mediaInfo.URL
+    if err := s.repo.UpdateUser(ctx, user); err != nil {
+        return nil, fmt.Errorf("failed to update user: %w", err)
+    }
+
+    log.Printf("✅ User avatar uploaded for user: %s", userID)
+
+    // 8. Return updated user info
+    return &domain.UserInfo{
+        ID:          user.ID,
+        Name:        user.Name,
+        DisplayName: user.DisplayName,
+        Email:       user.Email,
+        Phone:       user.Phone,
+        AccountType: user.AccountType,
+        AvatarURL:   user.AvatarURL,
+        Bio:         user.Bio,
+        Location:    user.Location,
+        Website:     user.Website,
+        SocialLinks: user.SocialLinks,
+        IsActive:    user.IsActive,
+        CreatedAt:   user.CreatedAt,
+        UpdatedAt:   user.UpdatedAt,
+    }, nil
+}
+
+// UploadInstitutionLogo uploads a logo for an institution
+func (s *profileService) UploadInstitutionLogo(ctx context.Context, institutionID string, file []byte, filename, contentType string) (*domain.InstitutionInfo, error) {
+    if institutionID == "" {
+        return nil, domain.ErrInvalidInstitutionID
+    }
+
+    // 1. Validate file
+    if err := s.validateImageFile(file, filename, contentType); err != nil {
+        return nil, err
+    }
+
+    // 2. Get viewer ID
+    viewerID := s.getUserIDFromContext(ctx)
+    if viewerID == "" {
+        return nil, domain.ErrPermissionDenied
+    }
+
+    // 3. Check if viewer is an account admin in this institution
+    scope := domain.NewInstitutionTeamScope(institutionID)
+    
+    // ✅ Check if user has account_admin role in this institution
+    hasRole, err := s.permChecker.IsTeamAdmin(ctx, viewerID, scope)
+    if err != nil {
+        return nil, fmt.Errorf("permission check failed: %w", err)
+    }
+    if !hasRole {
+        return nil, domain.ErrPermissionDenied
+    }
+
+    // 4. Get institution
+    institution, err := s.repo.GetInstitutionByID(ctx, institutionID)
+    if err != nil {
+        return nil, err
+    }
+    if institution == nil {
+        return nil, domain.ErrInstitutionNotFound
+    }
+
+    // 5. Delete old logo if exists
+    if institution.LogoURL != "" {
+        log.Printf("🗑️ Deleting old logo: %s", institution.LogoURL)
+        mediaType, err := s.mediaSvc.GetMediaTypeByName(ctx, "media_type_business")
+        if err != nil {
+            log.Printf("⚠️ Failed to get media type: %v", err)
+        } else if mediaType != nil {
+            if err := s.mediaSvc.DeleteFilesByEntityAndMediaType(ctx, institutionID, mediaType.ID); err != nil {
+                log.Printf("⚠️ Failed to delete old logo: %v", err)
+            } else {
+                log.Printf("✅ Old logo deleted")
+            }
+        }
+    }
+
+    // 6. Generate clean filename
+    ext := filepath.Ext(filename)
+    if ext == "" {
+        ext = ".png"
+    }
+    cleanFilename := institutionID + ext
+
+    // 7. Upload to storage
+    uploadCmd := domain.UploadMediaCommand{
+        File:          file,
+        FileName:      cleanFilename,
+        ContentType:   contentType,
+        MediaTypeName: "media_type_business",
+        EntityID:      institutionID,
+        UploadedBy:    viewerID,
+    }
+
+    mediaInfo, err := s.uploadMedia(ctx, uploadCmd)
+    if err != nil {
+        return nil, fmt.Errorf("failed to upload logo: %w", err)
+    }
+
+    // 8. Update institution with logo URL
+    institution.LogoURL = mediaInfo.URL
+    if err := s.repo.UpdateInstitution(ctx, institution); err != nil {
+        return nil, fmt.Errorf("failed to update institution: %w", err)
+    }
+
+    log.Printf("✅ Institution logo uploaded for institution: %s", institutionID)
+
+    return &domain.InstitutionInfo{
+        ID:          institution.ID,
+        Name:        institution.Name,
+        DisplayName: institution.DisplayName,
+        Slug:        institution.Slug,
+        Email:       institution.Email,
+        Phone:       institution.Phone,
+        Website:     institution.Website,
+        Description: institution.Description,
+        LogoURL:     institution.LogoURL,
+        Address:     institution.Address,
+        City:        institution.City,
+        Country:     institution.Country,
+    }, nil
+}
+
+// ============================================================
+// MEDIA - DELETE METHODS
+// ============================================================
+
+// DeleteUserAvatar deletes a user's avatar
+func (s *profileService) DeleteUserAvatar(ctx context.Context, userID string) error {
+    if userID == "" {
+        return domain.ErrInvalidUserID
+    }
+
+    // 1. Check permission
+    viewerID := s.getUserIDFromContext(ctx)
+    if viewerID == "" {
+        return domain.ErrPermissionDenied
+    }
+    if viewerID != userID {
+        scope := domain.NewPersonalTeamScope(viewerID)
+        allowed, err := s.permChecker.CanUpdateProfile(ctx, viewerID, scope)
+        if err != nil {
+            return fmt.Errorf("permission check failed: %w", err)
+        }
+        if !allowed {
+            return domain.ErrPermissionDenied
+        }
+    }
+
+    // 2. Get user
+    user, err := s.repo.GetUserByID(ctx, userID)
+    if err != nil {
+        return err
+    }
+    if user == nil {
+        return domain.ErrUserNotFound
+    }
+
+    // 3. ✅ Delete from storage using media type (like events module)
+    if user.AvatarURL != "" {
+        log.Printf("🗑️ Deleting avatar for user: %s", userID)
+        
+        mediaType, err := s.mediaSvc.GetMediaTypeByName(ctx, "media_type_profile")
+        if err != nil {
+            log.Printf("⚠️ Failed to get media type: %v", err)
+        } else if mediaType != nil {
+            if err := s.mediaSvc.DeleteFilesByEntityAndMediaType(ctx, userID, mediaType.ID); err != nil {
+                log.Printf("⚠️ Failed to delete avatar files: %v", err)
+                // Continue to clear URL even if storage deletion fails
+            } else {
+                log.Printf("✅ Avatar files deleted from storage")
+            }
+        }
+    } else {
+        log.Printf("ℹ️ No avatar URL to delete")
+    }
+
+    // 4. Clear avatar URL in database
+    user.AvatarURL = ""
+    if err := s.repo.UpdateUser(ctx, user); err != nil {
+        return fmt.Errorf("failed to update user: %w", err)
+    }
+
+    log.Printf("✅ User avatar deleted for user: %s", userID)
+    return nil
+}
+
+
+func (s *profileService) DeleteInstitutionLogo(ctx context.Context, institutionID string) error {
+    if institutionID == "" {
+        return domain.ErrInvalidInstitutionID
+    }
+
+    // 1. Check permission - must be account admin
+    viewerID := s.getUserIDFromContext(ctx)
+    if viewerID == "" {
+        return domain.ErrPermissionDenied
+    }
+
+    scope := domain.NewInstitutionTeamScope(institutionID)
+    
+    // ✅ Check if user has account_admin role in this institution
+    hasRole, err := s.permChecker.IsTeamAdmin(ctx, viewerID, scope)
+    if err != nil {
+        return fmt.Errorf("permission check failed: %w", err)
+    }
+    if !hasRole {
+        return domain.ErrPermissionDenied
+    }
+
+    // 2. Get institution
+    institution, err := s.repo.GetInstitutionByID(ctx, institutionID)
+    if err != nil {
+        return err
+    }
+    if institution == nil {
+        return domain.ErrInstitutionNotFound
+    }
+
+    // 3. Delete file from storage
+    if institution.LogoURL != "" {
+        log.Printf("🗑️ Deleting logo for institution: %s", institutionID)
+        
+        mediaType, err := s.mediaSvc.GetMediaTypeByName(ctx, "media_type_business")
+        if err != nil {
+            log.Printf("⚠️ Failed to get media type: %v", err)
+        } else if mediaType != nil {
+            if err := s.mediaSvc.DeleteFilesByEntityAndMediaType(ctx, institutionID, mediaType.ID); err != nil {
+                log.Printf("⚠️ Failed to delete logo files: %v", err)
+            } else {
+                log.Printf("✅ Logo files deleted from storage")
+            }
+        }
+    }
+
+    // 4. Clear logo URL in database
+    institution.LogoURL = ""
+    if err := s.repo.UpdateInstitution(ctx, institution); err != nil {
+        return fmt.Errorf("failed to update institution: %w", err)
+    }
+
+    log.Printf("✅ Institution logo deleted for institution: %s", institutionID)
+    return nil
+}
+// ============================================================
+// PRIVATE HELPERS
+// ============================================================
+
+// validateImageFile validates an image file
+func (s *profileService) validateImageFile(file []byte, filename, contentType string) error {
+    // Check file size (max 5MB)
+    maxSize := 5 * 1024 * 1024 // 5MB
+    if len(file) > maxSize {
+        return fmt.Errorf("file size exceeds maximum allowed size of 5MB")
+    }
+
+    // Check content type (allow common image types)
+    allowedTypes := map[string]bool{
+        "image/jpeg":    true,
+        "image/png":     true,
+        "image/gif":     true,
+        "image/webp":    true,
+        "image/svg+xml": true,
+        "image/bmp":     true,
+    }
+    if !allowedTypes[contentType] {
+        return fmt.Errorf("unsupported file type: %s. Allowed types: JPEG, PNG, GIF, WEBP, SVG, BMP", contentType)
+    }
+
+    // Check file extension
+    ext := strings.ToLower(filepath.Ext(filename))
+    allowedExtensions := map[string]bool{
+        ".jpg":  true,
+        ".jpeg": true,
+        ".png":  true,
+        ".gif":  true,
+        ".webp": true,
+        ".svg":  true,
+        ".bmp":  true,
+    }
+    if !allowedExtensions[ext] {
+        return fmt.Errorf("unsupported file extension: %s. Allowed extensions: .jpg, .jpeg, .png, .gif, .webp, .svg, .bmp", ext)
+    }
+
+    return nil
 }

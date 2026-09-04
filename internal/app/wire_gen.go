@@ -18,14 +18,14 @@ import (
 	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
 	service5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 	postgres4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
-	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
+	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/domain"
 	postgres3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/infrastructure/postgres"
-	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/service"
+	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
@@ -71,12 +71,13 @@ func InitializeApp() (*AppDependencies, error) {
 	domainPermissionChecker := provideEventsPermissionAdapter(permissionChecker)
 	repository2 := postgres3.NewProfileRepository(db)
 	permissionChecker2 := provideProfilePermissionAdapter(permissionChecker)
-	domainService := service3.NewProfileService(repository2, permissionChecker2)
-	userInfoProvider := provideEventsProfileAdapter(domainService)
 	repository3 := postgres4.NewPostgresRepository(db)
-	service6 := service4.NewService(repository3, client)
-	mediaService := provideEventsMediaAdapter(service6)
-	service7 := service5.NewService(domainRepository, domainPermissionChecker, userInfoProvider, mediaService)
+	service6 := service3.NewService(repository3, client)
+	mediaService := NewProfileMediaAdapter(service6)
+	domainService := service4.NewProfileService(repository2, permissionChecker2, mediaService)
+	userInfoProvider := provideEventsProfileAdapter(domainService)
+	domainMediaService := provideEventsMediaAdapter(service6)
+	service7 := service5.NewService(domainRepository, domainPermissionChecker, userInfoProvider, domainMediaService)
 	authHandler := authhandler.NewAuthHandler(serviceService, configConfig)
 	eventHandler := eventhandler.NewEventHandler(service7)
 	profileHandler := handler.NewProfileHandler(domainService)
@@ -101,7 +102,7 @@ type AppDependencies struct {
 	ProfileService    domain.Service
 	AuthService       service2.Service
 	EventsService     service5.Service
-	MediaService      service4.Service
+	MediaService      service3.Service
 	AuthHandler       *authhandler.AuthHandler
 	EventsHandler     *eventhandler.EventHandler
 	ProfileHandler    *handler.ProfileHandler
@@ -118,7 +119,7 @@ func provideEventsProfileAdapter(profileSvc domain.Service) domain2.UserInfoProv
 }
 
 // provideEventsMediaAdapter creates the events media adapter
-func provideEventsMediaAdapter(mediaSvc service4.Service) domain2.MediaService {
+func provideEventsMediaAdapter(mediaSvc service3.Service) domain2.MediaService {
 	return NewEventsMediaAdapter(mediaSvc)
 }
 

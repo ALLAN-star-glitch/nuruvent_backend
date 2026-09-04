@@ -38,13 +38,22 @@ type PermissionChecker interface {
     CanViewProfile(ctx context.Context, userID string, scope Scope) (bool, error)
 
     // ============================================================
+    // ✅ TEAM ROLE CHECKS (NEW)
+    // ============================================================
+    
+    // IsTeamAdmin checks if user is an admin in the scope
+    IsTeamAdmin(ctx context.Context, userID string, scope Scope) (bool, error)
+    
+    // IsEventManager checks if user is an event manager in the scope
+    IsEventManager(ctx context.Context, userID string, scope Scope) (bool, error)
+    
+    // IsTeamMember checks if user is a team member in the scope
+    IsTeamMember(ctx context.Context, userID string, scope Scope) (bool, error)
+
+    // ============================================================
     // ✅ USER INFORMATION METHODS (NEW)
     // ============================================================
     
     // GetUserInstitutionTeamIDs returns all institution team IDs where a user has roles
     GetUserInstitutionTeamIDs(ctx context.Context, userID string) ([]string, error)
-    
-    // GetUserPersonalTeamID returns the personal team ID for a user
-    // This is derived from the user ID, but the method provides consistency
-    GetUserPersonalTeamID(ctx context.Context, userID string) (string, error)
 }

@@ -131,7 +131,6 @@ func (m *UserModel) ToDomain() *domain.User {
         DisplayName: m.DisplayName,
         Email:       m.Email,
         Phone:       m.Phone,
-        AccountType: m.AccountType,
         AvatarURL:   m.AvatarURL,
         Bio:         m.Bio,
         Location:    m.Location,
@@ -145,7 +144,7 @@ func (m *UserModel) ToDomain() *domain.User {
 
 // FromDomain converts domain.User to UserModel
 func (m *UserModel) FromDomain(user *domain.User) {
-    if user == nil {
+   if user == nil {
         return
     }
     m.ID = user.ID
@@ -153,12 +152,13 @@ func (m *UserModel) FromDomain(user *domain.User) {
     m.DisplayName = user.DisplayName
     m.Email = user.Email
     m.Phone = user.Phone
-    m.AccountType = user.AccountType
+    // ❌ REMOVE: m.AccountType = user.AccountType
+    // ✅ This should be handled separately if needed
     m.AvatarURL = user.AvatarURL
     m.Bio = user.Bio
     m.Location = user.Location
     m.Website = user.Website
-    m.SocialLinks = JSONBString(user.SocialLinks) // ✅ Convert map[string]string to JSONBString
+    m.SocialLinks = JSONBString(user.SocialLinks)
     m.IsActive = user.IsActive
     m.CreatedAt = user.CreatedAt
     m.UpdatedAt = user.UpdatedAt

@@ -62,7 +62,10 @@ type UserInfo struct {
     Bio         string
     Location    string
     Website     string
+    IsActive    bool
     SocialLinks map[string]string
+    CreatedAt   time.Time
+    UpdatedAt   time.Time
 }
 
 // InstitutionInfo (minimal) for cross-module usage (events, etc.)
@@ -79,6 +82,8 @@ type InstitutionInfo struct {
     Address     string
     City        string
     Country     string
+    CreatedAt   time.Time 
+    UpdatedAt   time.Time
 }
 
 // ============================================================

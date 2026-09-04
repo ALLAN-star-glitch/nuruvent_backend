@@ -56,4 +56,17 @@ type Service interface {
     // Used by events module to display who is organizing an event
     // Scope determines whether to return institution or user info
     GetOrganizerInfo(ctx context.Context, scope Scope) (*OrganizerInfo, error)
+
+
+    // UploadUserAvatar uploads an avatar for a user
+    UploadUserAvatar(ctx context.Context, userID string, file []byte, filename, contentType string) (*UserInfo, error)
+    
+    // UploadInstitutionLogo uploads a logo for an institution
+    UploadInstitutionLogo(ctx context.Context, institutionID string, file []byte, filename, contentType string) (*InstitutionInfo, error)
+    
+    // DeleteUserAvatar deletes a user's avatar
+    DeleteUserAvatar(ctx context.Context, userID string) error
+    
+    // DeleteInstitutionLogo deletes an institution's logo
+    DeleteInstitutionLogo(ctx context.Context, institutionID string) error
 }

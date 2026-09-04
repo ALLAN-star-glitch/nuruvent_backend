@@ -33,8 +33,7 @@ import (
 
 	notificationdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 
-
-    profileDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/domain"
+	profileDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/domain"
 
 	profileHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
 )
@@ -55,21 +54,14 @@ func provideFiberAppWithMiddleware() *fiber.App {
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: []string{
-			// Development
 			"http://localhost:3000",
 			"http://localhost:3001",
 			"http://localhost:3002",
 			"http://localhost:8080",
-
-			// Production - Your custom domain
 			"https://nuruvent.com",
 			"https://www.nuruvent.com",
-
-			// Vercel preview deployments
 			"https://nuruvent.vercel.app",
 			"https://*.vercel.app",
-
-			// Staging
 			"https://staging.nuruvent.com",
 		},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
@@ -116,7 +108,7 @@ func provideAppDependencies(
 		MediaService:      mediaService,
 		AuthHandler:       authHandler,
 		EventsHandler:     eventsHandler,
-		ProfileHandler: profileHandler,
+		ProfileHandler:    profileHandler,
 	}
 }
 
@@ -167,17 +159,13 @@ func NewEventsPermissionAdapter(permSvc authDomain.PermissionChecker) eventsDoma
 
 // HasPermission checks if a user has a specific permission in a scope
 func (a *EventsPermissionAdapter) HasPermission(ctx context.Context, userID string, scope eventsDomain.Scope, resource, action string) (bool, error) {
-	// Convert eventsDomain.Scope to authDomain.Scope
 	authScope := a.convertScope(scope)
-
-	// Use authDomain.PermissionChecker to check permission
 	return a.permSvc.HasPermission(ctx, userID, authScope, resource, action)
 }
 
 // HasAnyPermission checks if a user has any of the given permissions in a scope
 func (a *EventsPermissionAdapter) HasAnyPermission(ctx context.Context, userID string, scope eventsDomain.Scope, resource string, actions ...string) (bool, error) {
 	authScope := a.convertScope(scope)
-
 	for _, action := range actions {
 		allowed, err := a.permSvc.HasPermission(ctx, userID, authScope, resource, action)
 		if err != nil {
@@ -193,7 +181,6 @@ func (a *EventsPermissionAdapter) HasAnyPermission(ctx context.Context, userID s
 // HasAllPermissions checks if a user has all of the given permissions in a scope
 func (a *EventsPermissionAdapter) HasAllPermissions(ctx context.Context, userID string, scope eventsDomain.Scope, resource string, actions ...string) (bool, error) {
 	authScope := a.convertScope(scope)
-
 	for _, action := range actions {
 		allowed, err := a.permSvc.HasPermission(ctx, userID, authScope, resource, action)
 		if err != nil {
@@ -241,9 +228,10 @@ func (a *EventsPermissionAdapter) CanReadEvent(ctx context.Context, userID strin
 	return a.CanReadOwnEvents(ctx, userID, scope)
 }
 
+// CanViewCreator checks if user can view creator details
 func (a *EventsPermissionAdapter) CanViewCreator(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-    authScope := a.convertScope(scope)
-    return a.permSvc.HasPermission(ctx, userID, authScope, "event", "view_creator")
+	authScope := a.convertScope(scope)
+	return a.permSvc.HasPermission(ctx, userID, authScope, "event", "view_creator")
 }
 
 // ============================================================
@@ -352,17 +340,12 @@ func (a *EventsPermissionAdapter) CanViewEvent(ctx context.Context, userID strin
 
 // convertScope converts eventsDomain.Scope to authDomain.Scope
 func (a *EventsPermissionAdapter) convertScope(scope eventsDomain.Scope) authDomain.Scope {
-	// Check if it's a personal team scope
 	if scope.IsPersonal() {
 		return authDomain.NewPersonalTeamScope(scope.ID)
 	}
-
-	// Check if it's an institution team scope
 	if scope.IsInstitution() {
 		return authDomain.NewInstitutionTeamScope(scope.ID)
 	}
-
-	// Default to platform scope
 	return authDomain.NewPlatformScope()
 }
 
@@ -602,87 +585,84 @@ func (a *AuthNotificationAdapter) SendLoginNotification(ctx context.Context, req
 }
 
 // ============================================================
-// NEW: EVENTS PROFILE ADAPTER
+// EVENTS PROFILE ADAPTER
 // ============================================================
 
 // EventsProfileAdapter adapts profile service to events domain UserInfoProvider
 type EventsProfileAdapter struct {
-    profileSvc profileDomain.Service
+	profileSvc profileDomain.Service
 }
 
 func NewEventsProfileAdapter(profileSvc profileDomain.Service) eventsDomain.UserInfoProvider {
-    return &EventsProfileAdapter{profileSvc: profileSvc}
+	return &EventsProfileAdapter{profileSvc: profileSvc}
 }
 
 func (a *EventsProfileAdapter) GetUserByID(ctx context.Context, userID string) (*eventsDomain.UserInfo, error) {
-    if userID == "" {
-        return nil, nil
-    }
+	if userID == "" {
+		return nil, nil
+	}
 
-    user, err := a.profileSvc.GetUserProfile(ctx, userID)
-    if err != nil {
-        return nil, err
-    }
-    if user == nil {
-        return nil, nil
-    }
+	user, err := a.profileSvc.GetUserProfile(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, nil
+	}
 
-    return &eventsDomain.UserInfo{
-        ID:          user.ID,
-        Name:        user.Name,
-        DisplayName: user.DisplayName,
-        AvatarURL:   user.AvatarURL,
-    }, nil
+	return &eventsDomain.UserInfo{
+		ID:          user.ID,
+		Name:        user.Name,
+		DisplayName: user.DisplayName,
+		AvatarURL:   user.AvatarURL,
+	}, nil
 }
 
 func (a *EventsProfileAdapter) GetUserByIDWithDetails(ctx context.Context, userID string) (*eventsDomain.UserInfo, error) {
-    if userID == "" {
-        return nil, nil
-    }
+	if userID == "" {
+		return nil, nil
+	}
 
-    user, err := a.profileSvc.GetUserProfileWithDetails(ctx, userID)
-    if err != nil {
-        return nil, err
-    }
-    if user == nil {
-        return nil, nil
-    }
+	user, err := a.profileSvc.GetUserProfileWithDetails(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, nil
+	}
 
-    return &eventsDomain.UserInfo{
-        ID:          user.ID,
-        Name:        user.Name,
-        DisplayName: user.DisplayName,
-        Email:       user.Email,
-        Phone:       user.Phone,
-        AccountType: user.AccountType,
-        AvatarURL:   user.AvatarURL,
-    }, nil
+	return &eventsDomain.UserInfo{
+		ID:          user.ID,
+		Name:        user.Name,
+		DisplayName: user.DisplayName,
+		Email:       user.Email,
+		Phone:       user.Phone,
+		AccountType: user.AccountType,
+		AvatarURL:   user.AvatarURL,
+	}, nil
 }
 
 func (a *EventsProfileAdapter) GetInstitutionByID(ctx context.Context, institutionID string) (*eventsDomain.InstitutionInfo, error) {
-    if institutionID == "" {
-        return nil, nil
-    }
+	if institutionID == "" {
+		return nil, nil
+	}
 
-    institution, err := a.profileSvc.GetInstitutionProfile(ctx, institutionID)
-    if err != nil {
-        return nil, err
-    }
-    if institution == nil {
-        return nil, nil
-    }
+	institution, err := a.profileSvc.GetInstitutionProfile(ctx, institutionID)
+	if err != nil {
+		return nil, err
+	}
+	if institution == nil {
+		return nil, nil
+	}
 
-    return &eventsDomain.InstitutionInfo{
-        ID:          institution.ID,
-        Name:        institution.Name,
-        DisplayName: institution.DisplayName,
-        Slug:        institution.Slug,
-        LogoURL:     institution.LogoURL,
-    }, nil
+	return &eventsDomain.InstitutionInfo{
+		ID:          institution.ID,
+		Name:        institution.Name,
+		DisplayName: institution.DisplayName,
+		Slug:        institution.Slug,
+		LogoURL:     institution.LogoURL,
+	}, nil
 }
-
-
-// internal/app/providers.go
 
 // ============================================================
 // PROFILE PERMISSION ADAPTER
@@ -695,16 +675,6 @@ type ProfilePermissionAdapter struct {
 
 func NewProfilePermissionAdapter(permSvc authDomain.PermissionChecker) profileDomain.PermissionChecker {
 	return &ProfilePermissionAdapter{permSvc: permSvc}
-}
-
-// GetUserInstitutionTeamIDs returns all institution team IDs where a user has roles
-func (a *ProfilePermissionAdapter) GetUserInstitutionTeamIDs(ctx context.Context, userID string) ([]string, error) {
-    return a.permSvc.GetUserInstitutionTeamIDs(ctx, userID)
-}
-
-// GetUserPersonalTeamID returns the personal team ID for a user
-func (a *ProfilePermissionAdapter) GetUserPersonalTeamID(ctx context.Context, userID string) (string, error) {
-    return userID, nil // Personal team ID is the user ID
 }
 
 // ============================================================
@@ -808,6 +778,42 @@ func (a *ProfilePermissionAdapter) CanViewProfile(ctx context.Context, userID st
 }
 
 // ============================================================
+// ✅ TEAM ROLE CHECKS
+// ============================================================
+
+// IsTeamAdmin checks if user is an admin in the scope
+func (a *ProfilePermissionAdapter) IsTeamAdmin(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
+	authScope := a.convertScope(scope)
+	return a.permSvc.IsTeamAdmin(ctx, userID, authScope)
+}
+
+// IsEventManager checks if user is an event manager in the scope
+func (a *ProfilePermissionAdapter) IsEventManager(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
+	authScope := a.convertScope(scope)
+	return a.permSvc.IsEventManager(ctx, userID, authScope)
+}
+
+// IsTeamMember checks if user is a team member in the scope
+func (a *ProfilePermissionAdapter) IsTeamMember(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
+	authScope := a.convertScope(scope)
+	return a.permSvc.IsTeamMember(ctx, userID, authScope)
+}
+
+// ============================================================
+// ✅ USER INFORMATION METHODS
+// ============================================================
+
+// GetUserInstitutionTeamIDs returns all institution team IDs where a user has roles
+func (a *ProfilePermissionAdapter) GetUserInstitutionTeamIDs(ctx context.Context, userID string) ([]string, error) {
+	return a.permSvc.GetUserInstitutionTeamIDs(ctx, userID)
+}
+
+// GetUserPersonalTeamID returns the personal team ID for a user
+func (a *ProfilePermissionAdapter) GetUserPersonalTeamID(ctx context.Context, userID string) (string, error) {
+	return userID, nil
+}
+
+// ============================================================
 // HELPER METHODS
 // ============================================================
 
@@ -820,4 +826,112 @@ func (a *ProfilePermissionAdapter) convertScope(scope profileDomain.Scope) authD
 		return authDomain.NewInstitutionTeamScope(scope.ID)
 	}
 	return authDomain.NewPlatformScope()
+}
+
+// ============================================================
+// PROFILE MEDIA ADAPTER
+// ============================================================
+
+// ProfileMediaAdapter adapts media service to profile domain MediaService
+type ProfileMediaAdapter struct {
+	mediaSvc mediaService.Service
+}
+
+func NewProfileMediaAdapter(mediaSvc mediaService.Service) profileDomain.MediaService {
+	return &ProfileMediaAdapter{mediaSvc: mediaSvc}
+}
+
+func (a *ProfileMediaAdapter) UploadFile(ctx context.Context, cmd profileDomain.UploadMediaCommand) (*profileDomain.MediaInfo, error) {
+	mediaCmd := mediaService.UploadCommand{
+		File:          cmd.File,
+		FileName:      cmd.FileName,
+		ContentType:   cmd.ContentType,
+		MediaTypeName: cmd.MediaTypeName,
+		EntityID:      cmd.EntityID,
+		UploadedBy:    cmd.UploadedBy,
+	}
+
+	media, err := a.mediaSvc.UploadFile(ctx, mediaCmd)
+	if err != nil {
+		return nil, err
+	}
+	if media == nil {
+		return nil, nil
+	}
+
+	return &profileDomain.MediaInfo{
+		ID:         media.ID,
+		URL:        media.URL,
+		MediaType:  cmd.MediaTypeName,
+		EntityID:   media.EntityID,
+		UploadedBy: media.UploadedBy,
+		CreatedAt:  media.CreatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+func (a *ProfileMediaAdapter) GetMediaByID(ctx context.Context, id string) (*profileDomain.MediaInfo, error) {
+	media, err := a.mediaSvc.GetMediaByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if media == nil {
+		return nil, nil
+	}
+
+	return &profileDomain.MediaInfo{
+		ID:         media.ID,
+		URL:        media.URL,
+		MediaType:  media.MediaTypeID,
+		EntityID:   media.EntityID,
+		UploadedBy: media.UploadedBy,
+		CreatedAt:  media.CreatedAt.Format(time.RFC3339),
+	}, nil
+}
+
+func (a *ProfileMediaAdapter) GetMediaByEntity(ctx context.Context, entityID string) ([]*profileDomain.MediaInfo, error) {
+	mediaList, _, err := a.mediaSvc.GetMediaByEntity(ctx, entityID, 1, 1000)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*profileDomain.MediaInfo, len(mediaList))
+	for i, media := range mediaList {
+		result[i] = &profileDomain.MediaInfo{
+			ID:         media.ID,
+			URL:        media.URL,
+			MediaType:  media.MediaTypeID,
+			EntityID:   media.EntityID,
+			UploadedBy: media.UploadedBy,
+			CreatedAt:  media.CreatedAt.Format(time.RFC3339),
+		}
+	}
+	return result, nil
+}
+
+func (a *ProfileMediaAdapter) GetMediaTypeByName(ctx context.Context, name string) (*profileDomain.MediaTypeInfo, error) {
+	mediaType, err := a.mediaSvc.GetMediaTypeByName(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	if mediaType == nil {
+		return nil, nil
+	}
+
+	return &profileDomain.MediaTypeInfo{
+		ID:   mediaType.ID,
+		Name: mediaType.Name,
+		Slug: mediaType.Slug,
+	}, nil
+}
+
+func (a *ProfileMediaAdapter) DeleteFile(ctx context.Context, id string) error {
+	return a.mediaSvc.DeleteFile(ctx, id)
+}
+
+func (a *ProfileMediaAdapter) DeleteFilesByEntity(ctx context.Context, entityID string) error {
+	return a.mediaSvc.DeleteFilesByEntity(ctx, entityID)
+}
+
+func (a *ProfileMediaAdapter) DeleteFilesByEntityAndMediaType(ctx context.Context, entityID, mediaTypeID string) error {
+	return a.mediaSvc.DeleteFilesByEntityAndMediaType(ctx, entityID, mediaTypeID)
 }

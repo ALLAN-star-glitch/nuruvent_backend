@@ -128,6 +128,8 @@ func InitializeApp() (*AppDependencies, error) {
 		provideEventsMediaAdapter,
 		provideProfilePermissionAdapter, // ✅ Add this
 
+		NewProfileMediaAdapter,
+
 		// ============================================================
 		// FINAL APP DEPENDENCIES
 		// ============================================================

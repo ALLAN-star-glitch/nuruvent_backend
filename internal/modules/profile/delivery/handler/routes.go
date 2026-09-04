@@ -26,34 +26,50 @@ func (h *ProfileHandler) RegisterRoutes(
 
 	// ============================================================
 	// 2. PERSONAL TEAM ROUTES - User's own profile
-	//    Purpose: View and update own profile
+	//    Purpose: View and update own profile, manage avatar
 	//    Scope: personal:team:{user_id}
 	// ============================================================
-	personal := router.Group("/users/me/profile")
+	personal := router.Group("/users/me")
 	personal.Use(authMiddleware)
 	personal.Use(authzMiddleware)
 	{
+		// ---- PROFILE ----
 		// View my full profile (with email, phone, etc.)
-		personal.Get("/", h.GetMyProfile)
+		personal.Get("/profile", h.GetMyProfile)
 
 		// Update my profile
-		personal.Put("/", h.UpdateMyProfile)
+		personal.Put("/profile", h.UpdateMyProfile)
+
+		// ---- AVATAR ----
+		// Upload my avatar
+		personal.Post("/avatar", h.UploadUserAvatar)
+
+		// Delete my avatar
+		personal.Delete("/avatar", h.DeleteUserAvatar)
 	}
 
 	// ============================================================
 	// 3. INSTITUTION TEAM ROUTES - Institution profile
-	//    Purpose: View and update institution profile
+	//    Purpose: View and update institution profile, manage logo
 	//    Scope: institution:team:{institution_id}
 	// ============================================================
-	institution := router.Group("/institutions/:institutionId/profile")
+	institution := router.Group("/institutions/:institutionId")
 	institution.Use(authMiddleware)
 	institution.Use(authzMiddleware)
 	{
+		// ---- PROFILE ----
 		// View institution profile (with details if authorized)
-		institution.Get("/", h.GetInstitutionProfile)
+		institution.Get("/profile", h.GetInstitutionProfile)
 
 		// Update institution profile (Account Admin only)
-		institution.Put("/", h.UpdateInstitutionProfile)
+		institution.Put("/profile", h.UpdateInstitutionProfile)
+
+		// ---- LOGO ----
+		// Upload institution logo
+		institution.Post("/logo", h.UploadInstitutionLogo)
+
+		// Delete institution logo
+		institution.Delete("/logo", h.DeleteInstitutionLogo)
 	}
 
 	// ============================================================

@@ -3,13 +3,14 @@
 package postgres
 
 import (
-    "context"
-    "errors"
-    "fmt"
+	"context"
+	"errors"
+	"fmt"
+	"time"
 
-    "gorm.io/gorm"
+	"gorm.io/gorm"
 
-    "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/domain"
 )
 
 type ProfileRepository struct {
@@ -56,6 +57,7 @@ func (r *ProfileRepository) GetUserByEmail(ctx context.Context, email string) (*
     return model.ToDomain(), nil
 }
 
+
 func (r *ProfileRepository) UpdateUser(ctx context.Context, user *domain.User) error {
     if user == nil {
         return errors.New("user is nil")
@@ -64,11 +66,29 @@ func (r *ProfileRepository) UpdateUser(ctx context.Context, user *domain.User) e
         return domain.ErrInvalidUserID
     }
 
-    var model UserModel
-    model.FromDomain(user)
+    // ✅ Update all profile fields now
+    updates := map[string]interface{}{
+        "name":          user.Name,
+        "display_name":  user.DisplayName,
+        "phone":         user.Phone,
+        "avatar_url":    user.AvatarURL,
+        "bio":           user.Bio,
+        "location":      user.Location,
+        "website":       user.Website,
+        "social_links":  user.SocialLinks,
+        "updated_at":    time.Now(),
+    }
 
-    if err := r.db.WithContext(ctx).Save(&model).Error; err != nil {
-        return fmt.Errorf("failed to update user: %w", err)
+    result := r.db.WithContext(ctx).Model(&UserModel{}).
+        Where("id = ?", user.ID).
+        Updates(updates)
+
+    if result.Error != nil {
+        return fmt.Errorf("failed to update user: %w", result.Error)
+    }
+
+    if result.RowsAffected == 0 {
+        return domain.ErrUserNotFound
     }
 
     return nil

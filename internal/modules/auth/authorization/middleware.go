@@ -47,10 +47,23 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 		log.Printf("🔍 AUTHZ: user=%s, scope=%s, resource=%s, action=%s",
 			userIDStr, scope.String(), resource, action)
 
-		// ✅ SPECIAL CASE: /users/me/profile - always allow
-		// The service handles permission checks internally (viewerID == userID)
+		// ✅ SPECIAL CASE: /users/me/profile - always allow (GET and PUT)
 		if isOwnProfileRequest(c) {
 			log.Printf("✅ AUTHZ BYPASS: /users/me/profile - allowing access")
+			c.Locals("scope", scope)
+			return c.Next()
+		}
+
+		// ✅ SPECIAL CASE: /users/me/avatar - always allow for own avatar
+		if isOwnAvatarRequest(c) {
+			log.Printf("✅ AUTHZ BYPASS: /users/me/avatar - allowing access")
+			c.Locals("scope", scope)
+			return c.Next()
+		}
+
+		// ✅ SPECIAL CASE: /institutions/:id/logo - allow for institution admins
+		if isInstitutionLogoRequest(c) {
+			log.Printf("✅ AUTHZ BYPASS: institution logo request - allowing access")
 			c.Locals("scope", scope)
 			return c.Next()
 		}
@@ -81,11 +94,23 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 	}
 }
 
-// isOwnProfileRequest checks if this is a /users/me/profile request
+// isOwnProfileRequest checks if this is a /users/me/profile request (GET or PUT)
 func isOwnProfileRequest(c fiber.Ctx) bool {
 	path := c.Path()
-	method := c.Method()
-	return method == http.MethodGet && strings.Contains(path, "/users/me/profile")
+	// ✅ Allow both GET and PUT for profile
+	return strings.Contains(path, "/users/me/profile")
+}
+
+// isOwnAvatarRequest checks if this is a /users/me/avatar request
+func isOwnAvatarRequest(c fiber.Ctx) bool {
+	path := c.Path()
+	return strings.Contains(path, "/users/me/avatar")
+}
+
+// isInstitutionLogoRequest checks if this is an institution logo request
+func isInstitutionLogoRequest(c fiber.Ctx) bool {
+	path := c.Path()
+	return strings.Contains(path, "/institutions/") && strings.Contains(path, "/logo")
 }
 
 // checkPermissionWithFallback checks permissions with a fallback chain
@@ -236,6 +261,14 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 				}
 			}
 		}
+		// For /users/me/avatar - use personal scope
+		if strings.Contains(path, "/users/me/avatar") {
+			if uid := c.Locals(authdomain.ContextKeyUserID); uid != nil {
+				if uidStr, ok := uid.(string); ok && uidStr != "" {
+					return authdomain.NewPersonalTeamScope(uidStr)
+				}
+			}
+		}
 		// For /profile/organizer?scope=xxx - parse from query
 		if strings.Contains(path, "/profile/organizer") {
 			scopeParam := c.Query("scope")
@@ -249,6 +282,16 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 						return authdomain.NewInstitutionTeamScope(parts[1])
 					}
 				}
+			}
+		}
+	}
+
+	// Check if this is an institution logo request
+	if strings.Contains(path, "/institutions/") && strings.Contains(path, "/logo") {
+		parts := strings.Split(path, "/")
+		for i, part := range parts {
+			if part == "institutions" && i+1 < len(parts) {
+				return authdomain.NewInstitutionTeamScope(parts[i+1])
 			}
 		}
 	}
@@ -328,6 +371,18 @@ func getResourceFromRequest(c fiber.Ctx) string {
 			if i+1 < len(segments) && (segments[i+1] == "profile" || strings.Contains(segments[i+1], "profile")) {
 				return "profile"
 			}
+			// Check if this is an avatar endpoint
+			if i+1 < len(segments) && segments[i+1] == "avatar" {
+				return "profile"
+			}
+			// Check if this is me/profile
+			if i+1 < len(segments) && segments[i] == "me" && (segments[i+1] == "profile" || segments[i+1] == "avatar") {
+				return "profile"
+			}
+			// Check if this is users/me/profile
+			if i+2 < len(segments) && segments[i] == "users" && segments[i+1] == "me" && segments[i+2] == "profile" {
+				return "profile"
+			}
 			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
 				return authdomain.ResourceEvent.String()
 			}
@@ -344,6 +399,10 @@ func getResourceFromRequest(c fiber.Ctx) string {
 			if i+2 < len(segments) && segments[i+2] == "profile" {
 				return "profile"
 			}
+			// ✅ Check if this is a logo endpoint
+			if i+1 < len(segments) && segments[i+1] == "logo" {
+				return "profile"
+			}
 			return authdomain.ResourceInstitution.String()
 		case "teams", "team":
 			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
@@ -354,9 +413,13 @@ func getResourceFromRequest(c fiber.Ctx) string {
 			if i+1 < len(segments) && (segments[i+1] == "events" || segments[i+1] == "event") {
 				return authdomain.ResourceEvent.String()
 			}
-			if i+1 < len(segments) && segments[i+1] == "profile" {
+			if i+1 < len(segments) && (segments[i+1] == "profile" || segments[i+1] == "avatar") {
 				return "profile"
 			}
+		case "avatar":
+			return "profile"
+		case "logo":
+			return "profile"
 		}
 	}
 
@@ -385,6 +448,10 @@ func getResourceFromRequest(c fiber.Ctx) string {
 			return "notification"
 		case "media":
 			return "media"
+		case "avatar":
+			return "profile"
+		case "logo":
+			return "profile"
 		}
 	}
 
@@ -393,6 +460,18 @@ func getResourceFromRequest(c fiber.Ctx) string {
 
 // getActionFromRequest maps HTTP method to action
 func getActionFromRequest(c fiber.Ctx) string {
+	path := c.Path()
+	
+	// For avatar/logo uploads, POST should map to update, not create
+	if strings.Contains(path, "/avatar") || strings.Contains(path, "/logo") {
+		switch c.Method() {
+		case http.MethodPost:
+			return authdomain.ActionUpdate.String() // Upload = Update
+		case http.MethodDelete:
+			return authdomain.ActionDelete.String()
+		}
+	}
+	
 	switch c.Method() {
 	case http.MethodGet:
 		return authdomain.ActionRead.String()

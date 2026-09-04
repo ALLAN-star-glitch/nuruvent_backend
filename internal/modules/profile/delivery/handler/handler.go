@@ -5,6 +5,8 @@ package handler
 import (
 	"context"
 	"errors"
+	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -694,4 +696,271 @@ func splitString(s, sep string) []string {
 	}
 	result = append(result, s[start:])
 	return result
+}
+
+
+// ============================================================
+// MEDIA UPLOAD HANDLERS
+// ============================================================
+// internal/modules/profile/delivery/handler/handler.go
+
+// UploadUserAvatar godoc
+// @Summary Upload user avatar
+// @Description Upload an avatar for the authenticated user
+// @Tags Profile
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param avatar formData file true "Avatar image (JPEG, PNG, GIF, WEBP, SVG)"
+// @Success 200 {object} response.BaseResponse{data=UserProfileResponse}
+// @Failure 400 {object} response.BaseResponse
+// @Failure 401 {object} response.BaseResponse
+// @Failure 403 {object} response.BaseResponse
+// @Failure 500 {object} response.BaseResponse
+// @Router /api/v1/users/me/avatar [post]
+func (h *ProfileHandler) UploadUserAvatar(c fiber.Ctx) error {
+    userID, err := getUserID(c)
+    if err != nil {
+        return response.Unauthorized(c, "User not authenticated", nil)
+    }
+
+    // Get file from form
+    fileHeader, err := c.FormFile("avatar")
+    if err != nil {
+        return response.BadRequest(c, "Avatar file is required", nil)
+    }
+
+    // Open file
+    file, err := fileHeader.Open()
+    if err != nil {
+        return response.InternalError(c, "Failed to open file", nil)
+    }
+    defer file.Close()
+
+    // Read file content
+    fileContent, err := io.ReadAll(file)
+    if err != nil {
+        return response.InternalError(c, "Failed to read file", nil)
+    }
+
+    // ✅ Detect MIME type from file content
+    contentType := fileHeader.Header.Get("Content-Type")
+    if contentType == "application/octet-stream" || contentType == "" {
+        contentType = detectImageMimeType(fileContent, fileHeader.Filename)
+    }
+
+    ctx := context.WithValue(c.Context(), "user_id", userID)
+
+    profile, err := h.svc.UploadUserAvatar(ctx, userID, fileContent, fileHeader.Filename, contentType)
+    if err != nil {
+        if errors.Is(err, domain.ErrUserNotFound) {
+            return response.NotFound(c, "User not found", nil)
+        }
+        if errors.Is(err, domain.ErrPermissionDenied) {
+            return response.Forbidden(c, "You don't have permission to upload avatar", nil)
+        }
+        return response.InternalError(c, "Failed to upload avatar", fiber.Map{
+            "error": err.Error(),
+        })
+    }
+
+    return response.Success(c, "Avatar uploaded successfully", NewUserProfileResponse(profile))
+}
+
+// UploadInstitutionLogo godoc
+// @Summary Upload institution logo
+// @Description Upload a logo for an institution (admin only)
+// @Tags Profile
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param institutionId path string true "Institution ID"
+// @Param logo formData file true "Logo image (JPEG, PNG, GIF, WEBP, SVG)"
+// @Success 200 {object} response.BaseResponse{data=InstitutionProfileResponse}
+// @Failure 400 {object} response.BaseResponse
+// @Failure 401 {object} response.BaseResponse
+// @Failure 403 {object} response.BaseResponse
+// @Failure 404 {object} response.BaseResponse
+// @Failure 500 {object} response.BaseResponse
+// @Router /api/v1/institutions/{institutionId}/logo [post]
+func (h *ProfileHandler) UploadInstitutionLogo(c fiber.Ctx) error {
+    userID, err := getUserID(c)
+    if err != nil {
+        return response.Unauthorized(c, "User not authenticated", nil)
+    }
+
+    institutionID := c.Params("institutionId")
+    if institutionID == "" {
+        institutionID = c.Params("id")
+    }
+    if institutionID == "" {
+        return response.BadRequest(c, "Institution ID is required", nil)
+    }
+
+    // Get file from form
+    fileHeader, err := c.FormFile("logo")
+    if err != nil {
+        return response.BadRequest(c, "Logo file is required", nil)
+    }
+
+    // Open file
+    file, err := fileHeader.Open()
+    if err != nil {
+        return response.InternalError(c, "Failed to open file", nil)
+    }
+    defer file.Close()
+
+    // Read file content
+    fileContent, err := io.ReadAll(file)
+    if err != nil {
+        return response.InternalError(c, "Failed to read file", nil)
+    }
+
+    // ✅ Detect MIME type from file content
+    contentType := fileHeader.Header.Get("Content-Type")
+    if contentType == "application/octet-stream" || contentType == "" {
+        contentType = detectImageMimeType(fileContent, fileHeader.Filename)
+    }
+
+    ctx := context.WithValue(c.Context(), "user_id", userID)
+
+    profile, err := h.svc.UploadInstitutionLogo(ctx, institutionID, fileContent, fileHeader.Filename, contentType)
+    if err != nil {
+        if errors.Is(err, domain.ErrInstitutionNotFound) {
+            return response.NotFound(c, "Institution not found", nil)
+        }
+        if errors.Is(err, domain.ErrPermissionDenied) {
+            return response.Forbidden(c, "You don't have permission to upload institution logo", nil)
+        }
+        return response.InternalError(c, "Failed to upload logo", fiber.Map{
+            "error": err.Error(),
+        })
+    }
+
+    return response.Success(c, "Logo uploaded successfully", NewInstitutionProfileResponse(profile))
+}
+
+// detectImageMimeType detects MIME type from file content and filename
+func detectImageMimeType(data []byte, filename string) string {
+    // Check by magic bytes first (most reliable)
+    if len(data) >= 4 {
+        // PNG: 89 50 4E 47
+        if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
+            return "image/png"
+        }
+        // JPEG: FF D8 FF
+        if data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
+            return "image/jpeg"
+        }
+        // GIF: 47 49 46
+        if data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 {
+            return "image/gif"
+        }
+        // WEBP: 52 49 46 46 ... 57 45 42 50
+        if len(data) >= 12 && data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
+            data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50 {
+            return "image/webp"
+        }
+        // BMP: 42 4D
+        if data[0] == 0x42 && data[1] == 0x4D {
+            return "image/bmp"
+        }
+    }
+
+    // Check by file extension as fallback
+    ext := strings.ToLower(filepath.Ext(filename))
+    switch ext {
+    case ".jpg", ".jpeg":
+        return "image/jpeg"
+    case ".png":
+        return "image/png"
+    case ".gif":
+        return "image/gif"
+    case ".webp":
+        return "image/webp"
+    case ".svg":
+        return "image/svg+xml"
+    case ".bmp":
+        return "image/bmp"
+    }
+
+    return "application/octet-stream"
+}
+
+// DeleteUserAvatar godoc
+// @Summary Delete user avatar
+// @Description Delete the authenticated user's avatar
+// @Tags Profile
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} response.BaseResponse
+// @Failure 401 {object} response.BaseResponse
+// @Failure 403 {object} response.BaseResponse
+// @Failure 500 {object} response.BaseResponse
+// @Router /api/v1/users/me/avatar [delete]
+func (h *ProfileHandler) DeleteUserAvatar(c fiber.Ctx) error {
+    userID, err := getUserID(c)
+    if err != nil {
+        return response.Unauthorized(c, "User not authenticated", nil)
+    }
+
+    ctx := context.WithValue(c.Context(), "user_id", userID)
+
+    if err := h.svc.DeleteUserAvatar(ctx, userID); err != nil {
+        if errors.Is(err, domain.ErrUserNotFound) {
+            return response.NotFound(c, "User not found", nil)
+        }
+        if errors.Is(err, domain.ErrPermissionDenied) {
+            return response.Forbidden(c, "You don't have permission to delete avatar", nil)
+        }
+        return response.InternalError(c, "Failed to delete avatar", fiber.Map{
+            "error": err.Error(),
+        })
+    }
+
+    return response.Success(c, "Avatar deleted successfully", nil)
+}
+
+// DeleteInstitutionLogo godoc
+// @Summary Delete institution logo
+// @Description Delete an institution's logo (admin only)
+// @Tags Profile
+// @Produce json
+// @Security BearerAuth
+// @Param institutionId path string true "Institution ID"
+// @Success 200 {object} response.BaseResponse
+// @Failure 401 {object} response.BaseResponse
+// @Failure 403 {object} response.BaseResponse
+// @Failure 404 {object} response.BaseResponse
+// @Failure 500 {object} response.BaseResponse
+// @Router /api/v1/institutions/{institutionId}/logo [delete]
+func (h *ProfileHandler) DeleteInstitutionLogo(c fiber.Ctx) error {
+    userID, err := getUserID(c)
+    if err != nil {
+        return response.Unauthorized(c, "User not authenticated", nil)
+    }
+
+    institutionID := c.Params("institutionId")
+    if institutionID == "" {
+        institutionID = c.Params("id")
+    }
+    if institutionID == "" {
+        return response.BadRequest(c, "Institution ID is required", nil)
+    }
+
+    ctx := context.WithValue(c.Context(), "user_id", userID)
+
+    if err := h.svc.DeleteInstitutionLogo(ctx, institutionID); err != nil {
+        if errors.Is(err, domain.ErrInstitutionNotFound) {
+            return response.NotFound(c, "Institution not found", nil)
+        }
+        if errors.Is(err, domain.ErrPermissionDenied) {
+            return response.Forbidden(c, "You don't have permission to delete institution logo", nil)
+        }
+        return response.InternalError(c, "Failed to delete logo", fiber.Map{
+            "error": err.Error(),
+        })
+    }
+
+    return response.Success(c, "Logo deleted successfully", nil)
 }

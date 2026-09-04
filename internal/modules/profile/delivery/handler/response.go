@@ -47,6 +47,8 @@ func NewUserProfileResponse(user *domain.UserInfo) UserProfileResponse {
 		Location:    user.Location,
 		Website:     user.Website,
 		SocialLinks: user.SocialLinks,
+		CreatedAt:   user.CreatedAt.Format(time.RFC3339),  // ✅ Format the time
+        UpdatedAt:   user.UpdatedAt.Format(time.RFC3339),  // ✅ Format the time
 	}
 }
 
@@ -114,6 +116,8 @@ func NewInstitutionProfileResponse(institution *domain.InstitutionInfo) Institut
 		Address:     institution.Address,
 		City:        institution.City,
 		Country:     institution.Country,
+		CreatedAt:   institution.CreatedAt.Format(time.RFC3339),  // ✅ Add this
+        UpdatedAt:   institution.UpdatedAt.Format(time.RFC3339),  // ✅ Add this
 	}
 }
 
