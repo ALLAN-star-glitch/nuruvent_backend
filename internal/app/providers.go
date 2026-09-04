@@ -745,15 +745,23 @@ func (a *ProfilePermissionAdapter) CanUpdateOwnProfile(ctx context.Context, user
 
 // CanUpdateProfile checks if user can update profiles in a scope (ALL or OWN)
 func (a *ProfilePermissionAdapter) CanUpdateProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-	allowed, err := a.CanUpdateAllProfiles(ctx, userID, scope)
-	if err != nil {
-		return false, err
-	}
-	if allowed {
-		return true, nil
-	}
-	return a.CanUpdateOwnProfile(ctx, userID, scope)
+    // First check if user has exact update permission
+    authScope := a.convertScope(scope)
+    allowed, err := a.permSvc.HasPermission(ctx, userID, authScope, "profile", "update")
+    if err == nil && allowed {
+        return true, nil
+    }
+    
+    // Then check update_all
+    allowed, err = a.permSvc.HasPermission(ctx, userID, authScope, "profile", "update_all")
+    if err == nil && allowed {
+        return true, nil
+    }
+    
+    // Finally check update_own
+    return a.permSvc.HasPermission(ctx, userID, authScope, "profile", "update_own")
 }
+
 
 // ============================================================
 // PROFILE PERMISSIONS - MANAGEMENT
