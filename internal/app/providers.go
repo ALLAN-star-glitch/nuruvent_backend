@@ -763,6 +763,7 @@ func (a *ProfilePermissionAdapter) CanUpdateProfile(ctx context.Context, userID 
 }
 
 
+
 // ============================================================
 // PROFILE PERMISSIONS - MANAGEMENT
 // ============================================================

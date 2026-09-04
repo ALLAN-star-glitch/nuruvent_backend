@@ -64,7 +64,9 @@ func GetPersonalTeamPolicies(domain string) [][]string {
 		// Dashboard and profile
 		{accountAdmin, domain, "dashboard", "read"},
 		{accountAdmin, domain, "profile", "read"},
+		{accountAdmin, domain, "profile", "read_all"},
 		{accountAdmin, domain, "profile", "update"},
+		{accountAdmin, domain, "profile", "update_all"},
 	}
 	policies = append(policies, accountAdminPolicies...)
 
@@ -192,8 +194,11 @@ func GetInstitutionTeamPolicies(domain string) [][]string {
 
 		// Dashboard and profile
 		{accountAdmin, domain, "dashboard", "read"},
+		// ✅ Add read_all and update_all for profile
 		{accountAdmin, domain, "profile", "read"},
+		{accountAdmin, domain, "profile", "read_all"},
 		{accountAdmin, domain, "profile", "update"},
+		{accountAdmin, domain, "profile", "update_all"},
 	}
 	policies = append(policies, accountAdminPolicies...)
 

@@ -147,6 +147,7 @@ func (c *PermissionChecker) CanManageEvent(ctx context.Context, userID string, s
 // CanViewEvent checks if user can view events in a scope
 func (c *PermissionChecker) CanViewEvent(ctx context.Context, userID string, scope authdomain.Scope) (bool, error) {
 	return c.HasAnyPermission(ctx, userID, scope, authdomain.ResourceEvent.String(),
+		authdomain.ActionRead.String(),     
 		authdomain.ActionReadAll.String(),
 		authdomain.ActionReadOwn.String(),
 	)
@@ -184,6 +185,7 @@ func (c *PermissionChecker) CanUpdateOwnProfile(ctx context.Context, userID stri
 // CanViewProfile checks if user can view profiles in a scope (read_all OR read_own)
 func (c *PermissionChecker) CanViewProfile(ctx context.Context, userID string, scope authdomain.Scope) (bool, error) {
 	return c.HasAnyPermission(ctx, userID, scope, authdomain.ResourceProfile.String(),
+		authdomain.ActionRead.String(),     // - exact read permission
 		authdomain.ActionReadAll.String(),
 		authdomain.ActionReadOwn.String(),
 	)
@@ -191,7 +193,11 @@ func (c *PermissionChecker) CanViewProfile(ctx context.Context, userID string, s
 
 // CanManageProfile checks if user can manage profiles in a scope (update_all)
 func (c *PermissionChecker) CanManageProfile(ctx context.Context, userID string, scope authdomain.Scope) (bool, error) {
-	return c.HasPermission(ctx, userID, scope, authdomain.ResourceProfile.String(), authdomain.ActionUpdateAll.String())
+	return c.HasAnyPermission(ctx, userID, scope, authdomain.ResourceProfile.String(),
+		authdomain.ActionUpdate.String(),     //  exact update permission
+		authdomain.ActionUpdateAll.String(),
+		authdomain.ActionUpdateOwn.String(),
+	)
 }
 
 // ============================================================

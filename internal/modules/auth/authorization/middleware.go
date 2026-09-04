@@ -97,7 +97,6 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 // isOwnProfileRequest checks if this is a /users/me/profile request (GET or PUT)
 func isOwnProfileRequest(c fiber.Ctx) bool {
 	path := c.Path()
-	// ✅ Allow both GET and PUT for profile
 	return strings.Contains(path, "/users/me/profile")
 }
 
@@ -251,6 +250,19 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 		}
 	}
 
+	// ✅ Check for team_id and team_type query params FIRST
+	teamID := c.Query("team_id")
+	teamType := c.Query("team_type")
+	
+	if teamID != "" && teamType != "" {
+		if teamType == "institution" {
+			return authdomain.NewInstitutionTeamScope(teamID)
+		}
+		if teamType == "personal" {
+			return authdomain.NewPersonalTeamScope(teamID)
+		}
+	}
+
 	// Check for profile endpoints
 	if strings.Contains(path, "/profile") {
 		// For /users/me/profile - use personal scope
@@ -307,7 +319,7 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 		return authdomain.NewPersonalTeamScope(userID)
 	}
 
-	teamID := c.Params("teamId")
+	teamID = c.Params("teamId")
 	if teamID != "" {
 		return authdomain.NewPersonalTeamScope(teamID)
 	}
@@ -399,7 +411,6 @@ func getResourceFromRequest(c fiber.Ctx) string {
 			if i+2 < len(segments) && segments[i+2] == "profile" {
 				return "profile"
 			}
-			// ✅ Check if this is a logo endpoint
 			if i+1 < len(segments) && segments[i+1] == "logo" {
 				return "profile"
 			}
@@ -466,7 +477,7 @@ func getActionFromRequest(c fiber.Ctx) string {
 	if strings.Contains(path, "/avatar") || strings.Contains(path, "/logo") {
 		switch c.Method() {
 		case http.MethodPost:
-			return authdomain.ActionUpdate.String() // Upload = Update
+			return authdomain.ActionUpdate.String()
 		case http.MethodDelete:
 			return authdomain.ActionDelete.String()
 		}

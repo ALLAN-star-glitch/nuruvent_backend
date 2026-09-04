@@ -19,7 +19,7 @@ import (
 // ============================================================
 
 // Current policy schema version - increment when policies change
-const CURRENT_POLICY_VERSION = "v6"
+const CURRENT_POLICY_VERSION = "v7"
 
 // ============================================================
 // POLICY VERSION TRACKING
