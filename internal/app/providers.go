@@ -547,7 +547,7 @@ func (a *AuthNotificationAdapter) SendInstitutionKYCWelcome(ctx context.Context,
 
 func (a *AuthNotificationAdapter) SendNewInstitutionAccountNotification(ctx context.Context, req authDomain.SendNewInstitutionAccountRegistrationRequest) error {
 	notifReq := notificationdomain.SendNewInstitutionAccountRegistrationRequest{
-		TO:                  req.To,
+		To:                  req.To,
 		NewAccountAdminName: req.NewAccountAdminName,
 		InstitutionName:     req.InstitutionName,
 		InstitutionType:     req.InstitutionType,
@@ -944,3 +944,4 @@ func (a *ProfileMediaAdapter) DeleteFilesByEntity(ctx context.Context, entityID 
 func (a *ProfileMediaAdapter) DeleteFilesByEntityAndMediaType(ctx context.Context, entityID, mediaTypeID string) error {
 	return a.mediaSvc.DeleteFilesByEntityAndMediaType(ctx, entityID, mediaTypeID)
 }
+

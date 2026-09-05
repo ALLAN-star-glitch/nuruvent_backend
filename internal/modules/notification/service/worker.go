@@ -400,5 +400,158 @@ func (w *NotificationWorker) HandleNewPersonalAccountRegistration(ctx context.Co
 	return w.ProcessNewPersonalAccountRegistration(ctx, data)
 }
 
+
+// ============================================================
+// ✅ TEAM INVITATION HANDLERS (UPDATED)
+// ============================================================
+
+// ProcessTeamInvite implements notificationdomain.TaskProcessor
+// Sent when: User exists → Direct add, just notify them
+func (w *NotificationWorker) ProcessTeamInvite(ctx context.Context, data notificationdomain.TeamInviteTask) error {
+	log.Printf("[NotificationWorker] Processing team invite for %s to join %s", data.To, data.TeamName) // ✅ Changed from InstitutionName
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "You've been invited to join " + data.TeamName + " on Nuruvent", // ✅ Changed from InstitutionName
+		Type:    notificationdomain.TypeTeamInvite,
+		Meta: map[string]string{
+			"user_name":   data.UserName,
+			"invited_by":  data.InvitedBy,
+			"team_name":   data.TeamName, // ✅ Changed from institution_name
+			"team_id":     data.TeamID,   // ✅ Changed from institution_id
+			"role":        data.Role,
+			"invite_link": data.InviteLink,
+			"expires_in":  data.ExpiresIn,
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send team invite to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Team invite sent to %s", data.To)
+	return nil
+}
+
+// HandleTeamInvite is the asynq task handler
+func (w *NotificationWorker) HandleTeamInvite(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.TeamInviteTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse team invite task: %v", err)
+		return err
+	}
+	return w.ProcessTeamInvite(ctx, data)
+}
+
+// ProcessTeamInviteRegistration implements notificationdomain.TaskProcessor
+// Sent when: User doesn't exist → Create invitation, send registration link
+func (w *NotificationWorker) ProcessTeamInviteRegistration(ctx context.Context, data notificationdomain.TeamInviteRegistrationTask) error {
+	log.Printf("[NotificationWorker] Processing team invite registration for %s to join %s", data.To, data.TeamName) // ✅ Changed from InstitutionName
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Complete Your Registration for " + data.TeamName + " on Nuruvent", // ✅ Changed from InstitutionName
+		Type:    notificationdomain.TypeTeamInviteRegistration,
+		Meta: map[string]string{
+			"name":              data.Name,
+			"expires_in":        data.ExpiresIn,
+			"team_name":         data.TeamName,         // ✅ Changed from institution_name
+			"invited_by":        data.InvitedBy,
+			"registration_link": data.RegistrationLink, // ✅ Added
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send team invite registration to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Team invite registration sent to %s", data.To)
+	return nil
+}
+
+// HandleTeamInviteRegistration is the asynq task handler
+func (w *NotificationWorker) HandleTeamInviteRegistration(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.TeamInviteRegistrationTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse team invite registration task: %v", err)
+		return err
+	}
+	return w.ProcessTeamInviteRegistration(ctx, data)
+}
+
+// ProcessTeamInviteAccepted implements notificationdomain.TaskProcessor
+func (w *NotificationWorker) ProcessTeamInviteAccepted(ctx context.Context, data notificationdomain.TeamInviteAcceptedTask) error {
+	log.Printf("[NotificationWorker] Processing team invite accepted notification for admin: %s, user: %s joined %s", 
+		data.AdminName, data.UserName, data.TeamName) // ✅ Changed from InstitutionName
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Team Invitation Accepted - " + data.UserName + " joined " + data.TeamName, // ✅ Changed from InstitutionName
+		Type:    notificationdomain.TypeTeamInviteAccepted,
+		Meta: map[string]string{
+			"admin_name": data.AdminName,
+			"user_name":  data.UserName,
+			"user_email": data.UserEmail,
+			"team_name":  data.TeamName, // ✅ Changed from institution_name
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send team invite accepted notification to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Team invite accepted notification sent to %s", data.To)
+	return nil
+}
+
+// HandleTeamInviteAccepted is the asynq task handler
+func (w *NotificationWorker) HandleTeamInviteAccepted(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.TeamInviteAcceptedTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse team invite accepted task: %v", err)
+		return err
+	}
+	return w.ProcessTeamInviteAccepted(ctx, data)
+}
+
+// ProcessTeamInviteDeclined implements notificationdomain.TaskProcessor
+func (w *NotificationWorker) ProcessTeamInviteDeclined(ctx context.Context, data notificationdomain.TeamInviteDeclinedTask) error {
+	log.Printf("[NotificationWorker] Processing team invite declined notification for admin: %s, user: %s declined %s", 
+		data.AdminName, data.UserName, data.TeamName) // ✅ Changed from InstitutionName
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Team Invitation Declined - " + data.UserName + " declined " + data.TeamName, // ✅ Changed from InstitutionName
+		Type:    notificationdomain.TypeTeamInviteDeclined,
+		Meta: map[string]string{
+			"admin_name": data.AdminName,
+			"user_name":  data.UserName,
+			"user_email": data.UserEmail,
+			"team_name":  data.TeamName, // ✅ Changed from institution_name
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send team invite declined notification to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Team invite declined notification sent to %s", data.To)
+	return nil
+}
+
+// HandleTeamInviteDeclined is the asynq task handler
+func (w *NotificationWorker) HandleTeamInviteDeclined(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.TeamInviteDeclinedTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse team invite declined task: %v", err)
+		return err
+	}
+	return w.ProcessTeamInviteDeclined(ctx, data)
+}
+
 // Ensure NotificationWorker implements notificationdomain.TaskProcessor
 var _ notificationdomain.TaskProcessor = (*NotificationWorker)(nil)

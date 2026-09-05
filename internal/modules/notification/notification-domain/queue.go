@@ -35,7 +35,7 @@ type TaskEnqueuer interface {
 	// EnqueueWelcomeInstitutionKYC enqueues an institution KYC welcome task
 	EnqueueWelcomeInstitutionKYC(ctx context.Context, task WelcomeInstitutionKYCTask) error
 
-	EnqueueNewInstitutionAccountRegistration(ctx context.Context, task NewInstitutionAccountRegistrationNotice)	error
+	EnqueueNewInstitutionAccountRegistration(ctx context.Context, task NewInstitutionAccountRegistrationNotice) error
 
 	EnqueueNewPersonalAccountRegistration(ctx context.Context, task NewPersonalAccountRegistrationTask) error
 
@@ -45,5 +45,19 @@ type TaskEnqueuer interface {
 	// EnqueueLoginNotification enqueues a login notification task
 	EnqueueLoginNotification(ctx context.Context, task LoginNotificationTask) error
 
+	// ============================================================
+	// ✅ TEAM INVITATION TASKS
+	// ============================================================
 
+	// EnqueueTeamInvite enqueues a team invitation email task
+	EnqueueTeamInvite(ctx context.Context, task TeamInviteTask) error
+
+	// EnqueueTeamInviteRegistration enqueues a team invite registration OTP task
+	EnqueueTeamInviteRegistration(ctx context.Context, task TeamInviteRegistrationTask) error
+
+	// EnqueueTeamInviteAccepted enqueues a team invite accepted notification task
+	EnqueueTeamInviteAccepted(ctx context.Context, task TeamInviteAcceptedTask) error
+
+	// EnqueueTeamInviteDeclined enqueues a team invite declined notification task
+	EnqueueTeamInviteDeclined(ctx context.Context, task TeamInviteDeclinedTask) error
 }

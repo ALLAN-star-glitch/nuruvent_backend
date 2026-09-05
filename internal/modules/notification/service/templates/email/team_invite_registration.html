@@ -1,0 +1,53 @@
+{{define "team_invite_registration"}}
+<div class="title">
+    You're <span class="gold-highlight">Invited</span> to Join!
+</div>
+<div class="subtitle">Complete your registration for {{.InstitutionName}}</div>
+
+<div class="greeting">
+    Hello{{if .Name}} {{.Name}}{{end}},
+</div>
+
+<p class="body-text">
+    <strong>{{.InvitedBy}}</strong> has invited you to join <strong>{{.InstitutionName}}</strong> on Nuruvent.
+    To accept this invitation, please complete your registration using the verification code below.
+</p>
+
+<div class="alert-success">
+    <div class="message">📝 Complete Your Registration</div>
+    <div class="sub">Use the OTP below to verify your account</div>
+</div>
+
+<div class="otp-box">
+    <div class="otp-label">Your Verification Code</div>
+    <div class="otp-code">{{.OTP}}</div>
+    <div class="otp-expiry">
+         This code expires in <span class="highlight">{{.Expires}}</span>
+    </div>
+</div>
+
+<div class="alert-info">
+    <p>
+        <strong>Already have an account?</strong><br>
+        If you already have a Nuruvent account, please <a href="https://nuruvent.com/login" style="color: #1A73E8;">log in</a> and you'll be automatically added to {{.InstitutionName}}.
+    </p>
+</div>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">Institution</span>
+        <span class="value">{{.InstitutionName}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Invited By</span>
+        <span class="value">{{.InvitedBy}}</span>
+    </div>
+</div>
+
+<div class="alert-warning">
+    <p>
+        <strong>Didn't expect this invitation?</strong><br>
+        If you were not expecting an invitation from {{.InstitutionName}}, please ignore this email.
+    </p>
+</div>
+{{end}}

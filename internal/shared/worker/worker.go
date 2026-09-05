@@ -32,25 +32,24 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
     notificationWorker := service.NewNotificationWorker(emailChannel)
 
     // 2. Parse Redis URL cleanly via Asynq native parser
-  // Parse Redis URI using Asynq's built-in parser
-	redisURL := cfg.GetRedisURL()
-	redisOpt, err := asynq.ParseRedisURI(redisURL)
-	if err != nil {
-		log.Fatalf("Failed to parse Redis URI for Asynq worker (%s): %v", redisURL, err)
-	}
+    redisURL := cfg.GetRedisURL()
+    redisOpt, err := asynq.ParseRedisURI(redisURL)
+    if err != nil {
+        log.Fatalf("Failed to parse Redis URI for Asynq worker (%s): %v", redisURL, err)
+    }
 
-	// Initialize Asynq server with parsed options
-	srv := asynq.NewServer(
-		redisOpt,
-		asynq.Config{
-			Concurrency: 10,
-			Queues: map[string]int{
-				"critical": 6,
-				"default":  3,
-				"low":      1,
-			},
-		},
-	)
+    // Initialize Asynq server with parsed options
+    srv := asynq.NewServer(
+        redisOpt,
+        asynq.Config{
+            Concurrency: 10,
+            Queues: map[string]int{
+                "critical": 6,
+                "default":  3,
+                "low":      1,
+            },
+        },
+    )
 
     // 4. Register Task Handlers
     mux := asynq.NewServeMux()
@@ -62,6 +61,12 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
     mux.HandleFunc(notificationdomain.TaskWelcomeInstitutionKYC, notificationWorker.HandleWelcomeInstitutionKYC)
     mux.HandleFunc(notificationdomain.TaskNewPersonalAccountRegistration, notificationWorker.HandleNewPersonalAccountRegistration)
     mux.HandleFunc(notificationdomain.TaskNewInstitutionAccountRegistration, notificationWorker.HandleNewInstitutionAccountRegistration)
+    
+    //  TEAM INVITATION TASK HANDLERS
+    mux.HandleFunc(notificationdomain.TaskTeamInvite, notificationWorker.HandleTeamInvite)
+    mux.HandleFunc(notificationdomain.TaskTeamInviteRegistration, notificationWorker.HandleTeamInviteRegistration)
+    mux.HandleFunc(notificationdomain.TaskTeamInviteAccepted, notificationWorker.HandleTeamInviteAccepted)
+    mux.HandleFunc(notificationdomain.TaskTeamInviteDeclined, notificationWorker.HandleTeamInviteDeclined)
 
     log.Println("✅ All task handlers registered")
     log.Println("📋 Registered tasks:")
@@ -70,6 +75,13 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
     log.Printf("   - %s", notificationdomain.TaskWelcomeInstitution)
     log.Printf("   - %s", notificationdomain.TaskPasswordResetConfirm)
     log.Printf("   - %s", notificationdomain.TaskLoginNotification)
+    
+    // ✅ TEAM INVITATION TASKS
+    log.Println("   📋 Team Invitation Tasks:")
+    log.Printf("   - %s", notificationdomain.TaskTeamInvite)
+    log.Printf("   - %s", notificationdomain.TaskTeamInviteRegistration)
+    log.Printf("   - %s", notificationdomain.TaskTeamInviteAccepted)
+    log.Printf("   - %s", notificationdomain.TaskTeamInviteDeclined)
 
     // 5. Start Worker in a Background Goroutine
     go func() {

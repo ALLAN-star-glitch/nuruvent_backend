@@ -176,5 +176,82 @@ func (e *taskEnqueuer) EnqueueNewPersonalAccountRegistration(ctx context.Context
 	return nil
 }
 
+
+// ============================================================
+// ✅ TEAM INVITATION ENQUEUE METHODS
+// ============================================================
+
+// EnqueueTeamInvite enqueues a team invitation email task
+func (e *taskEnqueuer) EnqueueTeamInvite(ctx context.Context, task notificationdomain.TeamInviteTask) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing team invite for %s to join %s", task.To, task.TeamName)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskTeamInvite, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue team invite: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Team invite enqueued for %s", task.To)
+	return nil
+}
+
+// EnqueueTeamInviteRegistration enqueues a team invite registration OTP task
+func (e *taskEnqueuer) EnqueueTeamInviteRegistration(ctx context.Context, task notificationdomain.TeamInviteRegistrationTask) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing team invite registration OTP for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskTeamInviteRegistration, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue team invite registration: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Team invite registration OTP enqueued for %s", task.To)
+	return nil
+}
+
+// EnqueueTeamInviteAccepted enqueues a team invite accepted notification task
+func (e *taskEnqueuer) EnqueueTeamInviteAccepted(ctx context.Context, task notificationdomain.TeamInviteAcceptedTask) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing team invite accepted notification for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskTeamInviteAccepted, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue team invite accepted: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Team invite accepted notification enqueued for %s", task.To)
+	return nil
+}
+
+// EnqueueTeamInviteDeclined enqueues a team invite declined notification task
+func (e *taskEnqueuer) EnqueueTeamInviteDeclined(ctx context.Context, task notificationdomain.TeamInviteDeclinedTask) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing team invite declined notification for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskTeamInviteDeclined, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue team invite declined: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Team invite declined notification enqueued for %s", task.To)
+	return nil
+}
+
 // Ensure taskEnqueuer implements notificationdomain.TaskEnqueuer
 var _ notificationdomain.TaskEnqueuer = (*taskEnqueuer)(nil)

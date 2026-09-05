@@ -93,10 +93,28 @@ type InstitutionInfo struct {
 // OrganizerInfo represents public-facing organizer information
 // Used by events module to display who is organizing an event
 type OrganizerInfo struct {
-    ID          string `json:"id"`
-    Name        string `json:"name"`
-    DisplayName string `json:"display_name"`
-    Type        string `json:"type"` // "institution" or "personal"
-    AvatarURL   string `json:"avatar_url,omitempty"`
-    Slug        string `json:"slug,omitempty"`
+    ID          string 
+    Name        string 
+    DisplayName string 
+    Type        string 
+    AvatarURL   string 
+    Slug        string 
+}
+
+// ============================================================
+// TEAM TYPE (For team member management)
+// ============================================================
+
+// TeamType represents a team type/role
+type TeamType struct {
+    ID          string
+    Slug        string
+    Name        string
+    DisplayName string
+    Description string
+    IsActive    bool
+    IsDefault   bool
+    CreatedAt   time.Time
+    UpdatedAt   time.Time
+    DeletedAt   *time.Time
 }

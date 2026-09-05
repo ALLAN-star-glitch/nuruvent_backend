@@ -114,7 +114,7 @@ func (s *service) RefreshTokens(ctx context.Context, refreshToken, userAgent, ip
 	}
 
 	// 4. Get user
-	user, err := s.repo.GetUserByID(token.UserID)
+	user, err := s.repo.GetUserByID(ctx, token.UserID)
 	if err != nil {
 		return "", "", err
 	}
@@ -259,4 +259,33 @@ func (s *service) GetUserTeamRoles(ctx context.Context, userID, teamID string) (
 	// Try institution team domain
 	scope = authdomain.NewInstitutionTeamScope(teamID)
 	return s.permChecker.GetUserRoles(ctx, userID, scope)
+}
+
+// GetTokenContext builds a TokenContext for a user
+func (s *service) GetTokenContext(ctx context.Context, user *authdomain.User) (*authdomain.TokenContext, error) {
+    // Determine role and team type using Casbin
+    role, teamTypeSlug, teamID := s.determineRoleAndTeamType(ctx, user)
+
+    // Get account type for account type slug
+    accountType, err := s.repo.GetAccountTypeByID(user.AccountTypeID)
+    if err != nil {
+        return nil, fmt.Errorf("failed to get account type: %w", err)
+    }
+    if accountType == nil {
+        return nil, fmt.Errorf("account type not found")
+    }
+
+    // Build TokenContext with all needed fields
+    return &authdomain.TokenContext{
+        UserID:          user.ID,
+        Email:           user.Email,
+        DisplayName:     user.DisplayName,
+        Role:            role,
+        AccountTypeSlug: accountType.Slug,
+        TeamTypeSlug:    teamTypeSlug,
+        TeamID:          teamID,
+        InstitutionID:   teamID,
+        IsVerified:      user.EmailVerified,
+        IsActive:        user.IsActive,
+    }, nil
 }

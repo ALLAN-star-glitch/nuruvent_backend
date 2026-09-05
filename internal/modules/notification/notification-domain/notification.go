@@ -100,6 +100,11 @@ const (
 	TypeWelcomeInstitutionKYC NotificationType = "welcome_institution_kyc"
 	TypeNewInstitutionAccountRegistration		NotificationType = "new_account_institution_registration_notice"
 	TypeNewPersonalAccountRegistration			NotificationType = "new_account_personal_registration_notice"
+	// TEAM INVITATION NOTIFICATION TYPES
+	TypeTeamInvite           NotificationType = "team_invite"
+	TypeTeamInviteRegistration NotificationType = "team_invite_registration"
+	TypeTeamInviteAccepted   NotificationType = "team_invite_accepted"
+	TypeTeamInviteDeclined   NotificationType = "team_invite_declined"
 )
 
 func (t NotificationType) String() string {

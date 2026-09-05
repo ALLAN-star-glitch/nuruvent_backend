@@ -130,6 +130,8 @@ func InitializeApp() (*AppDependencies, error) {
 
 		NewProfileMediaAdapter,
 
+		NewProfileRoleManagerAdapter,
+
 		// ============================================================
 		// FINAL APP DEPENDENCIES
 		// ============================================================

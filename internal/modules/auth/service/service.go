@@ -86,6 +86,16 @@ type Service interface {
 	ListProfessionalTypes(ctx context.Context) ([]*authdomain.ProfessionalType, error)
 	GetAccountTypeByID(ctx context.Context, id string) (*authdomain.AccountType, error)
 	GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error)
+
+
+
+	 
+    // GetUserByID retrieves a user by ID
+    GetUserByID(ctx context.Context, userID string) (*authdomain.User, error)
+    
+    
+    // GetTokenContext builds a TokenContext for a user
+    GetTokenContext(ctx context.Context, user *authdomain.User) (*authdomain.TokenContext, error)
 }
 
 // ============================================================

@@ -323,7 +323,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 		log.Printf("✅ Institution created successfully for user: %s", user.ID)
 
 		// ✅ Refresh user to get the updated InstitutionID
-		updatedUser, err := s.repo.GetUserByID(user.ID)
+		updatedUser, err := s.repo.GetUserByID(ctx, user.ID)
 		if err != nil {
 			log.Printf("⚠️ Failed to refresh user: %v", err)
 		} else if updatedUser != nil {
@@ -363,7 +363,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 		additionalData["institution_type"] = userData["institution_type"]
 
 		// Fetch the user again to get the updated institution_id
-		updatedUser, err := s.repo.GetUserByID(user.ID)
+		updatedUser, err := s.repo.GetUserByID(ctx, user.ID)
 		if err == nil && updatedUser != nil {
 			user = updatedUser
 			if user.InstitutionID != nil {

@@ -13,7 +13,7 @@ type Repository interface {
 	UserExistsByPhone(phone string) (bool, error)
 	GetUserByEmail(email string) (*User, error)
 	GetUserByPhone(phone string) (*User, error)
-	GetUserByID(id string) (*User, error)
+	GetUserByID(ctx context.Context, id string) (*User, error)
 	CreateUser(user *User) error
 	UpdateUser(user *User) error
 	UpdateUserInstitutionID(userID string, institutionID *string) error

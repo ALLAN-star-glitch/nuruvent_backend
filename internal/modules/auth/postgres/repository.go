@@ -64,9 +64,9 @@ func (r *PostgresRepository) GetUserByPhone(phone string) (*authdomain.User, err
 	return ToAuthDomainUser(&model), nil
 }
 
-func (r *PostgresRepository) GetUserByID(id string) (*authdomain.User, error) {
+func (r *PostgresRepository) GetUserByID(ctx context.Context,id string) (*authdomain.User, error) {
 	var model UserModel
-	err := r.db.Where("id = ?", id).First(&model).Error
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&model).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
