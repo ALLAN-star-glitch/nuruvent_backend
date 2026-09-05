@@ -10,20 +10,21 @@ type TokenContext struct {
 	DisplayName string
 	Role        string
 
-	// Account type - uses slug (snake_case) from account_types table
-	// Examples: "personal", "institution"
+	// Account ID - the account the user belongs to
+	// For personal accounts: user_id
+	// For institution accounts: institution_id
+	AccountID string
+
+	// Account type slug (kebab-case)
+	// Examples: "account-type-personal", "account-type-institution"
 	AccountTypeSlug string
 
-	// Team information - uses slug (kebab-case) from team_types table
-	// Examples: "personal-team", "institution-team"
-	TeamTypeSlug string
-
-	// Team ID - either user_id (personal) or institution_id (institution)
+	// Team ID - UUID from the teams table
 	TeamID string
 
-	// Institution ID (only for institution team members) - DEPRECATED: Use TeamID instead
-	// Deprecated: Use TeamID instead
-	InstitutionID string
+	// Team type slug (kebab-case)
+	// Examples: "personal-team", "institution-team"
+	TeamTypeSlug string
 
 	// User status
 	IsVerified bool
@@ -35,79 +36,59 @@ type TokenContext struct {
 // ============================================================
 
 // NewPersonalTokenContext creates a new token context for a personal team user
-// Domain: personal:team:{userID}
-func NewPersonalTokenContext(userID, email, displayName, role, accountTypeSlug string) *TokenContext {
+func NewPersonalTokenContext(userID, email, displayName, role, accountTypeSlug, teamID string) *TokenContext {
 	return &TokenContext{
 		UserID:          userID,
 		Email:           email,
 		DisplayName:     displayName,
 		Role:            role,
-		AccountTypeSlug: accountTypeSlug,  // snake_case: "personal"
-		TeamTypeSlug:    "personal-team",  // kebab-case
-		TeamID:          userID,           // For personal teams, TeamID = UserID
-		InstitutionID:   "",               // No institution for personal teams
+		AccountID:       userID,
+		AccountTypeSlug: accountTypeSlug,
+		TeamID:          teamID,           // UUID from teams table
+		TeamTypeSlug:    "personal-team",
 		IsVerified:      true,
 		IsActive:        true,
 	}
 }
 
 // NewInstitutionTokenContext creates a new token context for an institution team user
-// Domain: institution:team:{institutionID}
-func NewInstitutionTokenContext(userID, email, displayName, role, accountTypeSlug, institutionID string) *TokenContext {
+func NewInstitutionTokenContext(userID, email, displayName, role, accountTypeSlug, accountID, teamID string) *TokenContext {
 	return &TokenContext{
 		UserID:          userID,
 		Email:           email,
 		DisplayName:     displayName,
 		Role:            role,
-		AccountTypeSlug: accountTypeSlug,    // snake_case: "institution"
-		TeamTypeSlug:    "institution-team", // kebab-case
-		TeamID:          institutionID,      // For institution teams, TeamID = InstitutionID
-		InstitutionID:   institutionID,      // Keep for backward compatibility
+		AccountID:       accountID,
+		AccountTypeSlug: accountTypeSlug,
+		TeamID:          teamID,              // UUID from teams table
+		TeamTypeSlug:    "institution-team",
 		IsVerified:      true,
 		IsActive:        true,
 	}
 }
 
 // ============================================================
-// TEAM CONTEXT HELPERS
+// DOMAIN HELPERS
 // ============================================================
 
-// GetPersonalTeamDomain returns the personal team domain for this user
-// Format: "personal:team:{user_id}"
-func (c *TokenContext) GetPersonalTeamDomain() string {
-	return PersonalTeamDomain(c.UserID)
-}
-
-// GetInstitutionTeamDomain returns the institution team domain for this user
-// Format: "institution:team:{institution_id}"
-// Returns empty string if user is not in an institution team
-func (c *TokenContext) GetInstitutionTeamDomain() string {
-	if c.InstitutionID != "" {
-		return InstitutionTeamDomain(c.InstitutionID)
-	}
-	return ""
-}
-
-// GetTeamDomain returns the appropriate team domain for this user
-// For personal teams: "personal:team:{user_id}"
-// For institution teams: "institution:team:{institution_id}"
+// GetTeamDomain returns the team domain for this user
+// Format: "personal:team:{team_id}" or "institution:team:{team_id}"
 func (c *TokenContext) GetTeamDomain() string {
-	if c.IsInstitutionTeam() && c.InstitutionID != "" {
-		return InstitutionTeamDomain(c.InstitutionID)
+	if c.IsInstitutionTeam() {
+		return InstitutionTeamDomain(c.TeamID)
 	}
-	return PersonalTeamDomain(c.UserID)
+	return PersonalTeamDomain(c.TeamID)
 }
 
-// GetTeamID returns the team ID (either institution ID or user ID)
-func (c *TokenContext) GetTeamID() string {
-	if c.TeamID != "" {
-		return c.TeamID
-	}
-	if c.InstitutionID != "" {
-		return c.InstitutionID
-	}
-	return c.UserID
+// GetAccountDomain returns the account domain for this user
+// Format: "account:{account_id}"
+func (c *TokenContext) GetAccountDomain() string {
+	return AccountDomain(c.AccountID)
 }
+
+// ============================================================
+// TYPE CHECKERS
+// ============================================================
 
 // IsPersonalTeam returns true if the user has a personal team
 func (c *TokenContext) IsPersonalTeam() bool {
@@ -116,7 +97,17 @@ func (c *TokenContext) IsPersonalTeam() bool {
 
 // IsInstitutionTeam returns true if the user is part of an institution team
 func (c *TokenContext) IsInstitutionTeam() bool {
-	return c.TeamTypeSlug == "institution-team" || c.InstitutionID != ""
+	return c.TeamTypeSlug == "institution-team"
+}
+
+// IsPersonalAccount returns true if the user has a personal account
+func (c *TokenContext) IsPersonalAccount() bool {
+	return c.AccountTypeSlug == "account-type-personal"
+}
+
+// IsInstitutionAccount returns true if the user has an institution account
+func (c *TokenContext) IsInstitutionAccount() bool {
+	return c.AccountTypeSlug == "account-type-institution"
 }
 
 // ============================================================
@@ -162,14 +153,9 @@ func (c *TokenContext) IsAccountAdmin() bool {
 	return c.Role == RoleAccountAdmin.String()
 }
 
-// IsEventManager checks if the user is an event manager
-func (c *TokenContext) IsEventManager() bool {
-	return c.Role == RoleEventManager.String()
-}
-
-// IsTeamMember checks if the user is a team member
-func (c *TokenContext) IsTeamMember() bool {
-	return c.Role == RoleTeamMember.String()
+// IsTrainer checks if the user is a trainer
+func (c *TokenContext) IsTrainer() bool {
+	return c.Role == RoleTrainer.String()
 }
 
 // IsGuest checks if the user is a guest
@@ -182,9 +168,9 @@ func (c *TokenContext) IsPlatformRole() bool {
 	return IsPlatformRole(c.Role)
 }
 
-// IsTeamRole checks if the user has a team-level role
-func (c *TokenContext) IsTeamRole() bool {
-	return IsTeamRole(c.Role)
+// IsAccountRole checks if the user has an account-level role
+func (c *TokenContext) IsAccountRole() bool {
+	return IsAccountRole(c.Role)
 }
 
 // ============================================================
@@ -193,10 +179,15 @@ func (c *TokenContext) IsTeamRole() bool {
 
 // IsValid checks if the token context has all required fields
 func (c *TokenContext) IsValid() bool {
-	return c.UserID != "" && c.Email != "" && c.Role != ""
+	return c.UserID != "" && c.Email != "" && c.Role != "" && c.TeamID != ""
 }
 
 // HasTeamAccess checks if the user has any team access
 func (c *TokenContext) HasTeamAccess() bool {
-	return c.IsPersonalTeam() || c.IsInstitutionTeam()
+	return c.TeamID != ""
+}
+
+// HasAccountAccess checks if the user has account access
+func (c *TokenContext) HasAccountAccess() bool {
+	return c.AccountID != ""
 }

@@ -2,36 +2,39 @@
 
 package authdomain
 
-import "strings"
-
 // Role represents a user role in the system
 type Role string
 
 // Context keys for storing values in Fiber context
 const (
-	ContextKeyUserID        = "user_id"
-	ContextKeyUserRole      = "user_role"
-	ContextKeyUserEmail     = "user_email"
-	ContextKeyUserName      = "user_name"
-	ContextKeyDomain        = "domain"
-	ContextKeyInstitutionID = "institution_id"
-	ContextKeyTeamTypeID    = "team_type_id"
-	ContextKeyUserRoles     = "user_roles"
+	ContextKeyUserID    = "user_id"
+	ContextKeyUserRole  = "user_role"
+	ContextKeyUserEmail = "user_email"
+	ContextKeyUserName  = "user_name"
+	ContextKeyDomain    = "domain"
+	ContextKeyUserRoles = "user_roles"
 )
 
+// ============================================================
+// ROLE DEFINITIONS
+// ============================================================
+
 const (
-	// Platform-level roles
-	RoleSuperAdmin Role = "super_admin" // Full platform access
+	// Platform-level roles (Nuruvent staff)
+	RoleSuperAdmin Role = "super_admin" // Full platform control
 	RoleAdmin      Role = "admin"       // Platform management
 
-	// Team roles (assigned within a team domain)
-	RoleAccountAdmin   Role = "account_admin" // Full team management (admin)
-	RoleEventManager   Role = "event_manager" // Manage events, attendees, certificates
-	RoleTeamMember     Role = "team_member"   // View-only access
+	// Account-level roles (within accounts)
+	RoleAccountAdmin Role = "account_admin" // Full account management
+	RoleTrainer      Role = "trainer"       // Training focused
 
 	// System
 	RoleGuest Role = "guest" // Unregistered user
 )
+
+// ============================================================
+// RESOURCE DEFINITIONS
+// ============================================================
 
 // Resource represents a resource being accessed
 type Resource string
@@ -42,9 +45,13 @@ const (
 	ResourceUser        Resource = "user"
 	ResourceInstitution Resource = "institution"
 	ResourceTeam        Resource = "team"
-	ResourceTeamType    Resource = "team_type"
-	
-	// Team-level resources (within a team domain)
+
+	// Account resources
+	ResourceAccount Resource = "account"
+	ResourceBilling Resource = "billing"
+	ResourceSetting Resource = "setting"
+
+	// Team-level resources
 	ResourceEvent        Resource = "event"
 	ResourceCertificate  Resource = "certificate"
 	ResourceAttendee     Resource = "attendee"
@@ -56,8 +63,11 @@ const (
 	ResourceAnalytics    Resource = "analytics"
 	ResourceNotification Resource = "notification"
 	ResourceMedia        Resource = "media"
-	
 )
+
+// ============================================================
+// ACTION DEFINITIONS
+// ============================================================
 
 // Action represents an operation that can be performed
 type Action string
@@ -68,45 +78,30 @@ const (
 	ActionRead     Action = "read"
 	ActionUpdate   Action = "update"
 	ActionDelete   Action = "delete"
-	ActionManage   Action = "manage"   // Full CRUD operations
-	ActionIssue    Action = "issue"    // Issue certificates
-	ActionRegister Action = "register" // Register for events
-	ActionExport   Action = "export"   // Export data (CSV, Excel)
-	ActionRefund   Action = "refund"   // Refund payments
-	ActionDownload Action = "download" // Download certificates/replays
-	ActionInvite   Action = "invite"   // Invite team members
+	ActionManage   Action = "manage"
+	ActionIssue    Action = "issue"
+	ActionRegister Action = "register"
+	ActionExport   Action = "export"
+	ActionRefund   Action = "refund"
+	ActionDownload Action = "download"
+	ActionInvite   Action = "invite"
 	ActionViewCreator Action = "view_creator"
 
-	// ============================================================
-	// ✅ NEW: OWN vs ALL Actions for Team Resources
-	// ============================================================
-	
-	// READ - ALL vs OWN
-	ActionReadAll  Action = "read_all"  // Read ALL resources in the team
-	ActionReadOwn  Action = "read_own"  // Read ONLY OWN resources in the team
-	
-	// UPDATE - ALL vs OWN
-	ActionUpdateAll Action = "update_all" // Update ALL resources in the team
-	ActionUpdateOwn Action = "update_own" // Update ONLY OWN resources in the team
-	
-	// DELETE - ALL vs OWN
-	ActionDeleteAll Action = "delete_all" // Delete ALL resources in the team
-	ActionDeleteOwn Action = "delete_own" // Delete ONLY OWN resources in the team
-	
-	// PUBLISH - ALL vs OWN
-	ActionPublishAll Action = "publish_all" // Publish ALL resources in the team
-	ActionPublishOwn Action = "publish_own" // Publish ONLY OWN resources in the team
-)
+	// Account-specific actions
+	ActionMemberAdd     Action = "member_add"
+	ActionMemberRemove  Action = "member_remove"
+	ActionBillingRead   Action = "billing_read"
+	ActionBillingUpdate Action = "billing_update"
 
-// Domain constants
-const (
-	DomainPlatform = "platform"
-)
-
-// Team domain prefixes
-const (
-	TeamDomainPrefixPersonal   = "personal:team:"
-	TeamDomainPrefixInstitution = "institution:team:"
+	// OWN vs ALL Actions
+	ActionReadAll    Action = "read_all"
+	ActionReadOwn    Action = "read_own"
+	ActionUpdateAll  Action = "update_all"
+	ActionUpdateOwn  Action = "update_own"
+	ActionDeleteAll  Action = "delete_all"
+	ActionDeleteOwn  Action = "delete_own"
+	ActionPublishAll Action = "publish_all"
+	ActionPublishOwn Action = "publish_own"
 )
 
 // ============================================================
@@ -129,7 +124,6 @@ func (a Action) String() string {
 // ACTION HELPER METHODS
 // ============================================================
 
-// IsOwnAction checks if the action is an "own" action
 func (a Action) IsOwnAction() bool {
 	switch a {
 	case ActionReadOwn, ActionUpdateOwn, ActionDeleteOwn, ActionPublishOwn:
@@ -139,7 +133,6 @@ func (a Action) IsOwnAction() bool {
 	}
 }
 
-// IsAllAction checks if the action is an "all" action
 func (a Action) IsAllAction() bool {
 	switch a {
 	case ActionReadAll, ActionUpdateAll, ActionDeleteAll, ActionPublishAll:
@@ -149,7 +142,6 @@ func (a Action) IsAllAction() bool {
 	}
 }
 
-// GetOwnAction returns the corresponding "own" action for an action
 func (a Action) GetOwnAction() Action {
 	switch a {
 	case ActionRead:
@@ -165,7 +157,6 @@ func (a Action) GetOwnAction() Action {
 	}
 }
 
-// GetAllAction returns the corresponding "all" action for an action
 func (a Action) GetAllAction() Action {
 	switch a {
 	case ActionRead:
@@ -182,7 +173,7 @@ func (a Action) GetAllAction() Action {
 }
 
 // ============================================================
-// VALIDATION HELPERS
+// ROLE VALIDATION HELPERS
 // ============================================================
 
 func IsValidRole(role string) bool {
@@ -190,20 +181,10 @@ func IsValidRole(role string) bool {
 		RoleSuperAdmin.String():   true,
 		RoleAdmin.String():        true,
 		RoleAccountAdmin.String(): true,
-		RoleEventManager.String(): true,
-		RoleTeamMember.String():   true,
+		RoleTrainer.String():      true,
 		RoleGuest.String():        true,
 	}
 	return validRoles[role]
-}
-
-func IsTeamRole(role string) bool {
-	teamRoles := map[string]bool{
-		RoleAccountAdmin.String(): true,
-		RoleEventManager.String(): true,
-		RoleTeamMember.String():   true,
-	}
-	return teamRoles[role]
 }
 
 func IsPlatformRole(role string) bool {
@@ -215,73 +196,16 @@ func IsPlatformRole(role string) bool {
 	return platformRoles[role]
 }
 
-func IsValidTeamRole(role string) bool {
-	return IsTeamRole(role)
-}
-
-// ============================================================
-// DOMAIN HELPERS
-// ============================================================
-
-// PersonalTeamDomain returns the personal team domain for a user
-// Format: "personal:team:{user_id}"
-func PersonalTeamDomain(userID string) string {
-	if userID == "" {
-		return ""
+func IsAccountRole(role string) bool {
+	accountRoles := map[string]bool{
+		RoleAccountAdmin.String(): true,
+		RoleTrainer.String():      true,
 	}
-	return TeamDomainPrefixPersonal + userID
+	return accountRoles[role]
 }
 
-// InstitutionTeamDomain returns the institution team domain
-// Format: "institution:team:{institution_id}"
-func InstitutionTeamDomain(institutionID string) string {
-	if institutionID == "" {
-		return ""
-	}
-	return TeamDomainPrefixInstitution + institutionID
-}
-
-// IsPersonalTeamDomain checks if a domain is a personal team domain
-func IsPersonalTeamDomain(domain string) bool {
-	return strings.HasPrefix(domain, TeamDomainPrefixPersonal)
-}
-
-// IsInstitutionTeamDomain checks if a domain is an institution team domain
-func IsInstitutionTeamDomain(domain string) bool {
-	return strings.HasPrefix(domain, TeamDomainPrefixInstitution)
-}
-
-// IsTeamDomain checks if a domain is a team domain (personal or institution)
-func IsTeamDomain(domain string) bool {
-	return IsPersonalTeamDomain(domain) || IsInstitutionTeamDomain(domain)
-}
-
-// IsPlatformDomain checks if a domain is the platform domain
-func IsPlatformDomain(domain string) bool {
-	return domain == DomainPlatform
-}
-
-// ExtractTeamID extracts team ID from a team domain
-func ExtractTeamID(domain string) string {
-	if IsPersonalTeamDomain(domain) {
-		return strings.TrimPrefix(domain, TeamDomainPrefixPersonal)
-	}
-	if IsInstitutionTeamDomain(domain) {
-		return strings.TrimPrefix(domain, TeamDomainPrefixInstitution)
-	}
-	return ""
-}
-
-// ExtractTeamType extracts team type from a team domain
-// Returns: "personal", "institution", or empty string
-func ExtractTeamType(domain string) string {
-	if IsPersonalTeamDomain(domain) {
-		return "personal"
-	}
-	if IsInstitutionTeamDomain(domain) {
-		return "institution"
-	}
-	return ""
+func IsValidAccountRole(role string) bool {
+	return IsAccountRole(role)
 }
 
 // ============================================================
@@ -293,17 +217,8 @@ func GetAllRoles() []Role {
 		RoleSuperAdmin,
 		RoleAdmin,
 		RoleAccountAdmin,
-		RoleEventManager,
-		RoleTeamMember,
+		RoleTrainer,
 		RoleGuest,
-	}
-}
-
-func GetAllTeamRoles() []Role {
-	return []Role{
-		RoleAccountAdmin,
-		RoleEventManager,
-		RoleTeamMember,
 	}
 }
 
@@ -315,13 +230,22 @@ func GetAllPlatformRoles() []Role {
 	}
 }
 
+func GetAllAccountRoles() []Role {
+	return []Role{
+		RoleAccountAdmin,
+		RoleTrainer,
+	}
+}
+
 func GetAllResources() []Resource {
 	return []Resource{
 		ResourcePlatform,
 		ResourceUser,
 		ResourceInstitution,
 		ResourceTeam,
-		ResourceTeamType,
+		ResourceAccount,
+		ResourceBilling,
+		ResourceSetting,
 		ResourceEvent,
 		ResourceCertificate,
 		ResourceAttendee,
@@ -336,29 +260,11 @@ func GetAllResources() []Resource {
 	}
 }
 
-func GetAllTeamResources() []Resource {
+func GetAllAccountResources() []Resource {
 	return []Resource{
-		ResourceEvent,
-		ResourceCertificate,
-		ResourceAttendee,
-		ResourcePayment,
-		ResourcePayout,
-		ResourceMember,
-		ResourceProfile,
-		ResourceDashboard,
-		ResourceAnalytics,
-		ResourceNotification,
-		ResourceMedia,
-	}
-}
-
-func GetAllPlatformResources() []Resource {
-	return []Resource{
-		ResourcePlatform,
-		ResourceUser,
-		ResourceInstitution,
-		ResourceTeam,
-		ResourceTeamType,
+		ResourceAccount,
+		ResourceBilling,
+		ResourceSetting,
 	}
 }
 
@@ -375,6 +281,10 @@ func GetAllActions() []Action {
 		ActionRefund,
 		ActionDownload,
 		ActionInvite,
+		ActionMemberAdd,
+		ActionMemberRemove,
+		ActionBillingRead,
+		ActionBillingUpdate,
 		ActionReadAll,
 		ActionReadOwn,
 		ActionUpdateAll,
@@ -387,7 +297,7 @@ func GetAllActions() []Action {
 }
 
 // ============================================================
-// PERMISSION MATRIX HELPERS
+// DEFAULT PERMISSION MATRIX
 // ============================================================
 
 func DefaultPlatformPermissions() map[Role][]string {
@@ -396,12 +306,17 @@ func DefaultPlatformPermissions() map[Role][]string {
 			"*:*",
 		},
 		RoleAdmin: {
+			"platform:read",
+			"platform:update",
 			"user:read",
 			"user:update",
 			"user:delete",
 			"institution:read",
 			"institution:update",
 			"institution:delete",
+			"account:read",
+			"account:update",
+			"account:delete",
 			"event:read_all",
 			"event:update_all",
 			"event:delete_all",
@@ -409,91 +324,116 @@ func DefaultPlatformPermissions() map[Role][]string {
 			"team:update",
 			"team:delete",
 			"analytics:read",
-			"payment:read",
+			"billing:read",
 			"certificate:read",
 			"member:read",
 			"member:delete",
-			// ✅ Profile permissions (platform-wide)
-			"profile:read_all",    // Can read ALL profiles
-			"profile:update_all",  // Can update ALL profiles
+			"profile:read_all",
+			"profile:update_all",
 		},
 	}
 }
 
-func DefaultTeamPermissions() map[Role][]string {
+func DefaultAccountPermissions() map[Role][]string {
 	return map[Role][]string{
 		RoleAccountAdmin: {
+			// Account management
+			"account:read",
+			"account:update",
+			"account:delete",
+			"account:member_add",
+			"account:member_remove",
+			"billing:read",
+			"billing:update",
+			"setting:read",
+			"setting:update",
+
+			// Team management
+			"team:create",
+			"team:read",
+			"team:update",
+			"team:delete",
+
+			// Event management
 			"event:create",
 			"event:read_all",
 			"event:update_all",
 			"event:delete_all",
 			"event:publish_all",
-			"event:view_creator",
 			"event:manage",
-			"certificate:create",
-			"certificate:read",
-			"certificate:update",
-			"certificate:issue",
-			"certificate:delete",
-			"attendee:read",
-			"attendee:update",
-			"attendee:export",
-			"payment:read",
-			"payment:create",
-			"payment:refund",
+
+			// Member management
 			"member:create",
 			"member:read",
 			"member:update",
 			"member:delete",
 			"member:invite",
-			"institution:read",
-			"institution:update",
-			"team:create",
-			"team:read",
-			"team:update",
-			"team:delete",
+
+			// Profile
+			"profile:read_all",
+			"profile:update_all",
+
+			// Certificate
+			"certificate:create",
+			"certificate:read",
+			"certificate:update",
+			"certificate:delete",
+			"certificate:issue",
+
+			// Attendee
+			"attendee:read",
+			"attendee:update",
+			"attendee:export",
+
+			// Dashboard
 			"dashboard:read",
-			"profile:read",
-			"profile:update",
-			// ✅ Profile permissions - use read_all and update_all
-			"profile:read_all",    // Can read ALL profiles in the team
-			"profile:update_all",  // Can update ALL profiles in the team
+			"analytics:read",
 		},
-		RoleEventManager: {
+		RoleTrainer: {
+			// Events
 			"event:create",
 			"event:read_all",
 			"event:update_all",
 			"event:delete_all",
 			"event:publish_all",
-			"event:view_creator",
+
+			// Attendee
+			"attendee:create",
 			"attendee:read",
 			"attendee:update",
-			"attendee:export",
+			"attendee:delete",
+			"attendance:track",
+			"attendance:export",
+
+			// Certificate
 			"certificate:create",
 			"certificate:read",
 			"certificate:issue",
-			"certificate:delete",
-			"payment:read",
-			"dashboard:read",
+			"certificate:revoke",
+			"certificate:download",
+
+			// Course materials
+			"material:create",
+			"material:read",
+			"material:update",
+			"material:delete",
+			"material:upload",
+
+			// Analytics
+			"analytics:read_training",
+			"analytics:read_attendance",
+			"analytics:read_certificates",
+			"analytics:export_training",
+
+			// Profile
+			"profile:read",
+			"profile:update",
+
+			// Team
 			"team:read",
-			// ✅ Profile permissions - read_all only (can view, not update)
-			"profile:read_all",    // Can read ALL profiles in the team
-			// ❌ No profile:update_all - Event Managers cannot update profiles
-		},
-		RoleTeamMember: {
-			"event:read_own",
-			"event:update_own",
-			"event:delete_own",
-			"event:publish_own",
-			"attendee:read",
-			"attendee:update_own",
-			"certificate:read",
-			"dashboard:read",
-			"team:read",
-			// ✅ Profile permissions - read_own only
-			"profile:read_own",    // Can only read their own profile
-			// ❌ No profile:update_own - Team members cannot update profiles
-			// (Profile updates are handled by the user themselves or admins)
+
+			// Account
+			"account:read",
 		},
 	}
 }
@@ -507,8 +447,7 @@ func RolePriority(role Role) int {
 		RoleSuperAdmin:   100,
 		RoleAdmin:        90,
 		RoleAccountAdmin: 80,
-		RoleEventManager: 70,
-		RoleTeamMember:   60,
+		RoleTrainer:      70,
 		RoleGuest:        10,
 	}
 	return priority[role]

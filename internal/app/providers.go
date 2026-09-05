@@ -21,6 +21,9 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 
+	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
+	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
+
 	eventsHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	eventsDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	eventsService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
@@ -33,9 +36,11 @@ import (
 
 	notificationdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 
+	profileHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
 	profileDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/domain"
 
-	profileHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
+	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
+	teamDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/teamdomain"
 )
 
 // ============================================================
@@ -84,10 +89,14 @@ func provideAppDependencies(
 	policyManager authDomain.PolicyManager,
 	authService authService.Service,
 	authTokenService authDomain.TokenService,
+	accountService accountService.Service,
+	teamService teamService.Service,
 	eventsService eventsService.Service,
 	profileSvc profileDomain.Service,
 	mediaService mediaService.Service,
 	authHandler *authHandler.AuthHandler,
+	accountHandler *accountHandler.AccountHandler,
+	teamHandler *teamHandler.TeamHandler,
 	eventsHandler *eventsHandler.EventHandler,
 	profileHandler *profileHandler.ProfileHandler,
 ) *AppDependencies {
@@ -103,10 +112,14 @@ func provideAppDependencies(
 		PolicyManager:     policyManager,
 		AuthService:       authService,
 		AuthTokenService:  authTokenService,
+		AccountService:    accountService,
+		TeamService:       teamService,
 		EventsService:     eventsService,
 		ProfileService:    profileSvc,
 		MediaService:      mediaService,
 		AuthHandler:       authHandler,
+		AccountHandler:    accountHandler,
+		TeamHandler:       teamHandler,
 		EventsHandler:     eventsHandler,
 		ProfileHandler:    profileHandler,
 	}
@@ -153,21 +166,15 @@ func NewEventsPermissionAdapter(permSvc authDomain.PermissionChecker) eventsDoma
 	return &EventsPermissionAdapter{permSvc: permSvc}
 }
 
-// ============================================================
-// CORE PERMISSION METHODS
-// ============================================================
-
-// HasPermission checks if a user has a specific permission in a scope
-func (a *EventsPermissionAdapter) HasPermission(ctx context.Context, userID string, scope eventsDomain.Scope, resource, action string) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.HasPermission(ctx, userID, authScope, resource, action)
+// HasPermission checks if a user has a specific permission in a domain
+func (a *EventsPermissionAdapter) HasPermission(ctx context.Context, userID string, domain string, resource, action string) (bool, error) {
+	return a.permSvc.HasPermission(ctx, userID, domain, resource, action)
 }
 
-// HasAnyPermission checks if a user has any of the given permissions in a scope
-func (a *EventsPermissionAdapter) HasAnyPermission(ctx context.Context, userID string, scope eventsDomain.Scope, resource string, actions ...string) (bool, error) {
-	authScope := a.convertScope(scope)
+// HasAnyPermission checks if a user has any of the given permissions in a domain
+func (a *EventsPermissionAdapter) HasAnyPermission(ctx context.Context, userID string, domain string, resource string, actions ...string) (bool, error) {
 	for _, action := range actions {
-		allowed, err := a.permSvc.HasPermission(ctx, userID, authScope, resource, action)
+		allowed, err := a.permSvc.HasPermission(ctx, userID, domain, resource, action)
 		if err != nil {
 			return false, err
 		}
@@ -178,11 +185,10 @@ func (a *EventsPermissionAdapter) HasAnyPermission(ctx context.Context, userID s
 	return false, nil
 }
 
-// HasAllPermissions checks if a user has all of the given permissions in a scope
-func (a *EventsPermissionAdapter) HasAllPermissions(ctx context.Context, userID string, scope eventsDomain.Scope, resource string, actions ...string) (bool, error) {
-	authScope := a.convertScope(scope)
+// HasAllPermissions checks if a user has all of the given permissions in a domain
+func (a *EventsPermissionAdapter) HasAllPermissions(ctx context.Context, userID string, domain string, resource string, actions ...string) (bool, error) {
 	for _, action := range actions {
-		allowed, err := a.permSvc.HasPermission(ctx, userID, authScope, resource, action)
+		allowed, err := a.permSvc.HasPermission(ctx, userID, domain, resource, action)
 		if err != nil {
 			return false, err
 		}
@@ -194,163 +200,7 @@ func (a *EventsPermissionAdapter) HasAllPermissions(ctx context.Context, userID 
 }
 
 // ============================================================
-// CONVENIENCE METHODS - CREATE
-// ============================================================
-
-// CanCreateEvent checks if user can create events in a scope
-func (a *EventsPermissionAdapter) CanCreateEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	return a.HasPermission(ctx, userID, scope, "event", "create")
-}
-
-// ============================================================
-// CONVENIENCE METHODS - READ
-// ============================================================
-
-// CanReadAllEvents checks if user can read ALL events in a scope
-func (a *EventsPermissionAdapter) CanReadAllEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	return a.HasPermission(ctx, userID, scope, "event", "read_all")
-}
-
-// CanReadOwnEvents checks if user can read OWN events in a scope
-func (a *EventsPermissionAdapter) CanReadOwnEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	return a.HasPermission(ctx, userID, scope, "event", "read_own")
-}
-
-// CanReadEvent checks if user can read events in a scope (ALL or OWN)
-func (a *EventsPermissionAdapter) CanReadEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	allowed, err := a.CanReadAllEvents(ctx, userID, scope)
-	if err != nil {
-		return false, err
-	}
-	if allowed {
-		return true, nil
-	}
-	return a.CanReadOwnEvents(ctx, userID, scope)
-}
-
-// CanViewCreator checks if user can view creator details
-func (a *EventsPermissionAdapter) CanViewCreator(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.HasPermission(ctx, userID, authScope, "event", "view_creator")
-}
-
-// ============================================================
-// CONVENIENCE METHODS - UPDATE
-// ============================================================
-
-// CanUpdateAllEvents checks if user can update ALL events in a scope
-func (a *EventsPermissionAdapter) CanUpdateAllEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	return a.HasPermission(ctx, userID, scope, "event", "update_all")
-}
-
-// CanUpdateOwnEvents checks if user can update OWN events in a scope
-func (a *EventsPermissionAdapter) CanUpdateOwnEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	return a.HasPermission(ctx, userID, scope, "event", "update_own")
-}
-
-// CanUpdateEvent checks if user can update events in a scope (ALL or OWN)
-func (a *EventsPermissionAdapter) CanUpdateEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	allowed, err := a.CanUpdateAllEvents(ctx, userID, scope)
-	if err != nil {
-		return false, err
-	}
-	if allowed {
-		return true, nil
-	}
-	return a.CanUpdateOwnEvents(ctx, userID, scope)
-}
-
-// ============================================================
-// CONVENIENCE METHODS - DELETE
-// ============================================================
-
-// CanDeleteAllEvents checks if user can delete ALL events in a scope
-func (a *EventsPermissionAdapter) CanDeleteAllEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	return a.HasPermission(ctx, userID, scope, "event", "delete_all")
-}
-
-// CanDeleteOwnEvents checks if user can delete OWN events in a scope
-func (a *EventsPermissionAdapter) CanDeleteOwnEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	return a.HasPermission(ctx, userID, scope, "event", "delete_own")
-}
-
-// CanDeleteEvent checks if user can delete events in a scope (ALL or OWN)
-func (a *EventsPermissionAdapter) CanDeleteEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	allowed, err := a.CanDeleteAllEvents(ctx, userID, scope)
-	if err != nil {
-		return false, err
-	}
-	if allowed {
-		return true, nil
-	}
-	return a.CanDeleteOwnEvents(ctx, userID, scope)
-}
-
-// ============================================================
-// CONVENIENCE METHODS - PUBLISH
-// ============================================================
-
-// CanPublishAllEvents checks if user can publish ALL events in a scope
-func (a *EventsPermissionAdapter) CanPublishAllEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	return a.HasPermission(ctx, userID, scope, "event", "publish_all")
-}
-
-// CanPublishOwnEvents checks if user can publish OWN events in a scope
-func (a *EventsPermissionAdapter) CanPublishOwnEvents(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	return a.HasPermission(ctx, userID, scope, "event", "publish_own")
-}
-
-// CanPublishEvent checks if user can publish events in a scope (ALL or OWN)
-func (a *EventsPermissionAdapter) CanPublishEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	allowed, err := a.CanPublishAllEvents(ctx, userID, scope)
-	if err != nil {
-		return false, err
-	}
-	if allowed {
-		return true, nil
-	}
-	return a.CanPublishOwnEvents(ctx, userID, scope)
-}
-
-// ============================================================
-// CONVENIENCE METHODS - MANAGEMENT
-// ============================================================
-
-// CanManageEvent checks if user can manage events in a scope (Admin/Manager only)
-func (a *EventsPermissionAdapter) CanManageEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	return a.HasAnyPermission(ctx, userID, scope, "event",
-		"update_all", "delete_all", "manage")
-}
-
-// CanViewEvent checks if user can view events in a scope (ALL or OWN)
-func (a *EventsPermissionAdapter) CanViewEvent(ctx context.Context, userID string, scope eventsDomain.Scope) (bool, error) {
-	allowed, err := a.CanReadAllEvents(ctx, userID, scope)
-	if err != nil {
-		return false, err
-	}
-	if allowed {
-		return true, nil
-	}
-	return a.CanReadOwnEvents(ctx, userID, scope)
-}
-
-// ============================================================
-// HELPER METHODS
-// ============================================================
-
-// convertScope converts eventsDomain.Scope to authDomain.Scope
-func (a *EventsPermissionAdapter) convertScope(scope eventsDomain.Scope) authDomain.Scope {
-	if scope.IsPersonal() {
-		return authDomain.NewPersonalTeamScope(scope.ID)
-	}
-	if scope.IsInstitution() {
-		return authDomain.NewInstitutionTeamScope(scope.ID)
-	}
-	return authDomain.NewPlatformScope()
-}
-
-// ============================================================
-// EVENTS MEDIA ADAPTER - Using pure domain types
+// EVENTS MEDIA ADAPTER
 // ============================================================
 
 type EventsMediaAdapter struct {
@@ -492,7 +342,7 @@ func (b *bytesReaderWrapper) Stat() (fs.FileInfo, error) {
 }
 
 // ============================================================
-// AUTH NOTIFICATION ADAPTER - UNIFIED
+// AUTH NOTIFICATION ADAPTER
 // ============================================================
 
 type AuthNotificationAdapter struct {
@@ -503,7 +353,6 @@ func NewAuthNotificationAdapter(notifSvc notificationdomain.NotificationService)
 	return &AuthNotificationAdapter{notifSvc: notifSvc}
 }
 
-// SendOTP - Unified method for all OTP purposes
 func (a *AuthNotificationAdapter) SendOTP(ctx context.Context, req authDomain.SendOTPRequest) error {
 	notifReq := notificationdomain.SendOTPRequest{
 		To:      req.To,
@@ -516,7 +365,6 @@ func (a *AuthNotificationAdapter) SendOTP(ctx context.Context, req authDomain.Se
 	return a.notifSvc.SendOTP(ctx, notifReq)
 }
 
-// Welcome emails
 func (a *AuthNotificationAdapter) SendIndividualWelcome(ctx context.Context, req authDomain.SendWelcomeRequest) error {
 	notifReq := notificationdomain.SendWelcomeRequest{
 		To:   req.To,
@@ -563,7 +411,6 @@ func (a *AuthNotificationAdapter) SendNewPersonalAccountNotification(ctx context
 	return a.notifSvc.SendNewPersonalAccountNotification(ctx, notifReq)
 }
 
-// Password reset confirm
 func (a *AuthNotificationAdapter) SendPasswordResetConfirm(ctx context.Context, req authDomain.SendPasswordResetConfirmRequest) error {
 	notifReq := notificationdomain.SendPasswordResetConfirmRequest{
 		To:   req.To,
@@ -572,7 +419,6 @@ func (a *AuthNotificationAdapter) SendPasswordResetConfirm(ctx context.Context, 
 	return a.notifSvc.SendPasswordResetConfirm(ctx, notifReq)
 }
 
-// Login notification
 func (a *AuthNotificationAdapter) SendLoginNotification(ctx context.Context, req authDomain.SendLoginNotificationRequest) error {
 	notifReq := notificationdomain.SendLoginNotificationRequest{
 		To:        req.To,
@@ -588,7 +434,6 @@ func (a *AuthNotificationAdapter) SendLoginNotification(ctx context.Context, req
 // EVENTS PROFILE ADAPTER
 // ============================================================
 
-// EventsProfileAdapter adapts profile service to events domain UserInfoProvider
 type EventsProfileAdapter struct {
 	profileSvc profileDomain.Service
 }
@@ -665,282 +510,297 @@ func (a *EventsProfileAdapter) GetInstitutionByID(ctx context.Context, instituti
 }
 
 // ============================================================
-// PROFILE PERMISSION ADAPTER
+// ACCOUNT - AUTH ADAPTER
 // ============================================================
 
-// ProfilePermissionAdapter adapts auth domain permission checker to profile domain
-type ProfilePermissionAdapter struct {
-	permSvc authDomain.PermissionChecker
+type AccountAuthAdapter struct {
+	authSvc authService.Service
 }
 
-func NewProfilePermissionAdapter(permSvc authDomain.PermissionChecker) profileDomain.PermissionChecker {
-	return &ProfilePermissionAdapter{permSvc: permSvc}
+func NewAccountAuthAdapter(authSvc authService.Service) accountService.AuthService {
+	return &AccountAuthAdapter{authSvc: authSvc}
 }
 
-// ============================================================
-// CORE PERMISSION METHODS
-// ============================================================
-
-// HasPermission checks if a user has a specific permission in a scope
-func (a *ProfilePermissionAdapter) HasPermission(ctx context.Context, userID string, scope profileDomain.Scope, resource, action string) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.HasPermission(ctx, userID, authScope, resource, action)
-}
-
-// HasAnyPermission checks if a user has any of the given permissions in a scope
-func (a *ProfilePermissionAdapter) HasAnyPermission(ctx context.Context, userID string, scope profileDomain.Scope, resource string, actions ...string) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.HasAnyPermission(ctx, userID, authScope, resource, actions...)
-}
-
-// HasAllPermissions checks if a user has all of the given permissions in a scope
-func (a *ProfilePermissionAdapter) HasAllPermissions(ctx context.Context, userID string, scope profileDomain.Scope, resource string, actions ...string) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.HasAllPermissions(ctx, userID, authScope, resource, actions...)
-}
-
-// ============================================================
-// PROFILE PERMISSIONS - READ
-// ============================================================
-
-// CanReadAllProfiles checks if user can read ALL profiles in a scope
-func (a *ProfilePermissionAdapter) CanReadAllProfiles(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.HasPermission(ctx, userID, authScope, "profile", "read_all")
-}
-
-// CanReadOwnProfile checks if user can read OWN profile in a scope
-func (a *ProfilePermissionAdapter) CanReadOwnProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.HasPermission(ctx, userID, authScope, "profile", "read_own")
-}
-
-// CanReadProfile checks if user can read profiles in a scope (ALL or OWN)
-func (a *ProfilePermissionAdapter) CanReadProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-	allowed, err := a.CanReadAllProfiles(ctx, userID, scope)
-	if err != nil {
-		return false, err
-	}
-	if allowed {
-		return true, nil
-	}
-	return a.CanReadOwnProfile(ctx, userID, scope)
-}
-
-// ============================================================
-// PROFILE PERMISSIONS - UPDATE
-// ============================================================
-
-// CanUpdateAllProfiles checks if user can update ALL profiles in a scope
-func (a *ProfilePermissionAdapter) CanUpdateAllProfiles(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.HasPermission(ctx, userID, authScope, "profile", "update_all")
-}
-
-// CanUpdateOwnProfile checks if user can update OWN profile in a scope
-func (a *ProfilePermissionAdapter) CanUpdateOwnProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.HasPermission(ctx, userID, authScope, "profile", "update_own")
-}
-
-// CanUpdateProfile checks if user can update profiles in a scope (ALL or OWN)
-func (a *ProfilePermissionAdapter) CanUpdateProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-    // First check if user has exact update permission
-    authScope := a.convertScope(scope)
-    allowed, err := a.permSvc.HasPermission(ctx, userID, authScope, "profile", "update")
-    if err == nil && allowed {
-        return true, nil
-    }
-    
-    // Then check update_all
-    allowed, err = a.permSvc.HasPermission(ctx, userID, authScope, "profile", "update_all")
-    if err == nil && allowed {
-        return true, nil
-    }
-    
-    // Finally check update_own
-    return a.permSvc.HasPermission(ctx, userID, authScope, "profile", "update_own")
-}
-
-
-
-// ============================================================
-// PROFILE PERMISSIONS - MANAGEMENT
-// ============================================================
-
-// CanManageProfile checks if user can manage profiles in a scope
-func (a *ProfilePermissionAdapter) CanManageProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-	return a.HasAnyPermission(ctx, userID, scope, "profile",
-		"update_all", "delete_all", "manage")
-}
-
-// CanViewProfile checks if user can view profiles in a scope (ALL or OWN)
-func (a *ProfilePermissionAdapter) CanViewProfile(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-	allowed, err := a.CanReadAllProfiles(ctx, userID, scope)
-	if err != nil {
-		return false, err
-	}
-	if allowed {
-		return true, nil
-	}
-	return a.CanReadOwnProfile(ctx, userID, scope)
-}
-
-// ============================================================
-// ✅ TEAM ROLE CHECKS
-// ============================================================
-
-// IsTeamAdmin checks if user is an admin in the scope
-func (a *ProfilePermissionAdapter) IsTeamAdmin(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.IsTeamAdmin(ctx, userID, authScope)
-}
-
-// IsEventManager checks if user is an event manager in the scope
-func (a *ProfilePermissionAdapter) IsEventManager(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.IsEventManager(ctx, userID, authScope)
-}
-
-// IsTeamMember checks if user is a team member in the scope
-func (a *ProfilePermissionAdapter) IsTeamMember(ctx context.Context, userID string, scope profileDomain.Scope) (bool, error) {
-	authScope := a.convertScope(scope)
-	return a.permSvc.IsTeamMember(ctx, userID, authScope)
-}
-
-// ============================================================
-// ✅ USER INFORMATION METHODS
-// ============================================================
-
-// GetUserInstitutionTeamIDs returns all institution team IDs where a user has roles
-func (a *ProfilePermissionAdapter) GetUserInstitutionTeamIDs(ctx context.Context, userID string) ([]string, error) {
-	return a.permSvc.GetUserInstitutionTeamIDs(ctx, userID)
-}
-
-// GetUserPersonalTeamID returns the personal team ID for a user
-func (a *ProfilePermissionAdapter) GetUserPersonalTeamID(ctx context.Context, userID string) (string, error) {
-	return userID, nil
-}
-
-// ============================================================
-// HELPER METHODS
-// ============================================================
-
-// convertScope converts profileDomain.Scope to authDomain.Scope
-func (a *ProfilePermissionAdapter) convertScope(scope profileDomain.Scope) authDomain.Scope {
-	if scope.IsPersonal() {
-		return authDomain.NewPersonalTeamScope(scope.ID)
-	}
-	if scope.IsInstitution() {
-		return authDomain.NewInstitutionTeamScope(scope.ID)
-	}
-	return authDomain.NewPlatformScope()
-}
-
-// ============================================================
-// PROFILE MEDIA ADAPTER
-// ============================================================
-
-// ProfileMediaAdapter adapts media service to profile domain MediaService
-type ProfileMediaAdapter struct {
-	mediaSvc mediaService.Service
-}
-
-func NewProfileMediaAdapter(mediaSvc mediaService.Service) profileDomain.MediaService {
-	return &ProfileMediaAdapter{mediaSvc: mediaSvc}
-}
-
-func (a *ProfileMediaAdapter) UploadFile(ctx context.Context, cmd profileDomain.UploadMediaCommand) (*profileDomain.MediaInfo, error) {
-	mediaCmd := mediaService.UploadCommand{
-		File:          cmd.File,
-		FileName:      cmd.FileName,
-		ContentType:   cmd.ContentType,
-		MediaTypeName: cmd.MediaTypeName,
-		EntityID:      cmd.EntityID,
-		UploadedBy:    cmd.UploadedBy,
-	}
-
-	media, err := a.mediaSvc.UploadFile(ctx, mediaCmd)
+func (a *AccountAuthAdapter) GetUserByID(ctx context.Context, userID string) (*accountService.UserResult, error) {
+	user, err := a.authSvc.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if media == nil {
+	if user == nil {
 		return nil, nil
 	}
 
-	return &profileDomain.MediaInfo{
-		ID:         media.ID,
-		URL:        media.URL,
-		MediaType:  cmd.MediaTypeName,
-		EntityID:   media.EntityID,
-		UploadedBy: media.UploadedBy,
-		CreatedAt:  media.CreatedAt.Format(time.RFC3339),
+	return &accountService.UserResult{
+		ID:          user.ID,
+		Email:       user.Email,
+		Name:        user.Name,
+		Phone:       user.Phone,
+		DisplayName: user.DisplayName,
+		IsActive:    user.IsActive,
 	}, nil
 }
 
-func (a *ProfileMediaAdapter) GetMediaByID(ctx context.Context, id string) (*profileDomain.MediaInfo, error) {
-	media, err := a.mediaSvc.GetMediaByID(ctx, id)
+func (a *AccountAuthAdapter) GetUserByEmail(ctx context.Context, email string) (*accountService.UserResult, error) {
+	user, err := a.authSvc.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, err
 	}
-	if media == nil {
+	if user == nil {
 		return nil, nil
 	}
 
-	return &profileDomain.MediaInfo{
-		ID:         media.ID,
-		URL:        media.URL,
-		MediaType:  media.MediaTypeID,
-		EntityID:   media.EntityID,
-		UploadedBy: media.UploadedBy,
-		CreatedAt:  media.CreatedAt.Format(time.RFC3339),
+	return &accountService.UserResult{
+		ID:          user.ID,
+		Email:       user.Email,
+		Name:        user.Name,
+		Phone:       user.Phone,
+		DisplayName: user.DisplayName,
+		IsActive:    user.IsActive,
 	}, nil
 }
 
-func (a *ProfileMediaAdapter) GetMediaByEntity(ctx context.Context, entityID string) ([]*profileDomain.MediaInfo, error) {
-	mediaList, _, err := a.mediaSvc.GetMediaByEntity(ctx, entityID, 1, 1000)
-	if err != nil {
-		return nil, err
-	}
+func (a *AccountAuthAdapter) UserExists(ctx context.Context, email string) (bool, error) {
+	return a.authSvc.UserExists(ctx, email)
+}
 
-	result := make([]*profileDomain.MediaInfo, len(mediaList))
-	for i, media := range mediaList {
-		result[i] = &profileDomain.MediaInfo{
-			ID:         media.ID,
-			URL:        media.URL,
-			MediaType:  media.MediaTypeID,
-			EntityID:   media.EntityID,
-			UploadedBy: media.UploadedBy,
-			CreatedAt:  media.CreatedAt.Format(time.RFC3339),
+// ============================================================
+// ACCOUNT - PERMISSION ADAPTER
+// ============================================================
+
+type AccountPermissionAdapter struct {
+	permChecker authDomain.PermissionChecker
+	roleManager authDomain.RoleManager
+}
+
+func NewAccountPermissionAdapter(
+	permChecker authDomain.PermissionChecker,
+	roleManager authDomain.RoleManager,
+) accountService.PermissionChecker {
+	return &AccountPermissionAdapter{
+		permChecker: permChecker,
+		roleManager: roleManager,
+	}
+}
+
+// HasPermission checks if a user has a specific permission in a domain
+func (a *AccountPermissionAdapter) HasPermission(ctx context.Context, domain string, userID, resource, action string) (bool, error) {
+	return a.permChecker.HasPermission(ctx, userID, domain, resource, action)
+}
+
+// HasAnyPermission checks if a user has any of the given permissions in a domain
+func (a *AccountPermissionAdapter) HasAnyPermission(ctx context.Context, domain string, userID, resource string, actions ...string) (bool, error) {
+	for _, action := range actions {
+		allowed, err := a.permChecker.HasPermission(ctx, userID, domain, resource, action)
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			return true, nil
 		}
 	}
-	return result, nil
+	return false, nil
 }
 
-func (a *ProfileMediaAdapter) GetMediaTypeByName(ctx context.Context, name string) (*profileDomain.MediaTypeInfo, error) {
-	mediaType, err := a.mediaSvc.GetMediaTypeByName(ctx, name)
+// HasAllPermissions checks if a user has all of the given permissions in a domain
+func (a *AccountPermissionAdapter) HasAllPermissions(ctx context.Context, domain string, userID, resource string, actions ...string) (bool, error) {
+	for _, action := range actions {
+		allowed, err := a.permChecker.HasPermission(ctx, userID, domain, resource, action)
+		if err != nil {
+			return false, err
+		}
+		if !allowed {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+// CanManageAccount checks if user can manage an account (update, delete, manage)
+func (a *AccountPermissionAdapter) CanManageAccount(ctx context.Context, domain string, userID string) (bool, error) {
+	return a.HasAnyPermission(ctx, domain, userID, "account", "update", "delete", "manage")
+}
+
+// CanManageAccountMembers checks if user can manage account members
+func (a *AccountPermissionAdapter) CanManageAccountMembers(ctx context.Context, domain string, userID string) (bool, error) {
+	return a.HasAnyPermission(ctx, domain, userID, "member", "create", "update", "delete")
+}
+
+// CanViewAccount checks if user can view an account
+func (a *AccountPermissionAdapter) CanViewAccount(ctx context.Context, domain string, userID string) (bool, error) {
+	return a.permChecker.HasPermission(ctx, userID, domain, "account", "read")
+}
+
+// IsAccountAdmin checks if user is an account admin in the domain
+func (a *AccountPermissionAdapter) IsAccountAdmin(ctx context.Context, domain string, userID string) (bool, error) {
+	return a.permChecker.IsAccountAdmin(ctx, userID, domain)
+}
+
+// IsAccountTrainer checks if user is a trainer in the domain
+func (a *AccountPermissionAdapter) IsAccountTrainer(ctx context.Context, domain string, userID string) (bool, error) {
+	return a.permChecker.IsTrainer(ctx, userID, domain)
+}
+
+// GetUserRoles returns all roles for a user in a domain
+func (a *AccountPermissionAdapter) GetUserRoles(ctx context.Context, domain string, userID string) ([]string, error) {
+	return a.roleManager.GetUserRoles(ctx, userID, domain)
+}
+
+// ============================================================
+// ACCOUNT - ROLE MANAGER ADAPTER
+// ============================================================
+
+type AccountRoleManagerAdapter struct {
+	roleManager authDomain.RoleManager
+}
+
+func NewAccountRoleManagerAdapter(roleManager authDomain.RoleManager) accountService.RoleManager {
+	return &AccountRoleManagerAdapter{roleManager: roleManager}
+}
+
+func (a *AccountRoleManagerAdapter) AssignRole(ctx context.Context, domain string, userID, role string) error {
+	return a.roleManager.AssignRole(ctx, domain, userID, role)
+}
+
+func (a *AccountRoleManagerAdapter) RemoveRole(ctx context.Context, domain string, userID, role string) error {
+	return a.roleManager.RemoveRole(ctx, domain, userID, role)
+}
+
+func (a *AccountRoleManagerAdapter) GetUserRoles(ctx context.Context, domain string, userID string) ([]string, error) {
+	return a.roleManager.GetUserRoles(ctx, userID, domain)
+}
+
+// HasRole implements service.RoleManager.
+func (a *AccountRoleManagerAdapter) HasRole(ctx context.Context, domain string, userID string, role string) (bool, error) {
+	roles, err := a.roleManager.GetUserRoles(ctx, userID, domain)
+	if err != nil {
+		return false, err
+	}
+
+	for _, r := range roles {
+		if r == role {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ============================================================
+// TEAM - AUTH ADAPTER
+// ============================================================
+
+type TeamAuthAdapter struct {
+	authSvc authService.Service
+}
+
+func NewTeamAuthAdapter(authSvc authService.Service) teamService.AuthService {
+	return &TeamAuthAdapter{authSvc: authSvc}
+}
+
+func (a *TeamAuthAdapter) GetUserByID(ctx context.Context, userID string) (*teamService.UserResult, error) {
+	user, err := a.authSvc.GetUserByID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if mediaType == nil {
+	if user == nil {
 		return nil, nil
 	}
 
-	return &profileDomain.MediaTypeInfo{
-		ID:   mediaType.ID,
-		Name: mediaType.Name,
-		Slug: mediaType.Slug,
+	return &teamService.UserResult{
+		ID:          user.ID,
+		Email:       user.Email,
+		Name:        user.Name,
+		Phone:       user.Phone,
+		DisplayName: user.DisplayName,
+		IsActive:    user.IsActive,
 	}, nil
 }
 
-func (a *ProfileMediaAdapter) DeleteFile(ctx context.Context, id string) error {
-	return a.mediaSvc.DeleteFile(ctx, id)
+func (a *TeamAuthAdapter) GetUserByEmail(ctx context.Context, email string) (*teamService.UserResult, error) {
+	user, err := a.authSvc.GetUserByEmail(ctx, email)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, nil
+	}
+
+	return &teamService.UserResult{
+		ID:          user.ID,
+		Email:       user.Email,
+		Name:        user.Name,
+		Phone:       user.Phone,
+		DisplayName: user.DisplayName,
+		IsActive:    user.IsActive,
+	}, nil
 }
 
-func (a *ProfileMediaAdapter) DeleteFilesByEntity(ctx context.Context, entityID string) error {
-	return a.mediaSvc.DeleteFilesByEntity(ctx, entityID)
+func (a *TeamAuthAdapter) UserExists(ctx context.Context, email string) (bool, error) {
+	return a.authSvc.UserExists(ctx, email)
 }
 
-func (a *ProfileMediaAdapter) DeleteFilesByEntityAndMediaType(ctx context.Context, entityID, mediaTypeID string) error {
-	return a.mediaSvc.DeleteFilesByEntityAndMediaType(ctx, entityID, mediaTypeID)
+// ============================================================
+// TEAM - PERMISSION ADAPTER
+// ============================================================
+
+type TeamPermissionAdapter struct {
+	permChecker authDomain.PermissionChecker
+	roleManager authDomain.RoleManager
+}
+
+func NewTeamPermissionAdapter(
+	permChecker authDomain.PermissionChecker,
+	roleManager authDomain.RoleManager,
+) teamService.PermissionService {
+	return &TeamPermissionAdapter{
+		permChecker: permChecker,
+		roleManager: roleManager,
+	}
+}
+
+func (a *TeamPermissionAdapter) IsTeamAdmin(ctx context.Context, domain string, userID string) (bool, error) {
+	return a.permChecker.IsAccountAdmin(ctx, userID, domain)
+}
+
+func (a *TeamPermissionAdapter) IsTeamTrainer(ctx context.Context, domain string, userID string) (bool, error) {
+	return a.permChecker.IsTrainer(ctx, userID, domain)
+}
+
+func (a *TeamPermissionAdapter) AssignRole(ctx context.Context, domain string, userID, role string) error {
+	return a.roleManager.AssignRole(ctx, domain, userID, role)
+}
+
+func (a *TeamPermissionAdapter) RemoveRole(ctx context.Context, domain string, userID, role string) error {
+	return a.roleManager.RemoveRole(ctx, domain, userID, role)
+}
+
+func (a *TeamPermissionAdapter) GetUserRoles(ctx context.Context, domain string, userID string) ([]string, error) {
+	return a.roleManager.GetUserRoles(ctx, userID, domain)
+}
+
+// ============================================================
+// TEAM - PERMISSION CHECKER ADAPTER
+// ============================================================
+
+type TeamPermissionCheckerAdapter struct {
+	permChecker authDomain.PermissionChecker
+}
+
+func NewTeamPermissionCheckerAdapter(permChecker authDomain.PermissionChecker) teamService.PermissionChecker {
+	return &TeamPermissionCheckerAdapter{permChecker: permChecker}
+}
+
+func (a *TeamPermissionCheckerAdapter) HasPermission(ctx context.Context, userID string, domain, resource, action string) (bool, error) {
+	return a.permChecker.HasPermission(ctx, userID, domain, resource, action)
+}
+
+func (a *TeamPermissionCheckerAdapter) IsAccountAdmin(ctx context.Context, userID string, domain string) (bool, error) {
+	return a.permChecker.IsAccountAdmin(ctx, userID, domain)
+}
+
+func (a *TeamPermissionCheckerAdapter) IsTrainer(ctx context.Context, userID string, domain string) (bool, error) {
+	return a.permChecker.IsTrainer(ctx, userID, domain)
+}
+
+func (a *TeamPermissionCheckerAdapter) HasTeamAccess(ctx context.Context, userID string) (bool, error) {
+	return a.permChecker.HasTeamAccess(ctx, userID)
 }

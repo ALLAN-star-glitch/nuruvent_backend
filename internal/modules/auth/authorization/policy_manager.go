@@ -24,22 +24,21 @@ func NewPolicyManager(enforcer *Enforcer) authdomain.PolicyManager {
 // TEAM POLICY MANAGEMENT
 // ============================================================
 
-// AddTeamPolicies adds default policies for a team scope
-func (m *PolicyManager) AddTeamPolicies(ctx context.Context, scope authdomain.Scope) error {
-	domain := scope.Domain()
+// AddTeamPolicies adds default policies for a team domain
+func (m *PolicyManager) AddTeamPolicies(ctx context.Context, domain string) error {
 	if domain == "" {
-		return fmt.Errorf("invalid scope: %s", scope.String())
+		return fmt.Errorf("invalid domain: empty string")
 	}
 
 	var policies [][]string
-	if scope.IsPersonalTeam() {
+	if authdomain.IsPersonalTeamDomain(domain) {
 		log.Printf("Adding personal team policies for domain: %s", domain)
 		policies = GetPersonalTeamPolicies(domain)
-	} else if scope.IsInstitutionTeam() {
+	} else if authdomain.IsInstitutionTeamDomain(domain) {
 		log.Printf("Adding institution team policies for domain: %s", domain)
 		policies = GetInstitutionTeamPolicies(domain)
 	} else {
-		return fmt.Errorf("invalid team scope: %s", scope.String())
+		return fmt.Errorf("invalid team domain: %s", domain)
 	}
 
 	// Add policies
@@ -60,11 +59,10 @@ func (m *PolicyManager) AddTeamPolicies(ctx context.Context, scope authdomain.Sc
 	return nil
 }
 
-// RemoveTeamPolicies removes all policies for a team scope
-func (m *PolicyManager) RemoveTeamPolicies(ctx context.Context, scope authdomain.Scope) error {
-	domain := scope.Domain()
+// RemoveTeamPolicies removes all policies for a team domain
+func (m *PolicyManager) RemoveTeamPolicies(ctx context.Context, domain string) error {
 	if domain == "" {
-		return fmt.Errorf("invalid scope: %s", scope.String())
+		return fmt.Errorf("invalid domain: empty string")
 	}
 
 	log.Printf("Removing team policies for domain: %s", domain)
@@ -99,6 +97,87 @@ func (m *PolicyManager) RemoveTeamPolicies(ctx context.Context, scope authdomain
 		len(policies), len(groupingPolicies), domain)
 	return nil
 }
+
+// ============================================================
+// ACCOUNT POLICY MANAGEMENT (NEW)
+// ============================================================
+
+// AddAccountPolicies adds default policies for an account domain
+func (m *PolicyManager) AddAccountPolicies(ctx context.Context, domain string) error {
+	if domain == "" {
+		return fmt.Errorf("invalid domain: empty string")
+	}
+
+	if !authdomain.IsAccountDomain(domain) {
+		return fmt.Errorf("invalid account domain: %s", domain)
+	}
+
+	log.Printf("Adding account policies for domain: %s", domain)
+
+	policies := GetAccountPolicies(domain)
+	_, err := m.enforcer.AddPolicies(policies)
+	if err != nil {
+		return fmt.Errorf("failed to add account policies: %w", err)
+	}
+
+	// Add role hierarchy for account
+	hierarchy := GetAccountRoleHierarchy(domain)
+	_, err = m.enforcer.AddGroupingPolicies(hierarchy)
+	if err != nil {
+		return fmt.Errorf("failed to add account role hierarchy: %w", err)
+	}
+
+	log.Printf("✅ Added %d account policies and %d hierarchy rules for domain: %s",
+		len(policies), len(hierarchy), domain)
+	return nil
+}
+
+// RemoveAccountPolicies removes all policies for an account domain
+func (m *PolicyManager) RemoveAccountPolicies(ctx context.Context, domain string) error {
+	if domain == "" {
+		return fmt.Errorf("invalid domain: empty string")
+	}
+
+	if !authdomain.IsAccountDomain(domain) {
+		return fmt.Errorf("invalid account domain: %s", domain)
+	}
+
+	log.Printf("Removing account policies for domain: %s", domain)
+
+	// Remove policy rules
+	policies, err := m.enforcer.GetFilteredPolicy(1, domain)
+	if err != nil {
+		return fmt.Errorf("failed to get policies: %w", err)
+	}
+
+	if len(policies) > 0 {
+		_, err := m.enforcer.RemovePolicies(policies)
+		if err != nil {
+			return fmt.Errorf("failed to remove policies: %w", err)
+		}
+	}
+
+	// Remove grouping policies
+	groupingPolicies, err := m.enforcer.GetFilteredGroupingPolicy(2, domain)
+	if err != nil {
+		return fmt.Errorf("failed to get grouping policies: %w", err)
+	}
+
+	if len(groupingPolicies) > 0 {
+		_, err := m.enforcer.RemoveGroupingPolicies(groupingPolicies)
+		if err != nil {
+			return fmt.Errorf("failed to remove grouping policies: %w", err)
+		}
+	}
+
+	log.Printf("✅ Removed %d account policies and %d grouping policies for domain: %s",
+		len(policies), len(groupingPolicies), domain)
+	return nil
+}
+
+// ============================================================
+// PLATFORM POLICY MANAGEMENT
+// ============================================================
 
 // AddPlatformPolicies adds default platform policies
 func (m *PolicyManager) AddPlatformPolicies(ctx context.Context) error {
@@ -160,11 +239,10 @@ func (m *PolicyManager) RemovePlatformPolicies(ctx context.Context) error {
 // HELPER METHODS (Internal)
 // ============================================================
 
-// ensureTeamPoliciesExist ensures policies exist for a team scope
-func (m *PolicyManager) ensureTeamPoliciesExist(ctx context.Context, scope authdomain.Scope) error {
-	domain := scope.Domain()
+// ensureTeamPoliciesExist ensures policies exist for a team domain
+func (m *PolicyManager) ensureTeamPoliciesExist(ctx context.Context, domain string) error {
 	if domain == "" {
-		return fmt.Errorf("invalid scope: %s", scope.String())
+		return fmt.Errorf("invalid domain: empty string")
 	}
 
 	policies, err := m.enforcer.GetFilteredPolicy(1, domain)
@@ -174,7 +252,30 @@ func (m *PolicyManager) ensureTeamPoliciesExist(ctx context.Context, scope authd
 
 	if len(policies) == 0 {
 		log.Printf("No policies found for domain %s, adding default policies", domain)
-		return m.AddTeamPolicies(ctx, scope)
+		return m.AddTeamPolicies(ctx, domain)
+	}
+
+	return nil
+}
+
+// ensureAccountPoliciesExist ensures policies exist for an account domain
+func (m *PolicyManager) ensureAccountPoliciesExist(ctx context.Context, domain string) error {
+	if domain == "" {
+		return fmt.Errorf("invalid domain: empty string")
+	}
+
+	if !authdomain.IsAccountDomain(domain) {
+		return fmt.Errorf("invalid account domain: %s", domain)
+	}
+
+	policies, err := m.enforcer.GetFilteredPolicy(1, domain)
+	if err != nil {
+		return fmt.Errorf("failed to check existing policies: %w", err)
+	}
+
+	if len(policies) == 0 {
+		log.Printf("No policies found for account domain %s, adding default policies", domain)
+		return m.AddAccountPolicies(ctx, domain)
 	}
 
 	return nil

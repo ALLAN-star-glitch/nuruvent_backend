@@ -27,15 +27,19 @@ func NewTokenService(cfg *config.Config) authdomain.TokenService {
 func (s *TokenService) GenerateAccessToken(ctx *authdomain.TokenContext) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"sub":         ctx.UserID,
-		"type":        "access",
-		"iat":         now.Unix(),
-		"exp":         now.Add(s.config.JWT.AccessExpiration).Unix(),
-		"jti":         uuid.New().String(),
-		"email":       ctx.Email,
-		"role":        ctx.Role,
-		"is_verified": ctx.IsVerified,
-		"is_active":   ctx.IsActive,
+		"sub":          ctx.UserID,
+		"type":         "access",
+		"iat":          now.Unix(),
+		"exp":          now.Add(s.config.JWT.AccessExpiration).Unix(),
+		"jti":          uuid.New().String(),
+		"email":        ctx.Email,
+		"role":         ctx.Role,
+		"is_verified":  ctx.IsVerified,
+		"is_active":    ctx.IsActive,
+		"account_id":   ctx.AccountID,
+		"account_type": ctx.AccountTypeSlug,
+		"team_id":      ctx.TeamID,
+		"team_type":    ctx.TeamTypeSlug,
 	}
 
 	if ctx.DisplayName != "" {
@@ -84,6 +88,10 @@ func (s *TokenService) ValidateToken(tokenString string) (*authdomain.TokenConte
 	email, _ := claims["email"].(string)
 	displayName, _ := claims["display_name"].(string)
 	role, _ := claims["role"].(string)
+	accountID, _ := claims["account_id"].(string)
+	accountType, _ := claims["account_type"].(string)
+	teamID, _ := claims["team_id"].(string)
+	teamType, _ := claims["team_type"].(string)
 	isVerified, _ := claims["is_verified"].(bool)
 	isActive, _ := claims["is_active"].(bool)
 
@@ -92,11 +100,15 @@ func (s *TokenService) ValidateToken(tokenString string) (*authdomain.TokenConte
 	}
 
 	return &authdomain.TokenContext{
-		UserID:      userID,
-		Email:       email,
-		DisplayName: displayName,
-		Role:        role,
-		IsVerified:  isVerified,
-		IsActive:    isActive,
+		UserID:          userID,
+		Email:           email,
+		DisplayName:     displayName,
+		Role:            role,
+		AccountID:       accountID,
+		AccountTypeSlug: accountType,
+		TeamID:          teamID,
+		TeamTypeSlug:    teamType,
+		IsVerified:      isVerified,
+		IsActive:        isActive,
 	}, nil
 }

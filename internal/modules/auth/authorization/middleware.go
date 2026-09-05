@@ -18,7 +18,6 @@ import (
 // ============================================================
 
 // AuthorizationMiddleware enforces permissions using Casbin
-// This is the ONLY middleware you need for most routes
 func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		// Get user ID
@@ -36,43 +35,43 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 			})
 		}
 
-		// Determine scope from request
-		scope := getScopeFromRequest(c)
+		// Determine domain from request
+		domain := getDomainFromRequest(c)
 
 		// Determine resource and action
 		resource := getResourceFromRequest(c)
 		action := getActionFromRequest(c)
 
 		// DEBUG
-		log.Printf("🔍 AUTHZ: user=%s, scope=%s, resource=%s, action=%s",
-			userIDStr, scope.String(), resource, action)
+		log.Printf("🔍 AUTHZ: user=%s, domain=%s, resource=%s, action=%s",
+			userIDStr, domain, resource, action)
 
 		// ✅ SPECIAL CASE: /users/me/profile - always allow (GET and PUT)
 		if isOwnProfileRequest(c) {
 			log.Printf("✅ AUTHZ BYPASS: /users/me/profile - allowing access")
-			c.Locals("scope", scope)
+			c.Locals("domain", domain)
 			return c.Next()
 		}
 
 		// ✅ SPECIAL CASE: /users/me/avatar - always allow for own avatar
 		if isOwnAvatarRequest(c) {
 			log.Printf("✅ AUTHZ BYPASS: /users/me/avatar - allowing access")
-			c.Locals("scope", scope)
+			c.Locals("domain", domain)
 			return c.Next()
 		}
 
 		// ✅ SPECIAL CASE: /institutions/:id/logo - allow for institution admins
 		if isInstitutionLogoRequest(c) {
 			log.Printf("✅ AUTHZ BYPASS: institution logo request - allowing access")
-			c.Locals("scope", scope)
+			c.Locals("domain", domain)
 			return c.Next()
 		}
 
-		// Store scope for downstream
-		c.Locals("scope", scope)
+		// Store domain for downstream
+		c.Locals("domain", domain)
 
 		// Check permission with fallback chain
-		allowed, err := checkPermissionWithFallback(c, checker, userIDStr, scope, resource, action)
+		allowed, err := checkPermissionWithFallback(c, checker, userIDStr, domain, resource, action)
 		if err != nil {
 			return response.InternalError(c, "Authorization error", fiber.Map{
 				"error": err.Error(),
@@ -80,10 +79,10 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 		}
 
 		if !allowed {
-			roles, _ := checker.GetUserRoles(c.Context(), userIDStr, scope)
+			roles, _ := checker.GetUserRoles(c.Context(), userIDStr, domain)
 			return response.Forbidden(c, "Insufficient permissions", fiber.Map{
 				"user":     userIDStr,
-				"scope":    scope.String(),
+				"domain":   domain,
 				"resource": resource,
 				"action":   action,
 				"roles":    roles,
@@ -94,7 +93,7 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 	}
 }
 
-// isOwnProfileRequest checks if this is a /users/me/profile request (GET or PUT)
+// isOwnProfileRequest checks if this is a /users/me/profile request
 func isOwnProfileRequest(c fiber.Ctx) bool {
 	path := c.Path()
 	return strings.Contains(path, "/users/me/profile")
@@ -117,7 +116,7 @@ func checkPermissionWithFallback(
 	c fiber.Ctx,
 	checker authdomain.PermissionChecker,
 	userID string,
-	scope authdomain.Scope,
+	domain string,
 	resource string,
 	action string,
 ) (bool, error) {
@@ -126,19 +125,19 @@ func checkPermissionWithFallback(
 	// For read actions: read -> read_all -> read_own
 	if action == authdomain.ActionRead.String() {
 		// Try exact read permission
-		allowed, err := checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionRead.String())
+		allowed, err := checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionRead.String())
 		if err == nil && allowed {
 			return true, nil
 		}
 
 		// Try read_all
-		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionReadAll.String())
+		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionReadAll.String())
 		if err == nil && allowed {
 			return true, nil
 		}
 
 		// Try read_own
-		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionReadOwn.String())
+		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionReadOwn.String())
 		if err == nil && allowed {
 			return true, nil
 		}
@@ -152,19 +151,19 @@ func checkPermissionWithFallback(
 	// For update actions: update -> update_all -> update_own
 	if action == authdomain.ActionUpdate.String() {
 		// Try exact update permission
-		allowed, err := checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionUpdate.String())
+		allowed, err := checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionUpdate.String())
 		if err == nil && allowed {
 			return true, nil
 		}
 
 		// Try update_all
-		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionUpdateAll.String())
+		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionUpdateAll.String())
 		if err == nil && allowed {
 			return true, nil
 		}
 
 		// Try update_own
-		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionUpdateOwn.String())
+		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionUpdateOwn.String())
 		if err == nil && allowed {
 			return true, nil
 		}
@@ -178,19 +177,19 @@ func checkPermissionWithFallback(
 	// For delete actions: delete -> delete_all -> delete_own
 	if action == authdomain.ActionDelete.String() {
 		// Try exact delete permission
-		allowed, err := checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionDelete.String())
+		allowed, err := checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionDelete.String())
 		if err == nil && allowed {
 			return true, nil
 		}
 
 		// Try delete_all
-		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionDeleteAll.String())
+		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionDeleteAll.String())
 		if err == nil && allowed {
 			return true, nil
 		}
 
 		// Try delete_own
-		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionDeleteOwn.String())
+		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionDeleteOwn.String())
 		if err == nil && allowed {
 			return true, nil
 		}
@@ -201,16 +200,16 @@ func checkPermissionWithFallback(
 		return false, nil
 	}
 
-	// For publish actions: publish_all -> publish_own (no exact publish)
+	// For publish actions: publish_all -> publish_own
 	if action == authdomain.ActionPublishAll.String() || action == authdomain.ActionPublishOwn.String() {
 		// Try publish_all
-		allowed, err := checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionPublishAll.String())
+		allowed, err := checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionPublishAll.String())
 		if err == nil && allowed {
 			return true, nil
 		}
 
 		// Try publish_own
-		allowed, err = checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionPublishOwn.String())
+		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionPublishOwn.String())
 		if err == nil && allowed {
 			return true, nil
 		}
@@ -223,29 +222,29 @@ func checkPermissionWithFallback(
 
 	// For create actions: just check create
 	if action == authdomain.ActionCreate.String() {
-		return checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionCreate.String())
+		return checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionCreate.String())
 	}
 
 	// For manage actions: just check manage
 	if action == authdomain.ActionManage.String() {
-		return checker.HasPermission(ctx, userID, scope, resource, authdomain.ActionManage.String())
+		return checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionManage.String())
 	}
 
 	// For all other actions, check exact match
-	return checker.HasPermission(ctx, userID, scope, resource, action)
+	return checker.HasPermission(ctx, userID, domain, resource, action)
 }
 
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
 
-// getScopeFromRequest extracts the Scope from the request
-func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
+// getDomainFromRequest extracts the domain string from the request
+func getDomainFromRequest(c fiber.Ctx) string {
 	path := c.Path()
 
 	// Check context first
-	if scope := c.Locals("scope"); scope != nil {
-		if s, ok := scope.(authdomain.Scope); ok {
+	if domain := c.Locals("domain"); domain != nil {
+		if s, ok := domain.(string); ok && s != "" {
 			return s
 		}
 	}
@@ -253,31 +252,28 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 	// ✅ Check for team_id and team_type query params FIRST
 	teamID := c.Query("team_id")
 	teamType := c.Query("team_type")
-	
+
 	if teamID != "" && teamType != "" {
 		if teamType == "institution" {
-			return authdomain.NewInstitutionTeamScope(teamID)
+			return authdomain.InstitutionTeamDomain(teamID)
 		}
 		if teamType == "personal" {
-			return authdomain.NewPersonalTeamScope(teamID)
+			return authdomain.PersonalTeamDomain(teamID)
 		}
+	}
+
+	// Check for account_id query param
+	accountID := c.Query("account_id")
+	if accountID != "" {
+		return authdomain.AccountDomain(accountID)
 	}
 
 	// Check for profile endpoints
 	if strings.Contains(path, "/profile") {
-		// For /users/me/profile - use personal scope
-		if strings.Contains(path, "/users/me/profile") {
+		if strings.Contains(path, "/users/me/profile") || strings.Contains(path, "/users/me/avatar") {
 			if uid := c.Locals(authdomain.ContextKeyUserID); uid != nil {
 				if uidStr, ok := uid.(string); ok && uidStr != "" {
-					return authdomain.NewPersonalTeamScope(uidStr)
-				}
-			}
-		}
-		// For /users/me/avatar - use personal scope
-		if strings.Contains(path, "/users/me/avatar") {
-			if uid := c.Locals(authdomain.ContextKeyUserID); uid != nil {
-				if uidStr, ok := uid.(string); ok && uidStr != "" {
-					return authdomain.NewPersonalTeamScope(uidStr)
+					return authdomain.PersonalTeamDomain(uidStr)
 				}
 			}
 		}
@@ -289,9 +285,11 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 				if len(parts) == 2 {
 					switch parts[0] {
 					case "personal":
-						return authdomain.NewPersonalTeamScope(parts[1])
+						return authdomain.PersonalTeamDomain(parts[1])
 					case "institution":
-						return authdomain.NewInstitutionTeamScope(parts[1])
+						return authdomain.InstitutionTeamDomain(parts[1])
+					case "account":
+						return authdomain.AccountDomain(parts[1])
 					}
 				}
 			}
@@ -303,7 +301,7 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 		parts := strings.Split(path, "/")
 		for i, part := range parts {
 			if part == "institutions" && i+1 < len(parts) {
-				return authdomain.NewInstitutionTeamScope(parts[i+1])
+				return authdomain.InstitutionTeamDomain(parts[i+1])
 			}
 		}
 	}
@@ -311,26 +309,34 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 	// Check path params
 	institutionID := c.Params("institutionId")
 	if institutionID != "" {
-		return authdomain.NewInstitutionTeamScope(institutionID)
+		return authdomain.InstitutionTeamDomain(institutionID)
 	}
 
 	userID := c.Params("userId")
 	if userID != "" {
-		return authdomain.NewPersonalTeamScope(userID)
+		return authdomain.PersonalTeamDomain(userID)
 	}
 
 	teamID = c.Params("teamId")
 	if teamID != "" {
-		return authdomain.NewPersonalTeamScope(teamID)
+		return authdomain.PersonalTeamDomain(teamID)
+	}
+
+	accountID = c.Params("accountId")
+	if accountID != "" {
+		return authdomain.AccountDomain(accountID)
 	}
 
 	id := c.Params("id")
 	if id != "" {
 		if strings.Contains(path, "/institutions/") {
-			return authdomain.NewInstitutionTeamScope(id)
+			return authdomain.InstitutionTeamDomain(id)
+		}
+		if strings.Contains(path, "/accounts/") {
+			return authdomain.AccountDomain(id)
 		}
 		if strings.Contains(path, "/users/") || strings.Contains(path, "/teams/") {
-			return authdomain.NewPersonalTeamScope(id)
+			return authdomain.PersonalTeamDomain(id)
 		}
 	}
 
@@ -338,37 +344,40 @@ func getScopeFromRequest(c fiber.Ctx) authdomain.Scope {
 	if strings.Contains(path, "/me") || strings.Contains(path, "/my") {
 		if uid := c.Locals(authdomain.ContextKeyUserID); uid != nil {
 			if uidStr, ok := uid.(string); ok && uidStr != "" {
-				return authdomain.NewPersonalTeamScope(uidStr)
+				return authdomain.PersonalTeamDomain(uidStr)
 			}
 		}
 	}
 
 	// Check query params
 	if institutionID = c.Query("institutionId"); institutionID != "" {
-		return authdomain.NewInstitutionTeamScope(institutionID)
+		return authdomain.InstitutionTeamDomain(institutionID)
 	}
 	if userID = c.Query("userId"); userID != "" {
-		return authdomain.NewPersonalTeamScope(userID)
+		return authdomain.PersonalTeamDomain(userID)
 	}
 	if teamID = c.Query("teamId"); teamID != "" {
-		return authdomain.NewPersonalTeamScope(teamID)
+		return authdomain.PersonalTeamDomain(teamID)
+	}
+	if accountID = c.Query("accountId"); accountID != "" {
+		return authdomain.AccountDomain(accountID)
 	}
 
 	// Platform routes
 	if strings.HasPrefix(path, "/api/v1/admin") ||
 		strings.HasPrefix(path, "/api/v1/platform") ||
 		strings.HasPrefix(path, "/api/v1/system") {
-		return authdomain.NewPlatformScope()
+		return authdomain.DomainPlatform
 	}
 
 	// Default to user's personal team
 	if uid := c.Locals(authdomain.ContextKeyUserID); uid != nil {
 		if uidStr, ok := uid.(string); ok && uidStr != "" {
-			return authdomain.NewPersonalTeamScope(uidStr)
+			return authdomain.PersonalTeamDomain(uidStr)
 		}
 	}
 
-	return authdomain.NewPlatformScope()
+	return authdomain.DomainPlatform
 }
 
 // getResourceFromRequest extracts the resource from the request path
@@ -379,40 +388,47 @@ func getResourceFromRequest(c fiber.Ctx) string {
 	for i, seg := range segments {
 		switch seg {
 		case "users", "user":
-			// Check if this is a profile endpoint
 			if i+1 < len(segments) && (segments[i+1] == "profile" || strings.Contains(segments[i+1], "profile")) {
-				return "profile"
+				return authdomain.ResourceProfile.String()
 			}
-			// Check if this is an avatar endpoint
 			if i+1 < len(segments) && segments[i+1] == "avatar" {
-				return "profile"
+				return authdomain.ResourceProfile.String()
 			}
-			// Check if this is me/profile
 			if i+1 < len(segments) && segments[i] == "me" && (segments[i+1] == "profile" || segments[i+1] == "avatar") {
-				return "profile"
+				return authdomain.ResourceProfile.String()
 			}
-			// Check if this is users/me/profile
 			if i+2 < len(segments) && segments[i] == "users" && segments[i+1] == "me" && segments[i+2] == "profile" {
-				return "profile"
+				return authdomain.ResourceProfile.String()
 			}
 			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
 				return authdomain.ResourceEvent.String()
 			}
 			if i+2 < len(segments) && segments[i+2] == "profiles" {
-				return "profile"
+				return authdomain.ResourceProfile.String()
 			}
 			return authdomain.ResourceUser.String()
 		case "profile":
-			return "profile"
+			return authdomain.ResourceProfile.String()
+		case "accounts", "account":
+			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
+				return authdomain.ResourceEvent.String()
+			}
+			if i+2 < len(segments) && segments[i+2] == "profile" {
+				return authdomain.ResourceProfile.String()
+			}
+			if i+1 < len(segments) && segments[i+1] == "members" {
+				return authdomain.ResourceMember.String()
+			}
+			return authdomain.ResourceAccount.String()
 		case "institutions", "institution":
 			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
 				return authdomain.ResourceEvent.String()
 			}
 			if i+2 < len(segments) && segments[i+2] == "profile" {
-				return "profile"
+				return authdomain.ResourceProfile.String()
 			}
 			if i+1 < len(segments) && segments[i+1] == "logo" {
-				return "profile"
+				return authdomain.ResourceProfile.String()
 			}
 			return authdomain.ResourceInstitution.String()
 		case "teams", "team":
@@ -425,12 +441,16 @@ func getResourceFromRequest(c fiber.Ctx) string {
 				return authdomain.ResourceEvent.String()
 			}
 			if i+1 < len(segments) && (segments[i+1] == "profile" || segments[i+1] == "avatar") {
-				return "profile"
+				return authdomain.ResourceProfile.String()
 			}
 		case "avatar":
-			return "profile"
+			return authdomain.ResourceProfile.String()
 		case "logo":
-			return "profile"
+			return authdomain.ResourceProfile.String()
+		case "members", "member":
+			return authdomain.ResourceMember.String()
+		case "billing":
+			return authdomain.ResourceBilling.String()
 		}
 	}
 
@@ -438,7 +458,7 @@ func getResourceFromRequest(c fiber.Ctx) string {
 	for _, seg := range segments {
 		switch seg {
 		case "profile":
-			return "profile"
+			return authdomain.ResourceProfile.String()
 		case "events", "event":
 			return authdomain.ResourceEvent.String()
 		case "certificates", "certificate":
@@ -452,17 +472,15 @@ func getResourceFromRequest(c fiber.Ctx) string {
 		case "members", "member":
 			return authdomain.ResourceMember.String()
 		case "dashboard":
-			return "dashboard"
+			return authdomain.ResourceDashboard.String()
 		case "analytics":
-			return "analytics"
+			return authdomain.ResourceAnalytics.String()
 		case "notifications", "notification":
-			return "notification"
+			return authdomain.ResourceNotification.String()
 		case "media":
-			return "media"
-		case "avatar":
-			return "profile"
-		case "logo":
-			return "profile"
+			return authdomain.ResourceMedia.String()
+		case "billing":
+			return authdomain.ResourceBilling.String()
 		}
 	}
 
@@ -472,7 +490,7 @@ func getResourceFromRequest(c fiber.Ctx) string {
 // getActionFromRequest maps HTTP method to action
 func getActionFromRequest(c fiber.Ctx) string {
 	path := c.Path()
-	
+
 	// For avatar/logo uploads, POST should map to update, not create
 	if strings.Contains(path, "/avatar") || strings.Contains(path, "/logo") {
 		switch c.Method() {
@@ -482,7 +500,7 @@ func getActionFromRequest(c fiber.Ctx) string {
 			return authdomain.ActionDelete.String()
 		}
 	}
-	
+
 	switch c.Method() {
 	case http.MethodGet:
 		return authdomain.ActionRead.String()

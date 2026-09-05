@@ -16,7 +16,7 @@ func (s *service) GenerateTokens(
 	user *authdomain.User,
 ) (string, string, error) {
 	// Determine role and team type using Casbin
-	role, teamTypeSlug, teamID := s.determineRoleAndTeamType(ctx, user)
+	role, teamTypeSlug, teamID, accountID := s.determineRoleAndTeamType(ctx, user)
 
 	// Get account type for account type slug
 	accountType, err := s.repo.GetAccountTypeByID(user.AccountTypeID)
@@ -33,10 +33,10 @@ func (s *service) GenerateTokens(
 		Email:           user.Email,
 		DisplayName:     user.DisplayName,
 		Role:            role,
-		AccountTypeSlug: accountType.Slug, // snake_case: "personal" or "institution"
-		TeamTypeSlug:    teamTypeSlug,     // kebab-case: "personal-team" or "institution-team"
-		TeamID:          teamID,           // user_id or institution_id
-		InstitutionID:   teamID,           // Keep for backward compatibility (only for institution)
+		AccountID:       accountID,
+		AccountTypeSlug: accountType.Slug,
+		TeamID:          teamID,
+		TeamTypeSlug:    teamTypeSlug,
 		IsVerified:      user.EmailVerified,
 		IsActive:        user.IsActive,
 	}
@@ -57,8 +57,8 @@ func (s *service) GenerateTokens(
 	newToken, err := authdomain.NewRefreshToken(
 		user.ID,
 		refreshToken,
-		"", // userAgent - can be passed from context if needed
-		"", // ipAddress - can be passed from context if needed
+		"",
+		"",
 		time.Now().Add(s.config.JWT.RefreshExpiration),
 	)
 	if err != nil {
@@ -83,9 +83,7 @@ func (s *service) GenerateTokensWithContext(
 		return "", "", err
 	}
 
-	// Update refresh token with user agent and IP
 	if err := s.repo.UpdateRefreshTokenContext(refreshToken, userAgent, ipAddress); err != nil {
-		// Log but don't fail - token is still valid
 		fmt.Printf("Failed to update refresh token context: %v\n", err)
 	}
 
@@ -94,7 +92,6 @@ func (s *service) GenerateTokensWithContext(
 
 // RefreshTokens refreshes an expired access token using a refresh token
 func (s *service) RefreshTokens(ctx context.Context, refreshToken, userAgent, ip string) (string, string, error) {
-	// 1. Get token from database
 	token, err := s.repo.GetRefreshTokenByToken(refreshToken)
 	if err != nil {
 		return "", "", err
@@ -103,17 +100,14 @@ func (s *service) RefreshTokens(ctx context.Context, refreshToken, userAgent, ip
 		return "", "", authdomain.ErrInvalidToken
 	}
 
-	// 2. Check if valid
 	if token.IsExpired() || token.IsRevoked() {
 		return "", "", authdomain.ErrInvalidToken
 	}
 
-	// 3. Revoke old token
 	if err := s.repo.RevokeRefreshToken(refreshToken); err != nil {
 		return "", "", err
 	}
 
-	// 4. Get user
 	user, err := s.repo.GetUserByID(token.UserID)
 	if err != nil {
 		return "", "", err
@@ -122,7 +116,6 @@ func (s *service) RefreshTokens(ctx context.Context, refreshToken, userAgent, ip
 		return "", "", authdomain.ErrUserNotFound
 	}
 
-	// 5. Generate new tokens with context
 	accessToken, newRefreshToken, err := s.GenerateTokensWithContext(ctx, user, userAgent, ip)
 	if err != nil {
 		return "", "", err
@@ -141,122 +134,171 @@ func (s *service) RevokeAllUserTokens(ctx context.Context, userID string) error 
 	return s.repo.RevokeAllRefreshTokensForUser(userID)
 }
 
-// determineRoleAndTeamType determines the user's role and team type using Casbin
-// Returns: role, teamTypeSlug, teamID (user_id for personal, institution_id for institution)
-func (s *service) determineRoleAndTeamType(ctx context.Context, user *authdomain.User) (string, string, string) {
+// determineRoleAndTeamType determines the user's role, team type, and IDs using Casbin
+// Returns: role, teamTypeSlug, teamID (UUID from teams table), accountID
+func (s *service) determineRoleAndTeamType(ctx context.Context, user *authdomain.User) (string, string, string, string) {
 	// ============================================================
 	// 1. CHECK PLATFORM ROLES (HIGHEST PRIORITY)
 	// ============================================================
 
-	// Check if user is super admin (platform-wide)
 	isSuperAdmin, err := s.repo.IsSuperAdmin(ctx, user.ID)
 	if err == nil && isSuperAdmin {
-		return authdomain.RoleSuperAdmin.String(), "", ""
+		return authdomain.RoleSuperAdmin.String(), "", "", ""
 	}
 
-	// Check if user is platform admin
 	isPlatformAdmin, err := s.repo.IsPlatformAdmin(ctx, user.ID)
 	if err == nil && isPlatformAdmin {
-		return authdomain.RoleAdmin.String(), "", ""
+		return authdomain.RoleAdmin.String(), "", "", ""
 	}
 
 	// ============================================================
-	// 2. CHECK PERSONAL TEAM ROLES
-	// Domain: personal:team:{user_id}
+	// 2. CHECK ACCOUNT-LEVEL ROLE (DEFAULT)
 	// ============================================================
 
-	scope := authdomain.NewPersonalTeamScope(user.ID)
+	// Get user's account role from account_members (Auth repo)
+	accountRole, accountID, err := s.getAccountRole(ctx, user.ID)
+	if err == nil && accountRole != "" && accountID != "" {
 
-	// Check account_admin role in personal team
-	isAdmin, _ := s.permChecker.IsTeamAdmin(ctx, user.ID, scope)
-	if isAdmin {
-		return authdomain.RoleAccountAdmin.String(), "personal-team", user.ID
-	}
+		// Check if user has team-level override using TeamService port
+		teamOverride, teamID, teamType := s.getTeamOverride(ctx, user.ID)
 
-	// Check event_manager role in personal team
-	isEventManager, _ := s.permChecker.IsEventManager(ctx, user.ID, scope)
-	if isEventManager {
-		return authdomain.RoleEventManager.String(), "personal-team", user.ID
-	}
+		if teamOverride != "" && teamID != "" {
+			// Team override takes precedence
+			return teamOverride, teamType, teamID, accountID
+		}
 
-	// Check team_member role in personal team
-	isMember, _ := s.permChecker.IsTeamMember(ctx, user.ID, scope)
-	if isMember {
-		return authdomain.RoleTeamMember.String(), "personal-team", user.ID
+		// If no team override, use account role with personal team
+		personalTeam, err := s.teamSvc.GetPersonalTeamByUserID(ctx, user.ID)
+		if err == nil && personalTeam != nil {
+			return accountRole, "personal-team", personalTeam.ID, accountID
+		}
+
+		// If no personal team, check if user has any institution team
+		institutionTeams, err := s.teamSvc.GetUserInstitutionTeamIDs(ctx, user.ID)
+		if err == nil && len(institutionTeams) > 0 {
+			team, err := s.teamSvc.GetTeamByID(ctx, institutionTeams[0])
+			if err == nil && team != nil {
+				return accountRole, "institution-team", team.ID, accountID
+			}
+		}
+
+		return accountRole, "", "", accountID
 	}
 
 	// ============================================================
-	// 3. CHECK INSTITUTION ROLES
-	// Domain: institution:team:{institution_id}
+	// 3. CHECK INSTITUTION TEAM ROLES (if no account role)
 	// ============================================================
 
-	if user.InstitutionID != nil && *user.InstitutionID != "" {
-		institutionID := *user.InstitutionID
-		scope := authdomain.NewInstitutionTeamScope(institutionID)
+	institutionTeams, err := s.teamSvc.GetUserInstitutionTeamIDs(ctx, user.ID)
+	if err == nil && len(institutionTeams) > 0 {
+		for _, teamID := range institutionTeams {
+			team, err := s.teamSvc.GetTeamByID(ctx, teamID)
+			if err != nil || team == nil {
+				continue
+			}
 
-		// Check account_admin role in institution
-		isAdmin, _ := s.permChecker.IsTeamAdmin(ctx, user.ID, scope)
+			domain := authdomain.InstitutionTeamDomain(teamID)
+
+			// Check account_admin role in institution team
+			isAdmin, _ := s.permChecker.IsAccountAdmin(ctx, user.ID, domain)
+			if isAdmin {
+				account, _ := s.teamSvc.GetAccountByTeamID(ctx, teamID)
+				if account != nil {
+					return authdomain.RoleAccountAdmin.String(), "institution-team", teamID, account.ID
+				}
+				return authdomain.RoleAccountAdmin.String(), "institution-team", teamID, ""
+			}
+
+			// Check trainer role in institution team
+			isTrainer, _ := s.permChecker.IsTrainer(ctx, user.ID, domain)
+			if isTrainer {
+				account, _ := s.teamSvc.GetAccountByTeamID(ctx, teamID)
+				if account != nil {
+					return authdomain.RoleTrainer.String(), "institution-team", teamID, account.ID
+				}
+				return authdomain.RoleTrainer.String(), "institution-team", teamID, ""
+			}
+		}
+	}
+
+	// ============================================================
+	// 4. CHECK PERSONAL TEAM (if no account role)
+	// ============================================================
+
+	personalTeam, err := s.teamSvc.GetPersonalTeamByUserID(ctx, user.ID)
+	if err == nil && personalTeam != nil {
+		domain := authdomain.PersonalTeamDomain(personalTeam.ID)
+
+		isAdmin, _ := s.permChecker.IsAccountAdmin(ctx, user.ID, domain)
 		if isAdmin {
-			return authdomain.RoleAccountAdmin.String(), "institution-team", institutionID
+			return authdomain.RoleAccountAdmin.String(), "personal-team", personalTeam.ID, user.ID
 		}
 
-		// Check event_manager role in institution
-		isEventManager, _ := s.permChecker.IsEventManager(ctx, user.ID, scope)
-		if isEventManager {
-			return authdomain.RoleEventManager.String(), "institution-team", institutionID
+		isTrainer, _ := s.permChecker.IsTrainer(ctx, user.ID, domain)
+		if isTrainer {
+			return authdomain.RoleTrainer.String(), "personal-team", personalTeam.ID, user.ID
 		}
-
-		// Check team_member role in institution
-		isMember, _ := s.permChecker.IsTeamMember(ctx, user.ID, scope)
-		if isMember {
-			return authdomain.RoleTeamMember.String(), "institution-team", institutionID
-		}
-	}
-
-	// ============================================================
-	// 4. CHECK IF USER HAS ANY TEAM ACCESS (via Casbin)
-	// ============================================================
-
-	hasAccess, _ := s.permChecker.HasTeamAccess(ctx, user.ID)
-	if hasAccess {
-		// Get user's teams and determine type
-		personalTeams, _ := s.permChecker.GetUserPersonalTeamIDs(ctx, user.ID)
-		if len(personalTeams) > 0 {
-			return authdomain.RoleTeamMember.String(), "personal-team", personalTeams[0]
-		}
-
-		institutionTeams, _ := s.permChecker.GetUserInstitutionTeamIDs(ctx, user.ID)
-		if len(institutionTeams) > 0 {
-			return authdomain.RoleTeamMember.String(), "institution-team", institutionTeams[0]
-		}
-
-		return authdomain.RoleTeamMember.String(), "personal-team", user.ID
 	}
 
 	// ============================================================
 	// 5. DEFAULT ROLE
 	// ============================================================
 
-	// Default role for users with no special permissions
-	return authdomain.RoleGuest.String(), "", ""
+	return authdomain.RoleGuest.String(), "", "", ""
+}
+
+// getAccountRole gets the user's account-level role from auth repository
+// Returns: role, accountID, error
+func (s *service) getAccountRole(ctx context.Context, userID string) (string, string, error) {
+	// Get account memberships for user from auth repository
+	members, err := s.repo.GetAccountMembersByUser(ctx, userID)
+	if err != nil || len(members) == 0 {
+		return "", "", nil
+	}
+
+	// Use the first account membership (primary account)
+	member := members[0]
+	return member.Role, member.AccountID, nil
+}
+
+// getTeamOverride checks if user has a team-level role override using TeamService port
+// Returns: role, teamID, teamType
+func (s *service) getTeamOverride(ctx context.Context, userID string) (string, string, string) {
+	// Get user's team memberships from TeamService port
+	members, err := s.teamSvc.GetUserTeamMemberships(ctx, userID)
+	if err != nil || len(members) == 0 {
+		return "", "", ""
+	}
+
+	// Check if any team membership role differs from account role
+	// For now, return the first team membership
+	// This will be enhanced with proper override logic
+	for _, member := range members {
+		team, err := s.teamSvc.GetTeamByID(ctx, member.TeamID)
+		if err != nil || team == nil {
+			continue
+		}
+		return member.Role, member.TeamID, team.Type
+	}
+
+	return "", "", ""
 }
 
 // GetUserRolesForDomain gets all roles for a user in a specific domain
 func (s *service) GetUserRolesForDomain(ctx context.Context, userID, domain string) ([]string, error) {
-	scope := authdomain.FromDomain(domain)
-	return s.permChecker.GetUserRoles(ctx, userID, scope)
+	return s.permChecker.GetUserRoles(ctx, userID, domain)
 }
 
 // GetUserTeamRoles returns all roles for a user in a specific team
 func (s *service) GetUserTeamRoles(ctx context.Context, userID, teamID string) ([]string, error) {
 	// Try personal team domain first
-	scope := authdomain.NewPersonalTeamScope(teamID)
-	roles, err := s.permChecker.GetUserRoles(ctx, userID, scope)
+	domain := authdomain.PersonalTeamDomain(teamID)
+	roles, err := s.permChecker.GetUserRoles(ctx, userID, domain)
 	if err == nil && len(roles) > 0 {
 		return roles, nil
 	}
 
 	// Try institution team domain
-	scope = authdomain.NewInstitutionTeamScope(teamID)
-	return s.permChecker.GetUserRoles(ctx, userID, scope)
+	domain = authdomain.InstitutionTeamDomain(teamID)
+	return s.permChecker.GetUserRoles(ctx, userID, domain)
 }

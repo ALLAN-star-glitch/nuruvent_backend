@@ -125,6 +125,7 @@ type service struct {
 	tokenSvc      authdomain.TokenService
 	notifSvc      authdomain.NotificationService
 	enforcer      *authorization.Enforcer
+	teamSvc      TeamService
 }
 
 func NewService(
@@ -138,6 +139,7 @@ func NewService(
 	tokenSvc authdomain.TokenService,
 	notifSvc authdomain.NotificationService,
 	enforcer *authorization.Enforcer,
+	teamSvc TeamService,
 ) Service {
 	return &service{
 		repo:          repo,
@@ -150,6 +152,7 @@ func NewService(
 		tokenSvc:      tokenSvc,
 		notifSvc:      notifSvc,
 		enforcer:      enforcer,
+		teamSvc:      teamSvc,
 	}
 }
 

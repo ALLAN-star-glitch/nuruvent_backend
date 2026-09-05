@@ -126,3 +126,10 @@ var (
 
 
 )
+
+var (
+	ErrAccountMemberNotFound  = errors.New("account member not found")
+	ErrAccountMemberExists    = errors.New("account member already exists")
+	ErrInvalidAccountMember   = errors.New("invalid account member")
+	ErrAccountMemberNotActive = errors.New("account member is not active")
+)

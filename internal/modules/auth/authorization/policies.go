@@ -12,8 +12,7 @@ import "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/auth
 // domain should be "personal:team:{user_id}"
 func GetPersonalTeamPolicies(domain string) [][]string {
 	accountAdmin := authdomain.RoleAccountAdmin.String()
-	eventManager := authdomain.RoleEventManager.String()
-	teamMember := authdomain.RoleTeamMember.String()
+	trainer := authdomain.RoleTrainer.String()
 
 	var policies [][]string
 
@@ -22,112 +21,88 @@ func GetPersonalTeamPolicies(domain string) [][]string {
 	// ============================================================
 	accountAdminPolicies := [][]string{
 		// Event permissions - ALL
-		{accountAdmin, domain, "event", "create"},
-		{accountAdmin, domain, "event", "read_all"},
-		{accountAdmin, domain, "event", "update_all"},
-		{accountAdmin, domain, "event", "delete_all"},
-		{accountAdmin, domain, "event", "publish_all"},
-		{accountAdmin, domain, "event", "manage"},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionCreate.String()},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionReadAll.String()},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionUpdateAll.String()},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionDeleteAll.String()},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionPublishAll.String()},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionManage.String()},
 
 		// Certificate permissions
-		{accountAdmin, domain, "certificate", "create"},
-		{accountAdmin, domain, "certificate", "read"},
-		{accountAdmin, domain, "certificate", "update"},
-		{accountAdmin, domain, "certificate", "issue"},
-		{accountAdmin, domain, "certificate", "delete"},
+		{accountAdmin, domain, authdomain.ResourceCertificate.String(), authdomain.ActionCreate.String()},
+		{accountAdmin, domain, authdomain.ResourceCertificate.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceCertificate.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceCertificate.String(), authdomain.ActionIssue.String()},
+		{accountAdmin, domain, authdomain.ResourceCertificate.String(), authdomain.ActionDelete.String()},
 
 		// Attendee permissions
-		{accountAdmin, domain, "attendee", "read"},
-		{accountAdmin, domain, "attendee", "update"},
-		{accountAdmin, domain, "attendee", "export"},
+		{accountAdmin, domain, authdomain.ResourceAttendee.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceAttendee.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceAttendee.String(), authdomain.ActionExport.String()},
 
 		// Payment permissions
-		{accountAdmin, domain, "payment", "read"},
-		{accountAdmin, domain, "payment", "create"},
-		{accountAdmin, domain, "payment", "refund"},
+		{accountAdmin, domain, authdomain.ResourcePayment.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourcePayment.String(), authdomain.ActionCreate.String()},
+		{accountAdmin, domain, authdomain.ResourcePayment.String(), authdomain.ActionRefund.String()},
 
 		// Member permissions
-		{accountAdmin, domain, "member", "create"},
-		{accountAdmin, domain, "member", "read"},
-		{accountAdmin, domain, "member", "update"},
-		{accountAdmin, domain, "member", "delete"},
-		{accountAdmin, domain, "member", "invite"},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionCreate.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionDelete.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionInvite.String()},
 
 		// Institution permissions (limited for personal)
-		{accountAdmin, domain, "institution", "read"},
+		{accountAdmin, domain, authdomain.ResourceInstitution.String(), authdomain.ActionRead.String()},
 
 		// Team permissions
-		{accountAdmin, domain, "team", "read"},
-		{accountAdmin, domain, "team", "update"},
-		{accountAdmin, domain, "team", "delete"},
+		{accountAdmin, domain, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceTeam.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceTeam.String(), authdomain.ActionDelete.String()},
 
 		// Dashboard and profile
-		{accountAdmin, domain, "dashboard", "read"},
-		{accountAdmin, domain, "profile", "read"},
-		{accountAdmin, domain, "profile", "read_all"},
-		{accountAdmin, domain, "profile", "update"},
-		{accountAdmin, domain, "profile", "update_all"},
+		{accountAdmin, domain, authdomain.ResourceDashboard.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceProfile.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceProfile.String(), authdomain.ActionReadAll.String()},
+		{accountAdmin, domain, authdomain.ResourceProfile.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceProfile.String(), authdomain.ActionUpdateAll.String()},
 	}
 	policies = append(policies, accountAdminPolicies...)
 
 	// ============================================================
-	// EVENT MANAGER - Full event management (ALL)
+	// TRAINER - Training focused (ALL)
 	// ============================================================
-	eventManagerPolicies := [][]string{
+	trainerPolicies := [][]string{
 		// Event permissions - ALL
-		{eventManager, domain, "event", "create"},
-		{eventManager, domain, "event", "read_all"},
-		{eventManager, domain, "event", "update_all"},
-		{eventManager, domain, "event", "delete_all"},
-		{eventManager, domain, "event", "publish_all"},
-		{eventManager, domain, "event", "manage"},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionCreate.String()},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionReadAll.String()},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionUpdateAll.String()},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionDeleteAll.String()},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionPublishAll.String()},
 
 		// Attendee permissions
-		{eventManager, domain, "attendee", "read"},
-		{eventManager, domain, "attendee", "update"},
-		{eventManager, domain, "attendee", "export"},
+		{trainer, domain, authdomain.ResourceAttendee.String(), authdomain.ActionCreate.String()},
+		{trainer, domain, authdomain.ResourceAttendee.String(), authdomain.ActionRead.String()},
+		{trainer, domain, authdomain.ResourceAttendee.String(), authdomain.ActionUpdate.String()},
+		{trainer, domain, authdomain.ResourceAttendee.String(), authdomain.ActionDelete.String()},
+		{trainer, domain, authdomain.ResourceAttendee.String(), authdomain.ActionExport.String()},
 
 		// Certificate permissions
-		{eventManager, domain, "certificate", "create"},
-		{eventManager, domain, "certificate", "read"},
-		{eventManager, domain, "certificate", "issue"},
-		{eventManager, domain, "certificate", "delete"},
+		{trainer, domain, authdomain.ResourceCertificate.String(), authdomain.ActionCreate.String()},
+		{trainer, domain, authdomain.ResourceCertificate.String(), authdomain.ActionRead.String()},
+		{trainer, domain, authdomain.ResourceCertificate.String(), authdomain.ActionIssue.String()},
+		{trainer, domain, authdomain.ResourceCertificate.String(), authdomain.ActionDelete.String()},
 
 		// Payment - Read only
-		{eventManager, domain, "payment", "read"},
+		{trainer, domain, authdomain.ResourcePayment.String(), authdomain.ActionRead.String()},
 
 		// Dashboard
-		{eventManager, domain, "dashboard", "read"},
+		{trainer, domain, authdomain.ResourceDashboard.String(), authdomain.ActionRead.String()},
 
 		// Team - Read only
-		{eventManager, domain, "team", "read"},
+		{trainer, domain, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
 	}
-	policies = append(policies, eventManagerPolicies...)
-
-	// ============================================================
-	// TEAM MEMBER - Own access only (OWN)
-	// ============================================================
-	teamMemberPolicies := [][]string{
-		// Event permissions - OWN only
-		{teamMember, domain, "event", "read_own"},
-		{teamMember, domain, "event", "update_own"},
-		{teamMember, domain, "event", "delete_own"},
-		{teamMember, domain, "event", "publish_own"},
-
-		// Attendee permissions
-		{teamMember, domain, "attendee", "read"},
-		{teamMember, domain, "attendee", "update_own"},
-
-		// Certificate - Read only
-		{teamMember, domain, "certificate", "read"},
-
-		// Dashboard
-		{teamMember, domain, "dashboard", "read"},
-
-		// Team - Read only
-		{teamMember, domain, "team", "read"},
-	}
-	policies = append(policies, teamMemberPolicies...)
+	policies = append(policies, trainerPolicies...)
 
 	return policies
 }
@@ -140,8 +115,7 @@ func GetPersonalTeamPolicies(domain string) [][]string {
 // domain should be "institution:team:{institution_id}"
 func GetInstitutionTeamPolicies(domain string) [][]string {
 	accountAdmin := authdomain.RoleAccountAdmin.String()
-	eventManager := authdomain.RoleEventManager.String()
-	teamMember := authdomain.RoleTeamMember.String()
+	trainer := authdomain.RoleTrainer.String()
 
 	var policies [][]string
 
@@ -150,116 +124,136 @@ func GetInstitutionTeamPolicies(domain string) [][]string {
 	// ============================================================
 	accountAdminPolicies := [][]string{
 		// Event permissions - ALL
-		{accountAdmin, domain, "event", "create"},
-		{accountAdmin, domain, "event", "read_all"},
-		{accountAdmin, domain, "event", "update_all"},
-		{accountAdmin, domain, "event", "delete_all"},
-		{accountAdmin, domain, "event", "publish_all"},
-		{accountAdmin, domain, "event", "manage"},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionCreate.String()},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionReadAll.String()},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionUpdateAll.String()},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionDeleteAll.String()},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionPublishAll.String()},
+		{accountAdmin, domain, authdomain.ResourceEvent.String(), authdomain.ActionManage.String()},
 
 		// Certificate permissions
-		{accountAdmin, domain, "certificate", "create"},
-		{accountAdmin, domain, "certificate", "read"},
-		{accountAdmin, domain, "certificate", "update"},
-		{accountAdmin, domain, "certificate", "issue"},
-		{accountAdmin, domain, "certificate", "delete"},
+		{accountAdmin, domain, authdomain.ResourceCertificate.String(), authdomain.ActionCreate.String()},
+		{accountAdmin, domain, authdomain.ResourceCertificate.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceCertificate.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceCertificate.String(), authdomain.ActionIssue.String()},
+		{accountAdmin, domain, authdomain.ResourceCertificate.String(), authdomain.ActionDelete.String()},
 
 		// Attendee permissions
-		{accountAdmin, domain, "attendee", "read"},
-		{accountAdmin, domain, "attendee", "update"},
-		{accountAdmin, domain, "attendee", "export"},
+		{accountAdmin, domain, authdomain.ResourceAttendee.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceAttendee.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceAttendee.String(), authdomain.ActionExport.String()},
 
 		// Payment permissions
-		{accountAdmin, domain, "payment", "read"},
-		{accountAdmin, domain, "payment", "create"},
-		{accountAdmin, domain, "payment", "refund"},
+		{accountAdmin, domain, authdomain.ResourcePayment.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourcePayment.String(), authdomain.ActionCreate.String()},
+		{accountAdmin, domain, authdomain.ResourcePayment.String(), authdomain.ActionRefund.String()},
 
 		// Member permissions
-		{accountAdmin, domain, "member", "create"},
-		{accountAdmin, domain, "member", "read"},
-		{accountAdmin, domain, "member", "update"},
-		{accountAdmin, domain, "member", "delete"},
-		{accountAdmin, domain, "member", "invite"},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionCreate.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionDelete.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionInvite.String()},
 
 		// Institution permissions (full for institution)
-		{accountAdmin, domain, "institution", "read"},
-		{accountAdmin, domain, "institution", "update"},
-		{accountAdmin, domain, "institution", "manage"},
+		{accountAdmin, domain, authdomain.ResourceInstitution.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceInstitution.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceInstitution.String(), authdomain.ActionManage.String()},
 
 		// Team permissions
-		{accountAdmin, domain, "team", "create"},
-		{accountAdmin, domain, "team", "read"},
-		{accountAdmin, domain, "team", "update"},
-		{accountAdmin, domain, "team", "delete"},
+		{accountAdmin, domain, authdomain.ResourceTeam.String(), authdomain.ActionCreate.String()},
+		{accountAdmin, domain, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceTeam.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceTeam.String(), authdomain.ActionDelete.String()},
 
 		// Dashboard and profile
-		{accountAdmin, domain, "dashboard", "read"},
-		// ✅ Add read_all and update_all for profile
-		{accountAdmin, domain, "profile", "read"},
-		{accountAdmin, domain, "profile", "read_all"},
-		{accountAdmin, domain, "profile", "update"},
-		{accountAdmin, domain, "profile", "update_all"},
+		{accountAdmin, domain, authdomain.ResourceDashboard.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceProfile.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceProfile.String(), authdomain.ActionReadAll.String()},
+		{accountAdmin, domain, authdomain.ResourceProfile.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceProfile.String(), authdomain.ActionUpdateAll.String()},
 	}
 	policies = append(policies, accountAdminPolicies...)
 
 	// ============================================================
-	// EVENT MANAGER - Full event management (ALL)
+	// TRAINER - Training focused (ALL)
 	// ============================================================
-	eventManagerPolicies := [][]string{
+	trainerPolicies := [][]string{
 		// Event permissions - ALL
-		{eventManager, domain, "event", "create"},
-		{eventManager, domain, "event", "read_all"},
-		{eventManager, domain, "event", "update_all"},
-		{eventManager, domain, "event", "delete_all"},
-		{eventManager, domain, "event", "publish_all"},
-		{eventManager, domain, "event", "manage"},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionCreate.String()},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionReadAll.String()},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionUpdateAll.String()},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionDeleteAll.String()},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionPublishAll.String()},
 
 		// Attendee permissions
-		{eventManager, domain, "attendee", "read"},
-		{eventManager, domain, "attendee", "update"},
-		{eventManager, domain, "attendee", "export"},
+		{trainer, domain, authdomain.ResourceAttendee.String(), authdomain.ActionCreate.String()},
+		{trainer, domain, authdomain.ResourceAttendee.String(), authdomain.ActionRead.String()},
+		{trainer, domain, authdomain.ResourceAttendee.String(), authdomain.ActionUpdate.String()},
+		{trainer, domain, authdomain.ResourceAttendee.String(), authdomain.ActionDelete.String()},
+		{trainer, domain, authdomain.ResourceAttendee.String(), authdomain.ActionExport.String()},
 
 		// Certificate permissions
-		{eventManager, domain, "certificate", "create"},
-		{eventManager, domain, "certificate", "read"},
-		{eventManager, domain, "certificate", "issue"},
-		{eventManager, domain, "certificate", "delete"},
+		{trainer, domain, authdomain.ResourceCertificate.String(), authdomain.ActionCreate.String()},
+		{trainer, domain, authdomain.ResourceCertificate.String(), authdomain.ActionRead.String()},
+		{trainer, domain, authdomain.ResourceCertificate.String(), authdomain.ActionIssue.String()},
+		{trainer, domain, authdomain.ResourceCertificate.String(), authdomain.ActionDelete.String()},
 
 		// Payment - Read only
-		{eventManager, domain, "payment", "read"},
+		{trainer, domain, authdomain.ResourcePayment.String(), authdomain.ActionRead.String()},
 
 		// Dashboard
-		{eventManager, domain, "dashboard", "read"},
+		{trainer, domain, authdomain.ResourceDashboard.String(), authdomain.ActionRead.String()},
 
 		// Team - Read only
-		{eventManager, domain, "team", "read"},
+		{trainer, domain, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
 	}
-	policies = append(policies, eventManagerPolicies...)
+	policies = append(policies, trainerPolicies...)
+
+	return policies
+}
+
+// ============================================================
+// ACCOUNT POLICIES (NEW)
+// ============================================================
+
+// GetAccountPolicies returns all policies for an account domain
+// domain should be "account:{account_id}"
+func GetAccountPolicies(domain string) [][]string {
+	accountAdmin := authdomain.RoleAccountAdmin.String()
+	trainer := authdomain.RoleTrainer.String()
+
+	var policies [][]string
 
 	// ============================================================
-	// TEAM MEMBER - Own access only (OWN)
+	// ACCOUNT ADMIN - Full account management
 	// ============================================================
-	teamMemberPolicies := [][]string{
-		// Event permissions - OWN only
-		{teamMember, domain, "event", "read_own"},
-		{teamMember, domain, "event", "update_own"},
-		{teamMember, domain, "event", "delete_own"},
-		{teamMember, domain, "event", "publish_own"},
+	accountAdminPolicies := [][]string{
+		// Account management
+		{accountAdmin, domain, authdomain.ResourceAccount.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceAccount.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceAccount.String(), authdomain.ActionDelete.String()},
+		{accountAdmin, domain, authdomain.ResourceAccount.String(), authdomain.ActionMemberAdd.String()},
+		{accountAdmin, domain, authdomain.ResourceAccount.String(), authdomain.ActionMemberRemove.String()},
 
-		// Attendee permissions
-		{teamMember, domain, "attendee", "read"},
-		{teamMember, domain, "attendee", "update_own"},
+		// Billing
+		{accountAdmin, domain, authdomain.ResourceBilling.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceBilling.String(), authdomain.ActionUpdate.String()},
 
-		// Certificate - Read only
-		{teamMember, domain, "certificate", "read"},
-
-		// Dashboard
-		{teamMember, domain, "dashboard", "read"},
-
-		// Team - Read only
-		{teamMember, domain, "team", "read"},
+		// Settings
+		{accountAdmin, domain, authdomain.ResourceSetting.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceSetting.String(), authdomain.ActionUpdate.String()},
 	}
-	policies = append(policies, teamMemberPolicies...)
+	policies = append(policies, accountAdminPolicies...)
+
+	// ============================================================
+	// TRAINER - Limited account access
+	// ============================================================
+	trainerPolicies := [][]string{
+		// Account - Read only
+		{trainer, domain, authdomain.ResourceAccount.String(), authdomain.ActionRead.String()},
+	}
+	policies = append(policies, trainerPolicies...)
 
 	return policies
 }
@@ -272,12 +266,21 @@ func GetInstitutionTeamPolicies(domain string) [][]string {
 // domain should be "personal:team:{id}" or "institution:team:{id}"
 func GetTeamRoleHierarchy(domain string) [][]string {
 	return [][]string{
-		// Account Admin inherits Event Manager and Team Member
-		{authdomain.RoleAccountAdmin.String(), authdomain.RoleEventManager.String(), domain},
-		{authdomain.RoleAccountAdmin.String(), authdomain.RoleTeamMember.String(), domain},
+		// Account Admin inherits Trainer
+		{authdomain.RoleAccountAdmin.String(), authdomain.RoleTrainer.String(), domain},
+	}
+}
 
-		// Event Manager inherits Team Member
-		{authdomain.RoleEventManager.String(), authdomain.RoleTeamMember.String(), domain},
+// ============================================================
+// ACCOUNT ROLE HIERARCHY (NEW)
+// ============================================================
+
+// GetAccountRoleHierarchy returns the role hierarchy for an account domain
+// domain should be "account:{account_id}"
+func GetAccountRoleHierarchy(domain string) [][]string {
+	return [][]string{
+		// Account Admin inherits Trainer
+		{authdomain.RoleAccountAdmin.String(), authdomain.RoleTrainer.String(), domain},
 	}
 }
 
@@ -289,55 +292,58 @@ func GetTeamRoleHierarchy(domain string) [][]string {
 func GetPlatformPolicies() [][]string {
 	var allPolicies [][]string
 
+	admin := authdomain.RoleAdmin.String()
+	superAdmin := authdomain.RoleSuperAdmin.String()
+	guest := authdomain.RoleGuest.String()
+
 	// Admin policies
 	adminPolicies := [][]string{
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceUser.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceUser.String(), authdomain.ActionUpdate.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceUser.String(), authdomain.ActionDelete.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceInstitution.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceInstitution.String(), authdomain.ActionUpdate.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceInstitution.String(), authdomain.ActionDelete.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceEvent.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceEvent.String(), authdomain.ActionUpdate.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceEvent.String(), authdomain.ActionDelete.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourcePlatform.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceAnalytics.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourcePayment.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceCertificate.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceMember.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceMember.String(), authdomain.ActionDelete.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceMedia.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceMedia.String(), authdomain.ActionDelete.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceTeam.String(), authdomain.ActionUpdate.String()},
-		{authdomain.RoleAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceTeam.String(), authdomain.ActionDelete.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceUser.String(), authdomain.ActionRead.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceUser.String(), authdomain.ActionUpdate.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceUser.String(), authdomain.ActionDelete.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceInstitution.String(), authdomain.ActionRead.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceInstitution.String(), authdomain.ActionUpdate.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceInstitution.String(), authdomain.ActionDelete.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceEvent.String(), authdomain.ActionRead.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceEvent.String(), authdomain.ActionUpdate.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceEvent.String(), authdomain.ActionDelete.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourcePlatform.String(), authdomain.ActionManage.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceAnalytics.String(), authdomain.ActionRead.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourcePayment.String(), authdomain.ActionRead.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceCertificate.String(), authdomain.ActionRead.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceMember.String(), authdomain.ActionRead.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceMember.String(), authdomain.ActionDelete.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceMedia.String(), authdomain.ActionRead.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceMedia.String(), authdomain.ActionDelete.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceTeam.String(), authdomain.ActionUpdate.String()},
+		{admin, authdomain.DomainPlatform, authdomain.ResourceTeam.String(), authdomain.ActionDelete.String()},
 	}
 	allPolicies = append(allPolicies, adminPolicies...)
 
 	// Super admin policies (full access to everything)
 	superAdminPolicies := [][]string{
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourcePlatform.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceUser.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceInstitution.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceEvent.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceCertificate.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceAttendee.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourcePayment.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourcePayout.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceMember.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceProfile.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceDashboard.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceAnalytics.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceNotification.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceMedia.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceTeam.String(), authdomain.ActionManage.String()},
-		{authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform, authdomain.ResourceTeamType.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourcePlatform.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceUser.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceInstitution.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceEvent.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceCertificate.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceAttendee.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourcePayment.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourcePayout.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceMember.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceProfile.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceDashboard.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceAnalytics.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceNotification.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceMedia.String(), authdomain.ActionManage.String()},
+		{superAdmin, authdomain.DomainPlatform, authdomain.ResourceTeam.String(), authdomain.ActionManage.String()},
 	}
 	allPolicies = append(allPolicies, superAdminPolicies...)
 
 	// Guest policies (public access)
 	guestPolicies := [][]string{
-		{authdomain.RoleGuest.String(), authdomain.DomainPlatform, authdomain.ResourceEvent.String(), authdomain.ActionRead.String()},
+		{guest, authdomain.DomainPlatform, authdomain.ResourceEvent.String(), authdomain.ActionRead.String()},
 	}
 	allPolicies = append(allPolicies, guestPolicies...)
 
@@ -349,84 +355,5 @@ func GetPlatformRoleHierarchy() [][]string {
 	return [][]string{
 		// Super Admin inherits Admin
 		{authdomain.RoleSuperAdmin.String(), authdomain.RoleAdmin.String(), authdomain.DomainPlatform},
-
-		// Admin inherits Account Admin (platform admin can act as account admin)
-		{authdomain.RoleAdmin.String(), authdomain.RoleAccountAdmin.String(), authdomain.DomainPlatform},
-	}
-}
-
-// ============================================================
-// EVENT MANAGER POLICIES
-// ============================================================
-
-// GetEventManagerPolicies returns policies for event_manager
-func GetEventManagerPolicies(domain string) [][]string {
-	return [][]string{
-		// Event management - ALL
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionCreate.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionReadAll.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionUpdateAll.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionDeleteAll.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionPublishAll.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionManage.String()},
-
-		// Certificate management
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceCertificate.String(), authdomain.ActionCreate.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceCertificate.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceCertificate.String(), authdomain.ActionIssue.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceCertificate.String(), authdomain.ActionDelete.String()},
-
-		// Attendee management
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceAttendee.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceAttendee.String(), authdomain.ActionUpdate.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceAttendee.String(), authdomain.ActionExport.String()},
-
-		// Payment - Read only
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourcePayment.String(), authdomain.ActionRead.String()},
-
-		// Dashboard
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceDashboard.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceAnalytics.String(), authdomain.ActionRead.String()},
-
-		// Media
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceMedia.String(), authdomain.ActionCreate.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceMedia.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceMedia.String(), authdomain.ActionUpdate.String()},
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceMedia.String(), authdomain.ActionDelete.String()},
-
-		// Team - Read only
-		{authdomain.RoleEventManager.String(), domain, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
-	}
-}
-
-// ============================================================
-// TEAM MEMBER POLICIES (OWN access only)
-// ============================================================
-
-// GetTeamMemberPolicies returns policies for team_member (OWN access only)
-func GetTeamMemberPolicies(domain string) [][]string {
-	return [][]string{
-		// Event permissions - OWN only
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionReadOwn.String()},
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionUpdateOwn.String()},
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionDeleteOwn.String()},
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceEvent.String(), authdomain.ActionPublishOwn.String()},
-
-		// Attendee - Read and update own
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceAttendee.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceAttendee.String(), authdomain.ActionUpdateOwn.String()},
-
-		// Certificate - Read only
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceCertificate.String(), authdomain.ActionRead.String()},
-
-		// Dashboard - Read only
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceDashboard.String(), authdomain.ActionRead.String()},
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceAnalytics.String(), authdomain.ActionRead.String()},
-
-		// Media - Read only
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceMedia.String(), authdomain.ActionRead.String()},
-
-		// Team - Read only
-		{authdomain.RoleTeamMember.String(), domain, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
 	}
 }

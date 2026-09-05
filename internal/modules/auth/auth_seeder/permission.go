@@ -18,14 +18,12 @@ import (
 // CONSTANTS
 // ============================================================
 
-// Current policy schema version - increment when policies change
-const CURRENT_POLICY_VERSION = "v7"
+const CURRENT_POLICY_VERSION = "v10"
 
 // ============================================================
 // POLICY VERSION TRACKING
 // ============================================================
 
-// PolicyVersion tracks which policy version is applied to the database
 type PolicyVersion struct {
 	ID          string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	Version     string    `gorm:"type:varchar(20);uniqueIndex"`
@@ -41,17 +39,13 @@ func (PolicyVersion) TableName() string {
 // PUBLIC ENTRY FUNCTION
 // ============================================================
 
-// SeedPermissions seeds or migrates platform permissions
-// This is idempotent - safe to run multiple times
 func SeedPermissions(db *gorm.DB) error {
 	log.Println("🌱 Seeding platform permissions...")
 
-	// Create policy_versions table if not exists
 	if err := db.AutoMigrate(&PolicyVersion{}); err != nil {
 		return fmt.Errorf("failed to create policy_versions table: %w", err)
 	}
 
-	// Check if current version already applied
 	var existing PolicyVersion
 	err := db.Where("version = ?", CURRENT_POLICY_VERSION).First(&existing).Error
 	if err == nil {
@@ -65,7 +59,6 @@ func SeedPermissions(db *gorm.DB) error {
 
 	cfg := config.Load()
 
-	// Initialize enforcer
 	enforcer, err := authorization.NewEnforcer(db, cfg)
 	if err != nil {
 		return fmt.Errorf("failed to init enforcer: %w", err)
@@ -82,7 +75,6 @@ func SeedPermissions(db *gorm.DB) error {
 		roleManager:   roleManager,
 	}
 
-	// Check if we have old policies and need to migrate
 	var oldVersion PolicyVersion
 	err = db.Where("version != ?", CURRENT_POLICY_VERSION).First(&oldVersion).Error
 	if err == nil {
@@ -93,7 +85,6 @@ func SeedPermissions(db *gorm.DB) error {
 			return fmt.Errorf("failed to migrate policies: %w", err)
 		}
 	} else if err == gorm.ErrRecordNotFound {
-		// Fresh seed - no previous versions found
 		log.Println("📦 No previous policy versions found. Performing fresh seed...")
 
 		if err := seeder.freshSeed(); err != nil {
@@ -103,7 +94,6 @@ func SeedPermissions(db *gorm.DB) error {
 		return fmt.Errorf("failed to check policy versions: %w", err)
 	}
 
-	// Record the new version
 	version := PolicyVersion{
 		Version:     CURRENT_POLICY_VERSION,
 		Description: fmt.Sprintf("Policy schema version %s", CURRENT_POLICY_VERSION),
@@ -131,21 +121,21 @@ type permissionSeeder struct {
 // CLEANUP METHODS
 // ============================================================
 
-// cleanAllPolicies removes ALL policies from the database using direct SQL
 func (s *permissionSeeder) cleanAllPolicies() error {
 	log.Println("🧹 Cleaning all existing policies...")
 
-	// 1. Clean all platform policies
 	if err := s.cleanPlatformPolicies(); err != nil {
 		return err
 	}
 
-	// 2. Clean all team policies (personal and institution)
 	if err := s.cleanTeamPolicies(); err != nil {
 		return err
 	}
 
-	// 3. Clean all grouping policies (role assignments)
+	if err := s.cleanAccountPolicies(); err != nil {
+		return err
+	}
+
 	if err := s.cleanGroupingPolicies(); err != nil {
 		return err
 	}
@@ -154,9 +144,7 @@ func (s *permissionSeeder) cleanAllPolicies() error {
 	return nil
 }
 
-// cleanPlatformPolicies removes all platform policies using direct SQL
 func (s *permissionSeeder) cleanPlatformPolicies() error {
-	// Get all platform policies
 	platformPolicies, err := s.enforcer.GetFilteredPolicy(1, authdomain.DomainPlatform)
 	if err != nil {
 		return fmt.Errorf("failed to get platform policies: %w", err)
@@ -168,7 +156,6 @@ func (s *permissionSeeder) cleanPlatformPolicies() error {
 		log.Printf("   ✅ Removed %d platform policies", len(platformPolicies))
 	}
 
-	// Get all platform grouping policies
 	platformGrouping, err := s.enforcer.GetFilteredGroupingPolicy(2, authdomain.DomainPlatform)
 	if err != nil {
 		return fmt.Errorf("failed to get platform grouping policies: %w", err)
@@ -183,9 +170,7 @@ func (s *permissionSeeder) cleanPlatformPolicies() error {
 	return nil
 }
 
-// cleanTeamPolicies removes all team policies using direct SQL
 func (s *permissionSeeder) cleanTeamPolicies() error {
-	// Get all policies
 	allPolicies, err := s.enforcer.GetPolicy()
 	if err != nil {
 		return fmt.Errorf("failed to get all policies: %w", err)
@@ -195,7 +180,6 @@ func (s *permissionSeeder) cleanTeamPolicies() error {
 	for _, policy := range allPolicies {
 		if len(policy) >= 4 {
 			domain := policy[1]
-			// Check if it's a team domain
 			if authdomain.IsPersonalTeamDomain(domain) || authdomain.IsInstitutionTeamDomain(domain) {
 				teamPolicies = append(teamPolicies, policy)
 			}
@@ -212,33 +196,53 @@ func (s *permissionSeeder) cleanTeamPolicies() error {
 	return nil
 }
 
-// cleanGroupingPolicies removes all grouping policies (role assignments) using direct SQL
+func (s *permissionSeeder) cleanAccountPolicies() error {
+	allPolicies, err := s.enforcer.GetPolicy()
+	if err != nil {
+		return fmt.Errorf("failed to get all policies: %w", err)
+	}
+
+	var accountPolicies [][]string
+	for _, policy := range allPolicies {
+		if len(policy) >= 4 {
+			domain := policy[1]
+			if authdomain.IsAccountDomain(domain) {
+				accountPolicies = append(accountPolicies, policy)
+			}
+		}
+	}
+
+	if len(accountPolicies) > 0 {
+		if _, err := s.enforcer.RemovePolicies(accountPolicies); err != nil {
+			return fmt.Errorf("failed to remove account policies: %w", err)
+		}
+		log.Printf("   ✅ Removed %d account policies", len(accountPolicies))
+	}
+
+	return nil
+}
+
 func (s *permissionSeeder) cleanGroupingPolicies() error {
-    // ✅ Best Option: Skip cleaning grouping policies to preserve user roles
-    log.Println("   ℹ️  Skipping grouping policy cleanup to preserve user roles")
-    log.Println("   ℹ️  User roles will be managed separately via team_members table")
-    return nil
+	log.Println("   ℹ️  Skipping grouping policy cleanup to preserve user roles")
+	log.Println("   ℹ️  User roles will be managed separately via team_members table")
+	return nil
 }
 
 // ============================================================
 // SEED METHODS
 // ============================================================
 
-// freshSeed performs a fresh seed (no existing policies)
 func (s *permissionSeeder) freshSeed() error {
 	log.Println("🌱 Performing fresh seed...")
 
-	// Clean all existing policies first
 	if err := s.cleanAllPolicies(); err != nil {
 		return err
 	}
 
-	// Seed platform policies
 	if err := s.seedPlatformPolicies(); err != nil {
 		return err
 	}
 
-	// Seed platform role hierarchy
 	if err := s.seedPlatformRoleHierarchy(); err != nil {
 		return err
 	}
@@ -247,27 +251,26 @@ func (s *permissionSeeder) freshSeed() error {
 	return nil
 }
 
-// migratePolicies updates existing policies to the new schema
 func (s *permissionSeeder) migratePolicies() error {
 	log.Println("🔄 Migrating policies to new schema...")
 
-	// 1. Clean all existing policies first (to avoid duplicates)
 	if err := s.cleanAllPolicies(); err != nil {
 		return err
 	}
 
-	// 2. Seed platform policies
 	if err := s.seedPlatformPolicies(); err != nil {
 		return err
 	}
 
-	// 3. Seed platform role hierarchy
 	if err := s.seedPlatformRoleHierarchy(); err != nil {
 		return err
 	}
 
-	// 4. Update team policies for existing users and institutions
 	if err := s.updateTeamPolicies(); err != nil {
+		return err
+	}
+
+	if err := s.updateAccountPolicies(); err != nil {
 		return err
 	}
 
@@ -275,7 +278,6 @@ func (s *permissionSeeder) migratePolicies() error {
 	return nil
 }
 
-// seedPlatformPolicies seeds platform policies from policies.go
 func (s *permissionSeeder) seedPlatformPolicies() error {
 	policies := authorization.GetPlatformPolicies()
 	if _, err := s.enforcer.AddPolicies(policies); err != nil {
@@ -285,7 +287,6 @@ func (s *permissionSeeder) seedPlatformPolicies() error {
 	return nil
 }
 
-// seedPlatformRoleHierarchy seeds platform role hierarchy
 func (s *permissionSeeder) seedPlatformRoleHierarchy() error {
 	hierarchy := authorization.GetPlatformRoleHierarchy()
 	if _, err := s.enforcer.AddGroupingPolicies(hierarchy); err != nil {
@@ -299,16 +300,13 @@ func (s *permissionSeeder) seedPlatformRoleHierarchy() error {
 // TEAM POLICY UPDATE METHODS
 // ============================================================
 
-// updateTeamPolicies updates team policies for all existing teams
 func (s *permissionSeeder) updateTeamPolicies() error {
 	log.Println("📝 Updating team policies for existing users and institutions...")
 
-	// 1. Update personal team policies for all users
 	if err := s.updatePersonalTeamPolicies(); err != nil {
 		return err
 	}
 
-	// 2. Update institution team policies for all institutions
 	if err := s.updateInstitutionTeamPolicies(); err != nil {
 		return err
 	}
@@ -316,7 +314,6 @@ func (s *permissionSeeder) updateTeamPolicies() error {
 	return nil
 }
 
-// updatePersonalTeamPolicies updates personal team policies for all users
 func (s *permissionSeeder) updatePersonalTeamPolicies() error {
 	var userIDs []string
 	if err := s.db.Table("users").Pluck("id", &userIDs).Error; err != nil {
@@ -332,14 +329,12 @@ func (s *permissionSeeder) updatePersonalTeamPolicies() error {
 	for _, userID := range userIDs {
 		domain := authdomain.PersonalTeamDomain(userID)
 
-		// Add new policies
 		newPolicies := authorization.GetPersonalTeamPolicies(domain)
 		if _, err := s.enforcer.AddPolicies(newPolicies); err != nil {
 			log.Printf("   ⚠️  Failed to add policies for user %s: %v", userID, err)
 			continue
 		}
 
-		// Ensure user has account_admin role
 		hasRole := s.enforcer.HasRoleForUserInDomain(userID, authdomain.RoleAccountAdmin.String(), domain)
 		if !hasRole {
 			if _, err := s.enforcer.AddRoleForUserInDomain(userID, authdomain.RoleAccountAdmin.String(), domain); err != nil {
@@ -354,7 +349,6 @@ func (s *permissionSeeder) updatePersonalTeamPolicies() error {
 	return nil
 }
 
-// updateInstitutionTeamPolicies updates institution team policies for all institutions
 func (s *permissionSeeder) updateInstitutionTeamPolicies() error {
 	var institutionIDs []string
 	if err := s.db.Table("institutions").Pluck("id", &institutionIDs).Error; err != nil {
@@ -383,10 +377,43 @@ func (s *permissionSeeder) updateInstitutionTeamPolicies() error {
 }
 
 // ============================================================
+// ACCOUNT POLICY UPDATE METHODS (NEW)
+// ============================================================
+
+func (s *permissionSeeder) updateAccountPolicies() error {
+	log.Println("📝 Updating account policies for existing accounts...")
+
+	var accountIDs []string
+	if err := s.db.Table("accounts").Pluck("id", &accountIDs).Error; err != nil {
+		log.Printf("   ℹ️  No accounts found to update account policies (table may not exist yet)")
+		return nil
+	}
+
+	if len(accountIDs) == 0 {
+		log.Println("   No accounts found to update account policies")
+		return nil
+	}
+
+	accountUpdated := 0
+	for _, accountID := range accountIDs {
+		domain := authdomain.AccountDomain(accountID)
+
+		newPolicies := authorization.GetAccountPolicies(domain)
+		if _, err := s.enforcer.AddPolicies(newPolicies); err != nil {
+			log.Printf("   ⚠️  Failed to add policies for account %s: %v", accountID, err)
+			continue
+		}
+		accountUpdated++
+	}
+
+	log.Printf("   ✅ Updated account policies for %d accounts", accountUpdated)
+	return nil
+}
+
+// ============================================================
 // HELPER FUNCTIONS
 // ============================================================
 
-// IsSeeded checks if policies have been seeded
 func IsSeeded(db *gorm.DB) (bool, error) {
 	var count int64
 	if err := db.Model(&PolicyVersion{}).Count(&count).Error; err != nil {
@@ -395,7 +422,6 @@ func IsSeeded(db *gorm.DB) (bool, error) {
 	return count > 0, nil
 }
 
-// GetCurrentVersion returns the current policy version
 func GetCurrentVersion(db *gorm.DB) (string, error) {
 	var version PolicyVersion
 	err := db.Order("applied_at DESC").First(&version).Error
@@ -412,8 +438,6 @@ func GetCurrentVersion(db *gorm.DB) (string, error) {
 // TEAM POLICY SEEDING (for individual teams)
 // ============================================================
 
-// SeedPersonalTeamPolicies adds policies for a personal team (user's own team)
-// Domain: personal:team:{user_id}
 func SeedPersonalTeamPolicies(db *gorm.DB, userID string) error {
 	log.Printf("📦 Adding personal team policies for user: %s", userID)
 
@@ -426,19 +450,16 @@ func SeedPersonalTeamPolicies(db *gorm.DB, userID string) error {
 	defer enforcer.Close()
 
 	ctx := context.Background()
-
 	policyManager := authorization.NewPolicyManager(enforcer)
 	roleManager := authorization.NewRoleManager(enforcer)
 
-	scope := authdomain.NewPersonalTeamScope(userID)
+	domain := authdomain.PersonalTeamDomain(userID)
 
-	// Add policies
-	if err := policyManager.AddTeamPolicies(ctx, scope); err != nil {
+	if err := policyManager.AddTeamPolicies(ctx, domain); err != nil {
 		return fmt.Errorf("failed to add personal team policies: %w", err)
 	}
 
-	// Assign account admin role
-	if err := roleManager.AssignRole(ctx, scope, userID, authdomain.RoleAccountAdmin.String()); err != nil {
+	if err := roleManager.AssignRole(ctx, domain, userID, authdomain.RoleAccountAdmin.String()); err != nil {
 		return fmt.Errorf("failed to assign account admin role: %w", err)
 	}
 
@@ -446,8 +467,6 @@ func SeedPersonalTeamPolicies(db *gorm.DB, userID string) error {
 	return nil
 }
 
-// SeedInstitutionTeamPolicies adds policies for an institution team
-// Domain: institution:team:{institution_id}
 func SeedInstitutionTeamPolicies(db *gorm.DB, institutionID string) error {
 	log.Printf("📦 Adding institution team policies for institution: %s", institutionID)
 
@@ -460,12 +479,11 @@ func SeedInstitutionTeamPolicies(db *gorm.DB, institutionID string) error {
 	defer enforcer.Close()
 
 	ctx := context.Background()
-
 	policyManager := authorization.NewPolicyManager(enforcer)
 
-	scope := authdomain.NewInstitutionTeamScope(institutionID)
+	domain := authdomain.InstitutionTeamDomain(institutionID)
 
-	if err := policyManager.AddTeamPolicies(ctx, scope); err != nil {
+	if err := policyManager.AddTeamPolicies(ctx, domain); err != nil {
 		return fmt.Errorf("failed to add institution team policies: %w", err)
 	}
 
@@ -474,10 +492,37 @@ func SeedInstitutionTeamPolicies(db *gorm.DB, institutionID string) error {
 }
 
 // ============================================================
-// BULK SEEDING FUNCTIONS (for migrations)
+// ACCOUNT POLICY SEEDING (NEW)
 // ============================================================
 
-// SeedPersonalTeamPoliciesForAllUsers adds personal team policies for all users
+func SeedAccountPolicies(db *gorm.DB, accountID string) error {
+	log.Printf("📦 Adding account policies for account: %s", accountID)
+
+	cfg := config.Load()
+
+	enforcer, err := authorization.NewEnforcer(db, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to init enforcer: %w", err)
+	}
+	defer enforcer.Close()
+
+	ctx := context.Background()
+	policyManager := authorization.NewPolicyManager(enforcer)
+
+	domain := authdomain.AccountDomain(accountID)
+
+	if err := policyManager.AddAccountPolicies(ctx, domain); err != nil {
+		return fmt.Errorf("failed to add account policies: %w", err)
+	}
+
+	log.Printf("✅ Account policies seeded for account: %s", accountID)
+	return nil
+}
+
+// ============================================================
+// BULK SEEDING FUNCTIONS
+// ============================================================
+
 func SeedPersonalTeamPoliciesForAllUsers(db *gorm.DB) error {
 	log.Println("📦 Adding personal team policies for all users...")
 
@@ -490,7 +535,6 @@ func SeedPersonalTeamPoliciesForAllUsers(db *gorm.DB) error {
 	defer enforcer.Close()
 
 	ctx := context.Background()
-
 	policyManager := authorization.NewPolicyManager(enforcer)
 	roleManager := authorization.NewRoleManager(enforcer)
 
@@ -506,9 +550,9 @@ func SeedPersonalTeamPoliciesForAllUsers(db *gorm.DB) error {
 
 	successCount := 0
 	for _, userID := range userIDs {
-		scope := authdomain.NewPersonalTeamScope(userID)
+		domain := authdomain.PersonalTeamDomain(userID)
 
-		roles, err := roleManager.GetUserRoles(ctx, userID, scope)
+		roles, err := roleManager.GetUserRoles(ctx, userID, domain)
 		if err != nil {
 			log.Printf("⚠️  Failed to get roles for user %s: %v", userID, err)
 			continue
@@ -518,12 +562,12 @@ func SeedPersonalTeamPoliciesForAllUsers(db *gorm.DB) error {
 			continue
 		}
 
-		if err := policyManager.AddTeamPolicies(ctx, scope); err != nil {
+		if err := policyManager.AddTeamPolicies(ctx, domain); err != nil {
 			log.Printf("⚠️  Failed to seed personal team policies for user %s: %v", userID, err)
 			continue
 		}
 
-		if err := roleManager.AssignRole(ctx, scope, userID, authdomain.RoleAccountAdmin.String()); err != nil {
+		if err := roleManager.AssignRole(ctx, domain, userID, authdomain.RoleAccountAdmin.String()); err != nil {
 			log.Printf("⚠️  Failed to assign account admin role for user %s: %v", userID, err)
 			continue
 		}
@@ -535,7 +579,6 @@ func SeedPersonalTeamPoliciesForAllUsers(db *gorm.DB) error {
 	return nil
 }
 
-// SeedInstitutionTeamPoliciesForAllInstitutions adds institution team policies for all institutions
 func SeedInstitutionTeamPoliciesForAllInstitutions(db *gorm.DB) error {
 	log.Println("📦 Adding institution team policies for all institutions...")
 
@@ -548,7 +591,6 @@ func SeedInstitutionTeamPoliciesForAllInstitutions(db *gorm.DB) error {
 	defer enforcer.Close()
 
 	ctx := context.Background()
-
 	policyManager := authorization.NewPolicyManager(enforcer)
 
 	var institutionIDs []string
@@ -563,9 +605,9 @@ func SeedInstitutionTeamPoliciesForAllInstitutions(db *gorm.DB) error {
 
 	successCount := 0
 	for _, institutionID := range institutionIDs {
-		scope := authdomain.NewInstitutionTeamScope(institutionID)
+		domain := authdomain.InstitutionTeamDomain(institutionID)
 
-		policies, err := enforcer.GetFilteredPolicy(1, scope.Domain())
+		policies, err := enforcer.GetFilteredPolicy(1, domain)
 		if err != nil {
 			log.Printf("⚠️  Failed to check policies for institution %s: %v", institutionID, err)
 			continue
@@ -575,7 +617,7 @@ func SeedInstitutionTeamPoliciesForAllInstitutions(db *gorm.DB) error {
 			continue
 		}
 
-		if err := policyManager.AddTeamPolicies(ctx, scope); err != nil {
+		if err := policyManager.AddTeamPolicies(ctx, domain); err != nil {
 			log.Printf("⚠️  Failed to seed institution team policies for institution %s: %v", institutionID, err)
 			continue
 		}
@@ -588,11 +630,10 @@ func SeedInstitutionTeamPoliciesForAllInstitutions(db *gorm.DB) error {
 }
 
 // ============================================================
-// ASSIGN ADMIN ROLE TO INSTITUTION
+// ASSIGN ROLE FUNCTIONS
 // ============================================================
 
-// AssignInstitutionAdmin assigns account_admin role to a user in an institution
-func AssignInstitutionAdmin(db *gorm.DB, institutionID, userID string) error {
+func AssignAccountAdmin(db *gorm.DB, accountID, userID string) error {
 	cfg := config.Load()
 
 	enforcer, err := authorization.NewEnforcer(db, cfg)
@@ -604,12 +645,39 @@ func AssignInstitutionAdmin(db *gorm.DB, institutionID, userID string) error {
 	ctx := context.Background()
 	roleManager := authorization.NewRoleManager(enforcer)
 
-	scope := authdomain.NewInstitutionTeamScope(institutionID)
+	domain := authdomain.AccountDomain(accountID)
 
-	if err := roleManager.AssignRole(ctx, scope, userID, authdomain.RoleAccountAdmin.String()); err != nil {
-		return fmt.Errorf("failed to assign institution admin role: %w", err)
+	if err := roleManager.AssignRole(ctx, domain, userID, authdomain.RoleAccountAdmin.String()); err != nil {
+		return fmt.Errorf("failed to assign account admin role: %w", err)
 	}
 
-	log.Printf("✅ Assigned account_admin role for institution %s to user %s", institutionID, userID)
+	log.Printf("✅ Assigned account_admin role for account %s to user %s", accountID, userID)
 	return nil
+}
+
+func AssignTrainer(db *gorm.DB, accountID, userID string) error {
+	cfg := config.Load()
+
+	enforcer, err := authorization.NewEnforcer(db, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to init enforcer: %w", err)
+	}
+	defer enforcer.Close()
+
+	ctx := context.Background()
+	roleManager := authorization.NewRoleManager(enforcer)
+
+	domain := authdomain.AccountDomain(accountID)
+
+	if err := roleManager.AssignRole(ctx, domain, userID, authdomain.RoleTrainer.String()); err != nil {
+		return fmt.Errorf("failed to assign trainer role: %w", err)
+	}
+
+	log.Printf("✅ Assigned trainer role for account %s to user %s", accountID, userID)
+	return nil
+}
+
+// Deprecated: Use AssignAccountAdmin instead
+func AssignInstitutionAdmin(db *gorm.DB, institutionID, userID string) error {
+	return AssignAccountAdmin(db, institutionID, userID)
 }

@@ -24,11 +24,10 @@ func NewRoleManager(enforcer *Enforcer) authdomain.RoleManager {
 // GENERIC ROLE OPERATIONS
 // ============================================================
 
-// AssignRole assigns a role to a user in a scope
-func (m *RoleManager) AssignRole(ctx context.Context, scope authdomain.Scope, userID string, role string) error {
-	domain := scope.Domain()
+// AssignRole assigns a role to a user in a domain
+func (m *RoleManager) AssignRole(ctx context.Context, domain string, userID string, role string) error {
 	if domain == "" {
-		return fmt.Errorf("invalid scope: %s", scope.String())
+		return fmt.Errorf("invalid domain: empty string")
 	}
 
 	log.Printf("Assigning role %s to user %s in domain %s", role, userID, domain)
@@ -42,11 +41,10 @@ func (m *RoleManager) AssignRole(ctx context.Context, scope authdomain.Scope, us
 	return nil
 }
 
-// RemoveRole removes a role from a user in a scope
-func (m *RoleManager) RemoveRole(ctx context.Context, scope authdomain.Scope, userID string, role string) error {
-	domain := scope.Domain()
+// RemoveRole removes a role from a user in a domain
+func (m *RoleManager) RemoveRole(ctx context.Context, domain string, userID string, role string) error {
 	if domain == "" {
-		return fmt.Errorf("invalid scope: %s", scope.String())
+		return fmt.Errorf("invalid domain: empty string")
 	}
 
 	log.Printf("Removing role %s from user %s in domain %s", role, userID, domain)
@@ -60,11 +58,10 @@ func (m *RoleManager) RemoveRole(ctx context.Context, scope authdomain.Scope, us
 	return nil
 }
 
-// RemoveAllRoles removes all roles from a user in a scope
-func (m *RoleManager) RemoveAllRoles(ctx context.Context, scope authdomain.Scope, userID string) error {
-	domain := scope.Domain()
+// RemoveAllRoles removes all roles from a user in a domain
+func (m *RoleManager) RemoveAllRoles(ctx context.Context, domain string, userID string) error {
 	if domain == "" {
-		return fmt.Errorf("invalid scope: %s", scope.String())
+		return fmt.Errorf("invalid domain: empty string")
 	}
 
 	log.Printf("Removing all roles for user %s in domain %s", userID, domain)
@@ -78,11 +75,10 @@ func (m *RoleManager) RemoveAllRoles(ctx context.Context, scope authdomain.Scope
 	return nil
 }
 
-// GetUserRoles returns all roles for a user in a scope
-func (m *RoleManager) GetUserRoles(ctx context.Context, userID string, scope authdomain.Scope) ([]string, error) {
-	domain := scope.Domain()
+// GetUserRoles returns all roles for a user in a domain
+func (m *RoleManager) GetUserRoles(ctx context.Context, userID string, domain string) ([]string, error) {
 	if domain == "" {
-		return nil, fmt.Errorf("invalid scope: %s", scope.String())
+		return nil, fmt.Errorf("invalid domain: empty string")
 	}
 
 	roles := m.enforcer.GetRolesForUserInDomain(userID, domain)
@@ -90,39 +86,29 @@ func (m *RoleManager) GetUserRoles(ctx context.Context, userID string, scope aut
 }
 
 // ============================================================
-// CONVENIENCE METHODS
+// ACCOUNT-LEVEL CONVENIENCE METHODS (Only)
 // ============================================================
 
-// AssignPersonalTeamAdmin assigns account_admin to a user's personal team
-func (m *RoleManager) AssignPersonalTeamAdmin(ctx context.Context, userID string) error {
-	scope := authdomain.NewPersonalTeamScope(userID)
-	return m.AssignRole(ctx, scope, userID, authdomain.RoleAccountAdmin.String())
+// AssignAccountAdmin assigns account_admin to a user in an account domain
+// domain: account:{account_id}
+func (m *RoleManager) AssignAccountAdmin(ctx context.Context, domain string, userID string) error {
+	return m.AssignRole(ctx, domain, userID, authdomain.RoleAccountAdmin.String())
 }
 
-// AssignInstitutionAdmin assigns account_admin in an institution team
-func (m *RoleManager) AssignInstitutionAdmin(ctx context.Context, institutionID, userID string) error {
-	scope := authdomain.NewInstitutionTeamScope(institutionID)
-	return m.AssignRole(ctx, scope, userID, authdomain.RoleAccountAdmin.String())
+// AssignTrainer assigns trainer to a user in an account domain
+// domain: account:{account_id}
+func (m *RoleManager) AssignTrainer(ctx context.Context, domain string, userID string) error {
+	return m.AssignRole(ctx, domain, userID, authdomain.RoleTrainer.String())
 }
 
-// AssignEventManager assigns event_manager in a scope
-func (m *RoleManager) AssignEventManager(ctx context.Context, scope authdomain.Scope, userID string) error {
-	return m.AssignRole(ctx, scope, userID, authdomain.RoleEventManager.String())
+// RemoveAccountAdmin removes account_admin from a user in an account domain
+// domain: account:{account_id}
+func (m *RoleManager) RemoveAccountAdmin(ctx context.Context, domain string, userID string) error {
+	return m.RemoveRole(ctx, domain, userID, authdomain.RoleAccountAdmin.String())
 }
 
-// AssignTeamMember assigns team_member in a scope
-func (m *RoleManager) AssignTeamMember(ctx context.Context, scope authdomain.Scope, userID string) error {
-	return m.AssignRole(ctx, scope, userID, authdomain.RoleTeamMember.String())
-}
-
-// RemovePersonalTeamAdmin removes account_admin from a user's personal team
-func (m *RoleManager) RemovePersonalTeamAdmin(ctx context.Context, userID string) error {
-	scope := authdomain.NewPersonalTeamScope(userID)
-	return m.RemoveRole(ctx, scope, userID, authdomain.RoleAccountAdmin.String())
-}
-
-// RemoveInstitutionAdmin removes account_admin from an institution team
-func (m *RoleManager) RemoveInstitutionAdmin(ctx context.Context, institutionID, userID string) error {
-	scope := authdomain.NewInstitutionTeamScope(institutionID)
-	return m.RemoveRole(ctx, scope, userID, authdomain.RoleAccountAdmin.String())
+// RemoveTrainer removes trainer from a user in an account domain
+// domain: account:{account_id}
+func (m *RoleManager) RemoveTrainer(ctx context.Context, domain string, userID string) error {
+	return m.RemoveRole(ctx, domain, userID, authdomain.RoleTrainer.String())
 }
