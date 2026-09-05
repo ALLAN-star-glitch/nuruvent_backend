@@ -1,0 +1,41 @@
+{{define "team_invite_accepted"}}
+<div class="title">
+    🎉 <span class="highlight">Invitation Accepted</span>
+</div>
+<div class="subtitle">{{.UserName}} has joined {{.InstitutionName}}</div>
+
+<div class="greeting">
+    Hello {{.AdminName}},
+</div>
+
+<p class="body-text">
+    <strong>{{.UserName}}</strong> has accepted your invitation and joined <strong>{{.InstitutionName}}</strong> on Nuruvent.
+</p>
+
+<div class="alert-success">
+    <div class="message">✅ New Team Member!</div>
+    <div class="sub">{{.UserName}} is now part of your institution team</div>
+</div>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">Name</span>
+        <span class="value">{{.UserName}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Email</span>
+        <span class="value">{{.UserEmail}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Institution</span>
+        <span class="value">{{.InstitutionName}}</span>
+    </div>
+</div>
+
+<div class="alert-info">
+    <p>
+         <strong>Next Steps:</strong><br>
+        You can manage team members and their roles in your institution settings.
+    </p>
+</div>
+{{end}}

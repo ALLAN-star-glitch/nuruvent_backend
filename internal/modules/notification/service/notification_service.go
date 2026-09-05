@@ -461,7 +461,7 @@ func (s *notificationService) SendNewInstitutionAccountNotification(ctx context.
 
 	if s.async && s.taskEnqueuer != nil {
 		task := notificationdomain.NewInstitutionAccountRegistrationNotice{
-			To:                  req.TO,
+			To:                  req.To,
 			NewAccountAdminName: req.NewAccountAdminName,
 			InstitutionName:     req.InstitutionName,
 			InstitutionType:     req.InstitutionType,
@@ -482,7 +482,7 @@ func (s *notificationService) SendNewInstitutionAccountNotificationSync(ctx cont
 	}
 
 	channelReq := notificationdomain.ChannelRequest{
-		To:      req.TO,
+		To:      req.To,
 		Subject: "New Organization Account - Please Follow Up",
 		Type:    notificationdomain.TypeWelcomeInstitutionKYC,
 		Meta: map[string]string{
@@ -530,6 +530,203 @@ func (s *notificationService) SendNewPersonalAccountNotificationSync(ctx context
 		Type:    notificationdomain.TaskNewPersonalAccountRegistration,
 		Meta: map[string]string{
 			"admin_name": req.NewAccountAdminName,
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+
+// internal/modules/notification/service/service.go
+
+// ============================================================
+// TEAM INVITATION METHODS (UPDATED)
+// ============================================================
+
+// SendTeamInvite sends a team invitation email
+func (s *notificationService) SendTeamInvite(ctx context.Context, req notificationdomain.SendTeamInviteRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.TeamInviteTask{
+			To:         req.To,
+			UserName:   req.UserName,
+			InvitedBy:  req.InvitedBy,
+			TeamName:   req.TeamName,      // ✅ Changed from InstitutionName
+			TeamID:     req.TeamID,        // ✅ Changed from InstitutionID
+			Role:       req.Role,
+			InviteLink: req.InviteLink,
+			ExpiresIn:  req.ExpiresIn,
+		}
+		if err := s.taskEnqueuer.EnqueueTeamInvite(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue team invite task: %v, falling back to sync", err)
+			return s.sendTeamInviteSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendTeamInviteSync(ctx, req)
+}
+
+func (s *notificationService) sendTeamInviteSync(ctx context.Context, req notificationdomain.SendTeamInviteRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "You've been invited to join " + req.TeamName + " on Nuruvent", // ✅ Changed from InstitutionName
+		Type:    notificationdomain.TypeTeamInvite,
+		Meta: map[string]string{
+			"user_name":   req.UserName,
+			"invited_by":  req.InvitedBy,
+			"team_name":   req.TeamName, // ✅ Changed from institution_name
+			"team_id":     req.TeamID,   // ✅ Changed from institution_id
+			"role":        req.Role,
+			"invite_link": req.InviteLink,
+			"expires_in":  req.ExpiresIn,
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// SendTeamInviteRegistration sends OTP for team invite registration
+func (s *notificationService) SendTeamInviteRegistration(ctx context.Context, req notificationdomain.SendTeamInviteRegistrationRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.TeamInviteRegistrationTask{
+			To:               req.To,
+			Name:             req.Name,
+			Role:             req.Role,
+			ExpiresIn:       req.ExpiresIn,
+			TeamName:         req.TeamName, // ✅ Changed from InstitutionName
+			InvitedBy:        req.InvitedBy,
+			RegistrationLink: req.RegistrationLink, // ✅ Added
+		}
+		if err := s.taskEnqueuer.EnqueueTeamInviteRegistration(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue team invite registration task: %v, falling back to sync", err)
+			return s.sendTeamInviteRegistrationSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendTeamInviteRegistrationSync(ctx, req)
+}
+
+func (s *notificationService) sendTeamInviteRegistrationSync(ctx context.Context, req notificationdomain.SendTeamInviteRegistrationRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Complete Your Registration for " + req.TeamName + " on Nuruvent", // ✅ Changed from InstitutionName
+		Type:    notificationdomain.TypeTeamInviteRegistration,
+		Meta: map[string]string{
+			"name":              req.Name,
+			"role":              req.Role,
+			"expires_in":       req.ExpiresIn,
+			"team_name":         req.TeamName, // ✅ Changed from institution_name
+			"invited_by":        req.InvitedBy,
+			"registration_link": req.RegistrationLink, // ✅ Added
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// SendTeamInviteAccepted sends notification to admin when a user accepts an invitation
+func (s *notificationService) SendTeamInviteAccepted(ctx context.Context, req notificationdomain.SendTeamInviteAcceptedRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.TeamInviteAcceptedTask{
+			To:        req.To,
+			AdminName: req.AdminName,
+			UserName:  req.UserName,
+			UserEmail: req.UserEmail,
+			TeamName:  req.TeamName, // ✅ Changed from InstitutionName
+		}
+		if err := s.taskEnqueuer.EnqueueTeamInviteAccepted(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue team invite accepted task: %v, falling back to sync", err)
+			return s.sendTeamInviteAcceptedSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendTeamInviteAcceptedSync(ctx, req)
+}
+
+func (s *notificationService) sendTeamInviteAcceptedSync(ctx context.Context, req notificationdomain.SendTeamInviteAcceptedRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Team Invitation Accepted - " + req.UserName + " joined " + req.TeamName, // ✅ Changed from InstitutionName
+		Type:    notificationdomain.TypeTeamInviteAccepted,
+		Meta: map[string]string{
+			"admin_name": req.AdminName,
+			"user_name":  req.UserName,
+			"user_email": req.UserEmail,
+			"team_name":  req.TeamName, // ✅ Changed from institution_name
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// SendTeamInviteDeclined sends notification to admin when a user declines an invitation
+func (s *notificationService) SendTeamInviteDeclined(ctx context.Context, req notificationdomain.SendTeamInviteDeclinedRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.TeamInviteDeclinedTask{
+			To:        req.To,
+			AdminName: req.AdminName,
+			UserName:  req.UserName,
+			UserEmail: req.UserEmail,
+			TeamName:  req.TeamName, // ✅ Changed from InstitutionName
+		}
+		if err := s.taskEnqueuer.EnqueueTeamInviteDeclined(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue team invite declined task: %v, falling back to sync", err)
+			return s.sendTeamInviteDeclinedSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendTeamInviteDeclinedSync(ctx, req)
+}
+
+func (s *notificationService) sendTeamInviteDeclinedSync(ctx context.Context, req notificationdomain.SendTeamInviteDeclinedRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Team Invitation Declined - " + req.UserName + " declined " + req.TeamName, // ✅ Changed from InstitutionName
+		Type:    notificationdomain.TypeTeamInviteDeclined,
+		Meta: map[string]string{
+			"admin_name": req.AdminName,
+			"user_name":  req.UserName,
+			"user_email": req.UserEmail,
+			"team_name":  req.TeamName, // ✅ Changed from institution_name
 		},
 	}
 

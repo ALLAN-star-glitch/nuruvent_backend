@@ -108,7 +108,9 @@ func (s *service) RefreshTokens(ctx context.Context, refreshToken, userAgent, ip
 		return "", "", err
 	}
 
-	user, err := s.repo.GetUserByID(token.UserID)
+
+	// 4. Get user
+	user, err := s.repo.GetUserByID(ctx, token.UserID)
 	if err != nil {
 		return "", "", err
 	}

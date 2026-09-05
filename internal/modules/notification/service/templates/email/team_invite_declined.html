@@ -1,0 +1,43 @@
+{{define "team_invite_declined"}}
+<div class="title">
+    <span class="gold-highlight">Invitation Declined</span>
+</div>
+<div class="subtitle">{{.UserName}} has declined the invitation</div>
+
+<div class="greeting">
+    Hello {{.AdminName}},
+</div>
+
+<p class="body-text">
+    <strong>{{.UserName}}</strong> has declined your invitation to join <strong>{{.InstitutionName}}</strong> on Nuruvent.
+</p>
+
+<div class="alert-warning">
+    <p>
+        <strong>Invitation Status:</strong><br>
+        The invitation sent to {{.UserName}} has been declined. You may send a new invitation if needed.
+    </p>
+</div>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">Name</span>
+        <span class="value">{{.UserName}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Email</span>
+        <span class="value">{{.UserEmail}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Institution</span>
+        <span class="value">{{.InstitutionName}}</span>
+    </div>
+</div>
+
+<div class="alert-info">
+    <p>
+        <strong>Next Steps:</strong><br>
+        You can send a new invitation to {{.UserName}} or invite someone else to join your team.
+    </p>
+</div>
+{{end}}

@@ -125,6 +125,15 @@ func (c *EmailChannel) getTemplateName(notifType notificationdomain.Notification
 		return "new-institution-account"
 	case notificationdomain.TypeNewPersonalAccountRegistration:
 		return "new-personal-account"
+	//  TEAM INVITATION TEMPLATES
+	case notificationdomain.TypeTeamInvite:
+		return "team-invite"
+	case notificationdomain.TypeTeamInviteRegistration:
+		return "team-invite-registration"
+	case notificationdomain.TypeTeamInviteAccepted:
+		return "team-invite-accepted"
+	case notificationdomain.TypeTeamInviteDeclined:
+		return "team-invite-declined"
 	default:
 		return "welcome-individual"
 	}
@@ -181,7 +190,38 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 
 	case notificationdomain.TaskNewPersonalAccountRegistration:
 		data["name"] = req.Meta["name"]
+	
+	// ✅ TEAM INVITATION CASES
+	case notificationdomain.TypeTeamInvite:
+		data["user_name"] = req.Meta["user_name"]
+		data["invited_by"] = req.Meta["invited_by"]
+		data["institution_name"] = req.Meta["institution_name"]
+		data["institution_id"] = req.Meta["institution_id"]
+		data["role"] = req.Meta["role"]
+		data["invite_link"] = req.Meta["invite_link"]
+		data["expires_in"] = req.Meta["expires_in"]
+
+	case notificationdomain.TypeTeamInviteRegistration:
+		data["name"] = req.Meta["name"]
+		data["otp"] = req.Meta["otp"]
+		data["expires"] = req.Meta["expires"]
+		data["institution_name"] = req.Meta["institution_name"]
+		data["invited_by"] = req.Meta["invited_by"]
+
+	case notificationdomain.TypeTeamInviteAccepted:
+		data["admin_name"] = req.Meta["admin_name"]
+		data["user_name"] = req.Meta["user_name"]
+		data["user_email"] = req.Meta["user_email"]
+		data["institution_name"] = req.Meta["institution_name"]
+
+	case notificationdomain.TypeTeamInviteDeclined:
+		data["admin_name"] = req.Meta["admin_name"]
+		data["user_name"] = req.Meta["user_name"]
+		data["user_email"] = req.Meta["user_email"]
+		data["institution_name"] = req.Meta["institution_name"]
 	}
+
+	
 
 	return data
 }
@@ -326,7 +366,41 @@ func (c *EmailChannel) buildTextVersion(req notificationdomain.ChannelRequest, d
 		text += "- Save 3+ hours per event with automation\n"
 		text += "- Build your personal brand as a trainer/attendee\n\n"
 		text += "Please welcome them to Nuruvent.\n\n"
+
+    // ✅ TEAM INVITATION TEXT VERSIONS
+	case notificationdomain.TypeTeamInvite:
+		text += "Hello" + data["user_name"] + ",\n\n"
+		text += data["invited_by"] + " has invited you to join " + data["institution_name"] + " as a " + data["role"] + " on Nuruvent.\n\n"
+		text += "To accept this invitation, click the link below:\n"
+		text += data["invite_link"] + "\n\n"
+		text += "This invitation will expire in " + data["expires_in"] + ".\n\n"
+		text += "If you already have a Nuruvent account, you can log in and you'll be automatically added to the team.\n\n"
+		text += "If you did not expect this invitation, please ignore this email.\n\n"
+
+	case notificationdomain.TypeTeamInviteRegistration:
+		text += "Hello" + data["name"] + ",\n\n"
+		text += data["invited_by"] + " has invited you to join " + data["institution_name"] + " on Nuruvent.\n\n"
+		text += "To complete your registration, please use the verification code below:\n\n"
+		text += "Your Verification Code: " + data["otp"] + "\n\n"
+		text += "This code expires in " + data["expires"] + ".\n\n"
+		text += "If you already have a Nuruvent account, please log in and you'll be automatically added to the team.\n\n"
+		text += "If you did not expect this invitation, please ignore this email.\n\n"
+
+	case notificationdomain.TypeTeamInviteAccepted:
+		text += "Hello " + data["admin_name"] + ",\n\n"
+		text += data["user_name"] + " has accepted your invitation and joined " + data["institution_name"] + " on Nuruvent.\n\n"
+		text += "Team Member Details:\n"
+		text += "- Name: " + data["user_name"] + "\n"
+		text += "- Email: " + data["user_email"] + "\n\n"
+		text += "You can manage team members and their roles in your institution settings.\n\n"
+
+	case notificationdomain.TypeTeamInviteDeclined:
+		text += "Hello " + data["admin_name"] + ",\n\n"
+		text += data["user_name"] + " has declined your invitation to join " + data["institution_name"] + " on Nuruvent.\n\n"
+		text += "You may send a new invitation if needed.\n\n"
 	}
+
+	
 
 	text += "\n--\nNuruvent - Light Your Events. Illuminate Your Growth."
 	return text

@@ -395,7 +395,7 @@ func (a *AuthNotificationAdapter) SendInstitutionKYCWelcome(ctx context.Context,
 
 func (a *AuthNotificationAdapter) SendNewInstitutionAccountNotification(ctx context.Context, req authDomain.SendNewInstitutionAccountRegistrationRequest) error {
 	notifReq := notificationdomain.SendNewInstitutionAccountRegistrationRequest{
-		TO:                  req.To,
+		To:                  req.To,
 		NewAccountAdminName: req.NewAccountAdminName,
 		InstitutionName:     req.InstitutionName,
 		InstitutionType:     req.InstitutionType,
