@@ -11,11 +11,17 @@ type TeamService interface {
 	GetPersonalTeamByUserID(ctx context.Context, userID string) (*TeamInfo, error)
 	GetInstitutionTeamByInstitutionID(ctx context.Context, institutionID string) (*TeamInfo, error)
 	GetAccountByTeamID(ctx context.Context, teamID string) (*AccountInfo, error)
+	CreatePersonalTeam(ctx context.Context, userID, userName string) (*TeamInfo, error)
+	CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug string) (*TeamInfo, error)
 
-	// Team member operations
-	GetUserTeamMemberships(ctx context.Context, userID string) ([]*TeamMemberInfo, error) // ✅ Added
+	// Member & Invitation operations
+	GetUserTeamMemberships(ctx context.Context, userID string) ([]*TeamMemberInfo, error)
 	GetUserPersonalTeamIDs(ctx context.Context, userID string) ([]string, error)
 	GetUserInstitutionTeamIDs(ctx context.Context, userID string) ([]string, error)
+
+
+	// Process team invitation during user onboarding
+	AcceptInvitation(ctx context.Context, token string, userID string) (*TeamInfo, error)
 }
 
 // TeamInfo represents team information
@@ -45,4 +51,12 @@ type TeamMemberInfo struct {
 	UserID   string
 	Role     string
 	IsActive bool
+}
+
+// WorkspaceContext aggregates primary workspace context for JWT claims
+type WorkspaceContext struct {
+	TeamID    string
+	AccountID string
+	Role      string
+	TeamType  string // "personal" or "institution"
 }

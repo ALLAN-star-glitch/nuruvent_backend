@@ -1,5 +1,3 @@
-// internal/modules/auth/service/registration.go
-
 package service
 
 import (
@@ -15,13 +13,22 @@ import (
 	"gorm.io/gorm"
 )
 
+
+// Helper to extract strings from map[string]string safely
+func getString(m map[string]string, key string) string {
+    if val, ok := m[key]; ok {
+        return val
+    }
+    return ""
+}
+
 // ============================================================
 // REGISTRATION METHODS
 // ============================================================
 
 func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 	// 1. Check email uniqueness
-	exists, err := s.repo.UserExistsByEmail(req.Email)
+	exists, err := s.repo.UserExistsByEmail(ctx, req.Email)
 	if err != nil {
 		return err
 	}
@@ -29,46 +36,39 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 		return authdomain.ErrUserExists
 	}
 
-	// Check if user already exists
-	existingUser, err := s.repo.GetUserByEmail(req.Email)
+	// Check if user record already exists (e.g. inactive state)
+	existingUser, err := s.repo.GetUserByEmail(ctx, req.Email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return err
 	}
 
 	if existingUser != nil {
-		// User already exists - check if they're active
 		if existingUser.IsActive {
-			// Generate and send new OTP
 			otp := s.GenerateOTP()
 			if err := s.StoreOTP(ctx, req.Email, otp, "registration"); err != nil {
 				return fmt.Errorf("failed to store OTP: %w", err)
 			}
 
-			// Send OTP
 			if err := s.notifSvc.SendOTP(ctx, authdomain.SendOTPRequest{
 				To:      req.Email,
 				Name:    existingUser.Name,
 				OTP:     otp,
 				Expires: "1 hour",
 				Purpose: "registration",
-				Meta:    nil,
 			}); err != nil {
-				log.Printf("Failed to send OTP notification: %v", err)
+				log.Printf("[RegisterUser] Failed to send OTP notification: %v", err)
 			}
 
 			return fmt.Errorf("user with email '%s' already exists. A new OTP has been sent to your email", req.Email)
 		}
 
-		// User exists but is inactive - reactivate
-		if err := s.repo.ReactivateUser(existingUser.ID); err != nil {
+		if err := s.repo.ReactivateUser(ctx, existingUser.ID); err != nil {
 			return fmt.Errorf("failed to reactivate user: %w", err)
 		}
-
-		// Continue with OTP flow
 	}
 
 	// Check phone uniqueness
-	exists, err = s.repo.UserExistsByPhone(req.Phone)
+	exists, err = s.repo.UserExistsByPhone(ctx, req.Phone)
 	if err != nil {
 		return err
 	}
@@ -76,15 +76,13 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 		return authdomain.ErrInvalidPhone
 	}
 
-	// Generate OTP
+	// Generate & Store OTP
 	otp := s.GenerateOTP()
-
-	// Store OTP with purpose
 	if err := s.StoreOTP(ctx, req.Email, otp, "registration"); err != nil {
 		return fmt.Errorf("failed to store OTP: %w", err)
 	}
 
-	// Store user data
+	// Store user data in Redis for verification step
 	userData := map[string]any{
 		"email":             req.Email,
 		"password":          req.Password,
@@ -92,6 +90,7 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 		"phone":             req.Phone,
 		"account_type":      req.AccountType,
 		"professional_type": req.ProfessionalType,
+		"invite_token":      req.InviteToken, // Extracted if present
 	}
 
 	if req.AccountType == types.AccountTypeInstitutionName {
@@ -105,233 +104,235 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 		return fmt.Errorf("failed to store user data: %w", err)
 	}
 
-	// Send OTP
+	// Dispatch OTP Email
 	if err := s.notifSvc.SendOTP(ctx, authdomain.SendOTPRequest{
 		To:      req.Email,
 		Name:    req.Name,
 		OTP:     otp,
 		Expires: "1 hour",
 		Purpose: "registration",
-		Meta:    nil,
 	}); err != nil {
-		log.Printf("Failed to send OTP notification: %v", err)
+		log.Printf("[RegisterUser] Failed to send OTP notification: %v", err)
 	}
 
 	return nil
 }
 
-// VerifyOTPAndCreateUser verifies OTP and creates a new user
-func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string) (*authdomain.User, map[string]interface{}, error) {
+// VerifyOTPAndCreateUser verifies OTP and creates user, accounts, and workspace teams.
+func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string) (*authdomain.User, map[string]any, error) {
 	// 1. Verify OTP
 	if err := s.VerifyOTP(ctx, email, otp, "registration"); err != nil {
 		return nil, nil, err
 	}
 
-	// Check if user already exists
-	existingUser, err := s.repo.GetUserByEmail(email)
+	// 2. Check existing active user
+	existingUser, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil, fmt.Errorf("failed to check existing user: %w", err)
 	}
 	if existingUser != nil {
-		log.Printf("⚠️ User with email %s already exists", email)
-
-		// Clean up Redis data
 		_ = s.DeleteOTP(ctx, email, "registration")
 		_ = s.DeleteUserData(ctx, email)
 
-		// Generate new tokens for existing user
 		accessToken, refreshToken, err := s.GenerateTokens(ctx, existingUser)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to generate tokens: %w", err)
 		}
 
-		additionalData := map[string]interface{}{
+		return existingUser, map[string]any{
 			"user_id":       existingUser.ID,
 			"access_token":  accessToken,
 			"refresh_token": refreshToken,
 			"message":       "User already exists. Welcome back!",
-		}
-
-		return existingUser, additionalData, nil
+		}, nil
 	}
 
-	// 2. Get user data
+	// 3. Extract cached user payload from Redis
 	userData, err := s.GetUserData(ctx, email)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get user data: %w", err)
+		return nil, nil, fmt.Errorf("failed to get user data from cache: %w", err)
 	}
 
-	// ============================================================
-	// VALIDATE ALL DATA FIRST - BEFORE CREATING USER
-	// ============================================================
+	// Extract strongly typed string variables
+	reqPassword := getString(userData, "password")
+	reqName := getString(userData, "name")
+	reqPhone := getString(userData, "phone")
+	reqAccountType := getString(userData, "account_type")
+	reqProfessionalType := getString(userData, "professional_type")
+	reqInstitutionType := getString(userData, "institution_type")
+	reqInstitutionName := getString(userData, "institution_name")
+	reqInviteToken := getString(userData, "invite_token")
 
-	// 3. Validate account type
-	accountTypeName := userData["account_type"]
-	if accountTypeName == "" {
-		accountTypeName = types.AccountTypePersonalName
+	// 4. Validate Account Type
+	if reqAccountType == "" {
+		reqAccountType = types.AccountTypePersonalName
 	}
-	if accountTypeName != types.AccountTypePersonalName && accountTypeName != types.AccountTypeInstitutionName {
-		return nil, nil, fmt.Errorf("invalid account_type: %s. Must be '%s' or '%s'",
-			accountTypeName, types.AccountTypePersonalName, types.AccountTypeInstitutionName)
-	}
-
-	// 4. Get account type ID
-	accountTypeID, err := s.getAccountTypeID(accountTypeName)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get account type: %w", err)
-	}
-	if accountTypeID == "" {
-		return nil, nil, fmt.Errorf("account type not found: %s", accountTypeName)
+	if reqAccountType != types.AccountTypePersonalName && reqAccountType != types.AccountTypeInstitutionName {
+		return nil, nil, fmt.Errorf("invalid account_type: %s", reqAccountType)
 	}
 
-	// 5. Validate professional type for personal accounts
-	var professionalTypeID *string
-	if accountTypeName == types.AccountTypePersonalName {
-		professionalTypeName := userData["professional_type"]
-		if professionalTypeName != "" {
-			professionalType, err := s.repo.GetProfessionalTypeByName(professionalTypeName)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to validate professional type: %w", err)
-			}
-			if professionalType == nil {
-				return nil, nil, fmt.Errorf("invalid professional_type: %s. Valid types: %v",
-					professionalTypeName, types.AllProfessionalTypeNames())
-			}
-			professionalTypeID = &professionalType.ID
+	accountTypeID, err := s.getAccountTypeID(ctx, reqAccountType)
+	if err != nil || accountTypeID == "" {
+		return nil, nil, fmt.Errorf("failed to resolve account type ID: %w", err)
+	}
+
+	// 5. Validate Domain Enums
+	var institutionTypeID *string
+	if reqAccountType == types.AccountTypeInstitutionName {
+		if reqInstitutionType == "" {
+			return nil, nil, errors.New("institution_type is required for institution accounts")
 		}
+		institutionType, err := s.repo.GetInstitutionTypeByName(ctx, reqInstitutionType)
+		if err != nil || institutionType == nil {
+			return nil, nil, fmt.Errorf("invalid institution_type: %s", reqInstitutionType)
+		}
+		institutionTypeID = &institutionType.ID
 	}
 
-	// 6. Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(userData["password"]), bcrypt.DefaultCost)
+	var professionalTypeID *string
+	if reqAccountType == types.AccountTypePersonalName && reqProfessionalType != "" {
+		professionalType, err := s.repo.GetProfessionalTypeByName(ctx, reqProfessionalType)
+		if err != nil || professionalType == nil {
+			return nil, nil, fmt.Errorf("invalid professional_type: %s", reqProfessionalType)
+		}
+		professionalTypeID = &professionalType.ID
+	}
+
+	// 6. Password Hashing
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(reqPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	// 7. Create user
-	displayName := userData["display_name"]
-	if displayName == "" {
-		displayName = userData["name"]
-	}
-
-	user, err := authdomain.NewUser(
-		userData["email"],
-		string(hashedPassword),
-		userData["name"],
-		userData["phone"],
-		accountTypeID,
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create user: %w", err)
-	}
-
-	if displayName != "" {
-		user.DisplayName = displayName
-	}
-
-	if professionalTypeID != nil {
-		user.ProfessionalTypeID = professionalTypeID
-	}
-
-	// 8. Save user to database
-	if err := s.repo.CreateUser(user); err != nil {
-		return nil, nil, fmt.Errorf("failed to save user: %w", err)
-	}
-
-	log.Printf("✅ User created: %s", user.ID)
-
-	// ============================================================
-	// ✅ CREATE ACCOUNT
-	// ============================================================
-
+	// 7. Sanitize values
 	sanitizer := validation.Sanitize{}
-	accountSlug := sanitizer.GenerateSlugFromName(userData["name"])
-	cleanEmail := sanitizer.Identifier(userData["email"])
-	cleanPhone := sanitizer.Identifier(userData["phone"])
-	cleanName := sanitizer.DisplayName(userData["name"])
-	cleanDisplayName := displayName
+	cleanName := sanitizer.DisplayName(reqName)
+	cleanEmail := sanitizer.Identifier(email)
+	cleanPhone := sanitizer.Identifier(reqPhone)
+	accountSlug := sanitizer.GenerateSlugFromName(cleanName)
 
-	account, err := authdomain.NewAccount(
-		cleanName,
-		cleanDisplayName,
-		accountSlug,
-		cleanEmail,
-		cleanPhone,
-		accountTypeID,
-		user.ID,
-	)
+	user, err := authdomain.NewUser(cleanEmail, string(hashedPassword), cleanName, cleanPhone, accountTypeID)
 	if err != nil {
-		log.Printf("⚠️ Failed to create account for user: %v", err)
-		// Don't fail the registration, just log the error
-	} else {
-		if err := s.repo.CreateAccount(ctx, account); err != nil {
-			log.Printf("⚠️ Failed to save account: %v", err)
-		} else {
-			log.Printf("✅ Account created for user: %s (Account ID: %s)", user.ID, account.ID)
+		return nil, nil, fmt.Errorf("failed to construct user entity: %w", err)
+	}
+	user.DisplayName = cleanName
+	user.ProfessionalTypeID = professionalTypeID
 
-			// Add user as account_admin in account_members
-			accountMember, err := authdomain.NewAccountMember(
-				account.ID,
-				user.ID,
-				authdomain.RoleAccountAdmin.String(),
-				user.ID,
+	var account *authdomain.Account
+
+	// ============================================================
+	// ATOMIC TRANSACTION: User, Account, Account Member, Roles
+	// ============================================================
+	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+		// Create Core User
+		if err := s.repo.CreateUser(txCtx, user); err != nil {
+			return fmt.Errorf("failed to save user: %w", err)
+		}
+
+		// Create Core Account
+		if reqAccountType == types.AccountTypePersonalName {
+			account, err = authdomain.NewPersonalAccount(
+				cleanName, cleanName, accountSlug, cleanEmail, cleanPhone, accountTypeID, user.ID,
 			)
-			if err != nil {
-				log.Printf("⚠️ Failed to create account member: %v", err)
-			} else {
-				if err := s.repo.CreateAccountMember(ctx, accountMember); err != nil {
-					log.Printf("⚠️ Failed to save account member: %v", err)
-				} else {
-					log.Printf("✅ User added as account_admin of account: %s", account.ID)
-				}
-			}
+		} else {
+			account, err = authdomain.NewInstitutionAccount(
+				cleanName, cleanName, accountSlug, cleanEmail, cleanPhone, accountTypeID, *institutionTypeID, user.ID,
+			)
+		}
+		if err != nil {
+			return fmt.Errorf("failed to construct account: %w", err)
+		}
 
-			// Assign Casbin role for account domain
-			accountDomain := authdomain.AccountDomain(account.ID)
-			if err := s.roleManager.AssignRole(ctx, accountDomain, user.ID, authdomain.RoleAccountAdmin.String()); err != nil {
-				log.Printf("⚠️ Failed to assign account admin role: %v", err)
-			}
+		if err := s.repo.CreateAccount(txCtx, account); err != nil {
+			return fmt.Errorf("failed to save account: %w", err)
+		}
+
+		// Create Account Membership
+		accountMember, err := authdomain.NewAccountMember(
+			account.ID, user.ID, authdomain.RoleAccountAdmin.String(), user.ID,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to construct account member: %w", err)
+		}
+
+		if err := s.repo.CreateAccountMember(txCtx, accountMember); err != nil {
+			return fmt.Errorf("failed to save account member: %w", err)
+		}
+
+		// Assign RBAC Policy
+		accountDomain := authdomain.AccountDomain(account.ID)
+		if err := s.roleManager.AssignRole(txCtx, accountDomain, user.ID, authdomain.RoleAccountAdmin.String()); err != nil {
+			return fmt.Errorf("failed to assign account admin role: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("registration transaction failed: %w", err)
+	}
+
+	// ============================================================
+	// WORKSPACE & INVITATION INTEGRATION
+	// ============================================================
+
+	// 1. Handle Invitation if token exists
+	if reqInviteToken != "" {
+		if _, err := s.teamSvc.AcceptInvitation(ctx, reqInviteToken, user.ID); err != nil {
+			log.Printf("[VerifyOTPAndCreateUser] Warning: Failed to process invite token '%s': %v", reqInviteToken, err)
+		}
+	}
+
+	// 2. Create Personal Team Workspace
+	if err := s.createAndAddToPersonalTeam(ctx, user.ID, cleanName); err != nil {
+		log.Printf("[VerifyOTPAndCreateUser] Warning: Failed to create personal team: %v", err)
+	}
+
+	// 3. Create Institution Team Workspace if applicable
+	if reqAccountType == types.AccountTypeInstitutionName && account != nil {
+		if err := s.createAndAddToInstitutionTeam(ctx, user.ID, account.ID, reqInstitutionName); err != nil {
+			log.Printf("[VerifyOTPAndCreateUser] Warning: Failed to create institution team: %v", err)
 		}
 	}
 
 	// ============================================================
-	// ✅ GENERATE TOKENS
+	// TOKEN GENERATION & CLEANUP
 	// ============================================================
 	accessToken, refreshToken, err := s.GenerateTokens(ctx, user)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
-	// 9. Clean up Redis data
-	if err := s.DeleteOTP(ctx, email, "registration"); err != nil {
-		log.Printf("Failed to delete OTP: %v", err)
-	}
-	if err := s.DeleteUserData(ctx, email); err != nil {
-		log.Printf("Failed to delete user data: %v", err)
+	_ = s.DeleteOTP(ctx, email, "registration")
+	_ = s.DeleteUserData(ctx, email)
+
+	// Build response object
+	additionalData := map[string]any{
+		"user_id":         user.ID,
+		"access_token":    accessToken,
+		"refresh_token":   refreshToken,
+		"account_type":    reqAccountType,
+		"account_type_id": accountTypeID,
+		"account_id":      account.ID,
 	}
 
-	// 10. Build additional data
-	additionalData := map[string]interface{}{
-		"user_id":       user.ID,
-		"access_token":  accessToken,
-		"refresh_token": refreshToken,
+	if account.IsInstitution() {
+		additionalData["institution_type_id"] = account.InstitutionTypeID
+		additionalData["institution_name"] = reqInstitutionName
+		additionalData["institution_type"] = reqInstitutionType
 	}
 
-	if account != nil {
-		additionalData["account_id"] = account.ID
-	}
-
-	// Add professional type to response
 	if user.ProfessionalTypeID != nil {
 		additionalData["professional_type_id"] = *user.ProfessionalTypeID
-	}
-	if userData["professional_type"] != "" {
-		additionalData["professional_type"] = userData["professional_type"]
+		additionalData["professional_type"] = reqProfessionalType
 	}
 
-	// 11. Send welcome emails
-	if err := s.sendWelcomeEmails(ctx, user, userData); err != nil {
-		log.Printf("Failed to send welcome emails: %v", err)
-	}
+	// Async Welcome Emails
+	go func() {
+		if err := s.sendWelcomeEmails(context.Background(), user, userData); err != nil {
+			log.Printf("[VerifyOTPAndCreateUser] Failed to send welcome emails: %v", err)
+		}
+	}()
 
 	return user, additionalData, nil
 }
@@ -340,80 +341,85 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 // PRIVATE HELPERS
 // ============================================================
 
-func (s *service) getAccountTypeID(accountType string) (string, error) {
-	accountTypeObj, err := s.repo.GetAccountTypeByName(accountType)
-	if err != nil {
+func (s *service) getAccountTypeID(ctx context.Context, accountType string) (string, error) {
+	accountTypeObj, err := s.repo.GetAccountTypeByName(ctx, accountType)
+	if err != nil || accountTypeObj == nil {
 		return "", fmt.Errorf("failed to get account type: %w", err)
-	}
-	if accountTypeObj == nil {
-		return "", fmt.Errorf("account type not found: %s", accountType)
 	}
 	return accountTypeObj.ID, nil
 }
 
-// sendWelcomeEmails sends welcome emails based on account type
-func (s *service) sendWelcomeEmails(ctx context.Context, user *authdomain.User, userData map[string]string) error {
-	if user == nil {
-		return fmt.Errorf("user cannot be nil")
+func (s *service) createAndAddToPersonalTeam(ctx context.Context, userID, userName string) error {
+	existingTeam, err := s.teamSvc.GetPersonalTeamByUserID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to check existing personal team: %w", err)
+	}
+	if existingTeam != nil {
+		return nil
 	}
 
-	var errors []error
-	accountType := userData["account_type"]
-
-	switch accountType {
-	case types.AccountTypePersonalName:
-		// Send personal welcome
-		if err := s.notifSvc.SendIndividualWelcome(ctx, authdomain.SendWelcomeRequest{
-			To:   user.Email,
-			Name: user.Name,
-		}); err != nil {
-			errMsg := fmt.Errorf("failed to send individual welcome: %w", err)
-			log.Printf("[sendWelcomeEmails] %v", errMsg)
-			errors = append(errors, errMsg)
-		}
-
-		// Send new personal account notification to admin
-		if err := s.notifSvc.SendNewPersonalAccountNotification(ctx, authdomain.SendNewPersonalAccountRegistrationRequest{
-			To:                  s.config.NuruOnboardingNoticeEmails.AdminEmail,
-			NewAccountAdminName: user.Name,
-		}); err != nil {
-			errMsg := fmt.Errorf("failed to send new personal account notification: %w", err)
-			log.Printf("[sendWelcomeEmails] %v", errMsg)
-			errors = append(errors, errMsg)
-		}
-
-	case types.AccountTypeInstitutionName:
-		// Sent to institution admin
-		if err := s.notifSvc.SendInstitutionWelcome(ctx, authdomain.SendInstitutionWelcomeRequest{
-			To:               user.Email,
-			AdminName:        user.Name,
-			InstitutionName:  userData["institution_name"],
-			InstitutionEmail: userData["institution_email"],
-		}); err != nil {
-			errMsg := fmt.Errorf("failed to send institution welcome: %w", err)
-			log.Printf("[sendWelcomeEmails] %v", errMsg)
-			errors = append(errors, errMsg)
-		}
-
-		// Send notification to internal admin
-		if err := s.notifSvc.SendNewInstitutionAccountNotification(ctx, authdomain.SendNewInstitutionAccountRegistrationRequest{
-			To:                  s.config.NuruOnboardingNoticeEmails.AdminEmail,
-			NewAccountAdminName: user.Name,
-			InstitutionName:     userData["institution_name"],
-		}); err != nil {
-			errMsg := fmt.Errorf("failed to send new institution account notification: %w", err)
-			log.Printf("[sendWelcomeEmails] %v", errMsg)
-			errors = append(errors, errMsg)
-		}
-
-	default:
-		log.Printf("[sendWelcomeEmails] Unknown account type: %s for user %s", accountType, user.Email)
-		errors = append(errors, fmt.Errorf("unknown account type: %s", accountType))
-	}
-
-	if len(errors) > 0 {
-		return fmt.Errorf("encountered %d errors while sending welcome emails", len(errors))
+	_, err = s.teamSvc.CreatePersonalTeam(ctx, userID, userName)
+	if err != nil {
+		return fmt.Errorf("failed to create personal team: %w", err)
 	}
 
 	return nil
+}
+
+func (s *service) createAndAddToInstitutionTeam(ctx context.Context, userID, accountID, institutionName string) error {
+	if institutionName == "" {
+		return errors.New("institution name is required")
+	}
+
+	sanitizer := validation.Sanitize{}
+	displayName := sanitizer.DisplayName(institutionName)
+	slug := sanitizer.GenerateSlugFromName(institutionName)
+
+	_, err := s.teamSvc.CreateInstitutionTeam(ctx, accountID, institutionName, displayName, slug)
+	if err != nil {
+		return fmt.Errorf("failed to create institution team: %w", err)
+	}
+
+	return nil
+}
+
+func (s *service) sendWelcomeEmails(ctx context.Context, user *authdomain.User, userData map[string]string) error {
+    if user == nil {
+        return fmt.Errorf("user cannot be nil")
+    }
+
+    accountType := getString(userData, "account_type")
+    adminEmail := s.config.NuruOnboardingNoticeEmails.AdminEmail
+
+    switch accountType {
+    case types.AccountTypePersonalName:
+        _ = s.notifSvc.SendIndividualWelcome(ctx, authdomain.SendWelcomeRequest{
+            To:   user.Email,
+            Name: user.Name,
+        })
+
+        _ = s.notifSvc.SendNewPersonalAccountNotification(ctx, authdomain.SendNewPersonalAccountRegistrationRequest{
+            To:                  adminEmail,
+            NewAccountAdminName: user.Name,
+        })
+
+    case types.AccountTypeInstitutionName:
+        instName := getString(userData, "institution_name")
+        instEmail := getString(userData, "institution_email")
+
+        _ = s.notifSvc.SendInstitutionWelcome(ctx, authdomain.SendInstitutionWelcomeRequest{
+            To:               user.Email,
+            AdminName:        user.Name,
+            InstitutionName:  instName,
+            InstitutionEmail: instEmail,
+        })
+
+        _ = s.notifSvc.SendNewInstitutionAccountNotification(ctx, authdomain.SendNewInstitutionAccountRegistrationRequest{
+            To:                  adminEmail,
+            NewAccountAdminName: user.Name,
+            InstitutionName:     instName,
+        })
+    }
+
+    return nil
 }

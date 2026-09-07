@@ -6,20 +6,20 @@ import "time"
 
 // UserInfo represents basic user information for event creators
 type UserInfo struct {
-	ID              string
-	Name            string
-	DisplayName     string
-	Email           string
-	Phone           string
-	Username        string
-	AccountType     string
-	InstitutionID   string
-	InstitutionName string
-	Slug            string
-	AvatarURL       string // ✅ Added
-	IsActive        bool
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	ID            string
+	Name          string
+	DisplayName   string
+	Email         string
+	Phone         string
+	Username      string
+	AccountType   string
+	AccountID     string
+	AccountName   string
+	Slug          string
+	AvatarURL     string
+	IsActive      bool
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // NewUserInfo creates a new UserInfo instance
@@ -34,10 +34,10 @@ func NewUserInfo(id, name, email string) *UserInfo {
 	}
 }
 
-// WithInstitution sets the institution details
-func (u *UserInfo) WithInstitution(id, name string) *UserInfo {
-	u.InstitutionID = id
-	u.InstitutionName = name
+// WithAccount sets the account details
+func (u *UserInfo) WithAccount(id, name string) *UserInfo {
+	u.AccountID = id
+	u.AccountName = name
 	return u
 }
 
@@ -73,12 +73,12 @@ func (u *UserInfo) WithAvatarURL(avatarURL string) *UserInfo {
 
 // IsInstitution checks if the user is an institution account
 func (u *UserInfo) IsInstitution() bool {
-	return u.AccountType == "account_type_institution"
+	return u.AccountType == "institution"
 }
 
 // IsPersonal checks if the user is a personal account
 func (u *UserInfo) IsPersonal() bool {
-	return u.AccountType == "account_type_personal"
+	return u.AccountType == "personal"
 }
 
 // GetDisplayName returns the best available display name
@@ -86,15 +86,15 @@ func (u *UserInfo) GetDisplayName() string {
 	if u.DisplayName != "" {
 		return u.DisplayName
 	}
-	if u.InstitutionName != "" {
-		return u.InstitutionName
+	if u.AccountName != "" {
+		return u.AccountName
 	}
 	return u.Name
 }
 
-// HasInstitution checks if the user belongs to an institution
-func (u *UserInfo) HasInstitution() bool {
-	return u.InstitutionID != ""
+// HasAccount checks if the user belongs to an account
+func (u *UserInfo) HasAccount() bool {
+	return u.AccountID != ""
 }
 
 // GetFullName returns the full name (or display name if available)

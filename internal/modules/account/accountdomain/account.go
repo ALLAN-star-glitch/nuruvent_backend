@@ -16,6 +16,7 @@ type Account struct {
     Name          string
     DisplayName   string
     Slug          string
+    Type          string // "personal" or "institution"
     Email         string
     Phone         string
     AccountTypeID string
@@ -23,7 +24,12 @@ type Account struct {
     LogoURL       string
     Website       string
     Description   string
+    Address       string
+    City          string
+    Country       string
+    KYCStatus     string
     CreatedBy     string
+    IsActive       bool
     CreatedAt     time.Time
     UpdatedAt     time.Time
     DeletedAt     *time.Time
@@ -34,6 +40,21 @@ const (
     AccountStatusActive    = "active"
     AccountStatusSuspended = "suspended"
     AccountStatusInactive  = "inactive"
+)
+
+// Account type constants
+const (
+    AccountTypePersonal    = "personal"
+    AccountTypeInstitution = "institution"
+)
+
+// KYC status constants
+const (
+    KYCStatusPending    = "pending"
+    KYCStatusSubmitted  = "submitted"
+    KYCStatusVerified   = "verified"
+    KYCStatusRejected   = "rejected"
+    KYCStatusNotRequired = "not_required"
 )
 
 // NewPersonalAccount creates a new personal account
@@ -51,10 +72,10 @@ func NewPersonalAccount(name, email, phone, createdBy string, accountTypeID stri
     }
 
     // Sanitize fields
-    cleanName := sanitizer.DisplayName(name)           // Preserves case, removes extra spaces
+    cleanName := sanitizer.DisplayName(name)
     displayName := cleanName
-    slug := sanitizer.GenerateSlugFromName(cleanName)  // "john-doe"
-    cleanEmail := sanitizer.Identifier(email)          // Lowercase, no spaces
+    slug := sanitizer.GenerateSlugFromName(cleanName)
+    cleanEmail := sanitizer.Identifier(email)
 
     now := time.Now()
     return &Account{
@@ -62,10 +83,12 @@ func NewPersonalAccount(name, email, phone, createdBy string, accountTypeID stri
         Name:          cleanName,
         DisplayName:   displayName,
         Slug:          slug,
+        Type:          AccountTypePersonal,
         Email:         cleanEmail,
         Phone:         phone,
         AccountTypeID: accountTypeID,
         Status:        AccountStatusActive,
+        KYCStatus:     KYCStatusNotRequired,
         CreatedBy:     createdBy,
         CreatedAt:     now,
         UpdatedAt:     now,
@@ -89,7 +112,7 @@ func NewInstitutionAccount(name, email, phone, website, description, createdBy s
     // Sanitize fields
     cleanName := sanitizer.DisplayName(name)
     displayName := cleanName
-    slug := sanitizer.GenerateSlugFromName(cleanName)  // "nuruvent-ltd"
+    slug := sanitizer.GenerateSlugFromName(cleanName)
     cleanEmail := sanitizer.Identifier(email)
     cleanWebsite := sanitizer.Identifier(website)
     cleanDescription := sanitizer.Description(description)
@@ -100,10 +123,12 @@ func NewInstitutionAccount(name, email, phone, website, description, createdBy s
         Name:          cleanName,
         DisplayName:   displayName,
         Slug:          slug,
+        Type:          AccountTypeInstitution,
         Email:         cleanEmail,
         Phone:         phone,
         AccountTypeID: accountTypeID,
         Status:        AccountStatusActive,
+        KYCStatus:     KYCStatusPending,
         LogoURL:       "",
         Website:       cleanWebsite,
         Description:   cleanDescription,
@@ -114,7 +139,7 @@ func NewInstitutionAccount(name, email, phone, website, description, createdBy s
 }
 
 // Update updates the account with new values
-func (a *Account) Update(name, email, phone, website, description, logoURL string) {
+func (a *Account) Update(name, email, phone, website, description, logoURL, address, city, country string) {
     sanitizer := validation.Sanitize{}
     
     if name != "" {
@@ -137,7 +162,48 @@ func (a *Account) Update(name, email, phone, website, description, logoURL strin
     if logoURL != "" {
         a.LogoURL = logoURL
     }
+    if address != "" {
+        a.Address = address
+    }
+    if city != "" {
+        a.City = city
+    }
+    if country != "" {
+        a.Country = country
+    }
     a.UpdatedAt = time.Now()
+}
+
+// UpdateStatus updates the account status
+func (a *Account) UpdateStatus(status string) error {
+    validStatuses := map[string]bool{
+        AccountStatusActive:    true,
+        AccountStatusSuspended: true,
+        AccountStatusInactive:  true,
+    }
+    if !validStatuses[status] {
+        return errors.New("invalid status")
+    }
+    a.Status = status
+    a.UpdatedAt = time.Now()
+    return nil
+}
+
+// UpdateKYCStatus updates the KYC status
+func (a *Account) UpdateKYCStatus(status string) error {
+    validStatuses := map[string]bool{
+        KYCStatusPending:     true,
+        KYCStatusSubmitted:   true,
+        KYCStatusVerified:    true,
+        KYCStatusRejected:    true,
+        KYCStatusNotRequired: true,
+    }
+    if !validStatuses[status] {
+        return errors.New("invalid KYC status")
+    }
+    a.KYCStatus = status
+    a.UpdatedAt = time.Now()
+    return nil
 }
 
 // Suspend suspends the account
@@ -156,4 +222,29 @@ func (a *Account) Activate() {
 func (a *Account) Deactivate() {
     a.Status = AccountStatusInactive
     a.UpdatedAt = time.Now()
+}
+
+// IsPersonal checks if the account is a personal account
+func (a *Account) IsPersonal() bool {
+    return a.Type == AccountTypePersonal
+}
+
+// IsInstitution checks if the account is an institution account
+func (a *Account) IsInstitution() bool {
+    return a.Type == AccountTypeInstitution
+}
+
+// IsActive checks if the account is active
+func (a *Account) IsAccountActive() bool {
+    return a.Status == AccountStatusActive
+}
+
+// IsSuspended checks if the account is suspended
+func (a *Account) IsSuspended() bool {
+    return a.Status == AccountStatusSuspended
+}
+
+// IsDeleted checks if the account is deleted
+func (a *Account) IsDeleted() bool {
+    return a.DeletedAt != nil && !a.DeletedAt.IsZero()
 }

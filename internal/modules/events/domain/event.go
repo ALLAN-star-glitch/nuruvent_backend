@@ -49,18 +49,18 @@ type Event struct {
 	EventStatusID        string
 	CategoryID           *string
 	Category             *Category 
-	EventType		      *EventType
-	EventStatus				*EventStatus
+	EventType            *EventType
+	EventStatus          *EventStatus
 	EventFormatID        *string
 	CertificateTemplateID *string
 
 	// ============================================================
 	// Ownership
 	// ============================================================
-	InstitutionID *string // NULL for personal events
-	CreatedBy     string  // User ID who created this event
-	Creator       *UserInfo
-	Organizer     *OrganizerInfo 
+	TeamID      string       // Team ID this event belongs to (required)
+	CreatedBy   string       // User ID who created this event
+	Creator     *UserInfo
+	Organizer   *OrganizerInfo 
 
 	// ============================================================
 	// Schedule & Venue
@@ -84,7 +84,7 @@ type Event struct {
 	VenueAddress       string
 	VenueCity          string
 	VenueCountry       string
-	VenueCoordinates   map[string]float64 // JSONB
+	VenueCoordinates   map[string]float64
 	IsVirtual          bool
 	IsHybrid           bool
 	VirtualPlatform    string
@@ -96,7 +96,7 @@ type Event struct {
 	// ============================================================
 	// Ticketing & Capacity
 	// ============================================================
-	IsFreeEvent        bool // Renamed to avoid conflict with IsFree() method
+	IsFreeEvent        bool
 	Capacity           *int
 	CurrentAttendees   int
 	WaitlistEnabled    bool
@@ -114,7 +114,7 @@ type Event struct {
 	InviteOnly          bool
 	InvitedEmails       []string
 	RequiresApproval    bool
-	ApprovalRequiredFor []string // ["everyone", "new_users", "unverified"]
+	ApprovalRequiredFor []string
 
 	// ============================================================
 	// Monetization & Add-ons
@@ -130,11 +130,11 @@ type Event struct {
 	// ============================================================
 	// Child Entities (Value Objects - will be loaded separately)
 	// ============================================================
-	Schedules   []EventSchedule   // Multi-day schedules
-	Tickets     []EventTicket     // Ticket types
-	Speakers    []EventSpeaker    // Speakers/presenters
-	Materials   []EventMaterial   // Event materials
-	Invitations []EventInvitation // Invite-only tracking
+	Schedules   []EventSchedule
+	Tickets     []EventTicket
+	Speakers    []EventSpeaker
+	Materials   []EventMaterial
+	Invitations []EventInvitation
 
 	// ============================================================
 	// SEO & Marketing
@@ -159,7 +159,7 @@ type Event struct {
 		Description string
 		ImageURL    string
 	}
-	SchemaOrg map[string]interface{} // JSON-LD
+	SchemaOrg map[string]interface{}
 
 	// ============================================================
 	// Media
@@ -170,7 +170,7 @@ type Event struct {
 	// ============================================================
 	// Social & Engagement
 	// ============================================================
-	SocialLinks        map[string]string // LinkedIn, Twitter, etc.
+	SocialLinks        map[string]string
 	HasLivestream      bool
 	LivestreamURL      string
 	RecordingAvailable bool
@@ -205,20 +205,20 @@ type Event struct {
 
 // EventSchedule represents a schedule for multi-day events
 type EventSchedule struct {
-	ID           string
-	EventID      string
-	SessionName  string
+	ID            string
+	EventID       string
+	SessionName   string
 	SessionNumber int
-	StartDate    time.Time
-	EndDate      *time.Time
-	StartTime    string
-	EndTime      string
-	Timezone     string
-	Location     string
-	IsVirtual    bool
-	ZoomLink     string
-	MeetLink     string
-	MaxAttendees *int
+	StartDate     time.Time
+	EndDate       *time.Time
+	StartTime     string
+	EndTime       string
+	Timezone      string
+	Location      string
+	IsVirtual     bool
+	ZoomLink      string
+	MeetLink      string
+	MaxAttendees  *int
 }
 
 // EventTicket represents a ticket type for an event
@@ -286,7 +286,7 @@ type EventInvitation struct {
 // NewEvent creates a new event with required fields
 func NewEvent(
 	name, displayName, description string,
-	eventTypeID, createdBy string,
+	eventTypeID, teamID, createdBy string,
 ) (*Event, error) {
 	if name == "" {
 		return nil, ErrInvalidEventName
@@ -296,6 +296,9 @@ func NewEvent(
 	}
 	if eventTypeID == "" {
 		return nil, ErrInvalidEventType
+	}
+	if teamID == "" {
+		return nil, errors.New("team ID is required")
 	}
 	if createdBy == "" {
 		return nil, errors.New("created by is required")
@@ -311,7 +314,8 @@ func NewEvent(
 		DisplayName: displayName,
 		Description: description,
 		EventTypeID: eventTypeID,
-		EventStatusID: "", // Default to draft
+		EventStatusID: "",
+		TeamID:      teamID,
 		CreatedBy:   createdBy,
 		IsVirtual:   true,
 		Visibility:  "public",
@@ -372,6 +376,9 @@ func (e *Event) ValidateForPublish() error {
 	if e.EventTypeID == "" {
 		validationErrors = append(validationErrors, "event type is required for published events")
 	}
+	if e.TeamID == "" {
+		validationErrors = append(validationErrors, "team ID is required for published events")
+	}
 
 	// ============================================================
 	// 2. DATE & TIME CHECKS
@@ -389,7 +396,6 @@ func (e *Event) ValidateForPublish() error {
 	if len(e.Schedules) == 0 {
 		validationErrors = append(validationErrors, "at least one schedule is required for published events")
 	} else {
-		// Validate each schedule
 		for i, schedule := range e.Schedules {
 			if schedule.StartDate.IsZero() {
 				validationErrors = append(validationErrors, fmt.Sprintf("schedule %d: start date is required", i+1))
@@ -404,13 +410,10 @@ func (e *Event) ValidateForPublish() error {
 	}
 
 	// ============================================================
-	// 4. VENUE & MEETING LINK CHECKS (IMPROVED)
+	// 4. VENUE & MEETING LINK CHECKS
 	// ============================================================
-	
-	// Check event-level meeting links
 	hasEventLevelLink := e.VirtualPlatformURL != "" || e.ZoomLink != "" || e.MeetLink != ""
 	
-	// Check schedule-level meeting links
 	hasScheduleLevelLink := false
 	if len(e.Schedules) > 0 {
 		for _, schedule := range e.Schedules {
@@ -421,7 +424,6 @@ func (e *Event) ValidateForPublish() error {
 		}
 	}
 	
-	// Determine if meeting link exists at any level
 	hasMeetingLink := hasEventLevelLink || hasScheduleLevelLink
 
 	if e.IsVirtual && !hasMeetingLink {
@@ -429,14 +431,11 @@ func (e *Event) ValidateForPublish() error {
 			"meeting link is required for virtual events. Provide zoom_link or meet_link at event level or in at least one schedule")
 	}
 
-	// For in-person events (non-virtual, non-hybrid)
 	if !e.IsVirtual && !e.IsHybrid && e.InPersonLocation == "" {
 		validationErrors = append(validationErrors, "location is required for in-person events")
 	}
 
-	// For hybrid events
 	if e.IsHybrid {
-		// Need both virtual and in-person
 		if !hasMeetingLink {
 			validationErrors = append(validationErrors, 
 				"meeting link is required for hybrid events (virtual component)")
@@ -467,7 +466,6 @@ func (e *Event) ValidateForPublish() error {
 			totalQuantity += ticket.Quantity
 		}
 		
-		// Validate capacity against total tickets
 		if e.Capacity != nil && *e.Capacity > 0 && totalQuantity > *e.Capacity {
 			validationErrors = append(validationErrors, 
 				fmt.Sprintf("total ticket quantity (%d) exceeds capacity (%d)", totalQuantity, *e.Capacity))
@@ -509,7 +507,6 @@ func (e *Event) ValidateForPublish() error {
 			validationErrors = append(validationErrors, "recurrence pattern is required for recurring events")
 		}
 		
-		// Validate based on pattern
 		if e.RecurrencePatternID != nil {
 			switch *e.RecurrencePatternID {
 			case "weekly":
@@ -523,7 +520,6 @@ func (e *Event) ValidateForPublish() error {
 			}
 		}
 		
-		// Check recurrence end
 		if e.RecurrenceEndsOn == nil && e.RecurrenceOccurrences == nil {
 			validationErrors = append(validationErrors, "recurrence must have an end date or number of occurrences")
 		}
@@ -559,6 +555,9 @@ func (e *Event) ValidateForDraft() error {
 	if len(e.DisplayName) > 150 {
 		return errors.New("display name must be less than 150 characters")
 	}
+	if e.TeamID == "" {
+		return errors.New("team ID is required")
+	}
 	return nil
 }
 
@@ -572,6 +571,9 @@ func (e *Event) ValidateForUpdate() error {
 	}
 	if e.DisplayName == "" {
 		return errors.New("display name is required")
+	}
+	if e.TeamID == "" {
+		return errors.New("team ID is required")
 	}
 	return nil
 }
@@ -758,21 +760,19 @@ func (e *Event) AddMaterial(material EventMaterial) {
 }
 
 func (e *Event) RemoveMaterial(materialID string) error {
-    // Validate state
-    if e.IsDeleted() {
-        return errors.New("cannot modify a deleted event")
-    }
-    
-    // Find and remove
-    for i, m := range e.Materials {
-        if m.ID == materialID {
-            e.Materials = append(e.Materials[:i], e.Materials[i+1:]...)
-            e.UpdatedAt = time.Now()
-            return nil
-        }
-    }
-    
-    return fmt.Errorf("material with ID %s not found", materialID)
+	if e.IsDeleted() {
+		return errors.New("cannot modify a deleted event")
+	}
+	
+	for i, m := range e.Materials {
+		if m.ID == materialID {
+			e.Materials = append(e.Materials[:i], e.Materials[i+1:]...)
+			e.UpdatedAt = time.Now()
+			return nil
+		}
+	}
+	
+	return fmt.Errorf("material with ID %s not found", materialID)
 }
 
 // ============================================================
@@ -800,48 +800,37 @@ func (e *Event) IsUpcoming() bool {
 }
 
 // ============================================================
-// VISIBILITY HELPER METHODS ON EVENT
+// VISIBILITY HELPER METHODS
 // ============================================================
 
 // String returns the string representation of Visibility
 func (v Visibility) String() string {
-    return string(v)
+	return string(v)
 }
+
 // IsPublic checks if the event is public
 func (e *Event) IsPublic() bool {
-    return e.Visibility == string(VisibilityPublic)
+	return e.Visibility == string(VisibilityPublic)
 }
 
 // IsPrivate checks if the event is private
 func (e *Event) IsPrivate() bool {
-    return e.Visibility == string(VisibilityPrivate)
+	return e.Visibility == string(VisibilityPrivate)
 }
 
 // IsUnlisted checks if the event is unlisted
 func (e *Event) IsUnlisted() bool {
-    return e.Visibility == string(VisibilityUnlisted)
+	return e.Visibility == string(VisibilityUnlisted)
 }
 
 // GetVisibility returns the visibility as a Visibility type
 func (e *Event) GetVisibility() Visibility {
-    return Visibility(e.Visibility)
+	return Visibility(e.Visibility)
 }
 
-
+// IsFree checks if the event is free
 func (e *Event) IsFree() bool {
 	return e.IsFreeEvent
-}
-
-// ============================================================
-// PERMISSION METHODS
-// ============================================================
-
-func (e *Event) CanEdit(userID string) bool {
-	return e.CreatedBy == userID || (e.InstitutionID != nil && *e.InstitutionID == userID)
-}
-
-func (e *Event) CanDelete(userID string) bool {
-	return e.CreatedBy == userID
 }
 
 // ============================================================
@@ -865,4 +854,3 @@ func generateSlug(displayName string) string {
 	}
 	return fmt.Sprintf("%s-%d", slug, time.Now().Unix())
 }
-

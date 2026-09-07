@@ -19,21 +19,21 @@ type Service interface {
 	// ============================================================
 	// REGISTRATION
 	// ============================================================
-	
+
 	RegisterUser(ctx context.Context, req RegisterRequest) error
 	VerifyOTPAndCreateUser(ctx context.Context, email, otp string) (*authdomain.User, map[string]interface{}, error)
 
 	// ============================================================
 	// LOGIN
 	// ============================================================
-	
+
 	LoginUser(ctx context.Context, email, password, ipAddress, userAgent string) (*authdomain.User, string, error)
 	VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAddress, userAgent string) (*authdomain.User, string, string, error)
 
 	// ============================================================
 	// TOKEN MANAGEMENT
 	// ============================================================
-	
+
 	GenerateTokens(ctx context.Context, user *authdomain.User) (string, string, error)
 	RefreshTokens(ctx context.Context, refreshToken, userAgent, ip string) (string, string, error)
 	RevokeToken(ctx context.Context, refreshToken string) error
@@ -41,14 +41,14 @@ type Service interface {
 	// ============================================================
 	// PASSWORD RESET
 	// ============================================================
-	
+
 	InitiatePasswordReset(ctx context.Context, email, newPassword string) error
 	VerifyResetOTPAndResetPassword(ctx context.Context, email, otp string) error
 
 	// ============================================================
 	// UNIFIED OTP METHODS
 	// ============================================================
-	
+
 	GenerateOTP() string
 	StoreOTP(ctx context.Context, email, otp, purpose string) error
 	GetOTP(ctx context.Context, email, purpose string) (string, error)
@@ -58,14 +58,14 @@ type Service interface {
 	// ============================================================
 	// CONVENIENCE OTP METHOD
 	// ============================================================
-	
+
 	SendOTPEmail(ctx context.Context, to, name, purpose string, meta map[string]string) error
 	ResendOTP(ctx context.Context, email, name, purpose string) error
 
 	// ============================================================
 	// USER DATA (Registration flow)
 	// ============================================================
-	
+
 	StoreUserData(ctx context.Context, email string, data map[string]interface{}) error
 	GetUserData(ctx context.Context, email string) (map[string]string, error)
 	DeleteUserData(ctx context.Context, email string) error
@@ -73,7 +73,7 @@ type Service interface {
 	// ============================================================
 	// PASSWORD RESET DATA
 	// ============================================================
-	
+
 	StoreResetData(ctx context.Context, email, otp, newPassword string) error
 	GetResetData(ctx context.Context, email string) (map[string]string, error)
 	DeleteResetData(ctx context.Context, email string) error
@@ -81,21 +81,20 @@ type Service interface {
 	// ============================================================
 	// PROFESSIONAL TYPE
 	// ============================================================
-	
+
 	GetProfessionalTypeBySlug(ctx context.Context, slug string) (*authdomain.ProfessionalType, error)
 	ListProfessionalTypes(ctx context.Context) ([]*authdomain.ProfessionalType, error)
 	GetAccountTypeByID(ctx context.Context, id string) (*authdomain.AccountType, error)
 	GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error)
 
+	// ============================================================
+	// USER QUERIES (For Team Module)
+	// ============================================================
 
-
-	 
-    // GetUserByID retrieves a user by ID
-    GetUserByID(ctx context.Context, userID string) (*authdomain.User, error)
-    
-    
-    // GetTokenContext builds a TokenContext for a user
-    GetTokenContext(ctx context.Context, user *authdomain.User) (*authdomain.TokenContext, error)
+	GetUserByID(ctx context.Context, userID string) (*authdomain.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*authdomain.User, error)
+	UserExists(ctx context.Context, email string) (bool, error)
+	GetTokenContext(ctx context.Context, user *authdomain.User) (*authdomain.TokenContext, error)
 }
 
 // ============================================================
@@ -103,21 +102,22 @@ type Service interface {
 // ============================================================
 
 type RegisterRequest struct {
-	// User fields
-	Email          string `json:"email" validate:"required,email"`
-	Password       string `json:"password" validate:"required,min=8"`
-	Name           string `json:"name" validate:"required"`
-	Phone          string `json:"phone" validate:"required"`
-	AccountType    string `json:"account_type" validate:"required,oneof=personal institution"`
-	
+	Email       string
+	Password    string
+	Name        string
+	Phone       string
+	AccountType string
+
+	InviteToken string
+
 	// Professional Type (for personal accounts)
-	ProfessionalType string `json:"professional_type,omitempty"`
+	ProfessionalType string
 
 	// Institution fields (for institution accounts)
-	InstitutionName  string `json:"institution_name,omitempty"`
-	InstitutionEmail string `json:"institution_email,omitempty"`
-	InstitutionPhone string `json:"institution_phone,omitempty"`
-	InstitutionType  string `json:"institution_type,omitempty"`
+	InstitutionName  string
+	InstitutionEmail string
+	InstitutionPhone string
+	InstitutionType  string
 }
 
 // ============================================================
@@ -135,7 +135,7 @@ type service struct {
 	tokenSvc      authdomain.TokenService
 	notifSvc      authdomain.NotificationService
 	enforcer      *authorization.Enforcer
-	teamSvc      TeamService
+	teamSvc       TeamService
 }
 
 func NewService(
@@ -162,7 +162,7 @@ func NewService(
 		tokenSvc:      tokenSvc,
 		notifSvc:      notifSvc,
 		enforcer:      enforcer,
-		teamSvc:      teamSvc,
+		teamSvc:       teamSvc,
 	}
 }
 
@@ -170,23 +170,32 @@ func NewService(
 // PROFESSIONAL TYPE METHODS
 // ============================================================
 
-// GetProfessionalTypeBySlug gets a professional type by slug
 func (s *service) GetProfessionalTypeBySlug(ctx context.Context, slug string) (*authdomain.ProfessionalType, error) {
-	// Repository doesn't take context, but we keep it for interface consistency
-	return s.repo.GetProfessionalTypeBySlug(slug)
+	return s.repo.GetProfessionalTypeBySlug(ctx, slug)
 }
 
-// ListProfessionalTypes lists all professional types
 func (s *service) ListProfessionalTypes(ctx context.Context) ([]*authdomain.ProfessionalType, error) {
 	return s.repo.ListProfessionalTypes(ctx)
 }
 
-// GetAccountTypeByID gets an account type by ID
 func (s *service) GetAccountTypeByID(ctx context.Context, id string) (*authdomain.AccountType, error) {
-	return s.repo.GetAccountTypeByID(id)
+	return s.repo.GetAccountTypeByID(ctx, id)
 }
 
-// GetProfessionalTypeByID gets a professional type by ID
 func (s *service) GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error) {
-	return s.repo.GetProfessionalTypeByID(id)
+	return s.repo.GetProfessionalTypeByID(ctx, id)
+}
+
+// ============================================================
+// USER QUERIES (For Team Module)
+// ============================================================
+
+// GetUserByEmail retrieves a user by email
+func (s *service) GetUserByEmail(ctx context.Context, email string) (*authdomain.User, error) {
+	return s.repo.GetUserByEmail(ctx, email)
+}
+
+// UserExists checks if a user exists by email
+func (s *service) UserExists(ctx context.Context, email string) (bool, error) {
+	return s.repo.UserExistsByEmail(ctx, email)
 }

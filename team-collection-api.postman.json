@@ -1,0 +1,313 @@
+{
+  "info": {
+    "name": "Nuruvent Team API",
+    "description": "Complete Team Management API collection for Nuruvent",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "team_id",
+      "value": ""
+    },
+    {
+      "key": "user_id",
+      "value": ""
+    },
+    {
+      "key": "invitation_token",
+      "value": ""
+    },
+    {
+      "key": "invitation_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Public Routes",
+      "item": [
+        {
+          "name": "1. Validate Invitation Token",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/teams/invitations/validate?token={{invitation_token}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Team Operations",
+      "item": [
+        {
+          "name": "1. Create Personal Team",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/teams",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"My Personal Team\"\n}"
+            }
+          }
+        },
+        {
+          "name": "2. Get My Teams",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/teams",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "3. Get Team by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/teams/{{team_id}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "4. Update Team",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/api/v1/teams/{{team_id}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Updated Team Name\",\n    \"display_name\": \"Updated Display Name\"\n}"
+            }
+          }
+        },
+        {
+          "name": "5. Delete Team",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/v1/teams/{{team_id}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Member Operations",
+      "item": [
+        {
+          "name": "1. Get Team Members",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/teams/{{team_id}}/members?limit=20&offset=0",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "2. Add Member to Team",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/teams/{{team_id}}/members",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{user_id}}\",\n    \"role\": \"trainer\"\n}"
+            }
+          }
+        },
+        {
+          "name": "3. Update Member Role",
+          "request": {
+            "method": "PATCH",
+            "url": "{{base_url}}/api/v1/teams/{{team_id}}/members/{{user_id}}/role",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"role\": \"account_admin\"\n}"
+            }
+          }
+        },
+        {
+          "name": "4. Remove Member from Team",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/v1/teams/{{team_id}}/members/{{user_id}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "5. Leave Team",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/teams/{{team_id}}/leave",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Invitation Operations",
+      "item": [
+        {
+          "name": "1. Invite Member to Team",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/teams/invite",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"team_id\": \"{{team_id}}\",\n    \"email\": \"newuser@example.com\",\n    \"role\": \"trainer\"\n}"
+            }
+          }
+        },
+        {
+          "name": "2. Get Team Invitations",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/teams/{{team_id}}/invitations?limit=20&offset=0",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "3. Resend Invitation",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/teams/{{team_id}}/invitations/resend",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"invitation_id\": \"{{invitation_id}}\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

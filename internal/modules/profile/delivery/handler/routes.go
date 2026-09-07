@@ -19,8 +19,8 @@ func (h *ProfileHandler) RegisterRoutes(
 		// Get public user profile
 		public.Get("/users/:id", h.GetUserProfile)
 
-		// Get public institution profile
-		public.Get("/institutions/:id", h.GetInstitutionProfile)
+		// Get public account profile
+		public.Get("/accounts/:id", h.GetAccountProfile)
 	}
 
 	// ============================================================
@@ -37,12 +37,12 @@ func (h *ProfileHandler) RegisterRoutes(
 		// Get multiple users by IDs (bulk)
 		auth.Get("/users/bulk", h.GetUserProfiles)
 
-		// ---- INSTITUTION ----
-		// List institutions with filters (pagination, search, etc.)
-		auth.Get("/institutions", h.ListInstitutions)
+		// ---- ACCOUNT ----
+		// List accounts with filters (pagination, search, etc.)
+		auth.Get("/accounts", h.ListAccounts)
 
-		// Get multiple institutions by IDs (bulk)
-		auth.Get("/institutions/bulk", h.GetInstitutionProfiles)
+		// Get multiple accounts by IDs (bulk)
+		auth.Get("/accounts/bulk", h.GetAccountProfiles)
 
 		// ---- ORGANIZER ----
 		// Get organizer info for events module
@@ -50,7 +50,7 @@ func (h *ProfileHandler) RegisterRoutes(
 	}
 
 	// ============================================================
-	// 3. PERSONAL TEAM ROUTES
+	// 3. PERSONAL USER ROUTES
 	// ============================================================
 	personal := router.Group("/users/me")
 	personal.Use(authMiddleware)
@@ -63,15 +63,15 @@ func (h *ProfileHandler) RegisterRoutes(
 	}
 
 	// ============================================================
-	// 4. INSTITUTION TEAM ROUTES
+	// 4. ACCOUNT ROUTES (replaces Institution routes)
 	// ============================================================
-	institution := router.Group("/institutions/:institutionId")
-	institution.Use(authMiddleware)
-	institution.Use(authzMiddleware)
+	account := router.Group("/accounts/:accountId")
+	account.Use(authMiddleware)
+	account.Use(authzMiddleware)
 	{
-		institution.Get("/profile", h.GetInstitutionProfile)
-		institution.Put("/profile", h.UpdateInstitutionProfile)
-		institution.Post("/logo", h.UploadInstitutionLogo)
-		institution.Delete("/logo", h.DeleteInstitutionLogo)
+		account.Get("/profile", h.GetAccountProfile)
+		account.Put("/profile", h.UpdateAccountProfile)
+		account.Post("/logo", h.UploadAccountLogo)
+		account.Delete("/logo", h.DeleteAccountLogo)
 	}
 }

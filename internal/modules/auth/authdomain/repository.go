@@ -5,37 +5,59 @@ package authdomain
 import "context"
 
 type Repository interface {
+
+	WithTransaction(ctx context.Context, fn func(txCtx context.Context) error) error
+
+	
 	// ============================================================
 	// USER OPERATIONS
 	// ============================================================
 
-	UserExistsByEmail(email string) (bool, error)
-	UserExistsByPhone(phone string) (bool, error)
-	GetUserByEmail(email string) (*User, error)
-	GetUserByPhone(phone string) (*User, error)
+	UserExistsByEmail(ctx context.Context, email string) (bool, error)
+	UserExistsByPhone(ctx context.Context, phone string) (bool, error)
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	GetUserByPhone(ctx context.Context, phone string) (*User, error)
 	GetUserByID(ctx context.Context, id string) (*User, error)
-	CreateUser(user *User) error
-	UpdateUser(user *User) error
-	DeleteUser(userID string) error
-	ReactivateUser(userID string) error
+	CreateUser(ctx context.Context, user *User) error
+	UpdateUser(ctx context.Context, user *User) error
+	DeleteUser(ctx context.Context, userID string) error
+	ReactivateUser(ctx context.Context, userID string) error
 
 	// ============================================================
 	// ACCOUNT TYPE OPERATIONS
 	// ============================================================
 
-	GetAccountTypeByID(id string) (*AccountType, error)
-	GetAccountTypeBySlug(slug string) (*AccountType, error)
-	GetAccountTypeByName(name string) (*AccountType, error)
+	GetAccountTypeByID(ctx context.Context, id string) (*AccountType, error)
+	GetAccountTypeBySlug(ctx context.Context, slug string) (*AccountType, error)
+	GetAccountTypeByName(ctx context.Context, name string) (*AccountType, error)
+
+	// ============================================================
+	// INSTITUTION TYPE OPERATIONS
+	// ============================================================
+
+	GetInstitutionTypeByID(ctx context.Context, id string) (*InstitutionType, error)
+	GetInstitutionTypeBySlug(ctx context.Context, slug string) (*InstitutionType, error)
+	GetInstitutionTypeByName(ctx context.Context, name string) (*InstitutionType, error)
+	ListInstitutionTypes(ctx context.Context) ([]*InstitutionType, error)
+
+	// ============================================================
+	// PROFESSIONAL TYPE OPERATIONS
+	// ============================================================
+
+	GetProfessionalTypeByID(ctx context.Context, id string) (*ProfessionalType, error)
+	GetProfessionalTypeBySlug(ctx context.Context, slug string) (*ProfessionalType, error)
+	GetProfessionalTypeByName(ctx context.Context, name string) (*ProfessionalType, error)
+	ListProfessionalTypes(ctx context.Context) ([]*ProfessionalType, error)
 
 	// ============================================================
 	// REFRESH TOKEN OPERATIONS
 	// ============================================================
 
-	CreateRefreshToken(token *RefreshToken) error
-	GetRefreshTokenByToken(token string) (*RefreshToken, error)
-	RevokeRefreshToken(token string) error
-	RevokeAllRefreshTokensForUser(userID string) error
-	UpdateRefreshTokenContext(token, userAgent, ipAddress string) error
+	CreateRefreshToken(ctx context.Context, token *RefreshToken) error
+	GetRefreshTokenByToken(ctx context.Context, token string) (*RefreshToken, error)
+	RevokeRefreshToken(ctx context.Context, token string) error
+	RevokeAllRefreshTokensForUser(ctx context.Context, userID string) error
+	UpdateRefreshTokenContext(ctx context.Context, token, userAgent, ipAddress string) error
 
 	// ============================================================
 	// ACCOUNT OPERATIONS
@@ -72,14 +94,4 @@ type Repository interface {
 
 	IsPlatformAdmin(ctx context.Context, userID string) (bool, error)
 	IsSuperAdmin(ctx context.Context, userID string) (bool, error)
-
-
-	//============================================================
-	// PROFESSIONAL TYPE OPERATIONS
-	// ============================================================
-
-	GetProfessionalTypeByID(id string) (*ProfessionalType, error)
-	GetProfessionalTypeBySlug(slug string) (*ProfessionalType, error)
-	GetProfessionalTypeByName(name string) (*ProfessionalType, error)
-	ListProfessionalTypes(ctx context.Context) ([]*ProfessionalType, error)
 }

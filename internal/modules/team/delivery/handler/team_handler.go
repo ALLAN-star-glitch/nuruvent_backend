@@ -3,462 +3,517 @@
 package handler
 
 import (
-    "github.com/gofiber/fiber/v3"
+	"strconv"
 
-    "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
-    "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/teamdomain"
+	"github.com/gofiber/fiber/v3"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/teamdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 )
 
 type TeamHandler struct {
-    service service.Service
+	service service.Service
 }
 
 func NewTeamHandler(service service.Service) *TeamHandler {
-    return &TeamHandler{service: service}
-}
-
-// RegisterRoutes registers all team routes
-func (h *TeamHandler) RegisterRoutes(app fiber.Router) {
-    // Public routes (no auth required)
-    app.Get("/teams/invitations/validate", h.ValidateInvitation)
-    app.Post("/teams/register", h.RegisterAndAcceptInvitation)
-
-    // Protected routes (auth required)
-    team := app.Group("/teams")
-    team.Post("/invite", h.InviteMember)
-    team.Get("/", h.GetUserTeams)
-    team.Get("/:id", h.GetTeam)
-    team.Patch("/:id", h.UpdateTeam)
-    team.Get("/:id/members", h.GetTeamMembers)
-    team.Patch("/:id/members/:userId/role", h.UpdateMemberRole)
-    team.Delete("/:id/members/:userId", h.RemoveMember)
-    team.Post("/:id/leave", h.LeaveTeam)
-    team.Get("/:id/invitations", h.GetTeamInvitations)
-    team.Post("/:id/invitations/resend", h.ResendInvitation)
+	return &TeamHandler{service: service}
 }
 
 // ============================================================
-// HANDLER METHODS
+// PUBLIC HANDLERS
 // ============================================================
-
-// InviteMember handles inviting a member to a team
-func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
-    var req struct {
-        Email string `json:"email"`
-        Role  string `json:"role"`
-    }
-    if err := c.BodyParser(&req); err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Invalid request body",
-        })
-    }
-
-    // Get team ID from path
-    teamID := c.Params("id")
-    if teamID == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "team ID is required",
-        })
-    }
-
-    // Get current user ID from context (from auth middleware)
-    userID := c.Locals("user_id").(string)
-
-    // Validate role
-    if !teamdomain.IsValidRole(req.Role) {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Invalid role. Valid roles: account_admin, event_manager, team_member",
-        })
-    }
-
-    // Call service
-    invitation, err := h.service.InviteMember(c.Context(), service.InviteMemberCommand{
-        TeamID:    teamID,
-        Email:     req.Email,
-        Role:      teamdomain.MemberRole(req.Role),
-        InvitedBy: userID,
-    })
-    if err != nil {
-        status := fiber.StatusInternalServerError
-        switch err {
-        case teamdomain.ErrTeamNotFound:
-            status = fiber.StatusNotFound
-        case teamdomain.ErrMemberAlreadyExists:
-            status = fiber.StatusConflict
-        }
-        return c.Status(status).JSON(fiber.Map{
-            "error": err.Error(),
-        })
-    }
-
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "message":    "Invitation sent successfully",
-        "invitation": invitation,
-    })
-}
 
 // ValidateInvitation validates an invitation token
 func (h *TeamHandler) ValidateInvitation(c fiber.Ctx) error {
-    token := c.Query("token")
-    if token == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "token is required",
-        })
-    }
+	token := c.Query("token")
+	if token == "" {
+		return response.BadRequest(c, "token is required", nil)
+	}
 
-    invitation, err := h.service.ValidateInvitationToken(c.Context(), token)
-    if err != nil {
-        status := fiber.StatusBadRequest
-        switch err {
-        case teamdomain.ErrInvitationNotFound:
-            status = fiber.StatusNotFound
-        case teamdomain.ErrInvitationExpired:
-            status = fiber.StatusGone
-        case teamdomain.ErrInvitationAlreadyAccepted:
-            status = fiber.StatusConflict
-        }
-        return c.Status(status).JSON(fiber.Map{
-            "valid":   false,
-            "message": err.Error(),
-        })
-    }
+	invitation, err := h.service.ValidateInvitationToken(c.Context(), token)
+	if err != nil {
+		if err == teamdomain.ErrInvitationNotFound {
+			return response.NotFound(c, "Invitation not found", nil)
+		}
+		if err == teamdomain.ErrInvitationExpired {
+			return response.BadRequest(c, "Invitation has expired", nil)
+		}
+		if err == teamdomain.ErrInvitationAlreadyAccepted {
+			return response.BadRequest(c, "Invitation already accepted", nil)
+		}
+		return response.InternalError(c, "Failed to validate invitation", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "valid":           true,
-        "email":           invitation.Email,
-        "role":            string(invitation.Role),
-        "expires_at":      invitation.ExpiresAt,
-        "invitation_id":   invitation.ID,
-    })
+	return response.Success(c, "Invitation validated successfully", fiber.Map{
+		"valid":         true,
+		"email":         invitation.Email,
+		"role":          string(invitation.Role),
+		"expires_at":    invitation.ExpiresAt,
+		"invitation_id": invitation.ID,
+	})
 }
 
-// RegisterAndAcceptInvitation handles registration and invitation acceptance
-func (h *TeamHandler) RegisterAndAcceptInvitation(c fiber.Ctx) error {
-    var req struct {
-        Token    string `json:"token"`
-        Name     string `json:"name"`
-        Password string `json:"password"`
-        Phone    string `json:"phone"`
-    }
-    if err := c.BodyParser(&req); err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Invalid request body",
-        })
-    }
 
-    // Validate
-    if req.Token == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "token is required",
-        })
-    }
-    if req.Name == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "name is required",
-        })
-    }
-    if req.Password == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "password is required",
-        })
-    }
+// ============================================================
+// PROTECTED HANDLERS - TEAM OPERATIONS
+// ============================================================
 
-    // TODO: This should create user via auth service and accept invitation
-    // For now, we need to get user ID after creation
-
-    return c.Status(fiber.StatusNotImplemented).JSON(fiber.Map{
-        "error": "Registration flow coming soon",
-    })
-}
-
-// GetUserTeams retrieves all teams for the current user
+// GetUserTeams returns all teams for the authenticated user
 func (h *TeamHandler) GetUserTeams(c fiber.Ctx) error {
-    userID := c.Locals("user_id").(string)
+	userID := c.Locals("user_id").(string)
+	if userID == "" {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
 
-    teams, err := h.service.GetUserTeams(c.Context(), userID)
-    if err != nil {
-        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	teams, err := h.service.GetUserTeams(c.Context(), userID)
+	if err != nil {
+		return response.InternalError(c, "Failed to get user teams", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "teams": teams,
-    })
+	return response.Success(c, "Teams retrieved successfully", fiber.Map{
+		"teams": teams,
+		"count": len(teams),
+	})
 }
 
-// GetTeam retrieves a team by ID
+// GetTeam returns a team by ID
 func (h *TeamHandler) GetTeam(c fiber.Ctx) error {
-    teamID := c.Params("id")
-    if teamID == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "team ID is required",
-        })
-    }
+	teamID := c.Params("id")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
+	}
 
-    team, err := h.service.GetTeamByID(c.Context(), teamID)
-    if err != nil {
-        status := fiber.StatusInternalServerError
-        if err == teamdomain.ErrTeamNotFound {
-            status = fiber.StatusNotFound
-        }
-        return c.Status(status).JSON(fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	team, err := h.service.GetTeamByID(c.Context(), teamID)
+	if err != nil {
+		if err == teamdomain.ErrTeamNotFound {
+			return response.NotFound(c, "Team not found", nil)
+		}
+		return response.InternalError(c, "Failed to get team", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "team": team,
-    })
+	return response.Success(c, "Team retrieved successfully", fiber.Map{
+		"team": team,
+	})
+}
+
+// CreatePersonalTeam creates a personal team for the authenticated user
+func (h *TeamHandler) CreatePersonalTeam(c fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+	if userID == "" {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request body", nil)
+	}
+
+	userName := c.Locals("user_name").(string)
+	if userName == "" {
+		userName = req.Name
+	}
+
+	team, err := h.service.CreatePersonalTeam(c.Context(), userID, userName)
+	if err != nil {
+		if err == teamdomain.ErrTeamAlreadyExists {
+			return response.Conflict(c, "Personal team already exists", nil)
+		}
+		return response.InternalError(c, "Failed to create personal team", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return response.Created(c, "Personal team created successfully", fiber.Map{
+		"team": team,
+	})
 }
 
 // UpdateTeam updates a team
 func (h *TeamHandler) UpdateTeam(c fiber.Ctx) error {
-    teamID := c.Params("id")
-    if teamID == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "team ID is required",
-        })
-    }
+	teamID := c.Params("id")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
+	}
 
-    var updates map[string]interface{}
-    if err := c.BodyParser(&updates); err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Invalid request body",
-        })
-    }
+	var updates map[string]interface{}
+	if err := c.Bind().Body(&updates); err != nil {
+		return response.BadRequest(c, "Invalid request body", nil)
+	}
 
-    team, err := h.service.UpdateTeam(c.Context(), teamID, updates)
-    if err != nil {
-        status := fiber.StatusInternalServerError
-        if err == teamdomain.ErrTeamNotFound {
-            status = fiber.StatusNotFound
-        }
-        return c.Status(status).JSON(fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	team, err := h.service.UpdateTeam(c.Context(), teamID, updates)
+	if err != nil {
+		if err == teamdomain.ErrTeamNotFound {
+			return response.NotFound(c, "Team not found", nil)
+		}
+		if err == teamdomain.ErrPermissionDenied {
+			return response.Forbidden(c, "Permission denied", nil)
+		}
+		return response.InternalError(c, "Failed to update team", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "message": "Team updated successfully",
-        "team":    team,
-    })
+	return response.Success(c, "Team updated successfully", fiber.Map{
+		"team": team,
+	})
 }
 
-// GetTeamMembers retrieves all members of a team
+// DeleteTeam deletes a team
+func (h *TeamHandler) DeleteTeam(c fiber.Ctx) error {
+	teamID := c.Params("id")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
+	}
+
+	err := h.service.DeleteTeam(c.Context(), teamID)
+	if err != nil {
+		if err == teamdomain.ErrTeamNotFound {
+			return response.NotFound(c, "Team not found", nil)
+		}
+		if err == teamdomain.ErrPermissionDenied {
+			return response.Forbidden(c, "Permission denied", nil)
+		}
+		return response.InternalError(c, "Failed to delete team", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return response.Success(c, "Team deleted successfully", nil)
+}
+
+// ============================================================
+// PROTECTED HANDLERS - MEMBER OPERATIONS
+// ============================================================
+
+// GetTeamMembers returns all members of a team
 func (h *TeamHandler) GetTeamMembers(c fiber.Ctx) error {
-    teamID := c.Params("id")
-    if teamID == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "team ID is required",
-        })
-    }
+	teamID := c.Params("id")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
+	}
 
-    filters := teamdomain.ListMembersFilters{
-        Limit:  c.QueryInt("limit", 20),
-        Offset: c.QueryInt("offset", 0),
-        Search: c.Query("search"),
-        Role:   teamdomain.MemberRole(c.Query("role")),
-    }
+	limit, _ := strconv.Atoi(c.Query("limit", "20"))
+	offset, _ := strconv.Atoi(c.Query("offset", "0"))
 
-    members, total, err := h.service.GetTeamMembers(c.Context(), teamID, filters)
-    if err != nil {
-        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	filters := teamdomain.ListMembersFilters{
+		Limit:  limit,
+		Offset: offset,
+		Search: c.Query("search"),
+		Role:   teamdomain.MemberRole(c.Query("role")),
+	}
 
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "members": members,
-        "total":   total,
-        "limit":   filters.Limit,
-        "offset":  filters.Offset,
-    })
+	members, total, err := h.service.GetTeamMembers(c.Context(), teamID, filters)
+	if err != nil {
+		if err == teamdomain.ErrTeamNotFound {
+			return response.NotFound(c, "Team not found", nil)
+		}
+		return response.InternalError(c, "Failed to get team members", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return response.Success(c, "Team members retrieved successfully", fiber.Map{
+		"members": members,
+		"total":   total,
+		"limit":   limit,
+		"offset":  offset,
+	})
+}
+
+// AddMember adds a member to a team
+func (h *TeamHandler) AddMember(c fiber.Ctx) error {
+	teamID := c.Params("id")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
+	}
+
+	var req struct {
+		UserID string `json:"user_id"`
+		Role   string `json:"role"`
+	}
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request body", nil)
+	}
+
+	if req.UserID == "" {
+		return response.BadRequest(c, "user_id is required", nil)
+	}
+	if req.Role == "" {
+		return response.BadRequest(c, "role is required", nil)
+	}
+	if !teamdomain.IsValidRole(req.Role) {
+		return response.BadRequest(c, "Invalid role. Valid roles: account_admin, trainer", nil)
+	}
+
+	addedBy := c.Locals("user_id").(string)
+
+	member, err := h.service.AddMember(c.Context(), teamID, req.UserID, teamdomain.MemberRole(req.Role), addedBy)
+	if err != nil {
+		if err == teamdomain.ErrTeamNotFound {
+			return response.NotFound(c, "Team not found", nil)
+		}
+		if err == teamdomain.ErrMemberAlreadyExists {
+			return response.Conflict(c, "User is already a member of this team", nil)
+		}
+		if err == teamdomain.ErrPermissionDenied {
+			return response.Forbidden(c, "Permission denied", nil)
+		}
+		return response.InternalError(c, "Failed to add member", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return response.Created(c, "Member added successfully", fiber.Map{
+		"member": member,
+	})
 }
 
 // UpdateMemberRole updates a member's role
 func (h *TeamHandler) UpdateMemberRole(c fiber.Ctx) error {
-    teamID := c.Params("id")
-    if teamID == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "team ID is required",
-        })
-    }
+	teamID := c.Params("id")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
+	}
 
-    userID := c.Params("userId")
-    if userID == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "user ID is required",
-        })
-    }
+	userID := c.Params("userId")
+	if userID == "" {
+		return response.BadRequest(c, "User ID is required", nil)
+	}
 
-    var req struct {
-        Role string `json:"role"`
-    }
-    if err := c.BodyParser(&req); err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Invalid request body",
-        })
-    }
+	var req struct {
+		Role string `json:"role"`
+	}
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request body", nil)
+	}
 
-    if !teamdomain.IsValidRole(req.Role) {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Invalid role. Valid roles: account_admin, event_manager, team_member",
-        })
-    }
+	if req.Role == "" {
+		return response.BadRequest(c, "role is required", nil)
+	}
+	if !teamdomain.IsValidRole(req.Role) {
+		return response.BadRequest(c, "Invalid role. Valid roles: account_admin, trainer", nil)
+	}
 
-    updatedBy := c.Locals("user_id").(string)
+	updatedBy := c.Locals("user_id").(string)
 
-    member, err := h.service.UpdateMemberRole(c.Context(), teamID, userID, teamdomain.MemberRole(req.Role), updatedBy)
-    if err != nil {
-        status := fiber.StatusInternalServerError
-        switch err {
-        case teamdomain.ErrTeamNotFound, teamdomain.ErrMemberNotFound:
-            status = fiber.StatusNotFound
-        case teamdomain.ErrCannotChangeOwnRole:
-            status = fiber.StatusForbidden
-        }
-        return c.Status(status).JSON(fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	member, err := h.service.UpdateMemberRole(c.Context(), teamID, userID, teamdomain.MemberRole(req.Role), updatedBy)
+	if err != nil {
+		if err == teamdomain.ErrTeamNotFound || err == teamdomain.ErrMemberNotFound {
+			return response.NotFound(c, "Member not found", nil)
+		}
+		if err == teamdomain.ErrPermissionDenied {
+			return response.Forbidden(c, "Permission denied", nil)
+		}
+		if err == teamdomain.ErrCannotChangeOwnRole {
+			return response.BadRequest(c, "Cannot change your own role", nil)
+		}
+		return response.InternalError(c, "Failed to update member role", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "message": "Role updated successfully",
-        "member":  member,
-    })
+	return response.Success(c, "Member role updated successfully", fiber.Map{
+		"member": member,
+	})
 }
 
 // RemoveMember removes a member from a team
 func (h *TeamHandler) RemoveMember(c fiber.Ctx) error {
-    teamID := c.Params("id")
-    if teamID == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "team ID is required",
-        })
-    }
+	teamID := c.Params("id")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
+	}
 
-    userID := c.Params("userId")
-    if userID == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "user ID is required",
-        })
-    }
+	userID := c.Params("userId")
+	if userID == "" {
+		return response.BadRequest(c, "User ID is required", nil)
+	}
 
-    removedBy := c.Locals("user_id").(string)
+	removedBy := c.Locals("user_id").(string)
 
-    err := h.service.RemoveMember(c.Context(), teamID, userID, removedBy)
-    if err != nil {
-        status := fiber.StatusInternalServerError
-        switch err {
-        case teamdomain.ErrTeamNotFound, teamdomain.ErrMemberNotFound:
-            status = fiber.StatusNotFound
-        case teamdomain.ErrCannotRemoveSelf:
-            status = fiber.StatusForbidden
-        case teamdomain.ErrLastAdminCannotLeave:
-            status = fiber.StatusBadRequest
-        }
-        return c.Status(status).JSON(fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	err := h.service.RemoveMember(c.Context(), teamID, userID, removedBy)
+	if err != nil {
+		if err == teamdomain.ErrTeamNotFound || err == teamdomain.ErrMemberNotFound {
+			return response.NotFound(c, "Member not found", nil)
+		}
+		if err == teamdomain.ErrPermissionDenied {
+			return response.Forbidden(c, "Permission denied", nil)
+		}
+		if err == teamdomain.ErrCannotRemoveSelf {
+			return response.BadRequest(c, "Cannot remove yourself from the team", nil)
+		}
+		if err == teamdomain.ErrLastAdminCannotLeave {
+			return response.BadRequest(c, "Cannot remove the last admin of the team", nil)
+		}
+		return response.InternalError(c, "Failed to remove member", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "message": "Member removed successfully",
-    })
+	return response.Success(c, "Member removed successfully", nil)
 }
 
 // LeaveTeam allows a user to leave a team
 func (h *TeamHandler) LeaveTeam(c fiber.Ctx) error {
-    teamID := c.Params("id")
-    if teamID == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "team ID is required",
-        })
-    }
+	teamID := c.Params("id")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
+	}
 
-    userID := c.Locals("user_id").(string)
+	userID := c.Locals("user_id").(string)
 
-    err := h.service.LeaveTeam(c.Context(), teamID, userID)
-    if err != nil {
-        status := fiber.StatusInternalServerError
-        switch err {
-        case teamdomain.ErrTeamNotFound, teamdomain.ErrMemberNotFound:
-            status = fiber.StatusNotFound
-        case teamdomain.ErrLastAdminCannotLeave:
-            status = fiber.StatusBadRequest
-        }
-        return c.Status(status).JSON(fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	err := h.service.LeaveTeam(c.Context(), teamID, userID)
+	if err != nil {
+		if err == teamdomain.ErrTeamNotFound || err == teamdomain.ErrMemberNotFound {
+			return response.NotFound(c, "Team or member not found", nil)
+		}
+		if err == teamdomain.ErrLastAdminCannotLeave {
+			return response.BadRequest(c, "Cannot leave as the last admin of the team", nil)
+		}
+		return response.InternalError(c, "Failed to leave team", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "message": "You have left the team",
-    })
+	return response.Success(c, "You have left the team successfully", nil)
+}
+
+// ============================================================
+// PROTECTED HANDLERS - INVITATION OPERATIONS
+// ============================================================
+
+// InviteMember invites a user to join a team
+func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
+	userID := c.Locals("user_id").(string)
+	if userID == "" {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
+	teamID := c.Params("id")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
+	}
+
+	var req struct {
+		Email string `json:"email"`
+		Role  string `json:"role"`
+	}
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request body", nil)
+	}
+
+	if req.Email == "" {
+		return response.BadRequest(c, "email is required", nil)
+	}
+	if req.Role == "" {
+		return response.BadRequest(c, "role is required", nil)
+	}
+	if !teamdomain.IsValidRole(req.Role) {
+		return response.BadRequest(c, "Invalid role. Valid roles: account_admin, trainer", nil)
+	}
+
+	invitation, err := h.service.InviteMember(c.Context(), service.InviteMemberCommand{
+		TeamID:    teamID,
+		Email:     req.Email,
+		Role:      req.Role,
+		InvitedBy: userID,
+	})
+	if err != nil {
+		if err == teamdomain.ErrTeamNotFound {
+			return response.NotFound(c, "Team not found", nil)
+		}
+		if err == teamdomain.ErrMemberAlreadyExists {
+			return response.Conflict(c, "User is already a member of this team", nil)
+		}
+		if err == teamdomain.ErrPermissionDenied {
+			return response.Forbidden(c, "Permission denied", nil)
+		}
+		return response.InternalError(c, "Failed to invite member", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return response.Created(c, "Invitation sent successfully", fiber.Map{
+		"invitation": invitation,
+	})
 }
 
 // GetTeamInvitations retrieves all invitations for a team
 func (h *TeamHandler) GetTeamInvitations(c fiber.Ctx) error {
-    teamID := c.Params("id")
-    if teamID == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "team ID is required",
-        })
-    }
+	teamID := c.Params("id")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
+	}
 
-    filters := teamdomain.ListInvitationsFilters{
-        Limit:  c.QueryInt("limit", 20),
-        Offset: c.QueryInt("offset", 0),
-        Email:  c.Query("email"),
-        Status: teamdomain.InvitationStatus(c.Query("status")),
-    }
+	limit, _ := strconv.Atoi(c.Query("limit", "20"))
+	offset, _ := strconv.Atoi(c.Query("offset", "0"))
 
-    invitations, total, err := h.service.GetTeamInvitations(c.Context(), teamID, filters)
-    if err != nil {
-        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	filters := teamdomain.ListInvitationsFilters{
+		Limit:  limit,
+		Offset: offset,
+		Email:  c.Query("email"),
+		Status: teamdomain.InvitationStatus(c.Query("status")),
+	}
 
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "invitations": invitations,
-        "total":       total,
-        "limit":       filters.Limit,
-        "offset":      filters.Offset,
-    })
+	invitations, total, err := h.service.GetTeamInvitations(c.Context(), teamID, filters)
+	if err != nil {
+		if err == teamdomain.ErrTeamNotFound {
+			return response.NotFound(c, "Team not found", nil)
+		}
+		return response.InternalError(c, "Failed to get team invitations", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return response.Success(c, "Team invitations retrieved successfully", fiber.Map{
+		"invitations": invitations,
+		"total":       total,
+		"limit":       limit,
+		"offset":      offset,
+	})
 }
 
 // ResendInvitation resends an invitation
 func (h *TeamHandler) ResendInvitation(c fiber.Ctx) error {
-    var req struct {
-        InvitationID string `json:"invitation_id"`
-    }
-    if err := c.BodyParser(&req); err != nil {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "Invalid request body",
-        })
-    }
+	teamID := c.Params("id")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
+	}
 
-    if req.InvitationID == "" {
-        return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-            "error": "invitation_id is required",
-        })
-    }
+	var req struct {
+		InvitationID string `json:"invitation_id"`
+	}
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request body", nil)
+	}
 
-    invitation, err := h.service.ResendInvitation(c.Context(), req.InvitationID)
-    if err != nil {
-        status := fiber.StatusInternalServerError
-        if err == teamdomain.ErrInvitationNotFound {
-            status = fiber.StatusNotFound
-        }
-        return c.Status(status).JSON(fiber.Map{
-            "error": err.Error(),
-        })
-    }
+	if req.InvitationID == "" {
+		return response.BadRequest(c, "invitation_id is required", nil)
+	}
 
-    return c.Status(fiber.StatusOK).JSON(fiber.Map{
-        "message":    "Invitation resent successfully",
-        "invitation": invitation,
-    })
+	invitation, err := h.service.ResendInvitation(c.Context(), req.InvitationID)
+	if err != nil {
+		if err == teamdomain.ErrInvitationNotFound {
+			return response.NotFound(c, "Invitation not found", nil)
+		}
+		if err == teamdomain.ErrPermissionDenied {
+			return response.Forbidden(c, "Permission denied", nil)
+		}
+		return response.InternalError(c, "Failed to resend invitation", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return response.Success(c, "Invitation resent successfully", fiber.Map{
+		"invitation": invitation,
+	})
 }

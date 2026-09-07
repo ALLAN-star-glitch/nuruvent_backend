@@ -10,12 +10,13 @@ import "context"
 
 // RoleManager defines the role management operations that the profile module requires
 type RoleManager interface {
-    // AssignRole assigns a role to a user in a scope
-    AssignRole(ctx context.Context, scope Scope, userID string, role string) error
+    // AssignRole assigns a role to a user in a domain
+    // domain: "personal:team:{user_id}", "institution:team:{institution_id}", "account:{account_id}", or "platform"
+    AssignRole(ctx context.Context, domain string, userID string, role string) error
     
-    // RemoveRole removes a role from a user in a scope
-    RemoveRole(ctx context.Context, scope Scope, userID string, role string) error
+    // RemoveRole removes a role from a user in a domain
+    RemoveRole(ctx context.Context, domain string, userID string, role string) error
     
-    // GetUserRoles returns all roles for a user in a scope
-    GetUserRoles(ctx context.Context, userID string, scope Scope) ([]string, error)
+    // GetUserRoles returns all roles for a user in a domain
+    GetUserRoles(ctx context.Context, userID string, domain string) ([]string, error)
 }

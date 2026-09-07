@@ -10,36 +10,38 @@ import "context"
 
 // CasbinService defines the permission operations needed by the team module
 type CasbinService interface {
-    // AssignRole assigns a role to a user in a team scope
-    // scope.String() should return "personal:team:{id}" or "institution:team:{id}"
-    AssignRole(ctx context.Context, scope Scope, userID, role string) error
+    // AssignRole assigns a role to a user in a domain
+    // domain should be: "personal:team:{team_id}", "institution:team:{team_id}", or "account:{account_id}"
+    AssignRole(ctx context.Context, domain string, userID, role string) error
 
-    // RemoveRole removes a role from a user in a team scope
-    RemoveRole(ctx context.Context, scope Scope, userID, role string) error
+    // RemoveRole removes a role from a user in a domain
+    RemoveRole(ctx context.Context, domain string, userID, role string) error
 
-    // GetUserRoles returns all roles for a user in a team scope
-    GetUserRoles(ctx context.Context, scope Scope, userID string) ([]string, error)
+    // GetUserRoles returns all roles for a user in a domain
+    GetUserRoles(ctx context.Context, domain string, userID string) ([]string, error)
 
-    // HasPermission checks if a user has a specific permission in a scope
-    HasPermission(ctx context.Context, scope Scope, userID, resource, action string) (bool, error)
+    // HasPermission checks if a user has a specific permission in a domain
+    HasPermission(ctx context.Context, domain string, userID, resource, action string) (bool, error)
 
     // AddTeamPolicies adds all policies for a new team
-    AddTeamPolicies(ctx context.Context, scope Scope) error
+    AddTeamPolicies(ctx context.Context, domain string) error
 
     // RemoveTeamPolicies removes all policies for a team
-    RemoveTeamPolicies(ctx context.Context, scope Scope) error
+    RemoveTeamPolicies(ctx context.Context, domain string) error
+
+    // AddAccountPolicies adds all policies for a new account
+    AddAccountPolicies(ctx context.Context, domain string) error
+
+    // RemoveAccountPolicies removes all policies for an account
+    RemoveAccountPolicies(ctx context.Context, domain string) error
 
     // ============================================================
     // TEAM ROLE CHECKS
     // ============================================================
 
-    // IsTeamAdmin checks if a user is an admin in the scope
-    IsTeamAdmin(ctx context.Context, scope Scope, userID string) (bool, error)
+    // IsAccountAdmin checks if a user is an account admin in the domain
+    IsAccountAdmin(ctx context.Context, domain string, userID string) (bool, error)
 
-    // IsEventManager checks if a user is an event manager in the scope
-    IsEventManager(ctx context.Context, scope Scope, userID string) (bool, error)
-
-    // IsTeamMember checks if a user is a team member in the scope
-    IsTeamMember(ctx context.Context, scope Scope, userID string) (bool, error)
+    // IsTrainer checks if a user is a trainer in the domain
+    IsTrainer(ctx context.Context, domain string, userID string) (bool, error)
 }
-

@@ -20,7 +20,7 @@ import (
 func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
 	log.Printf("📤 Publishing event: %s", id)
 
-	// 1. Get event and check permissions using Scope
+	// 1. Get event and check permissions using team domain
 	event, err := s.getEventAndCheckPublishPermission(ctx, id, publishedBy)
 	if err != nil {
 		return nil, err
@@ -51,8 +51,11 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 
 // CancelEvent cancels a single event
 func (s *eventService) CancelEvent(ctx context.Context, id, cancelledBy string) (*domain.Event, error) {
-	// 1. Get event and check permissions using Scope
-	// ✅ Reuses getEventAndCheckUpdatePermission from media.go
+	if cancelledBy == "" {
+		return nil, errors.New("cancelled by is required")
+	}
+
+	// 1. Get event and check permissions using team domain
 	event, err := s.getEventAndCheckUpdatePermission(ctx, id, cancelledBy)
 	if err != nil {
 		return nil, err
@@ -106,6 +109,9 @@ func (s *eventService) BulkPublishEvents(ctx context.Context, ids []string, publ
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
 	}
+	if publishedBy == "" {
+		return nil, errors.New("published by is required")
+	}
 
 	result := &BulkStatusResult{
 		ProcessedCount: 0,
@@ -134,6 +140,9 @@ func (s *eventService) BulkPublishEvents(ctx context.Context, ids []string, publ
 func (s *eventService) BulkCancelEvents(ctx context.Context, ids []string, cancelledBy string) (*BulkStatusResult, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
+	}
+	if cancelledBy == "" {
+		return nil, errors.New("cancelled by is required")
 	}
 
 	result := &BulkStatusResult{
@@ -184,8 +193,12 @@ func (s *eventService) BulkCompleteEvents(ctx context.Context, ids []string) (*B
 // PRIVATE HELPER FUNCTIONS
 // ============================================================
 
-// getEventAndCheckPublishPermission gets event and checks publish permission using Scope
+// getEventAndCheckPublishPermission gets event and checks publish permission using team domain
 func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
+	if publishedBy == "" {
+		return nil, errors.New("published by is required")
+	}
+
 	event, err := s.repo.GetEventByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -194,11 +207,11 @@ func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id
 		return nil, domain.ErrEventNotFound
 	}
 
-	// Create scope from event
-	scope := s.getScopeFromEvent(event)
+	// Create team domain from event
+	teamDomain := domain.TeamDomain(event.TeamID)
 
-	// Check if user can publish events in this scope
-	allowed, err := s.permChecker.CanPublishEvent(ctx, publishedBy, scope)
+	// Check if user can publish events in this team
+	allowed, err := s.permChecker.CanPublishEvent(ctx, publishedBy, teamDomain)
 	if err != nil {
 		return nil, fmt.Errorf("permission check failed: %w", err)
 	}

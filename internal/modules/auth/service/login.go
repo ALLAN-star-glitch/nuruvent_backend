@@ -16,7 +16,7 @@ import (
 // ============================================================
 
 func (s *service) LoginUser(ctx context.Context, email, password, ipAddress, userAgent string) (*authdomain.User, string, error) {
-	user, err := s.repo.GetUserByEmail(email)
+	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, "", err
 	}
@@ -64,7 +64,7 @@ func (s *service) VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAdd
 		return nil, "", "", err
 	}
 
-	user, err := s.repo.GetUserByEmail(email)
+	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, "", "", err
 	}

@@ -11,15 +11,11 @@ import (
 // ============================================================
 
 // ConvertCreateDraftRequestToCommand converts CreateDraftRequest to service.CreateDraftCommand
-// ownerType and institutionID are passed from the handler (derived from URL)
-func ConvertCreateDraftRequestToCommand(req CreateDraftRequest, userID, ownerType, institutionID string) service.CreateDraftCommand {
-	var institutionIDPtr *string
-	if institutionID != "" {
-		institutionIDPtr = &institutionID
-	}
-
+// teamID is passed from the handler (derived from URL)
+func ConvertCreateDraftRequestToCommand(req CreateDraftRequest, userID, teamID string) service.CreateDraftCommand {
 	return service.CreateDraftCommand{
 		Name:             req.Name,
+		DisplayName:      req.DisplayName,
 		Description:      req.Description,
 		ShortDescription: req.ShortDescription,
 		EventTypeID:      req.EventTypeID,
@@ -27,8 +23,7 @@ func ConvertCreateDraftRequestToCommand(req CreateDraftRequest, userID, ownerTyp
 		Tags:             req.Tags,
 		Language:         req.Language,
 		CreatedBy:        userID,
-		OwnerType:        ownerType,          // ✅ Set from handler
-		InstitutionID:    institutionIDPtr,   // ✅ Set from handler
+		TeamID:           teamID, // ✅ Set from handler
 
 		Schedules:   convertScheduleRequestsToInputs(req.Schedules),
 		IsMultiDay:  req.IsMultiDay,
@@ -68,15 +63,11 @@ func ConvertCreateDraftRequestToCommand(req CreateDraftRequest, userID, ownerTyp
 }
 
 // ConvertCreateEventRequestToCommand converts CreateEventRequest to service.CreateEventCommand
-// ownerType and institutionID are passed from the handler (derived from URL)
-func ConvertCreateEventRequestToCommand(req CreateEventRequest, userID, ownerType, institutionID string) service.CreateEventCommand {
-	var institutionIDPtr *string
-	if institutionID != "" {
-		institutionIDPtr = &institutionID
-	}
-
+// teamID is passed from the handler (derived from URL)
+func ConvertCreateEventRequestToCommand(req CreateEventRequest, userID, teamID string) service.CreateEventCommand {
 	return service.CreateEventCommand{
 		Name:             req.Name,
+		DisplayName:      req.DisplayName,
 		Description:      req.Description,
 		ShortDescription: req.ShortDescription,
 		EventTypeID:      req.EventTypeID,
@@ -84,8 +75,7 @@ func ConvertCreateEventRequestToCommand(req CreateEventRequest, userID, ownerTyp
 		Tags:             req.Tags,
 		Language:         req.Language,
 		CreatedBy:        userID,
-		OwnerType:        ownerType,          // ✅ Set from handler
-		InstitutionID:    institutionIDPtr,   // ✅ Set from handler
+		TeamID:           teamID, // ✅ Set from handler
 
 		Schedules:   convertScheduleRequestsToInputs(req.Schedules),
 		IsMultiDay:  req.IsMultiDay,
@@ -126,9 +116,9 @@ func ConvertCreateEventRequestToCommand(req CreateEventRequest, userID, ownerTyp
 }
 
 // ConvertUpdateEventRequestToCommand converts UpdateEventRequest to service.UpdateEventCommand
-// Note: Updates don't need owner_type or institution_id since the event already exists
+// Note: Updates don't need team_id if not changing team
 func ConvertUpdateEventRequestToCommand(req UpdateEventRequest, eventID, userID string) service.UpdateEventCommand {
-	return service.UpdateEventCommand{
+	cmd := service.UpdateEventCommand{
 		ID:               eventID,
 		UpdatedBy:        userID,
 		Name:             req.Name,
@@ -176,6 +166,13 @@ func ConvertUpdateEventRequestToCommand(req UpdateEventRequest, eventID, userID 
 
 		SEO: convertSEORequestToInput(req.SEO),
 	}
+
+	// Set TeamID if provided (optional - allows moving event to different team)
+	if req.TeamID != nil {
+		cmd.TeamID = req.TeamID
+	}
+
+	return cmd
 }
 
 // ============================================================

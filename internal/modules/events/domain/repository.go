@@ -10,10 +10,10 @@ import "context"
 
 // ListOptions controls what data is returned in list queries
 type ListOptions struct {
-    IncludeCreator bool
-    IncludeDeleted bool
-    OnlyDeleted    bool
-    Visibility     Visibility
+	IncludeCreator bool
+	IncludeDeleted bool
+	OnlyDeleted    bool
+	Visibility     Visibility
 }
 
 // ============================================================
@@ -23,15 +23,29 @@ type ListOptions struct {
 // TeamFilter identifies which team to filter by
 // This is a simple data struct - NO methods
 type TeamFilter struct {
-    // ID is the team identifier
-    // - For personal teams: user_id
-    // - For institution teams: institution_id
-    ID string
+	// ID is the team identifier (UUID from teams table)
+	ID string
 
-    // Type indicates the team type
-    // Valid values: "personal" or "institution"
-    // If empty, no team filter is applied
-    Type string
+	// Type indicates the team type
+	// Valid values: "personal" or "institution"
+	// If empty, no team filter is applied
+	Type string
+}
+
+// ============================================================
+// ACCOUNT FILTER
+// ============================================================
+
+// AccountFilter identifies which account to filter by
+// This is used to get all events across all teams under an account
+type AccountFilter struct {
+	// ID is the account identifier (UUID from accounts table)
+	ID string
+
+	// Type indicates the account type
+	// Valid values: "personal" or "institution"
+	// If empty, no account filter is applied
+	Type string
 }
 
 // ============================================================
@@ -40,49 +54,55 @@ type TeamFilter struct {
 
 // Repository defines the data access interface for the events module
 type Repository interface {
-    // ============================================================
-    // EVENT CRUD OPERATIONS
-    // ============================================================
+	// ============================================================
+	// EVENT CRUD OPERATIONS
+	// ============================================================
 
-    CreateEvent(ctx context.Context, event *Event) error
-    GetEventByID(ctx context.Context, id string) (*Event, error)
-    GetEventBySlug(ctx context.Context, slug string) (*Event, error)
-    UpdateEvent(ctx context.Context, event *Event) error
-    DeleteEvent(ctx context.Context, id string) error
-    PermanentlyDeleteEvent(ctx context.Context, id string) error
-    RestoreEvent(ctx context.Context, id string) error
+	CreateEvent(ctx context.Context, event *Event) error
+	GetEventByID(ctx context.Context, id string) (*Event, error)
+	GetEventBySlug(ctx context.Context, slug string) (*Event, error)
+	UpdateEvent(ctx context.Context, event *Event) error
+	DeleteEvent(ctx context.Context, id string) error
+	PermanentlyDeleteEvent(ctx context.Context, id string) error
+	RestoreEvent(ctx context.Context, id string) error
 
-    // ============================================================
-    // QUERY OPERATIONS
-    // ============================================================
+	// ============================================================
+	// QUERY OPERATIONS
+	// ============================================================
 
-    // ListEvents returns a paginated list of events with flexible filtering
-    // TeamFilter determines which team's events to return:
-    //   - Type="personal", ID=userID → personal team events
-    //   - Type="institution", ID=institutionID → institution team events
-    //   - Type="" → no team filter (all events user has access to)
-    ListEvents(ctx context.Context, filters ListEventsFilters) ([]*Event, int64, error)
+	// ListEvents returns a paginated list of events with flexible filtering
+	// TeamFilter determines which team's events to return:
+	//   - Type="personal", ID=teamID → personal team events
+	//   - Type="institution", ID=teamID → institution team events
+	//   - Type="" → no team filter (all events user has access to)
+	ListEvents(ctx context.Context, filters ListEventsFilters) ([]*Event, int64, error)
 
-    GetUpcomingEvents(ctx context.Context, team TeamFilter, limit int) ([]*Event, error)
-    GetPastEvents(ctx context.Context, team TeamFilter, limit int) ([]*Event, error)
-    SearchEvents(ctx context.Context, query string, filters SearchFilters) ([]*Event, int64, error)
+	// ListEventsByAccount returns all events across all teams under an account
+	ListEventsByAccount(ctx context.Context, account AccountFilter, filters ListEventsFilters) ([]*Event, int64, error)
 
-    // ============================================================
-    // VALUE OBJECT QUERIES
-    // ============================================================
+	// ListEventsByTeam returns all events for a specific team
+	ListEventsByTeam(ctx context.Context, teamID string, filters ListEventsFilters) ([]*Event, int64, error)
 
-    GetEventTypeByID(ctx context.Context, id string) (*EventType, error)
-    GetEventTypeBySlug(ctx context.Context, slug string) (*EventType, error)
-    GetAllEventTypes(ctx context.Context) ([]*EventType, error)
+	GetUpcomingEvents(ctx context.Context, teamID string, limit int) ([]*Event, error)
+	GetPastEvents(ctx context.Context, teamID string, limit int) ([]*Event, error)
+	SearchEvents(ctx context.Context, query string, filters SearchFilters) ([]*Event, int64, error)
 
-    GetEventStatusByID(ctx context.Context, id string) (*EventStatus, error)
-    GetEventStatusBySlug(ctx context.Context, slug string) (*EventStatus, error)
-    GetAllEventStatuses(ctx context.Context) ([]*EventStatus, error)
+	// ============================================================
+	// VALUE OBJECT QUERIES
+	// ============================================================
 
-     // GetEventByIDIncludingDeleted gets an event by ID including soft-deleted ones
-    GetEventByIDIncludingDeleted(ctx context.Context, id string) (*Event, error)
+	GetEventTypeByID(ctx context.Context, id string) (*EventType, error)
+	GetEventTypeBySlug(ctx context.Context, slug string) (*EventType, error)
+	GetAllEventTypes(ctx context.Context) ([]*EventType, error)
 
-    GetAllCategories(ctx context.Context) ([]*Category, error)
+	GetEventStatusByID(ctx context.Context, id string) (*EventStatus, error)
+	GetEventStatusBySlug(ctx context.Context, slug string) (*EventStatus, error)
+	GetAllEventStatuses(ctx context.Context) ([]*EventStatus, error)
+
+	// GetEventByIDIncludingDeleted gets an event by ID including soft-deleted ones
+	GetEventByIDIncludingDeleted(ctx context.Context, id string) (*Event, error)
+
+	GetAllCategories(ctx context.Context) ([]*Category, error)
 }
 
 // ============================================================
@@ -91,55 +111,63 @@ type Repository interface {
 
 // ListEventsFilters provides comprehensive filtering for ListEvents
 type ListEventsFilters struct {
-    // TeamFilter filters events by team (personal or institution)
-    Team TeamFilter
+	// TeamFilter filters events by team
+	Team TeamFilter
 
-    // UserID filters events by the creator (created_by)
-    UserID string
+	// AccountFilter filters events by account (all teams under account)
+	Account AccountFilter
 
-    // EventTypeID filters events by their type
-    EventTypeID string
+	// TeamID filters events by a specific team ID (direct)
+	TeamID string
 
-    // EventStatusID filters events by their status
-    EventStatusID string
+	// UserID filters events by the creator (created_by)
+	UserID string
 
-    // CategoryID filters events by their category
-    CategoryID string
+	// EventTypeID filters events by their type
+	EventTypeID string
 
-    // IncludeDeleted controls whether soft-deleted events are included
-    IncludeDeleted bool
+	// EventStatusID filters events by their status
+	EventStatusID string
 
-    // OnlyDeleted controls whether ONLY soft-deleted events are returned
-    OnlyDeleted bool
+	// CategoryID filters events by their category
+	CategoryID string
 
-    // IncludeCreator controls whether creator user info is populated
-    IncludeCreator bool
+	// IncludeDeleted controls whether soft-deleted events are included
+	IncludeDeleted bool
 
-    // Limit controls the maximum number of events returned
-    Limit int
+	// OnlyDeleted controls whether ONLY soft-deleted events are returned
+	OnlyDeleted bool
 
-    // Offset controls pagination offset
-    Offset int
+	// IncludeCreator controls whether creator user info is populated
+	IncludeCreator bool
 
-    // SortBy specifies the field to sort by
-    SortBy string
+	// Limit controls the maximum number of events returned
+	Limit int
 
-    // SortOrder specifies the sort direction
-    SortOrder string
+	// Offset controls pagination offset
+	Offset int
 
-    // Visibility filters events by their visibility level
-    Visibility Visibility
+	// SortBy specifies the field to sort by
+	SortBy string
+
+	// SortOrder specifies the sort direction
+	SortOrder string
+
+	// Visibility filters events by their visibility level
+	Visibility Visibility
 }
 
 // SearchFilters provides filtering for the SearchEvents method
 type SearchFilters struct {
-    Team           TeamFilter
-    UserID         string
-    EventTypeID    string
-    CategoryID     string
-    IncludeDeleted bool
-    OnlyDeleted    bool
-    Limit          int
-    Offset         int
-    Visibility     Visibility
+	Team           TeamFilter
+	Account        AccountFilter
+	TeamID         string
+	UserID         string
+	EventTypeID    string
+	CategoryID     string
+	IncludeDeleted bool
+	OnlyDeleted    bool
+	Limit          int
+	Offset         int
+	Visibility     Visibility
 }

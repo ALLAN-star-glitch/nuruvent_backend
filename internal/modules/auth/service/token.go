@@ -19,7 +19,7 @@ func (s *service) GenerateTokens(
 	role, teamTypeSlug, teamID, accountID := s.determineRoleAndTeamType(ctx, user)
 
 	// Get account type for account type slug
-	accountType, err := s.repo.GetAccountTypeByID(user.AccountTypeID)
+	accountType, err := s.repo.GetAccountTypeByID(ctx, user.AccountTypeID)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to get account type: %w", err)
 	}
@@ -65,7 +65,7 @@ func (s *service) GenerateTokens(
 		return "", "", err
 	}
 
-	if err := s.repo.CreateRefreshToken(newToken); err != nil {
+	if err := s.repo.CreateRefreshToken(ctx, newToken); err != nil {
 		return "", "", fmt.Errorf("failed to store refresh token: %w", err)
 	}
 
@@ -83,7 +83,7 @@ func (s *service) GenerateTokensWithContext(
 		return "", "", err
 	}
 
-	if err := s.repo.UpdateRefreshTokenContext(refreshToken, userAgent, ipAddress); err != nil {
+	if err := s.repo.UpdateRefreshTokenContext(ctx, refreshToken, userAgent, ipAddress); err != nil {
 		fmt.Printf("Failed to update refresh token context: %v\n", err)
 	}
 
@@ -92,7 +92,7 @@ func (s *service) GenerateTokensWithContext(
 
 // RefreshTokens refreshes an expired access token using a refresh token
 func (s *service) RefreshTokens(ctx context.Context, refreshToken, userAgent, ip string) (string, string, error) {
-	token, err := s.repo.GetRefreshTokenByToken(refreshToken)
+	token, err := s.repo.GetRefreshTokenByToken(ctx, refreshToken)
 	if err != nil {
 		return "", "", err
 	}
@@ -104,7 +104,7 @@ func (s *service) RefreshTokens(ctx context.Context, refreshToken, userAgent, ip
 		return "", "", authdomain.ErrInvalidToken
 	}
 
-	if err := s.repo.RevokeRefreshToken(refreshToken); err != nil {
+	if err := s.repo.RevokeRefreshToken(ctx, refreshToken); err != nil {
 		return "", "", err
 	}
 
@@ -128,12 +128,12 @@ func (s *service) RefreshTokens(ctx context.Context, refreshToken, userAgent, ip
 
 // RevokeToken revokes a refresh token
 func (s *service) RevokeToken(ctx context.Context, refreshToken string) error {
-	return s.repo.RevokeRefreshToken(refreshToken)
+	return s.repo.RevokeRefreshToken(ctx, refreshToken)
 }
 
 // RevokeAllUserTokens revokes all refresh tokens for a user
 func (s *service) RevokeAllUserTokens(ctx context.Context, userID string) error {
-	return s.repo.RevokeAllRefreshTokensForUser(userID)
+	return s.repo.RevokeAllRefreshTokensForUser(ctx, userID)
 }
 
 // determineRoleAndTeamType determines the user's role, team type, and IDs using Casbin
@@ -247,6 +247,39 @@ func (s *service) determineRoleAndTeamType(ctx context.Context, user *authdomain
 	// ============================================================
 
 	return authdomain.RoleGuest.String(), "", "", ""
+}
+
+// GetTokenContext implements Service.
+func (s *service) GetTokenContext(ctx context.Context, user *authdomain.User) (*authdomain.TokenContext, error) {
+	if user == nil {
+		return nil, fmt.Errorf("user is nil")
+	}
+
+	// Determine role and team type using Casbin
+	role, teamTypeSlug, teamID, accountID := s.determineRoleAndTeamType(ctx, user)
+
+	// Get account type for account type slug
+	accountType, err := s.repo.GetAccountTypeByID(ctx, user.AccountTypeID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account type: %w", err)
+	}
+	if accountType == nil {
+		return nil, fmt.Errorf("account type not found")
+	}
+
+	// Build TokenContext with all needed fields
+	return &authdomain.TokenContext{
+		UserID:          user.ID,
+		Email:           user.Email,
+		DisplayName:     user.DisplayName,
+		Role:            role,
+		AccountID:       accountID,
+		AccountTypeSlug: accountType.Slug,
+		TeamID:          teamID,
+		TeamTypeSlug:    teamTypeSlug,
+		IsVerified:      user.EmailVerified,
+		IsActive:        user.IsActive,
+	}, nil
 }
 
 // getAccountRole gets the user's account-level role from auth repository

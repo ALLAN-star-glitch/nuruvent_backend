@@ -14,13 +14,10 @@ import (
 // JSONB TYPE FOR GORM
 // ============================================================
 
-
 // Defines JSONB as a map with string keys and any value type
 // Can store any JSON structure: objects, arrays, nested data
-type JSONB map[string]any // Custom type for JSONB fields in GORM
+type JSONB map[string]any
 
-
-// The Value method here is the writer
 // Value implements the driver.Valuer interface for JSONB
 // Purpose: Converts Go data → Database value (when INSERTING/UPDATEING)
 func (j JSONB) Value() (driver.Value, error) {
@@ -30,9 +27,7 @@ func (j JSONB) Value() (driver.Value, error) {
 	return json.Marshal(j)
 }
 
-
-// The Scan method here is the reader
-// Scan implements the sql.Scanner interface for JSONB 
+// Scan implements the sql.Scanner interface for JSONB
 // Purpose: Converts Database value → Go data (when SELECTING)
 func (j *JSONB) Scan(value any) error {
 	if value == nil {
@@ -60,7 +55,7 @@ type EventModel struct {
 	DisplayName      string
 	Description      string
 	ShortDescription string
-	Tags             JSONB `gorm:"column:tags;type:jsonb;default:'[]'"`
+	Tags             JSONB `gorm:"type:jsonb;default:'[]'"`
 	Language         string   `gorm:"default:'en'"`
 
 	// ============================================================
@@ -75,8 +70,8 @@ type EventModel struct {
 	// ============================================================
 	// Ownership
 	// ============================================================
-	InstitutionID *string `gorm:"index"`
-	CreatedBy     string  `gorm:"index"`
+	TeamID    string `gorm:"index;not null"` // Team ID this event belongs to
+	CreatedBy string `gorm:"index"`
 
 	// ============================================================
 	// Schedule & Venue
@@ -91,7 +86,7 @@ type EventModel struct {
 	RecurrenceInterval    int      `gorm:"default:1"`
 	RecurrenceEndsOn      *time.Time
 	RecurrenceOccurrences *int
-	RecurrenceDaysOfWeek JSONB `gorm:"column:recurrence_days_of_week;type:jsonb;default:'[]'"`
+	RecurrenceDaysOfWeek  JSONB    `gorm:"type:jsonb;default:'[]'"`
 	RecurrenceDayOfMonth  *int
 	RecurrenceWeekOfMonth *string
 
@@ -112,10 +107,10 @@ type EventModel struct {
 	// ============================================================
 	// Ticketing & Capacity
 	// ============================================================
-	IsFree        bool `gorm:"column:is_free;index"`
+	IsFree             bool       `gorm:"index"`
 	Capacity           *int
 	CurrentAttendees   int
-	WaitlistEnabled    bool `gorm:"index"`
+	WaitlistEnabled    bool       `gorm:"index"`
 	WaitlistCapacity   *int
 	TicketSalesStart   *time.Time `gorm:"index"`
 	TicketSalesEnd     *time.Time `gorm:"index"`
@@ -127,11 +122,10 @@ type EventModel struct {
 	// ============================================================
 	Visibility          string   `gorm:"default:'public';index"`
 	Password            *string
-	InviteOnly          bool `gorm:"index"`
-	InvitedEmails       JSONB `gorm:"column:invited_emails;type:jsonb;default:'[]'"`
+	InviteOnly          bool     `gorm:"index"`
+	InvitedEmails       JSONB    `gorm:"type:jsonb;default:'[]'"`
 	RequiresApproval    bool
-	ApprovalRequiredFor JSONB `gorm:"column:approval_required_for;type:jsonb;default:'[]'"`
-
+	ApprovalRequiredFor JSONB    `gorm:"type:jsonb;default:'[]'"`
 
 	// ============================================================
 	// Monetization & Add-ons
@@ -147,12 +141,12 @@ type EventModel struct {
 	// ============================================================
 	// SEO & Marketing
 	// ============================================================
-	SEOTitle       string
-	SEODescription string
-	SEOKeywords      JSONB `gorm:"column:seo_keywords;type:jsonb;default:'[]'"`
+	SEOTitle        string
+	SEODescription  string
+	SEOKeywords     JSONB    `gorm:"type:jsonb;default:'[]'"`
 	SEOCanonicalURL string
-	SEORobots      string
-	SEONoIndex      bool     `gorm:"column:seo_noindex;index"` 
+	SEORobots       string
+	SEONoIndex      bool     `gorm:"index"`
 
 	OGTitle       string
 	OGDescription string
@@ -206,12 +200,12 @@ type EventModel struct {
 	// ============================================================
 	// Creator Info (populated via JOIN for display purposes only)
 	// ============================================================
-	CreatorName            string `gorm:"column:creator_name;<-:false"`
-	CreatorDisplayName     string `gorm:"column:creator_display_name;<-:false"`
-	CreatorEmail           string `gorm:"column:creator_email;<-:false"`
-	CreatorPhone           string `gorm:"column:creator_phone;<-:false"`
-	CreatorAccountType     string `gorm:"column:creator_account_type;<-:false"`
-	CreatorInstitutionName string `gorm:"column:creator_institution_name;<-:false"`
+	CreatorName          string `gorm:"-"`
+	CreatorDisplayName   string `gorm:"-"`
+	CreatorEmail         string `gorm:"-"`
+	CreatorPhone         string `gorm:"-"`
+	CreatorAccountType   string `gorm:"-"`
+	CreatorAccountName   string `gorm:"-"`
 }
 
 func (EventModel) TableName() string {
@@ -521,18 +515,18 @@ func (TicketTypeModel) TableName() string {
 // ============================================================
 
 type UserModel struct {
-	ID               string `gorm:"primaryKey"`
-	Name             string
-	DisplayName      string
-	Email            string
-	Phone            string
-	AccountTypeID    string `gorm:"index"`
-	InstitutionID    *string `gorm:"index"`
-	InstitutionName  string `gorm:"-"`
-	IsActive         bool   `gorm:"default:true"`
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	DeletedAt        gorm.DeletedAt `gorm:"index"`
+	ID            string         `gorm:"primaryKey"`
+	Name          string
+	DisplayName   string
+	Email         string
+	Phone         string
+	AccountTypeID string         `gorm:"index"`
+	AccountID     *string        `gorm:"index"`
+	AccountName   string         `gorm:"-"`
+	IsActive      bool           `gorm:"default:true"`
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	DeletedAt     gorm.DeletedAt `gorm:"index"`
 }
 
 func (UserModel) TableName() string {
@@ -540,24 +534,25 @@ func (UserModel) TableName() string {
 }
 
 // ============================================================
-// INSTITUTION MODEL
+// ACCOUNT MODEL
 // ============================================================
 
-type InstitutionModel struct {
-	ID          string `gorm:"primaryKey"`
+type AccountModel struct {
+	ID          string         `gorm:"primaryKey"`
 	Name        string
 	DisplayName string
 	Slug        string
+	Type        string         `gorm:"index"` // "personal" or "institution"
 	Email       string
 	Phone       string
-	IsActive    bool `gorm:"default:true"`
+	IsActive    bool           `gorm:"default:true"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
-func (InstitutionModel) TableName() string {
-	return "institutions"
+func (AccountModel) TableName() string {
+	return "accounts"
 }
 
 // ============================================================
@@ -565,12 +560,12 @@ func (InstitutionModel) TableName() string {
 // ============================================================
 
 type AccountTypeModel struct {
-	ID          string `gorm:"primaryKey"`
-	Slug        string `gorm:"uniqueIndex;not null"`
-	Name        string `gorm:"not null"`
+	ID          string         `gorm:"primaryKey"`
+	Slug        string         `gorm:"uniqueIndex;not null"`
+	Name        string         `gorm:"not null"`
 	DisplayName string
 	Description string
-	IsActive    bool `gorm:"default:true"`
+	IsActive    bool           `gorm:"default:true"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
@@ -578,4 +573,27 @@ type AccountTypeModel struct {
 
 func (AccountTypeModel) TableName() string {
 	return "account_types"
+}
+
+// ============================================================
+// TEAM MODEL
+// ============================================================
+
+type TeamModel struct {
+	ID          string         `gorm:"primaryKey"`
+	AccountID   string         `gorm:"index;not null"`
+	Name        string         `gorm:"not null"`
+	DisplayName string
+	Slug        string         `gorm:"uniqueIndex;not null"`
+	Type        string         `gorm:"index"` // "personal" or "institution"
+	Description string
+	LogoURL     string
+	IsActive    bool           `gorm:"default:true"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
+}
+
+func (TeamModel) TableName() string {
+	return "teams"
 }

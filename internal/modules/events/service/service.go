@@ -48,10 +48,10 @@ type Service interface {
 	GetEventsByType(ctx context.Context, eventTypeSlug string, page, pageSize int) ([]*domain.Event, int64, error)
 
 	// GetUpcomingEvents is a convenience method for homepage/upcoming section
-	GetUpcomingEvents(ctx context.Context, team domain.TeamFilter, limit int) ([]*domain.Event, error)
+	GetUpcomingEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error)
 
 	// GetPastEvents is a convenience method for archives/past section
-	GetPastEvents(ctx context.Context, team domain.TeamFilter, limit int) ([]*domain.Event, error)
+	GetPastEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error)
 
 	// SearchEvents for full-text search
 	SearchEvents(ctx context.Context, query string, filters SearchFilters) ([]*domain.Event, int64, error)
@@ -137,6 +137,7 @@ type Service interface {
 type CreateDraftCommand struct {
 	// Basic Information
 	Name             string
+	DisplayName      string
 	Description      string
 	ShortDescription string
 	EventTypeID      string
@@ -144,10 +145,9 @@ type CreateDraftCommand struct {
 	Tags             []string
 	Language         string
 
-	// Ownership - determines the scope
-	CreatedBy     string  // User ID (required)
-	OwnerType     string  // "personal" or "institution" (required)
-	InstitutionID *string // Set if OwnerType is "institution"
+	// Ownership - determines the team
+	CreatedBy string // User ID (required)
+	TeamID    string // Team ID (required)
 
 	// Schedule
 	Schedules   []ScheduleInput
@@ -202,6 +202,7 @@ type CreateDraftCommand struct {
 type CreateEventCommand struct {
 	// Basic Information
 	Name             string
+	DisplayName      string
 	Description      string
 	ShortDescription string
 	EventTypeID      string
@@ -209,10 +210,9 @@ type CreateEventCommand struct {
 	Tags             []string
 	Language         string
 
-	// Ownership - determines the scope
-	CreatedBy     string  // User ID (required)
-	OwnerType     string  // "personal" or "institution" (required)
-	InstitutionID *string // Set if OwnerType is "institution"
+	// Ownership - determines the team
+	CreatedBy string // User ID (required)
+	TeamID    string // Team ID (required)
 
 	// Schedule - Required for published events
 	Schedules   []ScheduleInput
@@ -278,6 +278,9 @@ type UpdateEventCommand struct {
 	CategoryID       *string
 	Tags             []string
 	Language         *string
+
+	// Team ID (optional - can change team)
+	TeamID *string
 
 	// Schedule
 	Schedules   []ScheduleInput
@@ -371,6 +374,9 @@ type ListEventsFilters struct {
 	// TeamFilter filters events by team (personal or institution)
 	Team domain.TeamFilter
 
+	// TeamID filters events by a specific team ID
+	TeamID string
+
 	// UserID filters events by the creator (created_by)
 	UserID string
 
@@ -413,6 +419,9 @@ type SearchFilters struct {
 	// TeamFilter filters search results by team
 	Team domain.TeamFilter
 
+	// TeamID filters search results by a specific team ID
+	TeamID string
+
 	// UserID filters search results by creator
 	UserID string
 
@@ -437,7 +446,7 @@ type SearchFilters struct {
 	// Visibility filters search results by visibility level
 	Visibility string
 
-	// ✅ IncludeCreator controls whether creator user info is populated
+	// IncludeCreator controls whether creator user info is populated
 	IncludeCreator bool
 }
 

@@ -17,6 +17,7 @@ type UserProfileResponse struct {
 	ID          string            `json:"id"`
 	Name        string            `json:"name"`
 	DisplayName string            `json:"display_name"`
+	Slug        string            `json:"slug,omitempty"`
 	Email       string            `json:"email,omitempty"`
 	Phone       string            `json:"phone,omitempty"`
 	AccountType string            `json:"account_type,omitempty"`
@@ -39,6 +40,7 @@ func NewUserProfileResponse(user *domain.UserInfo) UserProfileResponse {
 		ID:          user.ID,
 		Name:        user.Name,
 		DisplayName: user.DisplayName,
+		Slug:        user.Slug,
 		Email:       user.Email,
 		Phone:       user.Phone,
 		AccountType: user.AccountType,
@@ -47,8 +49,9 @@ func NewUserProfileResponse(user *domain.UserInfo) UserProfileResponse {
 		Location:    user.Location,
 		Website:     user.Website,
 		SocialLinks: user.SocialLinks,
-		CreatedAt:   user.CreatedAt.Format(time.RFC3339),  // ✅ Format the time
-        UpdatedAt:   user.UpdatedAt.Format(time.RFC3339),  // ✅ Format the time
+		IsActive:    user.IsActive,
+		CreatedAt:   user.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:   user.UpdatedAt.Format(time.RFC3339),
 	}
 }
 
@@ -61,6 +64,7 @@ func NewFullUserProfileResponse(user *domain.User) UserProfileResponse {
 		ID:          user.ID,
 		Name:        user.Name,
 		DisplayName: user.DisplayName,
+		Slug:        user.Slug,
 		Email:       user.Email,
 		Phone:       user.Phone,
 		AccountType: user.AccountType,
@@ -76,15 +80,16 @@ func NewFullUserProfileResponse(user *domain.User) UserProfileResponse {
 }
 
 // ============================================================
-// INSTITUTION PROFILE RESPONSES
+// ACCOUNT PROFILE RESPONSES (replaces Institution)
 // ============================================================
 
-// InstitutionProfileResponse is the API response for institution profile
-type InstitutionProfileResponse struct {
+// AccountProfileResponse is the API response for account profile
+type AccountProfileResponse struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
 	Slug        string `json:"slug"`
+	Type        string `json:"type"` // "personal" or "institution"
 	Email       string `json:"email,omitempty"`
 	Phone       string `json:"phone,omitempty"`
 	Website     string `json:"website,omitempty"`
@@ -93,55 +98,63 @@ type InstitutionProfileResponse struct {
 	Address     string `json:"address,omitempty"`
 	City        string `json:"city,omitempty"`
 	Country     string `json:"country,omitempty"`
+	Status      string `json:"status,omitempty"`
+	KYCStatus   string `json:"kyc_status,omitempty"`
 	IsActive    bool   `json:"is_active"`
 	CreatedAt   string `json:"created_at"`
 	UpdatedAt   string `json:"updated_at"`
 }
 
-// NewInstitutionProfileResponse creates a new InstitutionProfileResponse from domain InstitutionInfo
-func NewInstitutionProfileResponse(institution *domain.InstitutionInfo) InstitutionProfileResponse {
-	if institution == nil {
-		return InstitutionProfileResponse{}
+// NewAccountProfileResponse creates a new AccountProfileResponse from domain AccountInfo
+func NewAccountProfileResponse(account *domain.AccountInfo) AccountProfileResponse {
+	if account == nil {
+		return AccountProfileResponse{}
 	}
-	return InstitutionProfileResponse{
-		ID:          institution.ID,
-		Name:        institution.Name,
-		DisplayName: institution.DisplayName,
-		Slug:        institution.Slug,
-		Email:       institution.Email,
-		Phone:       institution.Phone,
-		Website:     institution.Website,
-		Description: institution.Description,
-		LogoURL:     institution.LogoURL,
-		Address:     institution.Address,
-		City:        institution.City,
-		Country:     institution.Country,
-		CreatedAt:   institution.CreatedAt.Format(time.RFC3339),  // ✅ Add this
-        UpdatedAt:   institution.UpdatedAt.Format(time.RFC3339),  // ✅ Add this
+	return AccountProfileResponse{
+		ID:          account.ID,
+		Name:        account.Name,
+		DisplayName: account.DisplayName,
+		Slug:        account.Slug,
+		Type:        account.Type,
+		Email:       account.Email,
+		Phone:       account.Phone,
+		Website:     account.Website,
+		Description: account.Description,
+		LogoURL:     account.LogoURL,
+		Address:     account.Address,
+		City:        account.City,
+		Country:     account.Country,
+		Status:      account.Status,
+		KYCStatus:   account.KYCStatus,
+		CreatedAt:   account.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:   account.UpdatedAt.Format(time.RFC3339),
 	}
 }
 
-// NewFullInstitutionProfileResponse creates a full InstitutionProfileResponse from domain Institution
-func NewFullInstitutionProfileResponse(institution *domain.Institution) InstitutionProfileResponse {
-	if institution == nil {
-		return InstitutionProfileResponse{}
+// NewFullAccountProfileResponse creates a full AccountProfileResponse from domain Account
+func NewFullAccountProfileResponse(account *domain.Account) AccountProfileResponse {
+	if account == nil {
+		return AccountProfileResponse{}
 	}
-	return InstitutionProfileResponse{
-		ID:          institution.ID,
-		Name:        institution.Name,
-		DisplayName: institution.DisplayName,
-		Slug:        institution.Slug,
-		Email:       institution.Email,
-		Phone:       institution.Phone,
-		Website:     institution.Website,
-		Description: institution.Description,
-		LogoURL:     institution.LogoURL,
-		Address:     institution.Address,
-		City:        institution.City,
-		Country:     institution.Country,
-		IsActive:    institution.IsActive,
-		CreatedAt:   institution.CreatedAt.Format(time.RFC3339),
-		UpdatedAt:   institution.UpdatedAt.Format(time.RFC3339),
+	return AccountProfileResponse{
+		ID:          account.ID,
+		Name:        account.Name,
+		DisplayName: account.DisplayName,
+		Slug:        account.Slug,
+		Type:        account.Type,
+		Email:       account.Email,
+		Phone:       account.Phone,
+		Website:     account.Website,
+		Description: account.Description,
+		LogoURL:     account.LogoURL,
+		Address:     account.Address,
+		City:        account.City,
+		Country:     account.Country,
+		Status:      account.Status,
+		KYCStatus:   account.KYCStatus,
+		IsActive:    account.IsActive,
+		CreatedAt:   account.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:   account.UpdatedAt.Format(time.RFC3339),
 	}
 }
 

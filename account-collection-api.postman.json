@@ -1,0 +1,331 @@
+{
+  "info": {
+    "name": "Nuruvent Account API",
+    "description": "Complete Account Management API collection for Nuruvent",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "account_id",
+      "value": ""
+    },
+    {
+      "key": "user_id",
+      "value": ""
+    },
+    {
+      "key": "account_type_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Account Types (Public)",
+      "item": [
+        {
+          "name": "1. Get All Account Types",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/account-types",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "2. Get Account Type by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/account-types/{{account_type_id}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "3. Get Account Type by Slug",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/account-types/slug/personal",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Account Operations",
+      "item": [
+        {
+          "name": "1. Create Personal Account",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/accounts/personal",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"John Doe\",\n    \"email\": \"john@example.com\",\n    \"phone\": \"+254712345678\"\n}"
+            }
+          }
+        },
+        {
+          "name": "2. Create Institution Account",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/accounts/institution",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Tech Corp Ltd\",\n    \"email\": \"info@techcorp.com\",\n    \"phone\": \"+254712345679\",\n    \"website\": \"https://techcorp.com\",\n    \"description\": \"Leading technology training provider\"\n}"
+            }
+          }
+        },
+        {
+          "name": "3. Get My Accounts",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/accounts",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "4. Get Account by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "5. Get Account by Slug",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/accounts/slug/tech-corp-ltd",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "6. Update Account",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"Tech Corp International\",\n    \"phone\": \"+254712345680\",\n    \"website\": \"https://techcorp-international.com\",\n    \"description\": \"Leading technology training provider worldwide\"\n}"
+            }
+          }
+        },
+        {
+          "name": "7. Delete Account",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "8. Leave Account",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}/leave",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Account Member Operations",
+      "item": [
+        {
+          "name": "1. Get Account Members",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}/members",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "2. Add Member to Account",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}/members",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"user_id\": \"{{user_id}}\",\n    \"role\": \"trainer\"\n}"
+            }
+          }
+        },
+        {
+          "name": "3. Update Member Role",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}/members/{{user_id}}/role",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"role\": \"account_admin\"\n}"
+            }
+          }
+        },
+        {
+          "name": "4. Remove Member from Account",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}/members/{{user_id}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "User Account Routes",
+      "item": [
+        {
+          "name": "Get My Accounts (User)",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/users/me/accounts",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

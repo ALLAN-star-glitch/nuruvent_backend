@@ -10,6 +10,10 @@ import "context"
 
 // Repository defines the data access interface for the team module
 type Repository interface {
+
+    WithTransaction(ctx context.Context, fn func(txCtx context.Context) error) error
+
+
     // ============================================================
     // TEAM OPERATIONS
     // ============================================================

@@ -78,6 +78,7 @@ type AccountModel struct {
     Name          string     `gorm:"column:name;type:varchar(255);not null"`
     DisplayName   string     `gorm:"column:display_name;type:varchar(255);not null"`
     Slug          string     `gorm:"column:slug;type:varchar(255);uniqueIndex;not null"`
+    Type          string     `gorm:"column:type;type:varchar(50);not null;index"` // "personal" or "institution"
     Email         string     `gorm:"column:email;type:varchar(255);uniqueIndex;not null"`
     Phone         string     `gorm:"column:phone;type:varchar(50)"`
     AccountTypeID string     `gorm:"column:account_type_id;type:uuid;not null;index"`
@@ -85,6 +86,11 @@ type AccountModel struct {
     LogoURL       string     `gorm:"column:logo_url;type:varchar(500)"`
     Website       string     `gorm:"column:website;type:varchar(255)"`
     Description   string     `gorm:"column:description;type:text"`
+    Address       string     `gorm:"column:address;type:text"`
+    City          string     `gorm:"column:city;type:varchar(100)"`
+    Country       string     `gorm:"column:country;type:varchar(100)"`
+    KYCStatus     string     `gorm:"column:kyc_status;type:varchar(50);default:'pending'"`
+    IsActive      bool       `gorm:"column:is_active;default:true;index"`
     CreatedBy     string     `gorm:"column:created_by;type:uuid;index"`
     CreatedAt     time.Time  `gorm:"column:created_at;default:CURRENT_TIMESTAMP"`
     UpdatedAt     time.Time  `gorm:"column:updated_at;default:CURRENT_TIMESTAMP"`
@@ -104,6 +110,7 @@ func (m *AccountModel) ToDomain() *accountdomain.Account {
         Name:          m.Name,
         DisplayName:   m.DisplayName,
         Slug:          m.Slug,
+        Type:          m.Type,
         Email:         m.Email,
         Phone:         m.Phone,
         AccountTypeID: m.AccountTypeID,
@@ -111,6 +118,11 @@ func (m *AccountModel) ToDomain() *accountdomain.Account {
         LogoURL:       m.LogoURL,
         Website:       m.Website,
         Description:   m.Description,
+        Address:       m.Address,
+        City:          m.City,
+        Country:       m.Country,
+        KYCStatus:     m.KYCStatus,
+        IsActive:      m.IsActive,
         CreatedBy:     m.CreatedBy,
         CreatedAt:     m.CreatedAt,
         UpdatedAt:     m.UpdatedAt,
@@ -126,6 +138,7 @@ func (m *AccountModel) FromDomain(account *accountdomain.Account) {
     m.Name = account.Name
     m.DisplayName = account.DisplayName
     m.Slug = account.Slug
+    m.Type = account.Type
     m.Email = account.Email
     m.Phone = account.Phone
     m.AccountTypeID = account.AccountTypeID
@@ -133,6 +146,11 @@ func (m *AccountModel) FromDomain(account *accountdomain.Account) {
     m.LogoURL = account.LogoURL
     m.Website = account.Website
     m.Description = account.Description
+    m.Address = account.Address
+    m.City = account.City
+    m.Country = account.Country
+    m.KYCStatus = account.KYCStatus
+    m.IsActive = account.IsActive
     m.CreatedBy = account.CreatedBy
     m.CreatedAt = account.CreatedAt
     m.UpdatedAt = account.UpdatedAt

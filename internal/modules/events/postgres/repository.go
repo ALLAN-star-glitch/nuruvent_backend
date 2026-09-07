@@ -103,32 +103,30 @@ func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*doma
 	return event, nil
 }
 
-
-
 func (r *PostgresRepository) GetEventByIDIncludingDeleted(ctx context.Context, id string) (*domain.Event, error) {
-    var model EventModel
-    // Use Unscoped() to include soft-deleted records
-    err := r.db.WithContext(ctx).Unscoped().
-        Where("id = ?", id).
-        First(&model).Error
-    if err != nil {
-        if errors.Is(err, gorm.ErrRecordNotFound) {
-            return nil, nil
-        }
-        return nil, err
-    }
+	var model EventModel
+	// Use Unscoped() to include soft-deleted records
+	err := r.db.WithContext(ctx).Unscoped().
+		Where("id = ?", id).
+		First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
 
-    event := toDomainEvent(&model)
-    if event == nil {
-        return nil, nil
-    }
+	event := toDomainEvent(&model)
+	if event == nil {
+		return nil, nil
+	}
 
-    // Load child entities
-    if err := r.loadChildEntities(ctx, event); err != nil {
-        return nil, err
-    }
+	// Load child entities
+	if err := r.loadChildEntities(ctx, event); err != nil {
+		return nil, err
+	}
 
-    return event, nil
+	return event, nil
 }
 
 func (r *PostgresRepository) GetEventBySlug(ctx context.Context, slug string) (*domain.Event, error) {
@@ -240,7 +238,6 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 
 	log.Printf("🔍 REPOSITORY: IncludeDeleted=%v, OnlyDeleted=%v", filters.IncludeDeleted, filters.OnlyDeleted)
 
-
 	query := r.db.WithContext(ctx).Unscoped().Model(&EventModel{})
 
 	// Handle deleted filter logic
@@ -252,16 +249,19 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 		log.Printf("🔍 REPOSITORY: IncludeDeleted=false - adding deleted_at IS NULL")
 	}
 
-	// Team filtering - unified approach
-	if filters.Team.ID != "" && filters.Team.Type != "" {
-		switch filters.Team.Type {
-			case "personal":
-				// Personal team: events where institution_id IS NULL AND created_by = team ID
-				query = query.Where("institution_id IS NULL AND created_by = ?", filters.Team.ID)
-			case "institution":
-				// Institution team: events where institution_id = team ID
-				query = query.Where("institution_id = ?", filters.Team.ID)
-			}
+	// Team filtering - use TeamID directly (events belong to teams)
+	if filters.TeamID != "" {
+		query = query.Where("team_id = ?", filters.TeamID)
+	} else if filters.Team.ID != "" && filters.Team.Type != "" {
+		// For backward compatibility with TeamFilter
+		query = query.Where("team_id = ?", filters.Team.ID)
+	}
+
+	// Account filtering - all teams under an account
+	if filters.Account.ID != "" {
+		// Join with teams table to filter by account
+		query = query.Joins("JOIN teams ON teams.id = events.team_id").
+			Where("teams.account_id = ?", filters.Account.ID)
 	}
 
 	// User filter (creator)
@@ -327,8 +327,93 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 	return events, total, nil
 }
 
+// ListEventsByAccount returns all events across all teams under an account
+func (r *PostgresRepository) ListEventsByAccount(ctx context.Context, account domain.AccountFilter, filters domain.ListEventsFilters) ([]*domain.Event, int64, error) {
+	var models []EventModel
+	var total int64
+
+	query := r.db.WithContext(ctx).Unscoped().Model(&EventModel{}).
+		Joins("JOIN teams ON teams.id = events.team_id").
+		Where("teams.account_id = ?", account.ID)
+
+	// Handle deleted filter logic
+	if filters.OnlyDeleted {
+		query = query.Where("events.deleted_at IS NOT NULL")
+	} else if !filters.IncludeDeleted {
+		query = query.Where("events.deleted_at IS NULL")
+	}
+
+	// User filter (creator)
+	if filters.UserID != "" {
+		query = query.Where("events.created_by = ?", filters.UserID)
+	}
+
+	// Other filters
+	if filters.EventTypeID != "" {
+		query = query.Where("events.event_type_id = ?", filters.EventTypeID)
+	}
+	if filters.EventStatusID != "" {
+		query = query.Where("events.event_status_id = ?", filters.EventStatusID)
+	}
+	if filters.CategoryID != "" {
+		query = query.Where("events.category_id = ?", filters.CategoryID)
+	}
+	if filters.Visibility != "" {
+		query = query.Where("events.visibility = ?", filters.Visibility)
+	}
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Apply pagination
+	if filters.Limit > 0 {
+		query = query.Limit(filters.Limit)
+	}
+	if filters.Offset > 0 {
+		query = query.Offset(filters.Offset)
+	}
+
+	// Apply sorting
+	sortField := "events.start_date"
+	if filters.SortBy != "" {
+		sortField = "events." + filters.SortBy
+	}
+	sortOrder := "DESC"
+	if filters.SortOrder == "asc" {
+		sortOrder = "ASC"
+	}
+	query = query.Order(sortField + " " + sortOrder)
+
+	err := query.Find(&models).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Convert to domain events
+	events := make([]*domain.Event, len(models))
+	for i, m := range models {
+		event := toDomainEvent(&m)
+		if event != nil {
+			if err := r.loadChildEntities(ctx, event); err != nil {
+				log.Printf("⚠️ Failed to load child entities for event %s: %v", event.ID, err)
+			}
+		}
+		events[i] = event
+	}
+
+	return events, total, nil
+}
+
+// ListEventsByTeam returns all events for a specific team
+func (r *PostgresRepository) ListEventsByTeam(ctx context.Context, teamID string, filters domain.ListEventsFilters) ([]*domain.Event, int64, error) {
+	filters.TeamID = teamID
+	return r.ListEvents(ctx, filters)
+}
+
 // GetUpcomingEvents returns upcoming events for a team
-func (r *PostgresRepository) GetUpcomingEvents(ctx context.Context, team domain.TeamFilter, limit int) ([]*domain.Event, error) {
+func (r *PostgresRepository) GetUpcomingEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error) {
 	var models []EventModel
 
 	publishedStatusID, err := r.getStatusIDByName(ctx, domain.EventStatusPublished.GetName())
@@ -341,13 +426,8 @@ func (r *PostgresRepository) GetUpcomingEvents(ctx context.Context, team domain.
 		Where("start_date >= CURRENT_DATE AND deleted_at IS NULL").
 		Where("event_status_id = ?", publishedStatusID)
 
-	// Team filtering
-	if team.ID != "" && team.Type != "" {
-		if team.Type == "personal" {
-			query = query.Where("institution_id IS NULL AND created_by = ?", team.ID)
-		} else if team.Type == "institution" {
-			query = query.Where("institution_id = ?", team.ID)
-		}
+	if teamID != "" {
+		query = query.Where("team_id = ?", teamID)
 	}
 
 	if limit > 0 {
@@ -376,7 +456,7 @@ func (r *PostgresRepository) GetUpcomingEvents(ctx context.Context, team domain.
 }
 
 // GetPastEvents returns past events for a team
-func (r *PostgresRepository) GetPastEvents(ctx context.Context, team domain.TeamFilter, limit int) ([]*domain.Event, error) {
+func (r *PostgresRepository) GetPastEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error) {
 	var models []EventModel
 
 	publishedStatusID, err := r.getStatusIDByName(ctx, domain.EventStatusPublished.GetName())
@@ -389,13 +469,8 @@ func (r *PostgresRepository) GetPastEvents(ctx context.Context, team domain.Team
 		Where("start_date < CURRENT_DATE AND deleted_at IS NULL").
 		Where("event_status_id = ?", publishedStatusID)
 
-	// Team filtering
-	if team.ID != "" && team.Type != "" {
-		if team.Type == "personal" {
-			query = query.Where("institution_id IS NULL AND created_by = ?", team.ID)
-		} else if team.Type == "institution" {
-			query = query.Where("institution_id = ?", team.ID)
-		}
+	if teamID != "" {
+		query = query.Where("team_id = ?", teamID)
 	}
 
 	if limit > 0 {
@@ -438,12 +513,16 @@ func (r *PostgresRepository) SearchEvents(ctx context.Context, query string, fil
 	}
 
 	// Team filtering
-	if filters.Team.ID != "" && filters.Team.Type != "" {
-		if filters.Team.Type == "personal" {
-			dbQuery = dbQuery.Where("institution_id IS NULL AND created_by = ?", filters.Team.ID)
-		} else if filters.Team.Type == "institution" {
-			dbQuery = dbQuery.Where("institution_id = ?", filters.Team.ID)
-		}
+	if filters.TeamID != "" {
+		dbQuery = dbQuery.Where("team_id = ?", filters.TeamID)
+	} else if filters.Team.ID != "" && filters.Team.Type != "" {
+		dbQuery = dbQuery.Where("team_id = ?", filters.Team.ID)
+	}
+
+	// Account filtering
+	if filters.Account.ID != "" {
+		dbQuery = dbQuery.Joins("JOIN teams ON teams.id = events.team_id").
+			Where("teams.account_id = ?", filters.Account.ID)
 	}
 
 	// Apply search query
@@ -623,23 +702,23 @@ func (r *PostgresRepository) loadChildEntities(ctx context.Context, event *domai
 	}
 	event.Materials = toDomainMaterials(materialModels)
 
-	// ✅ Load EventType
-    if event.EventTypeID != "" {
-        var eventTypeModel EventTypeModel
-        if err := r.db.WithContext(ctx).Where("id = ?", event.EventTypeID).First(&eventTypeModel).Error; err == nil {
-            event.EventType = toDomainEventType(&eventTypeModel)
-        }
-    }
+	// Load EventType
+	if event.EventTypeID != "" {
+		var eventTypeModel EventTypeModel
+		if err := r.db.WithContext(ctx).Where("id = ?", event.EventTypeID).First(&eventTypeModel).Error; err == nil {
+			event.EventType = toDomainEventType(&eventTypeModel)
+		}
+	}
 
-    // ✅ Load EventStatus
-    if event.EventStatusID != "" {
-        var eventStatusModel EventStatusModel
-        if err := r.db.WithContext(ctx).Where("id = ?", event.EventStatusID).First(&eventStatusModel).Error; err == nil {
-            event.EventStatus = toDomainEventStatus(&eventStatusModel)
-        }
-    }
+	// Load EventStatus
+	if event.EventStatusID != "" {
+		var eventStatusModel EventStatusModel
+		if err := r.db.WithContext(ctx).Where("id = ?", event.EventStatusID).First(&eventStatusModel).Error; err == nil {
+			event.EventStatus = toDomainEventStatus(&eventStatusModel)
+		}
+	}
 
-	// ✅ Load Category
+	// Load Category
 	if event.CategoryID != nil && *event.CategoryID != "" {
 		var categoryModel CategoryModel
 		if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", *event.CategoryID).First(&categoryModel).Error; err == nil {
@@ -666,7 +745,6 @@ func (r *PostgresRepository) GetAllCategories(ctx context.Context) ([]*domain.Ca
 	}
 	return categories, nil
 }
-
 
 // ============================================================
 // CHILD ENTITY SAVE/UPDATE HELPERS

@@ -26,7 +26,7 @@ func (s *eventService) DuplicateEvent(ctx context.Context, id string, cmd Duplic
 		return nil, err
 	}
 
-	// 2. Check permissions using Scope
+	// 2. Check permissions using team domain
 	if err := s.checkDuplicatePermission(ctx, original); err != nil {
 		return nil, err
 	}
@@ -106,16 +106,20 @@ func (s *eventService) getOriginalEvent(ctx context.Context, id string) (*domain
 	return original, nil
 }
 
-// checkDuplicatePermission checks if user has permission to duplicate using Scope
+// checkDuplicatePermission checks if user has permission to duplicate using team domain
 func (s *eventService) checkDuplicatePermission(ctx context.Context, original *domain.Event) error {
 	// TODO: Get user ID from context
 	userID := "" // Will need to be passed in or extracted from context
 
-	// Create scope based on event
-	scope := s.getScopeFromEvent(original)
+	if userID == "" {
+		return errors.New("user ID is required")
+	}
 
-	// Check if user can manage events in this scope
-	allowed, err := s.permChecker.CanManageEvent(ctx, userID, scope)
+	// Create team domain from event
+	teamDomain := domain.TeamDomain(original.TeamID)
+
+	// Check if user can manage events in this team
+	allowed, err := s.permChecker.CanManageEvent(ctx, userID, teamDomain)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
 	}
@@ -149,13 +153,6 @@ func (s *eventService) buildDuplicateDraftCommand(
 	original *domain.Event,
 	newName, newDate string,
 ) CreateDraftCommand {
-	// Determine owner type and institution ID
-	ownerType := "personal"
-	institutionID := original.InstitutionID
-	if institutionID != nil && *institutionID != "" {
-		ownerType = "institution"
-	}
-
 	return CreateDraftCommand{
 		Name:             newName,
 		Description:      original.Description,
@@ -165,8 +162,7 @@ func (s *eventService) buildDuplicateDraftCommand(
 		Tags:             original.Tags,
 		Language:         original.Language,
 		CreatedBy:        "", // Will be set by CreateDraft method
-		OwnerType:        ownerType,
-		InstitutionID:    institutionID,
+		TeamID:           original.TeamID,
 
 		// Schedule - use the new date
 		IsMultiDay:  original.IsMultiDay,

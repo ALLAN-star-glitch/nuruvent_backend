@@ -179,8 +179,12 @@ func (s *eventService) applySEO(event *domain.Event, input *SEOInput) {
 // PERMISSION HELPERS (Shared across services)
 // ============================================================
 
-// getEventAndCheckUpdatePermission gets event and checks update permission using Scope
+// getEventAndCheckUpdatePermission gets event and checks update permission using team domain
 func (s *eventService) getEventAndCheckUpdatePermission(ctx context.Context, eventID, userID string) (*domain.Event, error) {
+	if userID == "" {
+		return nil, errors.New("user ID is required")
+	}
+
 	event, err := s.repo.GetEventByID(ctx, eventID)
 	if err != nil {
 		return nil, err
@@ -189,11 +193,11 @@ func (s *eventService) getEventAndCheckUpdatePermission(ctx context.Context, eve
 		return nil, domain.ErrEventNotFound
 	}
 
-	// Create scope from event
-	scope := s.getScopeFromEvent(event)
+	// Create team domain from event
+	teamDomain := domain.TeamDomain(event.TeamID)
 
-	// Check if user can update events in this scope
-	allowed, err := s.permChecker.CanUpdateEvent(ctx, userID, scope)
+	// Check if user can update events in this team
+	allowed, err := s.permChecker.CanUpdateEvent(ctx, userID, teamDomain)
 	if err != nil {
 		return nil, fmt.Errorf("permission check failed: %w", err)
 	}
@@ -204,66 +208,28 @@ func (s *eventService) getEventAndCheckUpdatePermission(ctx context.Context, eve
 	return event, nil
 }
 
-// getEventAndCheckDeletePermission gets event and checks delete permission using Scope
-func (s *eventService) getEventAndCheckDeletePermission(ctx context.Context, eventID, userID string) (*domain.Event, error) {
-	event, err := s.repo.GetEventByID(ctx, eventID)
-	if err != nil {
-		return nil, err
-	}
-	if event == nil {
-		return nil, domain.ErrEventNotFound
-	}
-
-	// Create scope from event
-	scope := s.getScopeFromEvent(event)
-
-	// Check if user can delete events in this scope
-	allowed, err := s.permChecker.CanDeleteEvent(ctx, userID, scope)
-	if err != nil {
-		return nil, fmt.Errorf("permission check failed: %w", err)
-	}
-	if !allowed {
-		return nil, errors.New("insufficient permissions to delete this event")
-	}
-
-	return event, nil
-}
-
-
-
-
+// canViewCreatorInfo checks if a user can view creator info for an event
 func (s *eventService) canViewCreatorInfo(ctx context.Context, userID string, event *domain.Event) bool {
-    // If no user, cannot view creator info
-    if userID == "" {
-        return false
-    }
-
-    // Event creator can always see their own info
-    if event.CreatedBy == userID {
-        return true
-    }
-
-    // Check if user has explicit view_creator permission
-    scope := s.getScopeFromEvent(event)
-    allowed, err := s.permChecker.CanViewCreator(ctx, userID, scope)
-    if err != nil {
-        log.Printf("⚠️ Failed to check view_creator permission: %v", err)
-        return false
-    }
-
-    return allowed
-}
-
-
-// getScopeFromEvent creates a Scope from an event
-func (s *eventService) getScopeFromEvent(event *domain.Event) domain.Scope {
-	if event.InstitutionID != nil && *event.InstitutionID != "" {
-		return domain.NewInstitutionTeamScope(*event.InstitutionID)
+	// If no user, cannot view creator info
+	if userID == "" {
+		return false
 	}
-	return domain.NewPersonalTeamScope(event.CreatedBy)
+
+	// Event creator can always see their own info
+	if event.CreatedBy == userID {
+		return true
+	}
+
+	// Check if user has explicit view_creator permission
+	teamDomain := domain.TeamDomain(event.TeamID)
+	allowed, err := s.permChecker.CanViewCreator(ctx, userID, teamDomain)
+	if err != nil {
+		log.Printf("⚠️ Failed to check view_creator permission: %v", err)
+		return false
+	}
+
+	return allowed
 }
-
-
 
 // getCreatorInfo fetches creator information using UserInfoProvider
 func (s *eventService) getCreatorInfo(ctx context.Context, userID string) *domain.UserInfo {
@@ -282,26 +248,40 @@ func (s *eventService) getCreatorInfo(ctx context.Context, userID string) *domai
 
 // getOrganizerInfo returns the public-facing organizer info for an event
 func (s *eventService) getOrganizerInfo(ctx context.Context, event *domain.Event) (*domain.OrganizerInfo, error) {
-	if event.InstitutionID != nil && *event.InstitutionID != "" {
-		// Institution event - show institution name
-		institution, err := s.userInfo.GetInstitutionByID(ctx, *event.InstitutionID)
+	// First check if event has an organizer already set
+	if event.Organizer != nil {
+		return event.Organizer, nil
+	}
+
+	// Get the team to determine if it's personal or institution
+	team, err := s.getTeamByID(ctx, event.TeamID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get team info: %w", err)
+	}
+	if team == nil {
+		return nil, fmt.Errorf("team not found: %s", event.TeamID)
+	}
+
+	if team.Type == "institution" {
+		// Institution team - show institution name
+		account, err := s.userInfo.GetAccountByID(ctx, team.AccountID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get institution info: %w", err)
+			return nil, fmt.Errorf("failed to get account info: %w", err)
 		}
-		if institution == nil {
-			return nil, fmt.Errorf("institution not found: %s", *event.InstitutionID)
+		if account == nil {
+			return nil, fmt.Errorf("account not found: %s", team.AccountID)
 		}
 		return &domain.OrganizerInfo{
-			ID:          institution.ID,
-			Name:        institution.Name,
-			DisplayName: institution.DisplayName,
+			ID:          account.ID,
+			Name:        account.Name,
+			DisplayName: account.DisplayName,
 			Type:        "institution",
-			AvatarURL:   institution.LogoURL,
-			Slug:        institution.Slug,
+			AvatarURL:   account.LogoURL,
+			Slug:        account.Slug,
 		}, nil
 	}
 
-	// Personal event - show user's name
+	// Personal team - show user's name
 	user, err := s.userInfo.GetUserByID(ctx, event.CreatedBy)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user info: %w", err)
@@ -317,6 +297,33 @@ func (s *eventService) getOrganizerInfo(ctx context.Context, event *domain.Event
 		AvatarURL:   user.AvatarURL,
 		Slug:        user.Slug,
 	}, nil
+}
+
+// getTeamByID retrieves a team by ID using the repository
+// Note: This requires a Team repository method to be added
+func (s *eventService) getTeamByID(ctx context.Context, teamID string) (*TeamInfo, error) {
+	// This is a temporary implementation - you'll need to add a Team repository
+	// or use the existing repository to query teams
+	// For now, we'll return a basic team info
+	if teamID == "" {
+		return nil, errors.New("team ID is required")
+	}
+	
+	// TODO: Implement team retrieval from database
+	// This should be added to the repository interface
+	
+	return &TeamInfo{
+		ID:        teamID,
+		Type:      "institution", // This should be fetched from DB
+		AccountID: "",            // This should be fetched from DB
+	}, nil
+}
+
+// TeamInfo represents basic team information
+type TeamInfo struct {
+	ID        string
+	Type      string // "personal" or "institution"
+	AccountID string
 }
 
 // ============================================================
@@ -335,7 +342,7 @@ func (s *eventService) logBulkStatusResult(operation string, result *BulkStatusR
 	}
 }
 
-
+// isEmptyTeam checks if a TeamFilter is empty
 func (s *eventService) isEmptyTeam(team domain.TeamFilter) bool {
 	return team.ID == "" || team.Type == ""
 }

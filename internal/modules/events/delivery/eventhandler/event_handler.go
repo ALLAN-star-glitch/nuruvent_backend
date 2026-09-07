@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"log"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -64,47 +63,41 @@ func getQueryString(c fiber.Ctx, key string, defaultValue string) string {
 }
 
 func getUserID(c fiber.Ctx) (string, error) {
-    // ✅ Use events domain constant
-    userID := c.Locals(domain.ContextKeyUserID)
-    if userID == nil {
-        return "", errors.New("user not authenticated")
-    }
-    userIDStr, ok := userID.(string)
-    if !ok {
-        return "", errors.New("invalid user ID")
-    }
-    return userIDStr, nil
+	userID := c.Locals(domain.ContextKeyUserID)
+	if userID == nil {
+		return "", errors.New("user not authenticated")
+	}
+	userIDStr, ok := userID.(string)
+	if !ok {
+		return "", errors.New("invalid user ID")
+	}
+	return userIDStr, nil
 }
-
 
 func getUserIDOptional(c fiber.Ctx) string {
-    // ✅ Use events domain constant
-    if user := c.Locals(domain.ContextKeyUserID); user != nil {
-        if id, ok := user.(string); ok {
-            return id
-        }
-    }
-    return ""
+	if user := c.Locals(domain.ContextKeyUserID); user != nil {
+		if id, ok := user.(string); ok {
+			return id
+		}
+	}
+	return ""
 }
-
 
 // buildEventResponses builds EventResponse slices with appropriate creator info
 func (h *EventHandler) buildEventResponses(c fiber.Ctx, events []*domain.Event) []EventResponse {
-    if len(events) == 0 {
-        return []EventResponse{}
-    }
+	if len(events) == 0 {
+		return []EventResponse{}
+	}
 
-    responses := make([]EventResponse, len(events))
-    for i, event := range events {
-        //  Service already populated Creator if allowed
-        // Handler just checks if Creator exists
-        if event.Creator != nil {
-            responses[i] = NewEventResponseFromEventWithCreator(event)
-        } else {
-            responses[i] = NewEventResponseFromEvent(event)
-        }
-    }
-    return responses
+	responses := make([]EventResponse, len(events))
+	for i, event := range events {
+		if event.Creator != nil {
+			responses[i] = NewEventResponseFromEventWithCreator(event)
+		} else {
+			responses[i] = NewEventResponseFromEvent(event)
+		}
+	}
+	return responses
 }
 
 // ============================================================
@@ -139,12 +132,11 @@ func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 		return response.InternalError(c, "Failed to get event", fiber.Map{
 			"error": err.Error(),
 		})
-	} 
+	}
 
 	if event == nil {
 		return response.NotFound(c, "Event not found", nil)
 	}
-
 
 	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
 }
@@ -183,7 +175,6 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
-
 	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
 }
 
@@ -205,7 +196,7 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 	userID := getUserIDOptional(c)
 	ctx := context.WithValue(c.Context(), "user_id", userID)
 
-	events, err := h.svc.GetUpcomingEvents(ctx, domain.TeamFilter{}, limit)
+	events, err := h.svc.GetUpcomingEvents(ctx, "", limit)
 	if err != nil {
 		return response.InternalError(c, "Failed to get upcoming events", fiber.Map{
 			"error": err.Error(),
@@ -222,13 +213,15 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 // @Description List events with filters
 // @Tags Events
 // @Produce json
-// @Param institution_id query string false "Institution ID"
+// @Param team_id query string false "Team ID"
+// @Param team_type query string false "Team Type (personal or institution)"
 // @Param user_id query string false "User ID (creator)"
 // @Param event_type_id query string false "Event Type ID"
 // @Param event_status_id query string false "Event Status ID"
 // @Param category_id query string false "Category ID"
 // @Param include_deleted query bool false "Include soft-deleted events"
 // @Param only_deleted query bool false "Show ONLY soft-deleted events"
+// @Param include_creator query bool false "Include creator details"
 // @Param limit query int false "Limit" default(20)
 // @Param offset query int false "Offset" default(0)
 // @Param sort_by query string false "Sort by field (created_at, start_date, name)" default(created_at)
@@ -246,10 +239,6 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 	if err := c.Bind().Query(&req); err != nil {
 		return response.BadRequest(c, "Invalid query parameters", nil)
 	}
-
-	includeDeleted := c.Query("include_deleted") == "true"
-	onlyDeleted := c.Query("only_deleted") == "true"
-	includeCreator := c.Query("include_creator") == "true"
 
 	if req.Limit <= 0 {
 		req.Limit = 20
@@ -274,13 +263,14 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 
 	filters := service.ListEventsFilters{
 		Team:           team,
+		TeamID:         req.TeamID,
 		UserID:         req.UserID,
 		EventTypeID:    req.EventTypeID,
 		EventStatusID:  req.EventStatusID,
 		CategoryID:     req.CategoryID,
-		IncludeDeleted: includeDeleted,
-		OnlyDeleted:    onlyDeleted,
-		IncludeCreator: includeCreator,
+		IncludeDeleted: req.IncludeDeleted,
+		OnlyDeleted:    req.OnlyDeleted,
+		IncludeCreator: req.IncludeCreator,
 		Limit:          req.Limit,
 		Offset:         req.Offset,
 		SortBy:         req.SortBy,
@@ -307,7 +297,6 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 	})
 }
 
-
 // GetEventsByType godoc
 // @Summary Get events by type
 // @Description Get all events of a specific type
@@ -326,11 +315,8 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event type is required", nil)
 	}
 
-	// ✅ Normalize the slug - check both formats
-	// If the slug doesn't start with "event-type-", try with the prefix
 	normalizedSlug := eventTypeSlug
 	if !strings.HasPrefix(eventTypeSlug, "event-type-") {
-		// Try the prefixed version
 		normalizedSlug = "event-type-" + eventTypeSlug
 	}
 
@@ -343,10 +329,8 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 	userID := getUserIDOptional(c)
 	ctx := context.WithValue(c.Context(), "user_id", userID)
 
-	// ✅ Try the normalized slug first, if not found, try the original
 	events, total, err := h.svc.GetEventsByType(ctx, normalizedSlug, page, pageSize)
 	if err != nil {
-		// If not found with normalized slug, try the original
 		if normalizedSlug != eventTypeSlug {
 			events, total, err = h.svc.GetEventsByType(ctx, eventTypeSlug, page, pageSize)
 		}
@@ -386,7 +370,7 @@ func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
 	userID := getUserIDOptional(c)
 	ctx := context.WithValue(c.Context(), "user_id", userID)
 
-	events, err := h.svc.GetPastEvents(ctx, domain.TeamFilter{}, limit)
+	events, err := h.svc.GetPastEvents(ctx, "", limit)
 	if err != nil {
 		return response.InternalError(c, "Failed to get past events", fiber.Map{
 			"error": err.Error(),
@@ -442,9 +426,6 @@ func (h *EventHandler) GetEventStatuses(c fiber.Ctx) error {
 	return response.Success(c, "Event statuses retrieved successfully", statuses)
 }
 
-
-// internal/modules/events/handler/eventhandler.go
-
 // GetCategories godoc
 // @Summary Get all event categories
 // @Description Get list of all event categories (public)
@@ -464,7 +445,6 @@ func (h *EventHandler) GetCategories(c fiber.Ctx) error {
 		})
 	}
 
-	// Convert to DTOs
 	categoryDTOs := make([]CategoryDTO, len(categories))
 	for i, cat := range categories {
 		categoryDTOs[i] = CategoryDTO{
@@ -487,12 +467,13 @@ func (h *EventHandler) GetCategories(c fiber.Ctx) error {
 // @Tags Events
 // @Produce json
 // @Param q query string false "Search query"
-// @Param institution_id query string false "Institution ID"
+// @Param team_id query string false "Team ID"
 // @Param user_id query string false "User ID (creator)"
 // @Param event_type_id query string false "Event Type ID"
 // @Param category_id query string false "Category ID"
 // @Param include_deleted query bool false "Include soft-deleted events"
 // @Param only_deleted query bool false "Show ONLY soft-deleted events"
+// @Param include_creator query bool false "Include creator details"
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
 // @Param visibility query string false "Visibility (public, private, unlisted)"
@@ -506,31 +487,31 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "Search query is required", nil)
 	}
 
-	institutionID := getQueryString(c, "institution_id", "")
+	teamID := getQueryString(c, "team_id", "")
 	userID := getQueryString(c, "user_id", "")
 	eventTypeID := getQueryString(c, "event_type_id", "")
 	categoryID := getQueryString(c, "category_id", "")
 	includeDeleted := c.Query("include_deleted") == "true"
 	onlyDeleted := c.Query("only_deleted") == "true"
+	includeCreator := c.Query("include_creator") == "true"
 	page := getQueryInt(c, "page", 1)
 	pageSize := getQueryInt(c, "page_size", 20)
 	visibility := getQueryString(c, "visibility", "")
-	includeCreator := c.Query("include_creator") == "true"
-	log.Printf("🔍 SearchEvents: visibility=%s", visibility)
 
 	if pageSize > 100 {
 		pageSize = 100
 	}
 
 	team := domain.TeamFilter{}
-	if institutionID != "" {
-		team = domain.TeamFilter{ID: institutionID, Type: "institution"}
+	if teamID != "" {
+		team = domain.TeamFilter{ID: teamID, Type: "institution"}
 	} else if userID != "" {
 		team = domain.TeamFilter{ID: userID, Type: "personal"}
 	}
 
 	filters := service.SearchFilters{
 		Team:           team,
+		TeamID:         teamID,
 		UserID:         userID,
 		EventTypeID:    eventTypeID,
 		CategoryID:     categoryID,
@@ -567,30 +548,33 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 // PROTECTED HANDLERS (Auth Required)
 // ============================================================
 
-// GetEventsByInstitution godoc
-// @Summary Get events by institution
-// @Description Get all events for an institution (requires auth)
+// GetEventsByTeam godoc
+// @Summary Get events by team
+// @Description Get all events for a team (requires auth)
 // @Tags Events
 // @Produce json
 // @Security BearerAuth
-// @Param institutionId path string true "Institution ID"
+// @Param teamId path string true "Team ID"
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
+// @Param include_deleted query bool false "Include soft-deleted events"
+// @Param only_deleted query bool false "Show ONLY soft-deleted events"
+// @Param include_creator query bool false "Include creator details"
 // @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/institutions/{institutionId}/events [get]
-func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
+// @Router /api/v1/teams/{teamId}/events [get]
+func (h *EventHandler) GetEventsByTeam(c fiber.Ctx) error {
 	userID, err := getUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	institutionID := c.Params("institutionId")
-	if institutionID == "" {
-		return response.BadRequest(c, "Institution ID is required", nil)
+	teamID := c.Params("teamId")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
 	}
 
 	ctx := context.WithValue(c.Context(), "user_id", userID)
@@ -608,15 +592,12 @@ func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
 	includeCreator := c.Query("include_creator") == "true"
 
 	filters := service.ListEventsFilters{
-		Team: domain.TeamFilter{
-			ID:   institutionID,
-			Type: "institution",
-		},
+		TeamID:         teamID,
 		Limit:          limit,
 		Offset:         offset,
 		IncludeDeleted: includeDeleted,
 		OnlyDeleted:    onlyDeleted,
-		IncludeCreator: includeCreator, 
+		IncludeCreator: includeCreator,
 	}
 
 	events, total, err := h.svc.ListEvents(ctx, filters)
@@ -637,78 +618,6 @@ func (h *EventHandler) GetEventsByInstitution(c fiber.Ctx) error {
 	})
 }
 
-// GetEventsByInstitutionWithCreator godoc
-// @Summary Get events by institution with creator details
-// @Description Get all events for an institution with full creator information (requires auth)
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param institutionId path string true "Institution ID"
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/institutions/{institutionId}/events/with-creator [get]
-func (h *EventHandler) GetEventsByInstitutionWithCreator(c fiber.Ctx) error {
-    userID, err := getUserID(c)
-    if err != nil {
-        return response.Unauthorized(c, "User not authenticated", nil)
-    }
-
-    institutionID := c.Params("institutionId")
-    if institutionID == "" {
-        return response.BadRequest(c, "Institution ID is required", nil)
-    }
-
-    ctx := context.WithValue(c.Context(), "user_id", userID)
-
-    page := getQueryInt(c, "page", 1)
-    pageSize := getQueryInt(c, "page_size", 20)
-    if pageSize > 100 {
-        pageSize = 100
-    }
-
-    limit, offset := pageSize, (page-1)*pageSize
-
-    includeDeleted := c.Query("include_deleted") == "true"
-    onlyDeleted := c.Query("only_deleted") == "true"
-    // ✅ Always include creator for this endpoint
-    includeCreator := true
-
-    filters := service.ListEventsFilters{
-        Team: domain.TeamFilter{
-            ID:   institutionID,
-            Type: "institution",
-        },
-        Limit:          limit,
-        Offset:         offset,
-        IncludeDeleted: includeDeleted,
-        OnlyDeleted:    onlyDeleted,
-        IncludeCreator: includeCreator,
-    }
-
-    events, total, err := h.svc.ListEvents(ctx, filters)
-    if err != nil {
-        return response.InternalError(c, "Failed to get events", fiber.Map{
-            "error": err.Error(),
-        })
-    }
-
-    // ✅ Use buildEventResponses
-    responses := h.buildEventResponses(c, events)
-
-    return response.Success(c, "Events retrieved successfully", fiber.Map{
-        "data":        responses,
-        "page":        page,
-        "page_size":   pageSize,
-        "total":       total,
-        "total_pages": (total + int64(pageSize) - 1) / int64(pageSize),
-    })
-}
-
 // GetMyEvents godoc
 // @Summary Get my events
 // @Description Get all events created by the authenticated user (personal events)
@@ -717,6 +626,9 @@ func (h *EventHandler) GetEventsByInstitutionWithCreator(c fiber.Ctx) error {
 // @Security BearerAuth
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
+// @Param include_deleted query bool false "Include soft-deleted events"
+// @Param only_deleted query bool false "Show ONLY soft-deleted events"
+// @Param include_creator query bool false "Include creator details"
 // @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
@@ -762,10 +674,7 @@ func (h *EventHandler) GetMyEvents(c fiber.Ctx) error {
 		})
 	}
 
-	responses := make([]EventResponse, len(events))
-	for i, event := range events {
-		responses[i] = NewEventResponseFromEventWithCreator(event)
-	}
+	responses := h.buildEventResponses(c, events)
 
 	return response.Success(c, "Events retrieved successfully", fiber.Map{
 		"data":        responses,
@@ -776,30 +685,13 @@ func (h *EventHandler) GetMyEvents(c fiber.Ctx) error {
 	})
 }
 
-// GetMyEventsWithCreator godoc
-// @Summary Get my events with creator details
-// @Description Get all events created by the authenticated user with creator info (same as GetMyEvents)
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/users/me/events/with-creator [get]
-func (h *EventHandler) GetMyEventsWithCreator(c fiber.Ctx) error {
-	return h.GetMyEvents(c)
-}
-
 // ============================================================
 // CREATE DRAFT - Personal
 // ============================================================
 
 // CreatePersonalDraft godoc
 // @Summary Create a personal draft event
-// @Description Create a draft event for personal account (no institution required)
+// @Description Create a draft event for personal team
 // @Tags Events
 // @Accept json
 // @Produce json
@@ -826,7 +718,11 @@ func (h *EventHandler) CreatePersonalDraft(c fiber.Ctx) error {
 		})
 	}
 
-	cmd := ConvertCreateDraftRequestToCommand(req, userID, "personal", "")
+	// For personal draft, team_id is the user's personal team ID
+	// You need to get the user's personal team ID
+	teamID := userID // This should be the actual team ID from the teams table
+
+	cmd := ConvertCreateDraftRequestToCommand(req, userID, teamID)
 
 	event, err := h.svc.CreateDraft(ctx, cmd)
 	if err != nil {
@@ -845,28 +741,28 @@ func (h *EventHandler) CreatePersonalDraft(c fiber.Ctx) error {
 }
 
 // ============================================================
-// CREATE DRAFT - Institution
+// CREATE DRAFT - Team
 // ============================================================
 
-// CreateDraft godoc
-// @Summary Create a draft event for institution
-// @Description Create a draft event for institution account (institution ID required)
+// CreateTeamDraft godoc
+// @Summary Create a draft event for a team
+// @Description Create a draft event for a team (team ID required)
 // @Tags Events
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param institutionId path string true "Institution ID"
+// @Param teamId path string true "Team ID"
 // @Param request body CreateDraftRequest true "Draft event details"
 // @Success 201 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/institutions/{institutionId}/events/draft [post]
-func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
-	institutionID := c.Params("institutionId")
-	if institutionID == "" {
-		return response.BadRequest(c, "Institution ID is required", nil)
+// @Router /api/v1/teams/{teamId}/events/draft [post]
+func (h *EventHandler) CreateTeamDraft(c fiber.Ctx) error {
+	teamID := c.Params("teamId")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
 	}
 
 	userID, err := getUserID(c)
@@ -883,7 +779,7 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 		})
 	}
 
-	cmd := ConvertCreateDraftRequestToCommand(req, userID, "institution", institutionID)
+	cmd := ConvertCreateDraftRequestToCommand(req, userID, teamID)
 
 	event, err := h.svc.CreateDraft(ctx, cmd)
 	if err != nil {
@@ -907,7 +803,7 @@ func (h *EventHandler) CreateDraft(c fiber.Ctx) error {
 
 // CreatePersonalEvent godoc
 // @Summary Create a published personal event
-// @Description Create a published event for personal account (no institution required)
+// @Description Create a published event for personal team
 // @Tags Events
 // @Accept json
 // @Produce json
@@ -953,7 +849,8 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Visibility is required (public, private, unlisted)", nil)
 	}
 
-	cmd := ConvertCreateEventRequestToCommand(req, userID, "personal", "")
+	teamID := userID // This should be the actual team ID from the teams table
+	cmd := ConvertCreateEventRequestToCommand(req, userID, teamID)
 
 	event, err := h.svc.CreateEvent(ctx, cmd)
 	if err != nil {
@@ -972,28 +869,28 @@ func (h *EventHandler) CreatePersonalEvent(c fiber.Ctx) error {
 }
 
 // ============================================================
-// CREATE PUBLISHED EVENT - Institution
+// CREATE PUBLISHED EVENT - Team
 // ============================================================
 
-// CreateEvent godoc
-// @Summary Create a published event for institution
-// @Description Create a published event for institution account (institution ID required)
+// CreateTeamEvent godoc
+// @Summary Create a published event for a team
+// @Description Create a published event for a team (team ID required)
 // @Tags Events
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param institutionId path string true "Institution ID"
+// @Param teamId path string true "Team ID"
 // @Param request body CreateEventRequest true "Event details"
 // @Success 201 {object} response.BaseResponse{data=EventResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/institutions/{institutionId}/events [post]
-func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
-	institutionID := c.Params("institutionId")
-	if institutionID == "" {
-		return response.BadRequest(c, "Institution ID is required", nil)
+// @Router /api/v1/teams/{teamId}/events [post]
+func (h *EventHandler) CreateTeamEvent(c fiber.Ctx) error {
+	teamID := c.Params("teamId")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
 	}
 
 	userID, err := getUserID(c)
@@ -1029,7 +926,7 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Visibility is required (public, private, unlisted)", nil)
 	}
 
-	cmd := ConvertCreateEventRequestToCommand(req, userID, "institution", institutionID)
+	cmd := ConvertCreateEventRequestToCommand(req, userID, teamID)
 
 	event, err := h.svc.CreateEvent(ctx, cmd)
 	if err != nil {
@@ -1757,7 +1654,7 @@ func (h *EventHandler) BulkDuplicateEvents(c fiber.Ctx) error {
 // @Accept multipart/form-data
 // @Produce json
 // @Security BearerAuth
-// @Param institutionId path string true "Institution ID"
+// @Param teamId path string true "Team ID"
 // @Param eventId path string true "Event ID"
 // @Param image formData file true "Event image"
 // @Success 200 {object} response.BaseResponse{data=MediaInfoResponse}
@@ -1766,8 +1663,7 @@ func (h *EventHandler) BulkDuplicateEvents(c fiber.Ctx) error {
 // @Failure 403 {object} response.BaseResponse
 // @Failure 404 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/institutions/{institutionId}/events/{eventId}/image [post]
-// internal/modules/events/handler/eventhandler.go
+// @Router /api/v1/teams/{teamId}/events/{eventId}/image [post]
 func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 	eventID := c.Params("eventId")
 	if eventID == "" {
@@ -1797,10 +1693,8 @@ func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 		return response.InternalError(c, "Failed to read image file", nil)
 	}
 
-	// ✅ Detect MIME type from file content
 	contentType := imageFile.Header.Get("Content-Type")
 	if contentType == "application/octet-stream" || contentType == "" {
-		// Detect from file extension or magic bytes
 		contentType = detectMimeType(imageFile.Filename, imageData)
 	}
 
@@ -1827,7 +1721,6 @@ func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 
 // detectMimeType detects MIME type from filename and file data
 func detectMimeType(filename string, data []byte) string {
-	// Check by file extension first
 	ext := strings.ToLower(filepath.Ext(filename))
 	switch ext {
 	case ".jpg", ".jpeg":
@@ -1844,21 +1737,16 @@ func detectMimeType(filename string, data []byte) string {
 		return "image/bmp"
 	}
 
-	// Check magic bytes
 	if len(data) >= 4 {
-		// PNG: 89 50 4E 47
 		if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
 			return "image/png"
 		}
-		// JPEG: FF D8 FF
 		if data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
 			return "image/jpeg"
 		}
-		// GIF: 47 49 46
 		if data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 {
 			return "image/gif"
 		}
-		// WEBP: 52 49 46 46 ... 57 45 42 50
 		if len(data) >= 12 && data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
 			data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50 {
 			return "image/webp"
@@ -1875,7 +1763,7 @@ func detectMimeType(filename string, data []byte) string {
 // @Accept multipart/form-data
 // @Produce json
 // @Security BearerAuth
-// @Param institutionId path string true "Institution ID"
+// @Param teamId path string true "Team ID"
 // @Param eventId path string true "Event ID"
 // @Param certificate formData file true "Certificate template (PDF or image)"
 // @Success 200 {object} response.BaseResponse{data=MediaInfoResponse}
@@ -1884,7 +1772,7 @@ func detectMimeType(filename string, data []byte) string {
 // @Failure 403 {object} response.BaseResponse
 // @Failure 404 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/institutions/{institutionId}/events/{eventId}/certificate [post]
+// @Router /api/v1/teams/{teamId}/events/{eventId}/certificate [post]
 func (h *EventHandler) UploadCertificateTemplate(c fiber.Ctx) error {
 	eventID := c.Params("eventId")
 	if eventID == "" {
@@ -1945,7 +1833,7 @@ func (h *EventHandler) UploadCertificateTemplate(c fiber.Ctx) error {
 // @Tags Events
 // @Produce json
 // @Security BearerAuth
-// @Param institutionId path string true "Institution ID"
+// @Param teamId path string true "Team ID"
 // @Param eventId path string true "Event ID"
 // @Success 200 {object} response.BaseResponse
 // @Failure 400 {object} response.BaseResponse
@@ -1953,7 +1841,7 @@ func (h *EventHandler) UploadCertificateTemplate(c fiber.Ctx) error {
 // @Failure 403 {object} response.BaseResponse
 // @Failure 404 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/institutions/{institutionId}/events/{eventId}/image [delete]
+// @Router /api/v1/teams/{teamId}/events/{eventId}/image [delete]
 func (h *EventHandler) DeleteEventImage(c fiber.Ctx) error {
 	eventID := c.Params("eventId")
 	if eventID == "" {
@@ -1985,7 +1873,7 @@ func (h *EventHandler) DeleteEventImage(c fiber.Ctx) error {
 // @Tags Events
 // @Produce json
 // @Security BearerAuth
-// @Param institutionId path string true "Institution ID"
+// @Param teamId path string true "Team ID"
 // @Param eventId path string true "Event ID"
 // @Success 200 {object} response.BaseResponse
 // @Failure 400 {object} response.BaseResponse
@@ -1993,7 +1881,7 @@ func (h *EventHandler) DeleteEventImage(c fiber.Ctx) error {
 // @Failure 403 {object} response.BaseResponse
 // @Failure 404 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/institutions/{institutionId}/events/{eventId}/certificate [delete]
+// @Router /api/v1/teams/{teamId}/events/{eventId}/certificate [delete]
 func (h *EventHandler) DeleteEventCertificate(c fiber.Ctx) error {
 	eventID := c.Params("eventId")
 	if eventID == "" {
@@ -2025,7 +1913,7 @@ func (h *EventHandler) DeleteEventCertificate(c fiber.Ctx) error {
 // @Tags Events
 // @Produce json
 // @Security BearerAuth
-// @Param institutionId path string true "Institution ID"
+// @Param teamId path string true "Team ID"
 // @Param eventId path string true "Event ID"
 // @Success 200 {object} response.BaseResponse
 // @Failure 400 {object} response.BaseResponse
@@ -2033,7 +1921,7 @@ func (h *EventHandler) DeleteEventCertificate(c fiber.Ctx) error {
 // @Failure 403 {object} response.BaseResponse
 // @Failure 404 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/institutions/{institutionId}/events/{eventId}/media [delete]
+// @Router /api/v1/teams/{teamId}/events/{eventId}/media [delete]
 func (h *EventHandler) DeleteAllEventMedia(c fiber.Ctx) error {
 	eventID := c.Params("eventId")
 	if eventID == "" {
@@ -2070,18 +1958,18 @@ func (h *EventHandler) DeleteAllEventMedia(c fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param institutionId path string true "Institution ID"
+// @Param teamId path string true "Team ID"
 // @Param request body BulkIDsRequest true "Event IDs to delete media for"
 // @Success 200 {object} response.BaseResponse{data=service.BulkDeleteResult}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
 // @Failure 403 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/institutions/{institutionId}/events/bulk/media [delete]
+// @Router /api/v1/teams/{teamId}/events/bulk/media [delete]
 func (h *EventHandler) BulkDeleteEventMedia(c fiber.Ctx) error {
-	institutionID := c.Params("institutionId")
-	if institutionID == "" {
-		return response.BadRequest(c, "Institution ID is required", nil)
+	teamID := c.Params("teamId")
+	if teamID == "" {
+		return response.BadRequest(c, "Team ID is required", nil)
 	}
 
 	var req BulkIDsRequest

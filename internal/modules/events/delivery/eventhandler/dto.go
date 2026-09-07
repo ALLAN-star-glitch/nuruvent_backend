@@ -7,8 +7,7 @@ package eventhandler
 // ============================================================
 
 // CreateDraftRequest - All fields optional for drafts (application/json)
-// NOTE: owner_type and institution_id are NOT in the request body
-// They are derived from the URL by the handler
+// NOTE: team_id is NOT in the request body - it's derived from the URL by the handler
 type CreateDraftRequest struct {
 	// Basic Information
 	Name             string   `json:"name"`
@@ -67,14 +66,10 @@ type CreateDraftRequest struct {
 
 	// SEO
 	SEO *SEORequest `json:"seo"`
-
-	// ❌ REMOVED: Image URL (handled by separate media endpoints)
-	// ImageURL string `json:"image_url"`
 }
 
 // CreateEventRequest - All fields required for published events (application/json)
-// NOTE: owner_type and institution_id are NOT in the request body
-// They are derived from the URL by the handler
+// NOTE: team_id is NOT in the request body - it's derived from the URL by the handler
 type CreateEventRequest struct {
 	// Basic Information - Required
 	Name             string   `json:"name" binding:"required"`
@@ -134,9 +129,6 @@ type CreateEventRequest struct {
 
 	// SEO
 	SEO *SEORequest `json:"seo"`
-
-	// ❌ REMOVED: Image URL (handled by separate media endpoints)
-	// ImageURL string `json:"image_url"`
 }
 
 // UpdateEventRequest - All fields optional for updates (application/json)
@@ -150,6 +142,9 @@ type UpdateEventRequest struct {
 	CategoryID       *string   `json:"category_id,omitempty"`
 	Tags             []string  `json:"tags,omitempty"`
 	Language         *string   `json:"language,omitempty"`
+
+	// Team ID - optional, can move event to different team
+	TeamID *string `json:"team_id,omitempty"`
 
 	// Schedule
 	Schedules   []ScheduleRequest  `json:"schedules,omitempty"`
@@ -196,9 +191,6 @@ type UpdateEventRequest struct {
 
 	// SEO
 	SEO *SEORequest `json:"seo,omitempty"`
-
-	// ❌ REMOVED: Image (handled by separate media endpoints)
-	// ImageURL *string `json:"image_url,omitempty"`
 }
 
 // ============================================================
@@ -288,34 +280,31 @@ type SEORequest struct {
 	TwitterImageURL string   `json:"twitter_image_url,omitempty"`
 }
 
-
+// ListEventsRequest - List events with filters
 type ListEventsRequest struct {
-    // Team Filter (from query params)
-    TeamID   string `json:"team_id" query:"team_id"`
-    TeamType string `json:"team_type" query:"team_type"` // "personal" or "institution"
-    
-    // Event Filters
-    EventTypeID    string `json:"event_type_id" query:"event_type_id"`
-    EventStatusID  string `json:"event_status_id" query:"event_status_id"`
-    CategoryID     string `json:"category_id" query:"category_id"`
-    UserID         string `json:"user_id" query:"user_id"` // Filter by creator
-    Visibility     string `json:"visibility" query:"visibility"` // public, private, unlisted
-
+	// Team Filter (from query params)
+	TeamID   string `json:"team_id" query:"team_id"`
+	TeamType string `json:"team_type" query:"team_type"` // "personal" or "institution"
 	
-    
-    // Deletion Filters
-    IncludeDeleted bool `json:"include_deleted" query:"include_deleted"`
-    OnlyDeleted    bool `json:"only_deleted" query:"only_deleted"`
-    IncludeCreator bool `json:"include_creator" query:"include_creator"`
-    
+	// Event Filters
+	EventTypeID    string `json:"event_type_id" query:"event_type_id"`
+	EventStatusID  string `json:"event_status_id" query:"event_status_id"`
+	CategoryID     string `json:"category_id" query:"category_id"`
+	UserID         string `json:"user_id" query:"user_id"` // Filter by creator
+	Visibility     string `json:"visibility" query:"visibility"` // public, private, unlisted
 	
-    // Pagination 
-    Limit  int `json:"limit" query:"limit"`
-    Offset int `json:"offset" query:"offset"`
-    
-    // Sorting
-    SortBy    string `json:"sort_by" query:"sort_by"`
-    SortOrder string `json:"sort_order" query:"sort_order"` // asc, desc
+	// Deletion Filters
+	IncludeDeleted bool `json:"include_deleted" query:"include_deleted"`
+	OnlyDeleted    bool `json:"only_deleted" query:"only_deleted"`
+	IncludeCreator bool `json:"include_creator" query:"include_creator"`
+	
+	// Pagination 
+	Limit  int `json:"limit" query:"limit"`
+	Offset int `json:"offset" query:"offset"`
+	
+	// Sorting
+	SortBy    string `json:"sort_by" query:"sort_by"`
+	SortOrder string `json:"sort_order" query:"sort_order"` // asc, desc
 }
 
 // ============================================================
@@ -345,7 +334,6 @@ type BulkDuplicateRequest struct {
 // ============================================================
 // RESPONSE DTOS
 // ============================================================
-
 
 // EventTypeDTO - Event type information
 type EventTypeDTO struct {
@@ -546,10 +534,9 @@ type EventResponse struct {
 	CertificateTemplate *CertificateTemplateDTO `json:"certificate_template,omitempty"`
 
 	// Ownership
-	OwnerType     string `json:"owner_type"` // "personal" or "institution"
-	InstitutionID string `json:"institution_id,omitempty"`
+	TeamID string `json:"team_id"` // Team ID this event belongs to
 	
-	// ✅ Organizer (public-facing - always shown)
+	// Organizer (public-facing - always shown)
 	Organizer *OrganizerResponse `json:"organizer"`
 	
 	// Creator (internal - only for authorized users)
@@ -625,7 +612,6 @@ type EventResponse struct {
 	UpdatedAt string `json:"updated_at"`
 	DeletedAt *string `json:"deleted_at,omitempty"`
 }
-
 
 // ============================================================
 // BULK RESPONSE TYPES

@@ -22,6 +22,15 @@ func NewTeamRepository(db *gorm.DB) teamdomain.Repository {
     return &TeamRepository{db: db}
 }
 
+
+func (r *TeamRepository) WithTransaction(ctx context.Context, fn func(txCtx context.Context) error) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Pass the transaction DB handle into context so subsequent repo calls use it
+		txCtx := context.WithValue(ctx, "tx_db", tx)
+		return fn(txCtx)
+	})
+}
+
 // ============================================================
 // TEAM OPERATIONS
 // ============================================================

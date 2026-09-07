@@ -20,6 +20,7 @@ const (
 // Team represents a team (personal or institution)
 type Team struct {
     ID          string
+    AccountID   string // ✅ Added: ID of the account this team belongs to
     Name        string
     DisplayName string
     Slug        string
@@ -31,7 +32,10 @@ type Team struct {
 }
 
 // NewTeam creates a new team
-func NewTeam(name, displayName, slug string, teamType TeamType) (*Team, error) {
+func NewTeam(accountID, name, displayName, slug string, teamType TeamType) (*Team, error) {
+    if accountID == "" {
+        return nil, errors.New("account ID is required")
+    }
     if name == "" {
         return nil, errors.New("team name is required")
     }
@@ -48,6 +52,7 @@ func NewTeam(name, displayName, slug string, teamType TeamType) (*Team, error) {
     now := time.Now()
     return &Team{
         ID:          uuid.New().String(),
+        AccountID:   accountID,
         Name:        name,
         DisplayName: displayName,
         Slug:        slug,
@@ -59,17 +64,30 @@ func NewTeam(name, displayName, slug string, teamType TeamType) (*Team, error) {
 }
 
 // NewPersonalTeam creates a new personal team
+// For personal teams, AccountID = UserID
 func NewPersonalTeam(userID, userName string) (*Team, error) {
-    // Personal team naming convention: {user_name}'s Personal Team
+    if userID == "" {
+        return nil, errors.New("user ID is required")
+    }
+    if userName == "" {
+        return nil, errors.New("user name is required")
+    }
+
     displayName := userName + "'s Personal Team"
     slug := "personal-" + userID
+    name := "personal_" + userID
 
-    return NewTeam("personal_"+userID, displayName, slug, TeamTypePersonal)
+    return NewTeam(userID, name, displayName, slug, TeamTypePersonal)
 }
 
 // NewInstitutionTeam creates a new institution team
-func NewInstitutionTeam(name, displayName, slug string) (*Team, error) {
-    return NewTeam(name, displayName, slug, TeamTypeInstitution)
+// For institution teams, AccountID = InstitutionID
+func NewInstitutionTeam(accountID, name, displayName, slug string) (*Team, error) {
+    if accountID == "" {
+        return nil, errors.New("account ID is required")
+    }
+
+    return NewTeam(accountID, name, displayName, slug, TeamTypeInstitution)
 }
 
 // IsPersonal returns true if team is a personal team
@@ -92,4 +110,12 @@ func (t *Team) Deactivate() {
 func (t *Team) Activate() {
     t.IsActive = true
     t.UpdatedAt = time.Now()
+}
+
+// GetDomain returns the Casbin domain for this team
+func (t *Team) GetDomain() string {
+    if t.IsPersonal() {
+        return "personal:team:" + t.ID
+    }
+    return "institution:team:" + t.ID
 }

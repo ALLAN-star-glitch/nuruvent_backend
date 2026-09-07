@@ -27,19 +27,19 @@ func NewTokenService(cfg *config.Config) authdomain.TokenService {
 func (s *TokenService) GenerateAccessToken(ctx *authdomain.TokenContext) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"sub":          ctx.UserID,
-		"type":         "access",
-		"iat":          now.Unix(),
-		"exp":          now.Add(s.config.JWT.AccessExpiration).Unix(),
-		"jti":          uuid.New().String(),
-		"email":        ctx.Email,
-		"role":         ctx.Role,
-		"is_verified":  ctx.IsVerified,
-		"is_active":    ctx.IsActive,
-		"account_id":   ctx.AccountID,
-		"account_type": ctx.AccountTypeSlug,
-		"team_id":      ctx.TeamID,
-		"team_type":    ctx.TeamTypeSlug,
+		"sub":           ctx.UserID,
+		"type":          "access",
+		"iat":           now.Unix(),
+		"exp":           now.Add(s.config.JWT.AccessExpiration).Unix(),
+		"jti":           uuid.New().String(),
+		"email":         ctx.Email,
+		"role":          ctx.Role,
+		"is_verified":   ctx.IsVerified,
+		"is_active":     ctx.IsActive,
+		"account_id":    ctx.AccountID,
+		"account_type":  ctx.AccountTypeSlug,
+		"team_id":       ctx.TeamID,
+		"team_type":     ctx.TeamTypeSlug,
 	}
 
 	if ctx.DisplayName != "" {

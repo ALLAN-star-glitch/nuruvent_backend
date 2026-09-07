@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// User entity (formerly Account)
+// User entity
 type User struct {
 	ID             string
 	Slug           string
@@ -18,7 +18,7 @@ type User struct {
 	Email          string
 	PasswordHash   string
 	Phone          string
-	AccountTypeID  string
+	AccountTypeID  string  // ✅ Only keep this - references account_types table
 	ProfessionalTypeID *string
 	InstitutionID  *string
 	
@@ -29,18 +29,6 @@ type User struct {
 	PhoneVerifiedAt   *time.Time
 	IdentityVerified  bool
 	IdentityVerifiedAt *time.Time
-	
-	// KYC fields
-	KYCStatus          string  // pending, submitted, verified, rejected, not_required
-	KYCSubmittedAt     *time.Time
-	KYCVerifiedAt      *time.Time
-	KYCRejectedAt      *time.Time
-	KYCRejectionReason *string
-	
-	// Document fields
-	IDDocument     *string
-	SelfieDocument *string
-	AddressProof   *string
 	
 	// Status
 	IsActive  bool
@@ -73,15 +61,26 @@ func NewUser(email, passwordHash, name, phone, accountTypeID string) (*User, err
 		Email:          email,
 		PasswordHash:   passwordHash,
 		Phone:          phone,
-		AccountTypeID:  accountTypeID,
+		AccountTypeID:  accountTypeID,  // ✅ Only AccountTypeID
 		EmailVerified:  false,
 		PhoneVerified:  false,
 		IdentityVerified: false,
-		KYCStatus:      "pending",
 		IsActive:       true,
 		CreatedAt:      now,
 		UpdatedAt:      now,
 	}, nil
+}
+
+// ============================================================
+// ACCOUNT TYPE HELPERS
+// ============================================================
+
+// GetAccountType returns the account type name (personal or institution)
+// This should be called after fetching the account type from the repository
+func (u *User) GetAccountType() string {
+	// This is just a placeholder - the actual type comes from the repository
+	// The repository should populate this when fetching the user
+	return ""
 }
 
 // ============================================================
@@ -122,26 +121,11 @@ func (u *User) IsEmailVerified() bool {
 	return u.EmailVerified
 }
 
-// ============================================================
-// KYC METHODS
-// ============================================================
 
-// SubmitKYC submits KYC documents
-func (u *User) SubmitKYC(idDocument, selfieDocument, addressProof string) {
-	now := time.Now()
-	u.KYCStatus = "submitted"
-	u.KYCSubmittedAt = &now
-	u.IDDocument = &idDocument
-	u.SelfieDocument = &selfieDocument
-	u.AddressProof = &addressProof
-	u.UpdatedAt = now
-}
 
 // VerifyKYC marks KYC as verified
 func (u *User) VerifyKYC() {
 	now := time.Now()
-	u.KYCStatus = "verified"
-	u.KYCVerifiedAt = &now
 	u.IdentityVerified = true
 	u.IdentityVerifiedAt = &now
 	u.UpdatedAt = now
@@ -150,21 +134,11 @@ func (u *User) VerifyKYC() {
 // RejectKYC rejects KYC with a reason
 func (u *User) RejectKYC(reason string) {
 	now := time.Now()
-	u.KYCStatus = "rejected"
-	u.KYCRejectedAt = &now
-	u.KYCRejectionReason = &reason
 	u.UpdatedAt = now
 }
 
-// IsKYCVerified checks if KYC is verified
-func (u *User) IsKYCVerified() bool {
-	return u.KYCStatus == "verified"
-}
 
-// IsKYCRequired checks if KYC is required
-func (u *User) IsKYCRequired() bool {
-	return u.KYCStatus != "not_required"
-}
+
 
 // ============================================================
 // STATUS METHODS
@@ -313,7 +287,5 @@ func (u *User) Restore() {
 
 // slugify generates a slug from a name
 func slugify(name string) string {
-	// Simple slug generation - can be improved
-	// In production, you'd want to check for uniqueness
 	return "user-" + uuid.New().String()[:8]
 }

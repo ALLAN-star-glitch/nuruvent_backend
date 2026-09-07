@@ -201,7 +201,7 @@ func (s *service) ResendOTP(ctx context.Context, email, name, purpose string) er
 
 	// 2. For certain purposes, try to get the user's name from the repository
 	if name == "User" && (purpose == "two_factor" || purpose == "password_reset") {
-		user, err := s.repo.GetUserByEmail(email)
+		user, err := s.repo.GetUserByEmail(ctx, email)
 		if err == nil && user != nil {
 			name = user.Name
 		}

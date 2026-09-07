@@ -1,10 +1,11 @@
+// internal/modules/auth/infrastructure/postgres/models.go
+
 package postgres
 
 import (
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -13,25 +14,62 @@ import (
 // ============================================================
 
 type AccountTypeModel struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	Slug        string         `gorm:"type:varchar(50);unique;not null" json:"slug"`
-	Name        string         `gorm:"type:varchar(100);not null" json:"name"`
-	DisplayName string         `gorm:"type:varchar(150)" json:"display_name,omitempty"`
-	Description string         `gorm:"type:text" json:"description"`
-	Icon        string         `gorm:"type:varchar(50)" json:"icon"`
-	Color       string         `gorm:"type:varchar(20)" json:"color"`
-	SortOrder   int            `gorm:"default:0" json:"sort_order"`
-	IsActive    bool           `gorm:"default:true" json:"is_active"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
-
-	// Relationships
-	Users []UserModel `gorm:"foreignKey:AccountTypeID" json:"users,omitempty"`
+	ID          string         `gorm:"primaryKey;default:gen_random_uuid()"`
+	Slug        string         `gorm:"type:varchar(50);uniqueIndex;not null"`
+	Name        string         `gorm:"type:varchar(100);not null"`
+	DisplayName string         `gorm:"type:varchar(150)"`
+	Description string         `gorm:"type:text"`
+	Icon        string         `gorm:"type:varchar(50)"`
+	Color       string         `gorm:"type:varchar(20)"`
+	SortOrder   int            `gorm:"default:0"`
+	IsActive    bool           `gorm:"default:true"`
+	CreatedAt   time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt   time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
 func (AccountTypeModel) TableName() string {
 	return "account_types"
+}
+
+func (m *AccountTypeModel) ToDomain() *authdomain.AccountType {
+	if m == nil {
+		return nil
+	}
+	return &authdomain.AccountType{
+		ID:          m.ID,
+		Slug:        m.Slug,
+		Name:        m.Name,
+		DisplayName: m.DisplayName,
+		Description: m.Description,
+		Icon:        m.Icon,
+		Color:       m.Color,
+		SortOrder:   m.SortOrder,
+		IsActive:    m.IsActive,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+		DeletedAt:   &m.DeletedAt.Time,
+	}
+}
+
+func (m *AccountTypeModel) FromDomain(at *authdomain.AccountType) {
+	if at == nil {
+		return
+	}
+	m.ID = at.ID
+	m.Slug = at.Slug
+	m.Name = at.Name
+	m.DisplayName = at.DisplayName
+	m.Description = at.Description
+	m.Icon = at.Icon
+	m.Color = at.Color
+	m.SortOrder = at.SortOrder
+	m.IsActive = at.IsActive
+	m.CreatedAt = at.CreatedAt
+	m.UpdatedAt = at.UpdatedAt
+	if at.DeletedAt != nil {
+		m.DeletedAt = gorm.DeletedAt{Time: *at.DeletedAt, Valid: true}
+	}
 }
 
 // ============================================================
@@ -39,25 +77,62 @@ func (AccountTypeModel) TableName() string {
 // ============================================================
 
 type ProfessionalTypeModel struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	Slug        string         `gorm:"type:varchar(50);unique;not null" json:"slug"`
-	Name        string         `gorm:"type:varchar(100);not null" json:"name"`
-	DisplayName string         `gorm:"type:varchar(150)" json:"display_name,omitempty"`
-	Description string         `gorm:"type:text" json:"description"`
-	Icon        string         `gorm:"type:varchar(50)" json:"icon"`
-	Color       string         `gorm:"type:varchar(20)" json:"color"`
-	SortOrder   int            `gorm:"default:0" json:"sort_order"`
-	IsActive    bool           `gorm:"default:true" json:"is_active"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
-
-	// Relationships
-	Users []UserModel `gorm:"foreignKey:ProfessionalTypeID" json:"users,omitempty"`
+	ID          string         `gorm:"primaryKey;default:gen_random_uuid()"`
+	Slug        string         `gorm:"type:varchar(50);uniqueIndex;not null"`
+	Name        string         `gorm:"type:varchar(100);not null"`
+	DisplayName string         `gorm:"type:varchar(150)"`
+	Description string         `gorm:"type:text"`
+	Icon        string         `gorm:"type:varchar(50)"`
+	Color       string         `gorm:"type:varchar(20)"`
+	SortOrder   int            `gorm:"default:0"`
+	IsActive    bool           `gorm:"default:true"`
+	CreatedAt   time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt   time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
 func (ProfessionalTypeModel) TableName() string {
 	return "professional_types"
+}
+
+func (m *ProfessionalTypeModel) ToDomain() *authdomain.ProfessionalType {
+	if m == nil {
+		return nil
+	}
+	return &authdomain.ProfessionalType{
+		ID:          m.ID,
+		Slug:        m.Slug,
+		Name:        m.Name,
+		DisplayName: m.DisplayName,
+		Description: m.Description,
+		Icon:        m.Icon,
+		Color:       m.Color,
+		SortOrder:   m.SortOrder,
+		IsActive:    m.IsActive,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+		DeletedAt:   &m.DeletedAt.Time,
+	}
+}
+
+func (m *ProfessionalTypeModel) FromDomain(pt *authdomain.ProfessionalType) {
+	if pt == nil {
+		return
+	}
+	m.ID = pt.ID
+	m.Slug = pt.Slug
+	m.Name = pt.Name
+	m.DisplayName = pt.DisplayName
+	m.Description = pt.Description
+	m.Icon = pt.Icon
+	m.Color = pt.Color
+	m.SortOrder = pt.SortOrder
+	m.IsActive = pt.IsActive
+	m.CreatedAt = pt.CreatedAt
+	m.UpdatedAt = pt.UpdatedAt
+	if pt.DeletedAt != nil {
+		m.DeletedAt = gorm.DeletedAt{Time: *pt.DeletedAt, Valid: true}
+	}
 }
 
 // ============================================================
@@ -65,205 +140,174 @@ func (ProfessionalTypeModel) TableName() string {
 // ============================================================
 
 type InstitutionTypeModel struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	Slug        string         `gorm:"type:varchar(50);unique;not null" json:"slug"`
-	Name        string         `gorm:"type:varchar(100);not null" json:"name"`
-	DisplayName string         `gorm:"type:varchar(150)" json:"display_name,omitempty"`
-	Description string         `gorm:"type:text" json:"description"`
-	Icon        string         `gorm:"type:varchar(50)" json:"icon"`
-	Color       string         `gorm:"type:varchar(20)" json:"color"`
-	SortOrder   int            `gorm:"default:0" json:"sort_order"`
-	IsActive    bool           `gorm:"default:true" json:"is_active"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
-
-	// Relationships
-	Institutions []InstitutionModel `gorm:"foreignKey:InstitutionTypeID" json:"institutions,omitempty"`
+	ID          string         `gorm:"primaryKey;default:gen_random_uuid()"`
+	Slug        string         `gorm:"type:varchar(50);uniqueIndex;not null"`
+	Name        string         `gorm:"type:varchar(100);not null"`
+	DisplayName string         `gorm:"type:varchar(150)"`
+	Description string         `gorm:"type:text"`
+	Icon        string         `gorm:"type:varchar(50)"`
+	Color       string         `gorm:"type:varchar(20)"`
+	SortOrder   int            `gorm:"default:0"`
+	IsActive    bool           `gorm:"default:true"`
+	CreatedAt   time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt   time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
 func (InstitutionTypeModel) TableName() string {
 	return "institution_types"
 }
 
-// ============================================================
-// INSTITUTION MODEL
-// ============================================================
-
-type InstitutionModel struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	Slug        string         `gorm:"type:varchar(50);unique;not null" json:"slug"`
-	Name        string         `gorm:"not null;size:255" json:"name"`
-	DisplayName string         `gorm:"type:varchar(150)" json:"display_name,omitempty"`
-	Email       string         `gorm:"uniqueIndex;not null;size:255" json:"email"`
-	Phone       string         `gorm:"size:50" json:"phone"`
-
-	InstitutionTypeID uuid.UUID `gorm:"type:uuid;index;not null" json:"institution_type_id"`
-
-	Description string         `gorm:"type:text" json:"description"`
-	Logo        string         `gorm:"size:500" json:"logo"`
-	Website     string         `gorm:"size:255" json:"website"`
-	Address     string         `gorm:"type:text" json:"address"`
-	IsActive    bool           `gorm:"default:true" json:"is_active"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
-
-	// Relationships
-	InstitutionType InstitutionTypeModel `gorm:"foreignKey:InstitutionTypeID" json:"institution_type,omitempty"`
-	Users           []UserModel          `gorm:"foreignKey:InstitutionID" json:"users,omitempty"`
-	TeamMembers     []TeamMemberModel    `gorm:"foreignKey:InstitutionID" json:"team_members,omitempty"`
+func (m *InstitutionTypeModel) ToDomain() *authdomain.InstitutionType {
+	if m == nil {
+		return nil
+	}
+	return &authdomain.InstitutionType{
+		ID:          m.ID,
+		Slug:        m.Slug,
+		Name:        m.Name,
+		DisplayName: m.DisplayName,
+		Description: m.Description,
+		Icon:        m.Icon,
+		Color:       m.Color,
+		SortOrder:   m.SortOrder,
+		IsActive:    m.IsActive,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+		DeletedAt:   &m.DeletedAt.Time,
+	}
 }
 
-func (InstitutionModel) TableName() string {
-	return "institutions"
-}
-
-
-
-// ============================================================
-// TEAM TYPE MODEL (NEW)
-// ============================================================
-
-type TeamTypeModel struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	Name        string         `gorm:"type:varchar(100);not null" json:"name"`          // institution_team, personal_team
-	DisplayName string         `gorm:"type:varchar(150);not null" json:"display_name"`   // Institution Team, Personal Team
-	Slug        string         `gorm:"type:varchar(50);unique;not null" json:"slug"`     // institution-team, personal-team
-	Description string         `gorm:"type:text" json:"description"`
-	IsActive    bool           `gorm:"default:true" json:"is_active"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
-	DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
-
-	// Relationships
-	TeamMembers []TeamMemberModel `gorm:"foreignKey:TeamTypeID" json:"team_members,omitempty"`
-}
-
-func (TeamTypeModel) TableName() string {
-	return "team_types"
+func (m *InstitutionTypeModel) FromDomain(it *authdomain.InstitutionType) {
+	if it == nil {
+		return
+	}
+	m.ID = it.ID
+	m.Slug = it.Slug
+	m.Name = it.Name
+	m.DisplayName = it.DisplayName
+	m.Description = it.Description
+	m.Icon = it.Icon
+	m.Color = it.Color
+	m.SortOrder = it.SortOrder
+	m.IsActive = it.IsActive
+	m.CreatedAt = it.CreatedAt
+	m.UpdatedAt = it.UpdatedAt
+	if it.DeletedAt != nil {
+		m.DeletedAt = gorm.DeletedAt{Time: *it.DeletedAt, Valid: true}
+	}
 }
 
 // ============================================================
-// TEAM MEMBER MODEL (UPDATED)
-// ============================================================
-
-type TeamMemberModel struct {
-	ID            uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	MemberID      uuid.UUID      `gorm:"type:uuid;not null;index" json:"member_id"`
-	InstitutionID *uuid.UUID     `gorm:"type:uuid;index" json:"institution_id,omitempty"` // NULL for personal teams
-	TeamTypeID    uuid.UUID      `gorm:"type:uuid;not null;index" json:"team_type_id"`
-	InvitedBy     *uuid.UUID     `gorm:"type:uuid;index" json:"invited_by,omitempty"` // NULL if self-created
-	IsActive      bool           `gorm:"default:true" json:"is_active"`
-	JoinedAt      time.Time      `gorm:"default:CURRENT_TIMESTAMP" json:"joined_at"`
-	CreatedBy     *uuid.UUID     `gorm:"type:uuid" json:"created_by,omitempty"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
-
-	// Relationships
-	Member      UserModel        `gorm:"foreignKey:MemberID" json:"member,omitempty"`
-	Institution *InstitutionModel `gorm:"foreignKey:InstitutionID" json:"institution,omitempty"`
-	TeamType    TeamTypeModel    `gorm:"foreignKey:TeamTypeID" json:"team_type,omitempty"`
-	Inviter     *UserModel       `gorm:"foreignKey:InvitedBy" json:"inviter,omitempty"`
-	Creator     *UserModel       `gorm:"foreignKey:CreatedBy" json:"creator,omitempty"`
-}
-
-func (TeamMemberModel) TableName() string {
-	return "team_members"
-}
-
-// ============================================================
-// REFRESH TOKEN MODEL
-// ============================================================
-
-type RefreshTokenModel struct {
-	ID         uuid.UUID `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	UserID     uuid.UUID `gorm:"type:uuid;index;not null" json:"user_id"`
-	Token      string    `gorm:"uniqueIndex;not null;size:512" json:"token"`
-	ExpiresAt  time.Time `gorm:"not null" json:"expires_at"`
-	Revoked    bool      `gorm:"default:false" json:"revoked"`
-	UserAgent  string    `gorm:"size:255" json:"user_agent"`
-	IPAddress  string    `gorm:"size:45" json:"ip_address"`
-	CreatedAt  time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"created_at"`
-	UpdatedAt  time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"updated_at"`
-	DeletedAt  *time.Time `json:"deleted_at,omitempty"`
-
-	// Relationship
-	User UserModel `gorm:"foreignKey:UserID" json:"user,omitempty"`
-}
-
-func (RefreshTokenModel) TableName() string {
-	return "refresh_tokens"
-}
-
-
-// ============================================================
-// USER MODEL (formerly Account)
+// USER MODEL
 // ============================================================
 
 type UserModel struct {
-	ID          uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	Slug        string         `gorm:"type:varchar(50);unique;not null" json:"slug"`
-	Name        string         `gorm:"type:varchar(100);not null" json:"name"`
-	DisplayName string         `gorm:"type:varchar(150)" json:"display_name,omitempty"`
-	Email       string         `gorm:"uniqueIndex;not null;size:255" json:"email"`
-	PasswordHash string        `gorm:"not null" json:"-"`
-	Phone       string         `gorm:"size:50" json:"phone"`
-
-	AccountTypeID     uuid.UUID  `gorm:"type:uuid;index;not null" json:"account_type_id"`
-	ProfessionalTypeID *uuid.UUID `gorm:"type:uuid;index" json:"professional_type_id,omitempty"`
-	InstitutionID     *uuid.UUID `gorm:"type:uuid;index" json:"institution_id,omitempty"`
-
-	EmailVerified    bool       `gorm:"default:false" json:"email_verified"`
-	EmailVerifiedAt  *time.Time `json:"email_verified_at,omitempty"`
-	IdentityVerified bool       `gorm:"default:false" json:"identity_verified"`
-	IdentityVerifiedAt *time.Time `json:"identity_verified_at,omitempty"`
-	PhoneVerified    bool       `gorm:"default:false" json:"phone_verified"`
-	PhoneVerifiedAt  *time.Time `json:"phone_verified_at,omitempty"`
-	KYCStatus        string     `gorm:"type:varchar(50);default:'pending'" json:"kyc_status"`
-
-	IsActive  bool           `gorm:"default:true" json:"is_active"`
-	CreatedAt time.Time      `json:"created_at"`
-	UpdatedAt time.Time      `json:"updated_at"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-
-	// Relationships
-	AccountType      AccountTypeModel        `gorm:"foreignKey:AccountTypeID" json:"account_type,omitempty"`
-	ProfessionalType *ProfessionalTypeModel  `gorm:"foreignKey:ProfessionalTypeID" json:"professional_type,omitempty"`
-	Institution      *InstitutionModel       `gorm:"foreignKey:InstitutionID" json:"institution,omitempty"`
-	TeamMembers      []TeamMemberModel       `gorm:"foreignKey:MemberID" json:"team_members,omitempty"`
-	RefreshTokens    []RefreshTokenModel     `gorm:"foreignKey:UserID" json:"refresh_tokens,omitempty"`
+	ID                  string         `gorm:"primaryKey;default:gen_random_uuid()"`
+	Slug                string         `gorm:"type:varchar(50);uniqueIndex;not null"`
+	Name                string         `gorm:"type:varchar(100);not null"`
+	DisplayName         string         `gorm:"type:varchar(150)"`
+	Email               string         `gorm:"uniqueIndex;not null;size:255"`
+	PasswordHash        string         `gorm:"not null"`
+	Phone               string         `gorm:"size:50"`
+	AccountTypeID       string         `gorm:"type:uuid;index;not null"`
+	ProfessionalTypeID  *string        `gorm:"type:uuid;index"`
+	EmailVerified       bool           `gorm:"default:false"`
+	EmailVerifiedAt     *time.Time
+	IdentityVerified    bool           `gorm:"default:false"`
+	IdentityVerifiedAt  *time.Time
+	PhoneVerified       bool           `gorm:"default:false"`
+	PhoneVerifiedAt     *time.Time
+	IsActive            bool           `gorm:"default:true"`
+	CreatedAt           time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt           time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+	DeletedAt           gorm.DeletedAt `gorm:"index"`
 }
 
 func (UserModel) TableName() string {
 	return "users"
 }
 
+func (m *UserModel) ToDomain() *authdomain.User {
+	if m == nil {
+		return nil
+	}
+	return &authdomain.User{
+		ID:                  m.ID,
+		Slug:                m.Slug,
+		Name:                m.Name,
+		DisplayName:         m.DisplayName,
+		Email:               m.Email,
+		PasswordHash:        m.PasswordHash,
+		Phone:               m.Phone,
+		AccountTypeID:       m.AccountTypeID,
+		ProfessionalTypeID:  m.ProfessionalTypeID,
+		EmailVerified:       m.EmailVerified,
+		EmailVerifiedAt:     m.EmailVerifiedAt,
+		IdentityVerified:    m.IdentityVerified,
+		IdentityVerifiedAt:  m.IdentityVerifiedAt,
+		PhoneVerified:       m.PhoneVerified,
+		PhoneVerifiedAt:     m.PhoneVerifiedAt,
+		IsActive:            m.IsActive,
+		CreatedAt:           m.CreatedAt,
+		UpdatedAt:           m.UpdatedAt,
+		DeletedAt:           &m.DeletedAt.Time,
+	}
+}
 
-
-// internal/modules/auth/infrastructure/postgres/models.go
+func (m *UserModel) FromDomain(user *authdomain.User) {
+	if user == nil {
+		return
+	}
+	m.ID = user.ID
+	m.Slug = user.Slug
+	m.Name = user.Name
+	m.DisplayName = user.DisplayName
+	m.Email = user.Email
+	m.PasswordHash = user.PasswordHash
+	m.Phone = user.Phone
+	m.AccountTypeID = user.AccountTypeID
+	m.ProfessionalTypeID = user.ProfessionalTypeID
+	m.EmailVerified = user.EmailVerified
+	m.EmailVerifiedAt = user.EmailVerifiedAt
+	m.IdentityVerified = user.IdentityVerified
+	m.IdentityVerifiedAt = user.IdentityVerifiedAt
+	m.PhoneVerified = user.PhoneVerified
+	m.PhoneVerifiedAt = user.PhoneVerifiedAt
+	m.IsActive = user.IsActive
+	m.CreatedAt = user.CreatedAt
+	m.UpdatedAt = user.UpdatedAt
+	if user.DeletedAt != nil {
+		m.DeletedAt = gorm.DeletedAt{Time: *user.DeletedAt, Valid: true}
+	}
+}
 
 // ============================================================
 // ACCOUNT MODEL
 // ============================================================
 
 type AccountModel struct {
-	ID            string     `gorm:"primaryKey;default:gen_random_uuid()"`
-	Name          string     `gorm:"column:name;type:varchar(255);not null"`
-	DisplayName   string     `gorm:"column:display_name;type:varchar(255);not null"`
-	Slug          string     `gorm:"column:slug;type:varchar(255);uniqueIndex;not null"`
-	Email         string     `gorm:"column:email;type:varchar(255);uniqueIndex;not null"`
-	Phone         string     `gorm:"column:phone;type:varchar(50)"`
-	AccountTypeID string     `gorm:"column:account_type_id;type:uuid;not null;index"` // ✅ Use AccountTypeID
-	Status        string     `gorm:"column:status;type:varchar(50);default:'active'"`
-	LogoURL       string     `gorm:"column:logo_url;type:varchar(500)"`
-	Website       string     `gorm:"column:website;type:varchar(255)"`
-	Description   string     `gorm:"column:description;type:text"`
-	CreatedBy     string     `gorm:"column:created_by;type:uuid;index"`
-	CreatedAt     time.Time  `gorm:"column:created_at;default:CURRENT_TIMESTAMP"`
-	UpdatedAt     time.Time  `gorm:"column:updated_at;default:CURRENT_TIMESTAMP"`
-	DeletedAt     *time.Time `gorm:"column:deleted_at;index"`
+	ID                string         `gorm:"primaryKey;default:gen_random_uuid()"`
+	Name              string         `gorm:"column:name;type:varchar(255);not null"`
+	DisplayName       string         `gorm:"column:display_name;type:varchar(255);not null"`
+	Slug              string         `gorm:"column:slug;type:varchar(255);uniqueIndex;not null"`
+	Email             string         `gorm:"column:email;type:varchar(255);uniqueIndex;not null"`
+	Phone             string         `gorm:"column:phone;type:varchar(50)"`
+	AccountTypeID     string         `gorm:"column:account_type_id;type:uuid;not null;index"`
+	InstitutionTypeID *string        `gorm:"column:institution_type_id;type:uuid;index"`
+	Status            string         `gorm:"column:status;type:varchar(50);default:'active'"`
+	LogoURL           string         `gorm:"column:logo_url;type:varchar(500)"`
+	Website           string         `gorm:"column:website;type:varchar(255)"`
+	Description       string         `gorm:"column:description;type:text"`
+	Address           string         `gorm:"column:address;type:text"`
+	City              string         `gorm:"column:city;type:varchar(100)"`
+	Country           string         `gorm:"column:country;type:varchar(100)"`
+	BillingEmail      string         `gorm:"column:billing_email;type:varchar(255)"`
+	SubscriptionPlan  string         `gorm:"column:subscription_plan;type:varchar(50)"`
+	CreatedBy         string         `gorm:"column:created_by;type:uuid;index"`
+	CreatedAt         time.Time      `gorm:"column:created_at;default:CURRENT_TIMESTAMP"`
+	UpdatedAt         time.Time      `gorm:"column:updated_at;default:CURRENT_TIMESTAMP"`
+	DeletedAt         *time.Time     `gorm:"column:deleted_at;index"`
 }
 
 func (AccountModel) TableName() string {
@@ -275,21 +319,27 @@ func (m *AccountModel) ToDomain() *authdomain.Account {
 		return nil
 	}
 	return &authdomain.Account{
-		ID:            m.ID,
-		Name:          m.Name,
-		DisplayName:   m.DisplayName,
-		Slug:          m.Slug,
-		Email:         m.Email,
-		Phone:         m.Phone,
-		AccountTypeID: m.AccountTypeID, // ✅ Use AccountTypeID
-		Status:        m.Status,
-		LogoURL:       m.LogoURL,
-		Website:       m.Website,
-		Description:   m.Description,
-		CreatedBy:     m.CreatedBy,
-		CreatedAt:     m.CreatedAt,
-		UpdatedAt:     m.UpdatedAt,
-		DeletedAt:     m.DeletedAt,
+		ID:                m.ID,
+		Name:              m.Name,
+		DisplayName:       m.DisplayName,
+		Slug:              m.Slug,
+		Email:             m.Email,
+		Phone:             m.Phone,
+		AccountTypeID:     m.AccountTypeID,
+		InstitutionTypeID: m.InstitutionTypeID,
+		Status:            m.Status,
+		LogoURL:           m.LogoURL,
+		Website:           m.Website,
+		Description:       m.Description,
+		Address:           m.Address,
+		City:              m.City,
+		Country:           m.Country,
+		BillingEmail:      m.BillingEmail,
+		SubscriptionPlan:  m.SubscriptionPlan,
+		CreatedBy:         m.CreatedBy,
+		CreatedAt:         m.CreatedAt,
+		UpdatedAt:         m.UpdatedAt,
+		DeletedAt:         m.DeletedAt,
 	}
 }
 
@@ -303,33 +353,38 @@ func (m *AccountModel) FromDomain(account *authdomain.Account) {
 	m.Slug = account.Slug
 	m.Email = account.Email
 	m.Phone = account.Phone
-	m.AccountTypeID = account.AccountTypeID // ✅ Use AccountTypeID
+	m.AccountTypeID = account.AccountTypeID
+	m.InstitutionTypeID = account.InstitutionTypeID
 	m.Status = account.Status
 	m.LogoURL = account.LogoURL
 	m.Website = account.Website
 	m.Description = account.Description
+	m.Address = account.Address
+	m.City = account.City
+	m.Country = account.Country
+	m.BillingEmail = account.BillingEmail
+	m.SubscriptionPlan = account.SubscriptionPlan
 	m.CreatedBy = account.CreatedBy
 	m.CreatedAt = account.CreatedAt
 	m.UpdatedAt = account.UpdatedAt
 	m.DeletedAt = account.DeletedAt
 }
 
-
 // ============================================================
 // ACCOUNT MEMBER MODEL
 // ============================================================
 
 type AccountMemberModel struct {
-	ID          string     `gorm:"primaryKey;default:gen_random_uuid()"`
-	AccountID   string     `gorm:"column:account_id;type:uuid;not null;index"`
-	UserID      string     `gorm:"column:user_id;type:uuid;not null;index"`
-	Role        string     `gorm:"column:role;type:varchar(50);not null"`
-	IsActive    bool       `gorm:"column:is_active;default:true"`
-	InvitedBy   string     `gorm:"column:invited_by;type:uuid;index"`
-	JoinedAt    time.Time  `gorm:"column:joined_at;default:CURRENT_TIMESTAMP"`
-	CreatedAt   time.Time  `gorm:"column:created_at;default:CURRENT_TIMESTAMP"`
-	UpdatedAt   time.Time  `gorm:"column:updated_at;default:CURRENT_TIMESTAMP"`
-	DeletedAt   *time.Time `gorm:"column:deleted_at;index"`
+	ID          string         `gorm:"primaryKey;default:gen_random_uuid()"`
+	AccountID   string         `gorm:"column:account_id;type:uuid;not null;index"`
+	UserID      string         `gorm:"column:user_id;type:uuid;not null;index"`
+	Role        string         `gorm:"column:role;type:varchar(50);not null"`
+	IsActive    bool           `gorm:"column:is_active;default:true"`
+	InvitedBy   string         `gorm:"column:invited_by;type:uuid;index"`
+	JoinedAt    time.Time      `gorm:"column:joined_at;default:CURRENT_TIMESTAMP"`
+	CreatedAt   time.Time      `gorm:"column:created_at;default:CURRENT_TIMESTAMP"`
+	UpdatedAt   time.Time      `gorm:"column:updated_at;default:CURRENT_TIMESTAMP"`
+	DeletedAt   *time.Time     `gorm:"column:deleted_at;index"`
 }
 
 func (AccountMemberModel) TableName() string {
@@ -368,4 +423,59 @@ func (m *AccountMemberModel) FromDomain(member *authdomain.AccountMember) {
 	m.CreatedAt = member.CreatedAt
 	m.UpdatedAt = member.UpdatedAt
 	m.DeletedAt = member.DeletedAt
+}
+
+// ============================================================
+// REFRESH TOKEN MODEL
+// ============================================================
+
+type RefreshTokenModel struct {
+	ID         string     `gorm:"primaryKey;default:gen_random_uuid()"`
+	UserID     string     `gorm:"type:uuid;index;not null"`
+	Token      string     `gorm:"uniqueIndex;not null;size:512"`
+	ExpiresAt  time.Time  `gorm:"not null"`
+	Revoked    bool       `gorm:"default:false"`
+	UserAgent  string     `gorm:"size:255"`
+	IPAddress  string     `gorm:"size:45"`
+	CreatedAt  time.Time  `gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt  time.Time  `gorm:"default:CURRENT_TIMESTAMP"`
+	DeletedAt  *time.Time `gorm:"index"`
+}
+
+func (RefreshTokenModel) TableName() string {
+	return "refresh_tokens"
+}
+
+func (m *RefreshTokenModel) ToDomain() *authdomain.RefreshToken {
+	if m == nil {
+		return nil
+	}
+	return &authdomain.RefreshToken{
+		ID:         m.ID,
+		UserID:     m.UserID,
+		Token:      m.Token,
+		ExpiresAt:  m.ExpiresAt,
+		Revoked:    m.Revoked,
+		UserAgent:  m.UserAgent,
+		IPAddress:  m.IPAddress,
+		CreatedAt:  m.CreatedAt,
+		UpdatedAt:  m.UpdatedAt,
+		DeletedAt:  m.DeletedAt,
+	}
+}
+
+func (m *RefreshTokenModel) FromDomain(rt *authdomain.RefreshToken) {
+	if rt == nil {
+		return
+	}
+	m.ID = rt.ID
+	m.UserID = rt.UserID
+	m.Token = rt.Token
+	m.ExpiresAt = rt.ExpiresAt
+	m.Revoked = rt.Revoked
+	m.UserAgent = rt.UserAgent
+	m.IPAddress = rt.IPAddress
+	m.CreatedAt = rt.CreatedAt
+	m.UpdatedAt = rt.UpdatedAt
+	m.DeletedAt = rt.DeletedAt
 }

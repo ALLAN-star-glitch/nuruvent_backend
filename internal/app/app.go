@@ -3,7 +3,6 @@
 package app
 
 import (
-	"context"
 	"log"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authmiddleware"
@@ -53,25 +52,6 @@ func NewApp() (*App, error) {
 	}))
 
 	return &App{AppDependencies: deps}, nil
-}
-
-// Init initializes all modules
-func (app *App) Init(ctx context.Context) error {
-	log.Println("Initializing modules...")
-	if app.AuthService != nil {
-		log.Println("✅ Auth module ready")
-	}
-	if app.EventsService != nil {
-		log.Println("✅ Events module ready")
-	}
-	if app.MediaService != nil {
-		log.Println("✅ Media module ready")
-	}
-	if app.Notification != nil {
-		log.Println("✅ Notification module ready")
-	}
-	log.Println("All modules initialized successfully")
-	return nil
 }
 
 // SetupRoutes registers all API routes

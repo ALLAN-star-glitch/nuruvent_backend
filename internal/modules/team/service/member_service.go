@@ -7,7 +7,6 @@ import (
     "fmt"
     "log"
 
-
     "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/teamdomain"
 )
 
@@ -36,6 +35,16 @@ func (s *teamService) AddMember(ctx context.Context, teamID, userID string, role
         return nil, teamdomain.ErrTeamNotFound
     }
 
+    // ✅ Check permission using domain
+    domain := NewTeamDomain(team).String()
+    isAdmin, err := s.casbinSvc.IsAccountAdmin(ctx, domain, addedBy)
+    if err != nil {
+        return nil, fmt.Errorf("permission check failed: %w", err)
+    }
+    if !isAdmin {
+        return nil, teamdomain.ErrPermissionDenied
+    }
+
     // Check if user exists
     user, err := s.authSvc.GetUserByID(ctx, userID)
     if err != nil {
@@ -61,9 +70,8 @@ func (s *teamService) AddMember(ctx context.Context, teamID, userID string, role
         return nil, fmt.Errorf("failed to add member: %w", err)
     }
 
-    // Assign Casbin role
-    scope := NewTeamScope(team)
-    if err := s.casbinSvc.AssignRole(ctx, scope, userID, string(role)); err != nil {
+    // ✅ Assign Casbin role using domain
+    if err := s.casbinSvc.AssignRole(ctx, domain, userID, string(role)); err != nil {
         log.Printf("⚠️ Failed to assign role: %v", err)
     }
 
@@ -90,6 +98,16 @@ func (s *teamService) RemoveMember(ctx context.Context, teamID, userID, removedB
     }
     if team == nil {
         return teamdomain.ErrTeamNotFound
+    }
+
+    // ✅ Check permission using domain
+    domain := NewTeamDomain(team).String()
+    isAdmin, err := s.casbinSvc.IsAccountAdmin(ctx, domain, removedBy)
+    if err != nil {
+        return fmt.Errorf("permission check failed: %w", err)
+    }
+    if !isAdmin {
+        return teamdomain.ErrPermissionDenied
     }
 
     // Get member
@@ -129,9 +147,8 @@ func (s *teamService) RemoveMember(ctx context.Context, teamID, userID, removedB
         return fmt.Errorf("failed to remove member: %w", err)
     }
 
-    // Remove Casbin role
-    scope := NewTeamScope(team)
-    if err := s.casbinSvc.RemoveRole(ctx, scope, userID, string(member.Role)); err != nil {
+    // ✅ Remove Casbin role using domain
+    if err := s.casbinSvc.RemoveRole(ctx, domain, userID, string(member.Role)); err != nil {
         log.Printf("⚠️ Failed to remove role: %v", err)
     }
 
@@ -158,6 +175,16 @@ func (s *teamService) UpdateMemberRole(ctx context.Context, teamID, userID strin
     }
     if team == nil {
         return nil, teamdomain.ErrTeamNotFound
+    }
+
+    // ✅ Check permission using domain
+    domain := NewTeamDomain(team).String()
+    isAdmin, err := s.casbinSvc.IsAccountAdmin(ctx, domain, updatedBy)
+    if err != nil {
+        return nil, fmt.Errorf("permission check failed: %w", err)
+    }
+    if !isAdmin {
+        return nil, teamdomain.ErrPermissionDenied
     }
 
     // Get member
@@ -188,12 +215,11 @@ func (s *teamService) UpdateMemberRole(ctx context.Context, teamID, userID strin
         return nil, fmt.Errorf("failed to update member role: %w", err)
     }
 
-    // Update Casbin role
-    scope := NewTeamScope(team)
-    if err := s.casbinSvc.RemoveRole(ctx, scope, userID, string(member.Role)); err != nil {
+    // ✅ Update Casbin role using domain
+    if err := s.casbinSvc.RemoveRole(ctx, domain, userID, string(member.Role)); err != nil {
         log.Printf("⚠️ Failed to remove old role: %v", err)
     }
-    if err := s.casbinSvc.AssignRole(ctx, scope, userID, string(newRole)); err != nil {
+    if err := s.casbinSvc.AssignRole(ctx, domain, userID, string(newRole)); err != nil {
         log.Printf("⚠️ Failed to assign new role: %v", err)
     }
 
@@ -217,6 +243,78 @@ func (s *teamService) GetUserMemberships(ctx context.Context, userID string) ([]
     }
 
     return s.repo.GetMembersByUser(ctx, userID)
+}
+
+// GetUserTeamMemberships gets all team memberships for a user (for Auth module)
+func (s *teamService) GetUserTeamMemberships(ctx context.Context, userID string) ([]*TeamMemberInfo, error) {
+    if userID == "" {
+        return nil, fmt.Errorf("user ID is required")
+    }
+
+    members, err := s.repo.GetMembersByUser(ctx, userID)
+    if err != nil {
+        return nil, err
+    }
+
+    result := make([]*TeamMemberInfo, len(members))
+    for i, member := range members {
+        result[i] = &TeamMemberInfo{
+            ID:       member.ID,
+            TeamID:   member.TeamID,
+            UserID:   member.UserID,
+            Role:     string(member.Role),
+            IsActive: member.IsActive,
+        }
+    }
+    return result, nil
+}
+
+// GetUserPersonalTeamIDs gets all personal team IDs for a user (for Auth module)
+func (s *teamService) GetUserPersonalTeamIDs(ctx context.Context, userID string) ([]string, error) {
+    if userID == "" {
+        return nil, fmt.Errorf("user ID is required")
+    }
+
+    members, err := s.repo.GetMembersByUser(ctx, userID)
+    if err != nil {
+        return nil, err
+    }
+
+    var teamIDs []string
+    for _, member := range members {
+        team, err := s.repo.GetTeamByID(ctx, member.TeamID)
+        if err != nil || team == nil {
+            continue
+        }
+        if team.IsPersonal() {
+            teamIDs = append(teamIDs, team.ID)
+        }
+    }
+    return teamIDs, nil
+}
+
+// GetUserInstitutionTeamIDs gets all institution team IDs for a user (for Auth module)
+func (s *teamService) GetUserInstitutionTeamIDs(ctx context.Context, userID string) ([]string, error) {
+    if userID == "" {
+        return nil, fmt.Errorf("user ID is required")
+    }
+
+    members, err := s.repo.GetMembersByUser(ctx, userID)
+    if err != nil {
+        return nil, err
+    }
+
+    var teamIDs []string
+    for _, member := range members {
+        team, err := s.repo.GetTeamByID(ctx, member.TeamID)
+        if err != nil || team == nil {
+            continue
+        }
+        if team.IsInstitution() {
+            teamIDs = append(teamIDs, team.ID)
+        }
+    }
+    return teamIDs, nil
 }
 
 // LeaveTeam allows a user to leave a team
@@ -269,9 +367,9 @@ func (s *teamService) LeaveTeam(ctx context.Context, teamID, userID string) erro
         return fmt.Errorf("failed to leave team: %w", err)
     }
 
-    // Remove Casbin role
-    scope := NewTeamScope(team)
-    if err := s.casbinSvc.RemoveRole(ctx, scope, userID, string(member.Role)); err != nil {
+    // ✅ Remove Casbin role using domain
+    domain := NewTeamDomain(team).String()
+    if err := s.casbinSvc.RemoveRole(ctx, domain, userID, string(member.Role)); err != nil {
         log.Printf("⚠️ Failed to remove role: %v", err)
     }
 

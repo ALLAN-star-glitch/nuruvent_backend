@@ -1,90 +1,76 @@
-// internal/modules/auth/authdomain/domains.go
+// internal/modules/auth/authdomain/domain.go
 
 package authdomain
 
 import "strings"
 
-// Domain constants
+// ============================================================
+// DOMAIN CONSTANTS
+// ============================================================
+
 const (
-    DomainPlatform = "platform"
+	// Platform domain
+	DomainPlatform = "platform"
 
-    // Team domain prefixes
-    TeamDomainPrefixPersonal    = "personal:team:"
-    TeamDomainPrefixInstitution = "institution:team:"
-
-    // Account domain prefix
-    AccountDomainPrefix = "account:"
+	// Team domain prefixes
+	TeamDomainPrefixPersonal    = "personal:team:"
+	TeamDomainPrefixInstitution = "institution:team:"
+	TeamDomainPrefixAccount     = "account:"
 )
 
 // ============================================================
-// PERSONAL TEAM DOMAINS
+// DOMAIN BUILDERS
 // ============================================================
 
 // PersonalTeamDomain returns the personal team domain for a user
 // Format: "personal:team:{user_id}"
 func PersonalTeamDomain(userID string) string {
-    if userID == "" {
-        return ""
-    }
-    return TeamDomainPrefixPersonal + userID
+	if userID == "" {
+		return ""
+	}
+	return TeamDomainPrefixPersonal + userID
 }
 
-// IsPersonalTeamDomain checks if a domain is a personal team domain
-func IsPersonalTeamDomain(domain string) bool {
-    return strings.HasPrefix(domain, TeamDomainPrefixPersonal)
+// InstitutionTeamDomain returns the institution team domain for an account
+// Format: "institution:team:{account_id}"
+func InstitutionTeamDomain(accountID string) string {
+	if accountID == "" {
+		return ""
+	}
+	return TeamDomainPrefixInstitution + accountID
 }
-
-// ============================================================
-// INSTITUTION TEAM DOMAINS
-// ============================================================
-
-// InstitutionTeamDomain returns the institution team domain
-// Format: "institution:team:{institution_id}"
-func InstitutionTeamDomain(institutionID string) string {
-    if institutionID == "" {
-        return ""
-    }
-    return TeamDomainPrefixInstitution + institutionID
-}
-
-// IsInstitutionTeamDomain checks if a domain is an institution team domain
-func IsInstitutionTeamDomain(domain string) bool {
-    return strings.HasPrefix(domain, TeamDomainPrefixInstitution)
-}
-
-// ============================================================
-// ACCOUNT DOMAINS (NEW)
-// ============================================================
 
 // AccountDomain returns the account domain for an account
 // Format: "account:{account_id}"
 func AccountDomain(accountID string) string {
-    if accountID == "" {
-        return ""
-    }
-    return AccountDomainPrefix + accountID
+	if accountID == "" {
+		return ""
+	}
+	return TeamDomainPrefixAccount + accountID
+}
+
+// ============================================================
+// DOMAIN CHECKERS
+// ============================================================
+
+// IsPersonalTeamDomain checks if a domain is a personal team domain
+func IsPersonalTeamDomain(domain string) bool {
+	return strings.HasPrefix(domain, TeamDomainPrefixPersonal)
+}
+
+// IsInstitutionTeamDomain checks if a domain is an institution team domain
+func IsInstitutionTeamDomain(domain string) bool {
+	return strings.HasPrefix(domain, TeamDomainPrefixInstitution)
 }
 
 // IsAccountDomain checks if a domain is an account domain
 func IsAccountDomain(domain string) bool {
-    return strings.HasPrefix(domain, AccountDomainPrefix)
+	return strings.HasPrefix(domain, TeamDomainPrefixAccount)
 }
-
-// ExtractAccountID extracts account ID from an account domain
-func ExtractAccountID(domain string) string {
-    if IsAccountDomain(domain) {
-        return strings.TrimPrefix(domain, AccountDomainPrefix)
-    }
-    return ""
-}
-
-// ============================================================
-// TEAM DOMAINS
-// ============================================================
 
 // IsTeamDomain checks if a domain is a team domain (personal or institution)
 func IsTeamDomain(domain string) bool {
-    return IsPersonalTeamDomain(domain) || IsInstitutionTeamDomain(domain)
+	return IsPersonalTeamDomain(domain) || IsInstitutionTeamDomain(domain)
 }
 
 // ============================================================
@@ -93,23 +79,42 @@ func IsTeamDomain(domain string) bool {
 
 // ExtractTeamID extracts team ID from a team domain
 func ExtractTeamID(domain string) string {
-    if IsPersonalTeamDomain(domain) {
-        return strings.TrimPrefix(domain, TeamDomainPrefixPersonal)
-    }
-    if IsInstitutionTeamDomain(domain) {
-        return strings.TrimPrefix(domain, TeamDomainPrefixInstitution)
-    }
-    return ""
+	if IsPersonalTeamDomain(domain) {
+		return strings.TrimPrefix(domain, TeamDomainPrefixPersonal)
+	}
+	if IsInstitutionTeamDomain(domain) {
+		return strings.TrimPrefix(domain, TeamDomainPrefixInstitution)
+	}
+	if IsAccountDomain(domain) {
+		return strings.TrimPrefix(domain, TeamDomainPrefixAccount)
+	}
+	return ""
+}
+
+// ExtractAccountIDFromDomain extracts account ID from a domain
+// Works with: "institution:team:{account_id}", "account:{account_id}", "personal:team:{user_id}"
+func ExtractAccountIDFromDomain(domain string) string {
+	if IsInstitutionTeamDomain(domain) {
+		return ExtractTeamID(domain)
+	}
+	if IsAccountDomain(domain) {
+		return ExtractTeamID(domain)
+	}
+	// For personal teams, the account ID is the user ID
+	if IsPersonalTeamDomain(domain) {
+		return ExtractTeamID(domain)
+	}
+	return ""
 }
 
 // ExtractTeamType extracts team type from a team domain
 // Returns: "personal", "institution", or empty string
 func ExtractTeamType(domain string) string {
-    if IsPersonalTeamDomain(domain) {
-        return "personal"
-    }
-    if IsInstitutionTeamDomain(domain) {
-        return "institution"
-    }
-    return ""
+	if IsPersonalTeamDomain(domain) {
+		return "personal"
+	}
+	if IsInstitutionTeamDomain(domain) {
+		return "institution"
+	}
+	return ""
 }

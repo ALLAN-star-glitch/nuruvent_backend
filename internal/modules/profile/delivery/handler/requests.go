@@ -48,8 +48,9 @@ func (r *UpdateProfileRequest) ToMap() map[string]interface{} {
 	return updates
 }
 
-// UpdateInstitutionRequest represents an institution update request
-type UpdateInstitutionRequest struct {
+// UpdateAccountRequest represents an account update request
+// Replaces UpdateInstitutionRequest
+type UpdateAccountRequest struct {
 	Name        string `json:"name,omitempty"`
 	DisplayName string `json:"display_name,omitempty"`
 	Email       string `json:"email,omitempty"`
@@ -60,10 +61,12 @@ type UpdateInstitutionRequest struct {
 	Address     string `json:"address,omitempty"`
 	City        string `json:"city,omitempty"`
 	Country     string `json:"country,omitempty"`
+	Status      string `json:"status,omitempty"`
+	KYCStatus   string `json:"kyc_status,omitempty"`
 }
 
-// ToMap converts UpdateInstitutionRequest to a map of updates
-func (r *UpdateInstitutionRequest) ToMap() map[string]interface{} {
+// ToMap converts UpdateAccountRequest to a map of updates
+func (r *UpdateAccountRequest) ToMap() map[string]interface{} {
 	updates := make(map[string]interface{})
 	if r.Name != "" {
 		updates["name"] = r.Name
@@ -95,6 +98,12 @@ func (r *UpdateInstitutionRequest) ToMap() map[string]interface{} {
 	if r.Country != "" {
 		updates["country"] = r.Country
 	}
+	if r.Status != "" {
+		updates["status"] = r.Status
+	}
+	if r.KYCStatus != "" {
+		updates["kyc_status"] = r.KYCStatus
+	}
 	return updates
 }
 
@@ -125,15 +134,15 @@ type ListUsersRequest struct {
 	SortOrder string `json:"sort_order" query:"sort_order"` // asc, desc
 }
 
-// ListInstitutionsRequest represents a request to list institutions
-type ListInstitutionsRequest struct {
-	// Team Filter (from query params)
-	TeamID   string `json:"team_id" query:"team_id"`
-	TeamType string `json:"team_type" query:"team_type"` // "institution"
-
-	// Institution Filters
-	InstitutionID string `json:"institution_id" query:"institution_id"`
-	Search        string `json:"search" query:"search"`
+// ListAccountsRequest represents a request to list accounts
+// Replaces ListInstitutionsRequest
+type ListAccountsRequest struct {
+	// Account Filters
+	AccountID string `json:"account_id" query:"account_id"`
+	Type      string `json:"type" query:"type"` // "personal" or "institution"
+	Search    string `json:"search" query:"search"`
+	Status    string `json:"status" query:"status"`
+	KYCStatus string `json:"kyc_status" query:"kyc_status"`
 
 	// Deletion Filters
 	IncludeDeleted bool `json:"include_deleted" query:"include_deleted"`
@@ -150,5 +159,6 @@ type ListInstitutionsRequest struct {
 
 // GetOrganizerInfoRequest represents a request to get organizer info
 type GetOrganizerInfoRequest struct {
-	Scope string `json:"scope" query:"scope"` // "personal:user_id" or "institution:institution_id"
+	Type string `json:"type" query:"type"` // "personal" or "institution"
+	ID   string `json:"id" query:"id"`     // User ID or Account ID
 }

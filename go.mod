@@ -20,6 +20,7 @@ require (
 )
 
 require (
+	github.com/casbin/casbin/v2 v2.135.0 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	golang.org/x/time v0.14.0 // indirect

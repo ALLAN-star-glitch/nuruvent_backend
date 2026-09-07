@@ -7,8 +7,12 @@ import "context"
 // PermissionChecker handles access evaluation queries
 // This interface is focused ONLY on reading/checking permissions
 type PermissionChecker interface {
+	// ============================================================
+	// CORE PERMISSION METHODS
+	// ============================================================
+
 	// HasPermission checks if a user has a specific permission in a domain
-	// domain: "personal:team:{user_id}", "institution:team:{institution_id}", "account:{account_id}", or "platform"
+	// domain: "personal:team:{user_id}", "institution:team:{account_id}", "account:{account_id}", or "platform"
 	// Returns (true, nil) if allowed, (false, nil) if denied, (false, error) if check failed
 	HasPermission(ctx context.Context, userID string, domain string, resource, action string) (bool, error)
 
@@ -94,7 +98,7 @@ type PermissionChecker interface {
 	CanManageProfile(ctx context.Context, userID string, domain string) (bool, error)
 
 	// ============================================================
-	// TEAM ROLE CHECKS
+	// ACCOUNT ROLE CHECKS
 	// ============================================================
 
 	// IsAccountAdmin checks if user is an account admin in the domain
@@ -110,14 +114,12 @@ type PermissionChecker interface {
 	// GetUserRoles returns all roles for a user in a domain
 	GetUserRoles(ctx context.Context, userID string, domain string) ([]string, error)
 
-	// GetUserTeamIDs returns all team IDs where a user has roles
-	GetUserTeamIDs(ctx context.Context, userID string) ([]string, error)
+	// GetUserTeamDomains returns all team domains where a user has membership
+	// Returns domains in format: "personal:team:{user_id}" and "institution:team:{account_id}"
+	GetUserTeamDomains(ctx context.Context, userID string) ([]string, error)
 
-	// GetUserPersonalTeamIDs returns personal team IDs where a user has roles
-	GetUserPersonalTeamIDs(ctx context.Context, userID string) ([]string, error)
-
-	// GetUserInstitutionTeamIDs returns institution team IDs where a user has roles
-	GetUserInstitutionTeamIDs(ctx context.Context, userID string) ([]string, error)
+	// GetUserAccountIDs returns all account IDs where a user has membership
+	GetUserAccountIDs(ctx context.Context, userID string) ([]string, error)
 
 	// HasTeamAccess checks if a user has any team role
 	HasTeamAccess(ctx context.Context, userID string) (bool, error)

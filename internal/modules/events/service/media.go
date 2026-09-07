@@ -22,6 +22,9 @@ func (s *eventService) UploadEventImage(ctx context.Context, cmd UploadEventImag
 	if cmd.EventID == "" {
 		return nil, errors.New("event ID is required")
 	}
+	if cmd.UploadedBy == "" {
+		return nil, errors.New("uploaded by is required")
+	}
 
 	event, err := s.getEventAndCheckUpdatePermission(ctx, cmd.EventID, cmd.UploadedBy)
 	if err != nil {
@@ -62,6 +65,9 @@ func (s *eventService) UploadCertificateTemplate(ctx context.Context, cmd Upload
 	if cmd.EventID == "" {
 		return nil, errors.New("event ID is required")
 	}
+	if cmd.UploadedBy == "" {
+		return nil, errors.New("uploaded by is required")
+	}
 
 	if _, err := s.getEventAndCheckUpdatePermission(ctx, cmd.EventID, cmd.UploadedBy); err != nil {
 		return nil, err
@@ -99,6 +105,9 @@ func (s *eventService) DeleteEventImage(ctx context.Context, eventID string, del
 	if eventID == "" {
 		return errors.New("event ID is required")
 	}
+	if deletedBy == "" {
+		return errors.New("deleted by is required")
+	}
 
 	// 1. Validate and get event
 	event, err := s.getEventAndCheckUpdatePermission(ctx, eventID, deletedBy)
@@ -130,6 +139,9 @@ func (s *eventService) DeleteEventCertificate(ctx context.Context, eventID strin
 	if eventID == "" {
 		return errors.New("event ID is required")
 	}
+	if deletedBy == "" {
+		return errors.New("deleted by is required")
+	}
 
 	// 1. Validate and get event
 	if _, err := s.getEventAndCheckUpdatePermission(ctx, eventID, deletedBy); err != nil {
@@ -154,6 +166,9 @@ func (s *eventService) DeleteEventCertificate(ctx context.Context, eventID strin
 func (s *eventService) DeleteAllEventMedia(ctx context.Context, eventID string, deletedBy string) error {
 	if eventID == "" {
 		return errors.New("event ID is required")
+	}
+	if deletedBy == "" {
+		return errors.New("deleted by is required")
 	}
 
 	// 1. Validate and get event
@@ -185,6 +200,9 @@ func (s *eventService) BulkDeleteEventMedia(ctx context.Context, eventIDs []stri
 	if len(eventIDs) == 0 {
 		return nil, errors.New("at least one event ID is required")
 	}
+	if deletedBy == "" {
+		return nil, errors.New("deleted by is required")
+	}
 
 	result := &BulkDeleteResult{
 		DeletedCount: 0,
@@ -204,6 +222,9 @@ func (s *eventService) BulkDeleteEventMedia(ctx context.Context, eventIDs []stri
 	return result, nil
 }
 
+// ============================================================
+// PRIVATE HELPERS
+// ============================================================
 
 // uploadMedia uploads a file to the media service
 func (s *eventService) uploadMedia(ctx context.Context, cmd domain.UploadMediaCommand) (*domain.MediaInfo, error) {
@@ -232,16 +253,4 @@ func (s *eventService) clearEventImageURL(ctx context.Context, event *domain.Eve
 		return fmt.Errorf("failed to update event after image deletion: %w", err)
 	}
 	return nil
-}
-
-// ============================================================
-// DEPRECATED HELPERS (Keep for backward compatibility)
-// ============================================================
-
-// getInstitutionIDFromEvent is deprecated - use getScopeFromEvent
-func (s *eventService) getInstitutionIDFromEvent(event *domain.Event) string {
-	if event.InstitutionID != nil {
-		return *event.InstitutionID
-	}
-	return ""
 }

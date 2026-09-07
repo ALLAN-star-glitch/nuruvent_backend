@@ -31,8 +31,7 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 		EventStatus: buildEventStatusDTO(event.EventStatus),
 
 		// Ownership
-		InstitutionID: "",
-		OwnerType:     "personal",
+		TeamID: event.TeamID,
 
 		// Organizer (public-facing - always shown)
 		Organizer: buildOrganizerResponse(event.Organizer),
@@ -88,12 +87,6 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 		IsActive:  event.IsActive,
 		CreatedAt: event.CreatedAt.Format(time.RFC3339),
 		UpdatedAt: event.UpdatedAt.Format(time.RFC3339),
-	}
-
-	// Set InstitutionID and OwnerType
-	if event.InstitutionID != nil && *event.InstitutionID != "" {
-		resp.InstitutionID = *event.InstitutionID
-		resp.OwnerType = "institution"
 	}
 
 	// Set Capacity

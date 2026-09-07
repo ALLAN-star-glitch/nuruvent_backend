@@ -17,6 +17,7 @@ type RefreshToken struct {
     IPAddress  string
     CreatedAt  time.Time
     UpdatedAt  time.Time
+    DeletedAt  *time.Time
 }
 
 // NewRefreshToken creates a new refresh token for a user

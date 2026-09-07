@@ -8,19 +8,21 @@ type OrganizerInfo struct {
 	Name        string
 	DisplayName string
 	Type        string // "institution" or "personal"
-	AvatarURL   string // ✅ Added
+	AvatarURL   string
 	Slug        string
 }
 
-// InstitutionInfo represents institution information
-type InstitutionInfo struct {
+// AccountInfo represents account information for the events module
+// Replaces InstitutionInfo
+type AccountInfo struct {
 	ID          string
 	Name        string
 	DisplayName string
 	Slug        string
+	Type        string // "personal" or "institution"
 	Email       string
 	Phone       string
-	LogoURL     string // ✅ This is the institution's avatar/logo
+	LogoURL     string
 	Website     string
 	Description string
 }

@@ -9,17 +9,16 @@ import "context"
 // ============================================================
 
 // TeamFilter identifies which team to filter by
-// This is a simple data struct - NO methods
 type TeamFilter struct {
-    // ID is the team identifier
-    // - For personal teams: user_id
-    // - For institution teams: institution_id
-    ID string
+	// ID is the team identifier
+	// - For personal teams: user_id
+	// - For institution teams: account_id
+	ID string
 
-    // Type indicates the team type
-    // Valid values: "personal" or "institution"
-    // If empty, no team filter is applied
-    Type string
+	// Type indicates the team type
+	// Valid values: "personal" or "institution"
+	// If empty, no team filter is applied
+	Type string
 }
 
 // ============================================================
@@ -28,41 +27,37 @@ type TeamFilter struct {
 
 // Repository defines the data access interface for the profile module
 type Repository interface {
-    // ============================================================
-    // USER CRUD OPERATIONS
-    // ============================================================
+	// ============================================================
+	// USER CRUD OPERATIONS
+	// ============================================================
 
-    GetUserByID(ctx context.Context, id string) (*User, error)
-    GetUserByEmail(ctx context.Context, email string) (*User, error)
-    UpdateUser(ctx context.Context, user *User) error
+	GetUserByID(ctx context.Context, id string) (*User, error)
+	GetUserByEmail(ctx context.Context, email string) (*User, error)
+	GetUsersByIDs(ctx context.Context, ids []string) ([]*User, error)
+	UpdateUser(ctx context.Context, user *User) error
 
-    // ============================================================
-    // INSTITUTION CRUD OPERATIONS
-    // ============================================================
+	// ============================================================
+	// ACCOUNT CRUD OPERATIONS
+	// ============================================================
 
-    GetInstitutionByID(ctx context.Context, id string) (*Institution, error)
-    GetInstitutionBySlug(ctx context.Context, slug string) (*Institution, error)
-    UpdateInstitution(ctx context.Context, institution *Institution) error
+	GetAccountByID(ctx context.Context, id string) (*Account, error)
+	GetAccountBySlug(ctx context.Context, slug string) (*Account, error)
+	GetAccountsByIDs(ctx context.Context, ids []string) ([]*Account, error)
+	UpdateAccount(ctx context.Context, account *Account) error
 
-    // ============================================================
-    // QUERY OPERATIONS
-    // ============================================================
+	// ============================================================
+	// QUERY OPERATIONS
+	// ============================================================
 
-    // ListUsers returns a paginated list of users with flexible filtering
-    // TeamFilter determines which team's users to return:
-    //   - Type="personal", ID=userID → personal team users (just the user themselves)
-    //   - Type="institution", ID=institutionID → institution team users (members)
-    //   - Type="" → no team filter (all users)
-    ListUsers(ctx context.Context, filters ListUsersFilters) ([]*User, int64, error)
+	// ListUsers returns a paginated list of users with flexible filtering
+	// TeamFilter determines which team's users to return:
+	//   - Type="personal", ID=userID → personal team users (just the user themselves)
+	//   - Type="institution", ID=accountID → institution team users (members)
+	//   - Type="" → no team filter (all users)
+	ListUsers(ctx context.Context, filters ListUsersFilters) ([]*User, int64, error)
 
-    // ListInstitutions returns a paginated list of institutions with flexible filtering
-    ListInstitutions(ctx context.Context, filters ListInstitutionsFilters) ([]*Institution, int64, error)
-
-    // GetUsersByIDs retrieves multiple users by IDs
-    GetUsersByIDs(ctx context.Context, ids []string) ([]*User, error)
-
-    // GetInstitutionsByIDs retrieves multiple institutions by IDs
-    GetInstitutionsByIDs(ctx context.Context, ids []string) ([]*Institution, error)
+	// ListAccounts returns a paginated list of accounts with flexible filtering
+	ListAccounts(ctx context.Context, filters ListAccountsFilters) ([]*Account, int64, error)
 }
 
 // ============================================================
@@ -71,60 +66,66 @@ type Repository interface {
 
 // ListUsersFilters provides comprehensive filtering for ListUsers
 type ListUsersFilters struct {
-    // TeamFilter filters users by team (personal or institution)
-    Team TeamFilter
+	// TeamFilter filters users by team (personal or institution)
+	Team TeamFilter
 
-    // UserID filters by specific user ID
-    UserID string
+	// UserID filters by specific user ID
+	UserID string
 
-    // Search query for name or email
-    Search string
+	// Search query for name or email
+	Search string
 
-    // IncludeDeleted controls whether soft-deleted users are included
-    IncludeDeleted bool
+	// IncludeDeleted controls whether soft-deleted users are included
+	IncludeDeleted bool
 
-    // OnlyDeleted controls whether ONLY soft-deleted users are returned
-    OnlyDeleted bool
+	// OnlyDeleted controls whether ONLY soft-deleted users are returned
+	OnlyDeleted bool
 
-    // Limit controls the maximum number of users returned
-    Limit int
+	// Limit controls the maximum number of users returned
+	Limit int
 
-    // Offset controls pagination offset
-    Offset int
+	// Offset controls pagination offset
+	Offset int
 
-    // SortBy specifies the field to sort by
-    SortBy string
+	// SortBy specifies the field to sort by
+	SortBy string
 
-    // SortOrder specifies the sort direction
-    SortOrder string
+	// SortOrder specifies the sort direction
+	SortOrder string
 }
 
-// ListInstitutionsFilters provides comprehensive filtering for ListInstitutions
-type ListInstitutionsFilters struct {
-    // TeamFilter filters institutions by team
-    Team TeamFilter
+// ListAccountsFilters provides comprehensive filtering for ListAccounts
+type ListAccountsFilters struct {
+	// Type filters by account type: "personal" or "institution"
+	Type string
 
-    // InstitutionID filters by specific institution ID
-    InstitutionID string
+	// AccountID filters by specific account ID
+	AccountID string
 
-    // Search query for name or email
-    Search string
+	// Search query for name or email
+	Search string
 
-    // IncludeDeleted controls whether soft-deleted institutions are included
-    IncludeDeleted bool
+	// Status filters by account status
+	Status string
 
-    // OnlyDeleted controls whether ONLY soft-deleted institutions are returned
-    OnlyDeleted bool
+	// KYCStatus filters by KYC status
+	KYCStatus string
 
-    // Limit controls the maximum number of institutions returned
-    Limit int
+	// IncludeDeleted controls whether soft-deleted accounts are included
+	IncludeDeleted bool
 
-    // Offset controls pagination offset
-    Offset int
+	// OnlyDeleted controls whether ONLY soft-deleted accounts are returned
+	OnlyDeleted bool
 
-    // SortBy specifies the field to sort by
-    SortBy string
+	// Limit controls the maximum number of accounts returned
+	Limit int
 
-    // SortOrder specifies the sort direction
-    SortOrder string
+	// Offset controls pagination offset
+	Offset int
+
+	// SortBy specifies the field to sort by
+	SortBy string
+
+	// SortOrder specifies the sort direction
+	SortOrder string
 }

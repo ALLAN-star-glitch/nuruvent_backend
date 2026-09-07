@@ -18,12 +18,18 @@ import (
 
 // CreateEvent creates a published event
 func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) (*domain.Event, error) {
-	// 1. Extract and validate context
-	institutionID := s.extractInstitutionIDFromEvent(cmd)
-	s.logCreateEvent(cmd, institutionID)
+	// 1. Validate required fields
+	if cmd.TeamID == "" {
+		return nil, errors.New("team ID is required")
+	}
+	if cmd.CreatedBy == "" {
+		return nil, errors.New("created by is required")
+	}
 
-	// 2. Check permissions using the new Scope-based approach
-	if err := s.validateEventPermissions(ctx, cmd, institutionID); err != nil {
+	s.logCreateEvent(cmd)
+
+	// 2. Check permissions using domain string
+	if err := s.validatePublishedEventPermissions(ctx, cmd); err != nil {
 		return nil, err
 	}
 
@@ -42,7 +48,7 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 	}
 
 	// 6. Create and populate domain entity
-	event, err := s.buildPublishedEvent(ctx, cmd, name, displayName, slug, eventTypeID, institutionID)
+	event, err := s.buildPublishedEvent(ctx, cmd, name, displayName, slug, eventTypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -60,58 +66,25 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 // HELPER FUNCTIONS
 // ============================================================
 
-// extractInstitutionIDFromEvent extracts institution ID from command
-func (s *eventService) extractInstitutionIDFromEvent(cmd CreateEventCommand) string {
-	if cmd.InstitutionID != nil {
-		return *cmd.InstitutionID
-	}
-	return ""
-}
-
 // logCreateEvent logs the event creation request
-func (s *eventService) logCreateEvent(cmd CreateEventCommand, institutionID string) {
-	log.Printf("🔄 CreateEvent called: Name='%s', TypeID='%s', InstitutionID='%s', OwnerType='%s'",
-		cmd.Name, cmd.EventTypeID, institutionID, cmd.OwnerType)
+func (s *eventService) logCreateEvent(cmd CreateEventCommand) {
+	log.Printf("🔄 CreateEvent called: Name='%s', TypeID='%s', TeamID='%s', CreatedBy='%s'",
+		cmd.Name, cmd.EventTypeID, cmd.TeamID, cmd.CreatedBy)
 }
 
-// validateEventPermissions checks if user has permission to create event using Scope
-func (s *eventService) validateEventPermissions(ctx context.Context, cmd CreateEventCommand, institutionID string) error {
-	var scope domain.Scope
+// validatePublishedEventPermissions checks if user has permission to create published event
+func (s *eventService) validatePublishedEventPermissions(ctx context.Context, cmd CreateEventCommand) error {
+	// Create domain string for the team
+	teamDomain := domain.TeamDomain(cmd.TeamID)
 
-	if cmd.OwnerType == "personal" {
-		if cmd.CreatedBy == "" {
-			return errors.New("user ID is required for personal events")
-		}
-		scope = domain.NewPersonalTeamScope(cmd.CreatedBy) // Personal events are scoped to the user
-
-		allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, scope)
-		if err != nil {
-			return fmt.Errorf("permission check failed: %w", err)
-		}
-		if !allowed {
-			log.Printf("❌ Permission denied: user %s cannot create personal published events", cmd.CreatedBy)
-			return errors.New("insufficient permissions to create personal event")
-		}
-		return nil
-	}
-
-	// Institution event
-	if institutionID == "" {
-		return errors.New("institution ID is required for institution events")
-	}
-	if cmd.CreatedBy == "" {
-		return errors.New("user ID is required")
-	}
-
-	scope = domain.NewInstitutionTeamScope(institutionID)
-
-	allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, scope)
+	// Check if user can create events in this team
+	allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, teamDomain)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
 	}
 	if !allowed {
-		log.Printf("❌ Permission denied: user %s cannot create events for institution %s", cmd.CreatedBy, institutionID)
-		return errors.New("insufficient permissions to create events for this institution")
+		log.Printf("❌ Permission denied: user %s cannot create events for team %s", cmd.CreatedBy, cmd.TeamID)
+		return errors.New("insufficient permissions to create events for this team")
 	}
 
 	return nil
@@ -140,7 +113,7 @@ func (s *eventService) validatePublishedEventFields(cmd CreateEventCommand) erro
 	return nil
 }
 
-//  generateEventIdentifiersForPublished creates name, display name, and slug from user input
+// generateEventIdentifiersForPublished creates name, display name, and slug from user input
 func (s *eventService) generateEventIdentifiersForPublished(ctx context.Context, rawInput string) (string, string, string) {
 	if rawInput == "" {
 		rawInput = "Untitled Event"
@@ -182,7 +155,7 @@ func (s *eventService) generateEventIdentifiersForPublished(ctx context.Context,
 	return displayName, name, uniqueSlug
 }
 
-// ✅ validateEventTypeForPublished validates that the event type exists
+// validateEventTypeForPublished validates that the event type exists
 func (s *eventService) validateEventTypeForPublished(ctx context.Context, eventTypeID string) (string, error) {
 	log.Printf("🔍 Validating event type: %s", eventTypeID)
 	eventType, err := s.repo.GetEventTypeByID(ctx, eventTypeID)
@@ -202,7 +175,7 @@ func (s *eventService) validateEventTypeForPublished(ctx context.Context, eventT
 func (s *eventService) buildPublishedEvent(
 	ctx context.Context,
 	cmd CreateEventCommand,
-	name, displayName, slug, eventTypeID, institutionID string,
+	name, displayName, slug, eventTypeID string,
 ) (*domain.Event, error) {
 	log.Printf("🏗️ Creating domain entity...")
 
@@ -216,6 +189,7 @@ func (s *eventService) buildPublishedEvent(
 		displayName,
 		cmd.Description,
 		eventTypeID,
+		cmd.TeamID,
 		cmd.CreatedBy,
 	)
 	if err != nil {
@@ -224,12 +198,9 @@ func (s *eventService) buildPublishedEvent(
 	}
 
 	event.Slug = slug
-	if institutionID != "" {
-		event.InstitutionID = &institutionID
-	}
 
-	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s",
-		event.ID, event.Name, event.Slug, event.DisplayName)
+	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s, TeamID=%s",
+		event.ID, event.Name, event.Slug, event.DisplayName, event.TeamID)
 
 	// Populate all fields
 	s.populatePublishedEventFields(event, cmd)

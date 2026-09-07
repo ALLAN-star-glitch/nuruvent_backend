@@ -14,13 +14,12 @@ type MemberRole string
 
 const (
     RoleAccountAdmin MemberRole = "account_admin"
-    RoleEventManager MemberRole = "event_manager"
-    RoleTeamMember   MemberRole = "team_member"
+    RoleTrainer      MemberRole = "trainer"
 )
 
 // AllRoles returns all available roles
 func AllRoles() []MemberRole {
-    return []MemberRole{RoleAccountAdmin, RoleEventManager, RoleTeamMember}
+    return []MemberRole{RoleAccountAdmin, RoleTrainer}
 }
 
 // IsValidRole checks if a role is valid

@@ -18,7 +18,7 @@ import (
 func (s *service) InitiatePasswordReset(ctx context.Context, email, newPassword string) error {
 	log.Printf("🔐 [Auth] InitiatePasswordReset called for: %s", email)
 
-	user, err := s.repo.GetUserByEmail(email)
+	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		log.Printf("❌ [Auth] Error getting user: %v", err)
 		return err
@@ -95,7 +95,7 @@ func (s *service) VerifyResetOTPAndResetPassword(ctx context.Context, email, otp
 	}
 
 	// Get user
-	user, err := s.repo.GetUserByEmail(email)
+	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
 		log.Printf("❌ [Auth] Error getting user: %v", err)
 		return err
@@ -114,7 +114,7 @@ func (s *service) VerifyResetOTPAndResetPassword(ctx context.Context, email, otp
 
 	// Update password
 	user.UpdatePassword(string(hashedPassword))
-	if err := s.repo.UpdateUser(user); err != nil {
+	if err := s.repo.UpdateUser(ctx, user); err != nil {
 		log.Printf("❌ [Auth] Failed to update user: %v", err)
 		return fmt.Errorf("failed to update password: %w", err)
 	}

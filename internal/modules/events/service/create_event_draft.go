@@ -18,12 +18,18 @@ import (
 
 // CreateDraft creates a draft event
 func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) (*domain.Event, error) {
-	// 1. Extract and validate context
-	institutionID := s.extractInstitutionID(cmd)
-	s.logCreateDraft(cmd, institutionID)
+	// 1. Validate required fields
+	if cmd.TeamID == "" {
+		return nil, errors.New("team ID is required")
+	}
+	if cmd.CreatedBy == "" {
+		return nil, errors.New("created by is required")
+	}
 
-	// 2. Check permissions using Scope
-	if err := s.validateDraftPermissions(ctx, cmd, institutionID); err != nil {
+	s.logCreateDraft(cmd)
+
+	// 2. Check permissions using domain string
+	if err := s.validateDraftPermissions(ctx, cmd); err != nil {
 		return nil, err
 	}
 
@@ -37,7 +43,7 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 	}
 
 	// 5. Create and populate domain entity
-	event, err := s.buildDraftEvent(ctx, cmd, name, displayName, slug, eventTypeID, institutionID)
+	event, err := s.buildDraftEvent(ctx, cmd, name, displayName, slug, eventTypeID)
 	if err != nil {
 		return nil, err
 	}
@@ -55,55 +61,27 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 // HELPER FUNCTIONS
 // ============================================================
 
-// extractInstitutionID extracts institution ID from command
-func (s *eventService) extractInstitutionID(cmd CreateDraftCommand) string {
-	if cmd.InstitutionID != nil {
-		return *cmd.InstitutionID
-	}
-	return ""
-}
-
 // logCreateDraft logs the draft creation request
-func (s *eventService) logCreateDraft(cmd CreateDraftCommand, institutionID string) {
-	log.Printf("🔄 CreateDraft called: Name='%s', TypeID='%s', InstitutionID='%s', OwnerType='%s'",
-		cmd.Name, cmd.EventTypeID, institutionID, cmd.OwnerType)
+func (s *eventService) logCreateDraft(cmd CreateDraftCommand) {
+	log.Printf("🔄 CreateDraft called: Name='%s', TypeID='%s', TeamID='%s', CreatedBy='%s'",
+		cmd.Name, cmd.EventTypeID, cmd.TeamID, cmd.CreatedBy)
 }
 
-// validateDraftPermissions checks if user has permission to create draft using Scope
-func (s *eventService) validateDraftPermissions(ctx context.Context, cmd CreateDraftCommand, institutionID string) error {
-	// Create the appropriate scope based on OwnerType using events domain Scope
-	var scope domain.Scope
-
-	if cmd.OwnerType == "personal" {
-		scope = domain.NewPersonalTeamScope(cmd.CreatedBy)
-		
-		// Check if user can create events in their personal team
-		allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, scope)
-		if err != nil {
-			return fmt.Errorf("permission check failed: %w", err)
-		}
-		if !allowed {
-			log.Printf("❌ Permission denied: user %s cannot create personal draft events", cmd.CreatedBy)
-			return errors.New("insufficient permissions to create personal draft event")
-		}
-		return nil
-	}
-
-	// Institution event
-	if institutionID == "" {
-		return errors.New("institution ID is required for institution events")
-	}
-
-	scope = domain.NewInstitutionTeamScope(institutionID)
-
-	// Check if user can create events in this institution
-	allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, scope)
+// validateDraftPermissions checks if user has permission to create draft
+func (s *eventService) validateDraftPermissions(ctx context.Context, cmd CreateDraftCommand) error {
+	// Create domain string for the team
+	// We need to determine if this is a personal or institution team
+	// For now, we'll use the team domain directly
+	teamDomain := domain.TeamDomain(cmd.TeamID)
+	
+	// Check if user can create events in this team
+	allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, teamDomain)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
 	}
 	if !allowed {
-		log.Printf("❌ Permission denied: user %s cannot create events for institution %s", cmd.CreatedBy, institutionID)
-		return errors.New("insufficient permissions to create events for this institution")
+		log.Printf("❌ Permission denied: user %s cannot create events for team %s", cmd.CreatedBy, cmd.TeamID)
+		return errors.New("insufficient permissions to create events for this team")
 	}
 
 	return nil
@@ -196,7 +174,7 @@ func (s *eventService) validateEventType(ctx context.Context, eventTypeID string
 func (s *eventService) buildDraftEvent(
 	ctx context.Context,
 	cmd CreateDraftCommand,
-	name, displayName, slug, eventTypeID, institutionID string,
+	name, displayName, slug, eventTypeID string,
 ) (*domain.Event, error) {
 	log.Printf("🏗️ Creating domain entity...")
 
@@ -210,6 +188,7 @@ func (s *eventService) buildDraftEvent(
 		displayName,
 		cmd.Description,
 		eventTypeID,
+		cmd.TeamID,
 		cmd.CreatedBy,
 	)
 	if err != nil {
@@ -218,12 +197,9 @@ func (s *eventService) buildDraftEvent(
 	}
 
 	event.Slug = slug
-	if institutionID != "" {
-		event.InstitutionID = &institutionID
-	}
 
-	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s",
-		event.ID, event.Name, event.Slug, event.DisplayName)
+	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s, TeamID=%s",
+		event.ID, event.Name, event.Slug, event.DisplayName, event.TeamID)
 
 	// Populate all fields
 	s.populateEventFields(event, cmd)

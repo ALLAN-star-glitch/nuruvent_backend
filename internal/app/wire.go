@@ -10,29 +10,42 @@ import (
 	"github.com/google/wire"
 	"gorm.io/gorm"
 
+	// Account Module
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account"
+	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
+	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
+
+	// Auth Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth"
 	authHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
-	profileHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
+	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
-	authdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
-
+	// Events Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events"
-	eventsDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	eventsHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	eventsService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 
+	// Media Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media"
 	mediaService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 
+	// Notification Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
-	notificationdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
+	notificationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 
-	// Profile module
+	// Profile Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile"
-	profileDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/domain"
+	profileService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/service"
+	profileHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
 
+	// Team Module
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team"
+	teamHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
+	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
+
+	// Shared
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
@@ -45,48 +58,28 @@ import (
 // ============================================================
 
 type AppDependencies struct {
-	Config            *config.Config
-	DB                *gorm.DB
-	App               *fiber.App
-	StorageClient     *storage.Client
-	RedisClient       *redis.Client
-	Enforcer          *authorization.Enforcer
-	PermissionChecker authdomain.PermissionChecker
-	RoleManager       authdomain.RoleManager
-	PolicyManager     authdomain.PolicyManager
-	AuthTokenService  authdomain.TokenService
-	Notification      notificationdomain.NotificationService
-	ProfileService    profileDomain.Service
-	AuthService       authService.Service
-	EventsService     eventsService.Service
-	MediaService      mediaService.Service
-	AuthHandler       *authHandler.AuthHandler
-	EventsHandler     *eventsHandler.EventHandler
-	ProfileHandler    *profileHandler.ProfileHandler
-}
-
-// ============================================================
-// PROVIDER FUNCTIONS
-// ============================================================
-
-// provideEventsPermissionAdapter creates the events permission adapter
-func provideEventsPermissionAdapter(permChecker authdomain.PermissionChecker) eventsDomain.PermissionChecker {
-	return NewEventsPermissionAdapter(permChecker)
-}
-
-// provideEventsProfileAdapter creates the events profile adapter
-func provideEventsProfileAdapter(profileSvc profileDomain.Service) eventsDomain.UserInfoProvider {
-	return NewEventsProfileAdapter(profileSvc)
-}
-
-// provideEventsMediaAdapter creates the events media adapter
-func provideEventsMediaAdapter(mediaSvc mediaService.Service) eventsDomain.MediaService {
-	return NewEventsMediaAdapter(mediaSvc)
-}
-
-// ✅ provideProfilePermissionAdapter creates the profile permission adapter
-func provideProfilePermissionAdapter(permChecker authdomain.PermissionChecker) profileDomain.PermissionChecker {
-	return NewProfilePermissionAdapter(permChecker)
+	Config             *config.Config
+	DB                 *gorm.DB
+	App                *fiber.App
+	StorageClient      *storage.Client
+	RedisClient        *redis.Client
+	Enforcer           *authorization.Enforcer
+	PermissionChecker  authDomain.PermissionChecker
+	RoleManager        authDomain.RoleManager
+	PolicyManager      authDomain.PolicyManager
+	AuthTokenService   authDomain.TokenService
+	AuthService        authService.Service
+	AccountService     accountService.Service
+	TeamService        teamService.Service
+	EventsService      eventsService.Service
+	ProfileService     profileService.Service
+	MediaService       mediaService.Service
+	NotificationSvc    notificationDomain.NotificationService
+	AuthHandler        *authHandler.AuthHandler
+	AccountHandler     *accountHandler.AccountHandler
+	TeamHandler        *teamHandler.TeamHandler
+	EventsHandler      *eventsHandler.EventHandler
+	ProfileHandler     *profileHandler.ProfileHandler
 }
 
 // ============================================================
@@ -113,22 +106,45 @@ func InitializeApp() (*AppDependencies, error) {
 		// MODULES
 		// ============================================================
 		auth.ProviderSet,
+		account.ProviderSet,
 		events.ProviderSet,
 		media.ProviderSet,
 		notification.ProviderSet,
 		profile.ProviderSet,
+		team.ProviderSet,
 
 		// ============================================================
-		// CROSS-MODULE ADAPTERS
+		// CROSS-MODULE ADAPTERS - AUTH
 		// ============================================================
 		NewAuthNotificationAdapter,
 		NewQueueAdapter,
-		provideEventsPermissionAdapter,
-		provideEventsProfileAdapter,
-		provideEventsMediaAdapter,
-		provideProfilePermissionAdapter, // ✅ Add this
+		NewAuthTeamAdapter,
 
+		// ============================================================
+		// CROSS-MODULE ADAPTERS - ACCOUNT
+		// ============================================================
+		NewAccountAuthAdapter,
+
+		// ============================================================
+		// CROSS-MODULE ADAPTERS - EVENTS
+		// ============================================================
+		NewEventsPermissionAdapter,
+		NewEventsUserInfoAdapter,
+		NewEventsMediaAdapter,
+
+		// ============================================================
+		// CROSS-MODULE ADAPTERS - PROFILE
+		// ============================================================
+		NewProfilePermissionAdapter,
 		NewProfileMediaAdapter,
+
+		// ============================================================
+		// CROSS-MODULE ADAPTERS - TEAM
+		// ============================================================
+		NewTeamAuthAdapter,
+		NewTeamCasbinAdapter,
+		NewTeamNotificationAdapter,
+		NewAccountNotificationAdapter,
 
 		NewProfileRoleManagerAdapter,
 
