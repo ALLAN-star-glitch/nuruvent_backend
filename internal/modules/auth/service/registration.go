@@ -122,6 +122,7 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 	return nil
 }
 
+
 // VerifyOTPAndCreateUser verifies OTP and creates user, accounts, and workspace teams.
 func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string) (*authdomain.User, map[string]any, error) {
 	log.Printf("[VerifyOTPAndCreateUser] Starting verification for email: %s", email)
@@ -171,6 +172,8 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	reqProfessionalType := getString(userData, "professional_type")
 	reqInstitutionType := getString(userData, "institution_type")
 	reqInstitutionName := getString(userData, "institution_name")
+	reqInstitutionEmail := getString(userData, "institution_email")
+	reqInstitutionPhone := getString(userData, "institution_phone")
 	reqInviteToken := getString(userData, "invite_token")
 
 	log.Printf("[VerifyOTPAndCreateUser] Account type: %s, Professional type: %s", reqAccountType, reqProfessionalType)
@@ -256,8 +259,20 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 			)
 		} else {
 			log.Printf("[VerifyOTPAndCreateUser] Creating institution account for user: %s", user.ID)
+			
+			// ✅ For institution accounts, use the institution name for display name and slug
+			institutionDisplayName := sanitizer.DisplayName(reqInstitutionName)
+			institutionSlug := sanitizer.GenerateSlugFromName(reqInstitutionName)
+			
 			account, err = authdomain.NewInstitutionAccount(
-				cleanName, cleanName, accountSlug, cleanEmail, cleanPhone, accountTypeID, *institutionTypeID, user.ID,
+				reqInstitutionName,      // ✅ Institution name becomes account.Name
+				institutionDisplayName,  // ✅ Display Name: "Tech Corp Ltd"
+				institutionSlug,         // ✅ Slug: "tech-corp-ltd"
+				reqInstitutionEmail,     // ✅ Institution email becomes account.Email
+				reqInstitutionPhone,     // ✅ Institution phone becomes account.Phone
+				accountTypeID,
+				*institutionTypeID,
+				user.ID,
 			)
 		}
 		if err != nil {
@@ -320,7 +335,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	}
 
 	// ============================================================
-	// ✅ UPDATED: Create Personal Team ONLY for Personal Accounts
+	// ✅ Create Personal Team ONLY for Personal Accounts
 	// ============================================================
 	if reqAccountType == types.AccountTypePersonalName {
 		log.Printf("[VerifyOTPAndCreateUser] Creating personal team for user: %s (Personal Account)", user.ID)
