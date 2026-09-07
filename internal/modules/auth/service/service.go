@@ -95,6 +95,17 @@ type Service interface {
 	GetUserByEmail(ctx context.Context, email string) (*authdomain.User, error)
 	UserExists(ctx context.Context, email string) (bool, error)
 	GetTokenContext(ctx context.Context, user *authdomain.User) (*authdomain.TokenContext, error)
+
+	// ✅ GetUserByIDWithAccount retrieves a user by ID with their account ID
+	// Returns: user, accountID, error
+	GetUserByIDWithAccount(ctx context.Context, userID string) (*authdomain.User, string, error)
+
+	// ✅ GetUserByEmailWithAccount retrieves a user by email with their account ID
+	// Returns: user, accountID, error
+	GetUserByEmailWithAccount(ctx context.Context, email string) (*authdomain.User, string, error)
+
+	// ✅ GetAccountIDByUserID gets the account ID for a user
+	GetAccountIDByUserID(ctx context.Context, userID string) (string, error)
 }
 
 // ============================================================
@@ -184,18 +195,4 @@ func (s *service) GetAccountTypeByID(ctx context.Context, id string) (*authdomai
 
 func (s *service) GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error) {
 	return s.repo.GetProfessionalTypeByID(ctx, id)
-}
-
-// ============================================================
-// USER QUERIES (For Team Module)
-// ============================================================
-
-// GetUserByEmail retrieves a user by email
-func (s *service) GetUserByEmail(ctx context.Context, email string) (*authdomain.User, error) {
-	return s.repo.GetUserByEmail(ctx, email)
-}
-
-// UserExists checks if a user exists by email
-func (s *service) UserExists(ctx context.Context, email string) (bool, error) {
-	return s.repo.UserExistsByEmail(ctx, email)
 }

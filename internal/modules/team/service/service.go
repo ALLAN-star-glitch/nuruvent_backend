@@ -12,7 +12,7 @@ import (
 type Service interface {
     // TEAM OPERATIONS
     CreatePersonalTeam(ctx context.Context, userID, userName string) (*teamdomain.Team, error)
-    CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug string) (*teamdomain.Team, error)
+    CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug, createdBy string) (*teamdomain.Team, error)
     GetTeamByID(ctx context.Context, id string) (*teamdomain.Team, error)
     GetUserTeams(ctx context.Context, userID string) ([]*teamdomain.Team, error)
     UpdateTeam(ctx context.Context, id string, updates map[string]interface{}) (*teamdomain.Team, error)

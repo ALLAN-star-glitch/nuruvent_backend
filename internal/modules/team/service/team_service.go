@@ -40,60 +40,80 @@ func NewTeamService(
 
 // CreatePersonalTeam creates a personal team for a user
 func (s *teamService) CreatePersonalTeam(ctx context.Context, userID, userName string) (*teamdomain.Team, error) {
-    if userID == "" {
-        return nil, fmt.Errorf("user ID is required")
-    }
-    if userName == "" {
-        return nil, fmt.Errorf("user name is required")
-    }
+	if userID == "" {
+		return nil, fmt.Errorf("user ID is required")
+	}
+	if userName == "" {
+		return nil, fmt.Errorf("user name is required")
+	}
 
-    // Check if personal team already exists
-    teams, err := s.repo.GetTeamsByUserID(ctx, userID)
-    if err != nil {
-        return nil, fmt.Errorf("failed to check existing teams: %w", err)
-    }
-    for _, team := range teams {
-        if team.IsPersonal() {
-            return nil, teamdomain.ErrTeamAlreadyExists
-        }
-    }
+	log.Printf("[CreatePersonalTeam] Creating personal team for user: %s", userID)
 
-    // Create personal team
-    team, err := teamdomain.NewPersonalTeam(userID, userName)
-    if err != nil {
-        return nil, err
-    }
+	// Check if personal team already exists
+	teams, err := s.repo.GetTeamsByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing teams: %w", err)
+	}
+	for _, team := range teams {
+		if team.IsPersonal() {
+			log.Printf("[CreatePersonalTeam] Personal team already exists for user: %s", userID)
+			return nil, teamdomain.ErrTeamAlreadyExists
+		}
+	}
 
-    if err := s.repo.CreateTeam(ctx, team); err != nil {
-        return nil, fmt.Errorf("failed to create personal team: %w", err)
-    }
+	// ✅ Get user with account ID
+	user, err := s.authSvc.GetUserByIDWithAccount(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+	if user == nil {
+		return nil, fmt.Errorf("user not found")
+	}
 
-    // Add user as admin of their personal team
-    member, err := teamdomain.NewMember(team.ID, userID, teamdomain.RoleAccountAdmin)
-    if err != nil {
-        return nil, err
-    }
-    if err := s.repo.CreateMember(ctx, member); err != nil {
-        return nil, fmt.Errorf("failed to add user to personal team: %w", err)
-    }
+	log.Printf("[CreatePersonalTeam] User: %s, AccountID: %s", user.ID, user.AccountID)
 
-    // ✅ Add Casbin policies for personal team using domain
-    domain := NewTeamDomain(team).String()
-    if err := s.casbinSvc.AddTeamPolicies(ctx, domain); err != nil {
-        log.Printf("⚠️ Failed to add personal team policies: %v", err)
-    }
+	if user.AccountID == "" {
+		return nil, fmt.Errorf("user has no account ID")
+	}
 
-    // ✅ Assign admin role using domain
-    if err := s.casbinSvc.AssignRole(ctx, domain, userID, string(teamdomain.RoleAccountAdmin)); err != nil {
-        log.Printf("⚠️ Failed to assign admin role: %v", err)
-    }
+	// ✅ Create personal team with the user's AccountID
+	team, err := teamdomain.NewPersonalTeamWithAccount(userID, userName, user.AccountID)
+	if err != nil {
+		return nil, err
+	}
 
-    log.Printf("✅ Personal team created for user: %s (Team ID: %s)", userID, team.ID)
-    return team, nil
+	log.Printf("[CreatePersonalTeam] Team created with AccountID: %s, Name: %s", team.AccountID, team.Name)
+
+	if err := s.repo.CreateTeam(ctx, team); err != nil {
+		return nil, fmt.Errorf("failed to create personal team: %w", err)
+	}
+
+	// Add user as admin of their personal team
+	member, err := teamdomain.NewMember(team.ID, userID, teamdomain.RoleAccountAdmin)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.repo.CreateMember(ctx, member); err != nil {
+		return nil, fmt.Errorf("failed to add user to personal team: %w", err)
+	}
+
+	// Add Casbin policies for personal team using domain
+	domain := NewTeamDomain(team).String()
+	if err := s.casbinSvc.AddTeamPolicies(ctx, domain); err != nil {
+		log.Printf("⚠️ Failed to add personal team policies: %v", err)
+	}
+
+	// Assign admin role using domain
+	if err := s.casbinSvc.AssignRole(ctx, domain, userID, string(teamdomain.RoleAccountAdmin)); err != nil {
+		log.Printf("⚠️ Failed to assign admin role: %v", err)
+	}
+
+	log.Printf("✅ Personal team created for user: %s (Team ID: %s, AccountID: %s)", userID, team.ID, team.AccountID)
+	return team, nil
 }
 
-// CreateInstitutionTeam creates an institution team
-func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug string) (*teamdomain.Team, error) {
+// CreateInstitutionTeam creates an institution team and adds the creator as admin
+func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug, createdBy string) (*teamdomain.Team, error) {
     if accountID == "" {
         return nil, fmt.Errorf("account ID is required")
     }
@@ -103,6 +123,11 @@ func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name
     if slug == "" {
         return nil, teamdomain.ErrTeamSlugRequired
     }
+    if createdBy == "" {
+        return nil, fmt.Errorf("created by is required")
+    }
+
+    log.Printf("[CreateInstitutionTeam] Creating institution team for account: %s, created by: %s", accountID, createdBy)
 
     // Check if team with slug already exists
     existing, err := s.repo.GetTeamBySlug(ctx, slug)
@@ -119,10 +144,30 @@ func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name
         return nil, fmt.Errorf("failed to create institution team: %w", err)
     }
 
-    // ✅ Add Casbin policies for institution team using domain
+    // ✅ Add the creator as admin of the institution team
+    log.Printf("[CreateInstitutionTeam] Adding user %s as admin to institution team", createdBy)
+    
+    member, err := teamdomain.NewMember(team.ID, createdBy, teamdomain.RoleAccountAdmin)
+    if err != nil {
+        log.Printf("[CreateInstitutionTeam] Failed to create member: %v", err)
+        return nil, fmt.Errorf("failed to create member: %w", err)
+    }
+    
+    if err := s.repo.CreateMember(ctx, member); err != nil {
+        log.Printf("[CreateInstitutionTeam] Failed to add user to institution team: %v", err)
+        return nil, fmt.Errorf("failed to add user to institution team: %w", err)
+    }
+    log.Printf("[CreateInstitutionTeam] ✅ User %s added as admin to institution team", createdBy)
+
+    // Add Casbin policies for institution team using domain
     domain := NewTeamDomain(team).String()
     if err := s.casbinSvc.AddTeamPolicies(ctx, domain); err != nil {
         log.Printf("⚠️ Failed to add institution team policies: %v", err)
+    }
+
+    // ✅ Assign admin role to the creator
+    if err := s.casbinSvc.AssignRole(ctx, domain, createdBy, string(teamdomain.RoleAccountAdmin)); err != nil {
+        log.Printf("⚠️ Failed to assign admin role: %v", err)
     }
 
     log.Printf("✅ Institution team created: %s (Team ID: %s)", team.Name, team.ID)

@@ -128,9 +128,9 @@ func (a *TeamAdapter) CreatePersonalTeam(ctx context.Context, userID string, use
 	}, nil
 }
 
-// CreateInstitutionTeam creates an institution team for an account
-func (a *TeamAdapter) CreateInstitutionTeam(ctx context.Context, accountID string, name string, displayName string, slug string) (*authService.TeamInfo, error) {
-	team, err := a.teamSvc.CreateInstitutionTeam(ctx, accountID, name, displayName, slug)
+// ✅ Updated: CreateInstitutionTeam with createdBy
+func (a *TeamAdapter) CreateInstitutionTeam(ctx context.Context, accountID string, name string, displayName string, slug string, createdBy string) (*authService.TeamInfo, error) {
+	team, err := a.teamSvc.CreateInstitutionTeam(ctx, accountID, name, displayName, slug, createdBy)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func (a *TeamAdapter) GetUserTeamMemberships(ctx context.Context, userID string)
 			ID:       m.ID,
 			TeamID:   m.TeamID,
 			UserID:   m.UserID,
-			Role:     string(m.Role),
+			Role:     m.Role,
 			IsActive: m.IsActive,
 		}
 	}

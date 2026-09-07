@@ -23,6 +23,7 @@ type RegisterRequest struct {
 	// Optional: Pre-assigned team invitation
 	InviteToken string `json:"invite_token,omitempty"`
 
+	
 	// Professional type (for personal accounts)
 	ProfessionalType string `json:"professional_type,omitempty"`
 

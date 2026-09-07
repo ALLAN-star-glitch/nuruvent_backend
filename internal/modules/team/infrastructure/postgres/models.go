@@ -14,6 +14,7 @@ import (
 
 type TeamModel struct {
     ID          string     `gorm:"primaryKey;default:gen_random_uuid()"`
+    AccountID   string     `gorm:"not null;index"`
     Name        string     `gorm:"not null"`
     DisplayName string     `gorm:"column:display_name"`
     Slug        string     `gorm:"uniqueIndex;not null"`
@@ -34,6 +35,7 @@ func (m *TeamModel) ToDomain() *teamdomain.Team {
     }
     return &teamdomain.Team{
         ID:          m.ID,
+        AccountID:   m.AccountID,  // ✅ Add this
         Name:        m.Name,
         DisplayName: m.DisplayName,
         Slug:        m.Slug,
@@ -45,11 +47,13 @@ func (m *TeamModel) ToDomain() *teamdomain.Team {
     }
 }
 
+
 func (m *TeamModel) FromDomain(team *teamdomain.Team) {
     if team == nil {
         return
     }
     m.ID = team.ID
+    m.AccountID = team.AccountID  // ✅ Add this - THIS WAS THE MISSING LINE
     m.Name = team.Name
     m.DisplayName = team.DisplayName
     m.Slug = team.Slug

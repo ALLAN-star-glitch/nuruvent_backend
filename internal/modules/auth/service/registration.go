@@ -1,3 +1,5 @@
+// internal/modules/auth/service/registration.go
+
 package service
 
 import (
@@ -13,13 +15,12 @@ import (
 	"gorm.io/gorm"
 )
 
-
 // Helper to extract strings from map[string]string safely
 func getString(m map[string]string, key string) string {
-    if val, ok := m[key]; ok {
-        return val
-    }
-    return ""
+	if val, ok := m[key]; ok {
+		return val
+	}
+	return ""
 }
 
 // ============================================================
@@ -27,6 +28,8 @@ func getString(m map[string]string, key string) string {
 // ============================================================
 
 func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
+	log.Printf("[RegisterUser] Starting registration for email: %s, account_type: %s", req.Email, req.AccountType)
+
 	// 1. Check email uniqueness
 	exists, err := s.repo.UserExistsByEmail(ctx, req.Email)
 	if err != nil {
@@ -90,7 +93,7 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 		"phone":             req.Phone,
 		"account_type":      req.AccountType,
 		"professional_type": req.ProfessionalType,
-		"invite_token":      req.InviteToken, // Extracted if present
+		"invite_token":      req.InviteToken,
 	}
 
 	if req.AccountType == types.AccountTypeInstitutionName {
@@ -115,15 +118,20 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 		log.Printf("[RegisterUser] Failed to send OTP notification: %v", err)
 	}
 
+	log.Printf("[RegisterUser] Registration initiated successfully for email: %s", req.Email)
 	return nil
 }
 
 // VerifyOTPAndCreateUser verifies OTP and creates user, accounts, and workspace teams.
 func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string) (*authdomain.User, map[string]any, error) {
+	log.Printf("[VerifyOTPAndCreateUser] Starting verification for email: %s", email)
+
 	// 1. Verify OTP
 	if err := s.VerifyOTP(ctx, email, otp, "registration"); err != nil {
+		log.Printf("[VerifyOTPAndCreateUser] OTP verification failed: %v", err)
 		return nil, nil, err
 	}
+	log.Printf("[VerifyOTPAndCreateUser] OTP verified successfully for email: %s", email)
 
 	// 2. Check existing active user
 	existingUser, err := s.repo.GetUserByEmail(ctx, email)
@@ -131,6 +139,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 		return nil, nil, fmt.Errorf("failed to check existing user: %w", err)
 	}
 	if existingUser != nil {
+		log.Printf("[VerifyOTPAndCreateUser] User already exists: %s", existingUser.ID)
 		_ = s.DeleteOTP(ctx, email, "registration")
 		_ = s.DeleteUserData(ctx, email)
 
@@ -152,6 +161,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get user data from cache: %w", err)
 	}
+	log.Printf("[VerifyOTPAndCreateUser] Retrieved user data from cache")
 
 	// Extract strongly typed string variables
 	reqPassword := getString(userData, "password")
@@ -162,6 +172,8 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	reqInstitutionType := getString(userData, "institution_type")
 	reqInstitutionName := getString(userData, "institution_name")
 	reqInviteToken := getString(userData, "invite_token")
+
+	log.Printf("[VerifyOTPAndCreateUser] Account type: %s, Professional type: %s", reqAccountType, reqProfessionalType)
 
 	// 4. Validate Account Type
 	if reqAccountType == "" {
@@ -175,6 +187,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	if err != nil || accountTypeID == "" {
 		return nil, nil, fmt.Errorf("failed to resolve account type ID: %w", err)
 	}
+	log.Printf("[VerifyOTPAndCreateUser] Account type ID: %s", accountTypeID)
 
 	// 5. Validate Domain Enums
 	var institutionTypeID *string
@@ -187,6 +200,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 			return nil, nil, fmt.Errorf("invalid institution_type: %s", reqInstitutionType)
 		}
 		institutionTypeID = &institutionType.ID
+		log.Printf("[VerifyOTPAndCreateUser] Institution type ID: %s", *institutionTypeID)
 	}
 
 	var professionalTypeID *string
@@ -196,6 +210,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 			return nil, nil, fmt.Errorf("invalid professional_type: %s", reqProfessionalType)
 		}
 		professionalTypeID = &professionalType.ID
+		log.Printf("[VerifyOTPAndCreateUser] Professional type ID: %s", *professionalTypeID)
 	}
 
 	// 6. Password Hashing
@@ -223,54 +238,72 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	// ============================================================
 	// ATOMIC TRANSACTION: User, Account, Account Member, Roles
 	// ============================================================
+	log.Printf("[VerifyOTPAndCreateUser] Starting database transaction...")
 	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
 		// Create Core User
+		log.Printf("[VerifyOTPAndCreateUser] Creating user: %s", cleanEmail)
 		if err := s.repo.CreateUser(txCtx, user); err != nil {
+			log.Printf("[VerifyOTPAndCreateUser] Failed to create user: %v", err)
 			return fmt.Errorf("failed to save user: %w", err)
 		}
+		log.Printf("[VerifyOTPAndCreateUser] User created: %s", user.ID)
 
 		// Create Core Account
 		if reqAccountType == types.AccountTypePersonalName {
+			log.Printf("[VerifyOTPAndCreateUser] Creating personal account for user: %s", user.ID)
 			account, err = authdomain.NewPersonalAccount(
 				cleanName, cleanName, accountSlug, cleanEmail, cleanPhone, accountTypeID, user.ID,
 			)
 		} else {
+			log.Printf("[VerifyOTPAndCreateUser] Creating institution account for user: %s", user.ID)
 			account, err = authdomain.NewInstitutionAccount(
 				cleanName, cleanName, accountSlug, cleanEmail, cleanPhone, accountTypeID, *institutionTypeID, user.ID,
 			)
 		}
 		if err != nil {
+			log.Printf("[VerifyOTPAndCreateUser] Failed to construct account: %v", err)
 			return fmt.Errorf("failed to construct account: %w", err)
 		}
 
 		if err := s.repo.CreateAccount(txCtx, account); err != nil {
+			log.Printf("[VerifyOTPAndCreateUser] Failed to save account: %v", err)
 			return fmt.Errorf("failed to save account: %w", err)
 		}
+		log.Printf("[VerifyOTPAndCreateUser] Account created: %s", account.ID)
 
 		// Create Account Membership
+		log.Printf("[VerifyOTPAndCreateUser] Creating account member for user: %s", user.ID)
 		accountMember, err := authdomain.NewAccountMember(
 			account.ID, user.ID, authdomain.RoleAccountAdmin.String(), user.ID,
 		)
 		if err != nil {
+			log.Printf("[VerifyOTPAndCreateUser] Failed to construct account member: %v", err)
 			return fmt.Errorf("failed to construct account member: %w", err)
 		}
 
 		if err := s.repo.CreateAccountMember(txCtx, accountMember); err != nil {
+			log.Printf("[VerifyOTPAndCreateUser] Failed to save account member: %v", err)
 			return fmt.Errorf("failed to save account member: %w", err)
 		}
+		log.Printf("[VerifyOTPAndCreateUser] Account member created")
 
 		// Assign RBAC Policy
 		accountDomain := authdomain.AccountDomain(account.ID)
+		log.Printf("[VerifyOTPAndCreateUser] Assigning account admin role for user: %s", user.ID)
 		if err := s.roleManager.AssignRole(txCtx, accountDomain, user.ID, authdomain.RoleAccountAdmin.String()); err != nil {
+			log.Printf("[VerifyOTPAndCreateUser] Failed to assign account admin role: %v", err)
 			return fmt.Errorf("failed to assign account admin role: %w", err)
 		}
+		log.Printf("[VerifyOTPAndCreateUser] Account admin role assigned")
 
 		return nil
 	})
 
 	if err != nil {
+		log.Printf("[VerifyOTPAndCreateUser] Transaction failed: %v", err)
 		return nil, nil, fmt.Errorf("registration transaction failed: %w", err)
 	}
+	log.Printf("[VerifyOTPAndCreateUser] Database transaction completed successfully")
 
 	// ============================================================
 	// WORKSPACE & INVITATION INTEGRATION
@@ -278,33 +311,55 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 
 	// 1. Handle Invitation if token exists
 	if reqInviteToken != "" {
+		log.Printf("[VerifyOTPAndCreateUser] Processing invite token: %s", reqInviteToken)
 		if _, err := s.teamSvc.AcceptInvitation(ctx, reqInviteToken, user.ID); err != nil {
 			log.Printf("[VerifyOTPAndCreateUser] Warning: Failed to process invite token '%s': %v", reqInviteToken, err)
+		} else {
+			log.Printf("[VerifyOTPAndCreateUser] Invitation accepted successfully")
 		}
 	}
 
-	// 2. Create Personal Team Workspace
-	if err := s.createAndAddToPersonalTeam(ctx, user.ID, cleanName); err != nil {
-		log.Printf("[VerifyOTPAndCreateUser] Warning: Failed to create personal team: %v", err)
+	// ============================================================
+	// ✅ UPDATED: Create Personal Team ONLY for Personal Accounts
+	// ============================================================
+	if reqAccountType == types.AccountTypePersonalName {
+		log.Printf("[VerifyOTPAndCreateUser] Creating personal team for user: %s (Personal Account)", user.ID)
+		if err := s.createAndAddToPersonalTeam(ctx, user.ID, cleanName); err != nil {
+			log.Printf("[VerifyOTPAndCreateUser] ⚠️ Warning: Failed to create personal team: %v", err)
+		} else {
+			log.Printf("[VerifyOTPAndCreateUser] ✅ Personal team created successfully for user: %s", user.ID)
+		}
+	} else {
+		log.Printf("[VerifyOTPAndCreateUser] Skipping personal team creation for institution account: %s", reqAccountType)
 	}
 
-	// 3. Create Institution Team Workspace if applicable
+	// ============================================================
+	// Create Institution Team Workspace ONLY for Institution Accounts
+	// ============================================================
 	if reqAccountType == types.AccountTypeInstitutionName && account != nil {
+		log.Printf("[VerifyOTPAndCreateUser] Creating institution team for user: %s (Institution Account)", user.ID)
 		if err := s.createAndAddToInstitutionTeam(ctx, user.ID, account.ID, reqInstitutionName); err != nil {
-			log.Printf("[VerifyOTPAndCreateUser] Warning: Failed to create institution team: %v", err)
+			log.Printf("[VerifyOTPAndCreateUser] ⚠️ Warning: Failed to create institution team: %v", err)
+		} else {
+			log.Printf("[VerifyOTPAndCreateUser] ✅ Institution team created successfully for user: %s", user.ID)
 		}
+	} else {
+		log.Printf("[VerifyOTPAndCreateUser] Skipping institution team creation for personal account")
 	}
 
 	// ============================================================
 	// TOKEN GENERATION & CLEANUP
 	// ============================================================
+	log.Printf("[VerifyOTPAndCreateUser] Generating tokens for user: %s", user.ID)
 	accessToken, refreshToken, err := s.GenerateTokens(ctx, user)
 	if err != nil {
+		log.Printf("[VerifyOTPAndCreateUser] Failed to generate tokens: %v", err)
 		return nil, nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
 	_ = s.DeleteOTP(ctx, email, "registration")
 	_ = s.DeleteUserData(ctx, email)
+	log.Printf("[VerifyOTPAndCreateUser] Cleaned up cache for email: %s", email)
 
 	// Build response object
 	additionalData := map[string]any{
@@ -334,6 +389,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 		}
 	}()
 
+	log.Printf("[VerifyOTPAndCreateUser] ✅ Registration completed successfully for user: %s, email: %s", user.ID, email)
 	return user, additionalData, nil
 }
 
@@ -350,76 +406,87 @@ func (s *service) getAccountTypeID(ctx context.Context, accountType string) (str
 }
 
 func (s *service) createAndAddToPersonalTeam(ctx context.Context, userID, userName string) error {
+	log.Printf("[createAndAddToPersonalTeam] Checking existing personal team for user: %s", userID)
 	existingTeam, err := s.teamSvc.GetPersonalTeamByUserID(ctx, userID)
 	if err != nil {
+		log.Printf("[createAndAddToPersonalTeam] Failed to check existing personal team: %v", err)
 		return fmt.Errorf("failed to check existing personal team: %w", err)
 	}
 	if existingTeam != nil {
+		log.Printf("[createAndAddToPersonalTeam] Personal team already exists for user: %s, team_id: %s", userID, existingTeam.ID)
 		return nil
 	}
 
-	_, err = s.teamSvc.CreatePersonalTeam(ctx, userID, userName)
+	log.Printf("[createAndAddToPersonalTeam] Creating personal team for user: %s", userID)
+	team, err := s.teamSvc.CreatePersonalTeam(ctx, userID, userName)
 	if err != nil {
+		log.Printf("[createAndAddToPersonalTeam] Failed to create personal team: %v", err)
 		return fmt.Errorf("failed to create personal team: %w", err)
 	}
-
+	log.Printf("[createAndAddToPersonalTeam] ✅ Personal team created: %s (Team ID: %s)", team.Name, team.ID)
 	return nil
 }
 
+// createAndAddToInstitutionTeam creates an institution team and adds the user
 func (s *service) createAndAddToInstitutionTeam(ctx context.Context, userID, accountID, institutionName string) error {
-	if institutionName == "" {
-		return errors.New("institution name is required")
-	}
+    if institutionName == "" {
+        return errors.New("institution name is required")
+    }
 
-	sanitizer := validation.Sanitize{}
-	displayName := sanitizer.DisplayName(institutionName)
-	slug := sanitizer.GenerateSlugFromName(institutionName)
+    sanitizer := validation.Sanitize{}
+    displayName := sanitizer.DisplayName(institutionName)
+    slug := sanitizer.GenerateSlugFromName(institutionName)
 
-	_, err := s.teamSvc.CreateInstitutionTeam(ctx, accountID, institutionName, displayName, slug)
-	if err != nil {
-		return fmt.Errorf("failed to create institution team: %w", err)
-	}
+    log.Printf("[createAndAddToInstitutionTeam] Creating institution team for account: %s", accountID)
+    
+    // ✅ Pass the userID as the creator
+    team, err := s.teamSvc.CreateInstitutionTeam(ctx, accountID, institutionName, displayName, slug, userID)
+    if err != nil {
+        log.Printf("[createAndAddToInstitutionTeam] Failed to create institution team: %v", err)
+        return fmt.Errorf("failed to create institution team: %w", err)
+    }
+    log.Printf("[createAndAddToInstitutionTeam] ✅ Institution team created: %s (Team ID: %s)", team.Name, team.ID)
 
-	return nil
+    return nil
 }
 
 func (s *service) sendWelcomeEmails(ctx context.Context, user *authdomain.User, userData map[string]string) error {
-    if user == nil {
-        return fmt.Errorf("user cannot be nil")
-    }
+	if user == nil {
+		return fmt.Errorf("user cannot be nil")
+	}
 
-    accountType := getString(userData, "account_type")
-    adminEmail := s.config.NuruOnboardingNoticeEmails.AdminEmail
+	accountType := getString(userData, "account_type")
+	adminEmail := s.config.NuruOnboardingNoticeEmails.AdminEmail
 
-    switch accountType {
-    case types.AccountTypePersonalName:
-        _ = s.notifSvc.SendIndividualWelcome(ctx, authdomain.SendWelcomeRequest{
-            To:   user.Email,
-            Name: user.Name,
-        })
+	switch accountType {
+	case types.AccountTypePersonalName:
+		_ = s.notifSvc.SendIndividualWelcome(ctx, authdomain.SendWelcomeRequest{
+			To:   user.Email,
+			Name: user.Name,
+		})
 
-        _ = s.notifSvc.SendNewPersonalAccountNotification(ctx, authdomain.SendNewPersonalAccountRegistrationRequest{
-            To:                  adminEmail,
-            NewAccountAdminName: user.Name,
-        })
+		_ = s.notifSvc.SendNewPersonalAccountNotification(ctx, authdomain.SendNewPersonalAccountRegistrationRequest{
+			To:                  adminEmail,
+			NewAccountAdminName: user.Name,
+		})
 
-    case types.AccountTypeInstitutionName:
-        instName := getString(userData, "institution_name")
-        instEmail := getString(userData, "institution_email")
+	case types.AccountTypeInstitutionName:
+		instName := getString(userData, "institution_name")
+		instEmail := getString(userData, "institution_email")
 
-        _ = s.notifSvc.SendInstitutionWelcome(ctx, authdomain.SendInstitutionWelcomeRequest{
-            To:               user.Email,
-            AdminName:        user.Name,
-            InstitutionName:  instName,
-            InstitutionEmail: instEmail,
-        })
+		_ = s.notifSvc.SendInstitutionWelcome(ctx, authdomain.SendInstitutionWelcomeRequest{
+			To:               user.Email,
+			AdminName:        user.Name,
+			InstitutionName:  instName,
+			InstitutionEmail: instEmail,
+		})
 
-        _ = s.notifSvc.SendNewInstitutionAccountNotification(ctx, authdomain.SendNewInstitutionAccountRegistrationRequest{
-            To:                  adminEmail,
-            NewAccountAdminName: user.Name,
-            InstitutionName:     instName,
-        })
-    }
+		_ = s.notifSvc.SendNewInstitutionAccountNotification(ctx, authdomain.SendNewInstitutionAccountRegistrationRequest{
+			To:                  adminEmail,
+			NewAccountAdminName: user.Name,
+			InstitutionName:     instName,
+		})
+	}
 
-    return nil
+	return nil
 }

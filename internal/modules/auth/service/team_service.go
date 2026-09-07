@@ -12,7 +12,7 @@ type TeamService interface {
 	GetInstitutionTeamByInstitutionID(ctx context.Context, institutionID string) (*TeamInfo, error)
 	GetAccountByTeamID(ctx context.Context, teamID string) (*AccountInfo, error)
 	CreatePersonalTeam(ctx context.Context, userID, userName string) (*TeamInfo, error)
-	CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug string) (*TeamInfo, error)
+	CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug, createdBy string) (*TeamInfo, error)
 
 	// Member & Invitation operations
 	GetUserTeamMemberships(ctx context.Context, userID string) ([]*TeamMemberInfo, error)
