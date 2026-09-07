@@ -74,6 +74,7 @@ type ForgotPasswordRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
+
 // VerifyResetOTPRequest represents the reset OTP verification request
 type VerifyResetOTPRequest struct {
 	Email string `json:"email"`

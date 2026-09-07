@@ -225,7 +225,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	// 7. Sanitize values
 	sanitizer := validation.Sanitize{}
 	cleanName := sanitizer.DisplayName(reqName)
-	cleanEmail := sanitizer.Identifier(email)
+	cleanEmail := email
 	cleanPhone := sanitizer.Identifier(reqPhone)
 	accountSlug := sanitizer.GenerateSlugFromName(cleanName)
 
