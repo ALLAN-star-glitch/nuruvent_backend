@@ -19,22 +19,22 @@ type Service interface {
     DeleteTeam(ctx context.Context, id string) error
 
     // MEMBER OPERATIONS
-    AddMember(ctx context.Context, teamID, userID string, role teamdomain.MemberRole, addedBy string) (*teamdomain.Member, error)
+    // ✅ REMOVED: role parameter - roles are inherited from account
+    AddMember(ctx context.Context, teamID, userID, addedBy string) (*teamdomain.Member, error)
+    // ✅ REMOVED: UpdateMemberRole - roles cannot be updated at team level
     RemoveMember(ctx context.Context, teamID, userID, removedBy string) error
-    UpdateMemberRole(ctx context.Context, teamID, userID string, newRole teamdomain.MemberRole, updatedBy string) (*teamdomain.Member, error)
     GetTeamMembers(ctx context.Context, teamID string, filters teamdomain.ListMembersFilters) ([]*teamdomain.Member, int64, error)
     GetUserMemberships(ctx context.Context, userID string) ([]*teamdomain.Member, error)
     LeaveTeam(ctx context.Context, teamID, userID string) error
 
     // INVITATION OPERATIONS
+    // ✅ REMOVED: role from InviteMemberCommand - roles are inherited from account
     InviteMember(ctx context.Context, cmd InviteMemberCommand) (*teamdomain.Invitation, error)
     ValidateInvitationToken(ctx context.Context, token string) (*teamdomain.Invitation, error)
-    AcceptInvitation(ctx context.Context, token, userID string) (*teamdomain.Member, error)  // ✅ Changed: removed token returns
+    AcceptInvitation(ctx context.Context, token, userID string) (*teamdomain.Member, error)
     DeclineInvitation(ctx context.Context, token, userID string) error
     ResendInvitation(ctx context.Context, invitationID string) (*teamdomain.Invitation, error)
     GetTeamInvitations(ctx context.Context, teamID string, filters teamdomain.ListInvitationsFilters) ([]*teamdomain.Invitation, int64, error)
-
-    // ❌ REMOVED: RegisterAndAcceptInvitation - User registration belongs in Auth module, not Team
 
     // TEAM MEMBERSHIP QUERIES (For Auth Module)
     GetPersonalTeamByUserID(ctx context.Context, userID string) (*teamdomain.Team, error)
@@ -46,15 +46,15 @@ type Service interface {
 }
 
 // InviteMemberCommand represents a request to invite a member
+// ✅ REMOVED: Role field - roles are inherited from account
 type InviteMemberCommand struct {
     TeamID    string
     Email     string
-    Role      string
     InvitedBy string
+    // ❌ REMOVED: Role      string
 }
 
-// ❌ REMOVED: RegisterAndAcceptInvitationCommand - User registration belongs in Auth module
-
+// AccountInfo represents account information for a team
 type AccountInfo struct {
     ID      string
     Name    string
@@ -63,14 +63,16 @@ type AccountInfo struct {
     Website string
 }
 
+// TeamMemberInfo represents team membership information
 type TeamMemberInfo struct {
     ID       string
     TeamID   string
     UserID   string
-    Role     string
     IsActive bool
+    // ❌ REMOVED: Role     string
 }
 
+// MemberInfo represents member information for display
 type MemberInfo struct {
     ID          string
     TeamID      string
@@ -78,12 +80,13 @@ type MemberInfo struct {
     UserName    string
     UserEmail   string
     UserAvatar  string
-    Role        string
-    RoleDisplay string
     JoinedAt    string
     IsActive    bool
+    // ❌ REMOVED: Role        string
+    // ❌ REMOVED: RoleDisplay string
 }
 
+// TeamInfo represents team information for display
 type TeamInfo struct {
     ID          string
     AccountID   string
@@ -92,18 +95,19 @@ type TeamInfo struct {
     Slug        string
     Type        string
     MemberCount int
-    Role        string
     CreatedAt   string
+    // ❌ REMOVED: Role        string
 }
 
+// InvitationInfo represents invitation information for display
 type InvitationInfo struct {
     ID            string
     Email         string
-    Role          string
-    RoleDisplay   string
     Status        string
     ExpiresAt     string
     CreatedAt     string
     InvitedBy     string
     InvitedByName string
+    // ❌ REMOVED: Role          string
+    // ❌ REMOVED: RoleDisplay   string
 }

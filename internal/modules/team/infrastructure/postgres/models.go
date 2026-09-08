@@ -35,7 +35,7 @@ func (m *TeamModel) ToDomain() *teamdomain.Team {
     }
     return &teamdomain.Team{
         ID:          m.ID,
-        AccountID:   m.AccountID,  // ✅ Add this
+        AccountID:   m.AccountID,
         Name:        m.Name,
         DisplayName: m.DisplayName,
         Slug:        m.Slug,
@@ -47,13 +47,12 @@ func (m *TeamModel) ToDomain() *teamdomain.Team {
     }
 }
 
-
 func (m *TeamModel) FromDomain(team *teamdomain.Team) {
     if team == nil {
         return
     }
     m.ID = team.ID
-    m.AccountID = team.AccountID  // ✅ Add this - THIS WAS THE MISSING LINE
+    m.AccountID = team.AccountID
     m.Name = team.Name
     m.DisplayName = team.DisplayName
     m.Slug = team.Slug
@@ -72,7 +71,6 @@ type MemberModel struct {
     ID        string     `gorm:"primaryKey;default:gen_random_uuid()"`
     TeamID    string     `gorm:"column:team_id;not null;index"`
     UserID    string     `gorm:"column:user_id;not null;index"`
-    Role      string     `gorm:"column:role;not null"`
     IsActive  bool       `gorm:"default:true"`
     JoinedAt  time.Time  `gorm:"column:joined_at"`
     CreatedAt time.Time  `gorm:"column:created_at"`
@@ -92,7 +90,6 @@ func (m *MemberModel) ToDomain() *teamdomain.Member {
         ID:        m.ID,
         TeamID:    m.TeamID,
         UserID:    m.UserID,
-        Role:      teamdomain.MemberRole(m.Role),
         IsActive:  m.IsActive,
         JoinedAt:  m.JoinedAt,
         CreatedAt: m.CreatedAt,
@@ -108,7 +105,6 @@ func (m *MemberModel) FromDomain(member *teamdomain.Member) {
     m.ID = member.ID
     m.TeamID = member.TeamID
     m.UserID = member.UserID
-    m.Role = string(member.Role)
     m.IsActive = member.IsActive
     m.JoinedAt = member.JoinedAt
     m.CreatedAt = member.CreatedAt
@@ -124,7 +120,6 @@ type InvitationModel struct {
     ID         string     `gorm:"primaryKey;default:gen_random_uuid()"`
     TeamID     string     `gorm:"column:team_id;not null;index"`
     Email      string     `gorm:"column:email;not null;index"`
-    Role       string     `gorm:"column:role;not null"`
     Token      string     `gorm:"column:token;not null;uniqueIndex"`
     Status     string     `gorm:"column:status;not null;default:'pending'"`
     InvitedBy  string     `gorm:"column:invited_by;not null"`
@@ -148,7 +143,6 @@ func (m *InvitationModel) ToDomain() *teamdomain.Invitation {
         ID:         m.ID,
         TeamID:     m.TeamID,
         Email:      m.Email,
-        Role:       teamdomain.MemberRole(m.Role),
         Token:      m.Token,
         Status:     teamdomain.InvitationStatus(m.Status),
         InvitedBy:  m.InvitedBy,
@@ -168,7 +162,6 @@ func (m *InvitationModel) FromDomain(invitation *teamdomain.Invitation) {
     m.ID = invitation.ID
     m.TeamID = invitation.TeamID
     m.Email = invitation.Email
-    m.Role = string(invitation.Role)
     m.Token = invitation.Token
     m.Status = string(invitation.Status)
     m.InvitedBy = invitation.InvitedBy

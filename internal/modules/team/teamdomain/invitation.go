@@ -24,7 +24,6 @@ type Invitation struct {
     ID            string
     TeamID        string
     Email         string
-    Role          MemberRole
     Token         string
     Status        InvitationStatus
     InvitedBy     string
@@ -34,10 +33,12 @@ type Invitation struct {
     CreatedAt     time.Time
     UpdatedAt     time.Time
     DeletedAt     *time.Time
+    // ❌ REMOVED: Role field - roles are at account level
 }
 
 // NewInvitation creates a new team invitation
-func NewInvitation(teamID, email, invitedBy string, role MemberRole, token string, expiresAt time.Time) (*Invitation, error) {
+// ✅ Removed role parameter - roles are inherited from account
+func NewInvitation(teamID, email, invitedBy string, token string, expiresAt time.Time) (*Invitation, error) {
     if teamID == "" {
         return nil, errors.New("team ID is required")
     }
@@ -46,12 +47,6 @@ func NewInvitation(teamID, email, invitedBy string, role MemberRole, token strin
     }
     if invitedBy == "" {
         return nil, errors.New("invited by is required")
-    }
-    if role == "" {
-        return nil, errors.New("role is required")
-    }
-    if !IsValidRole(string(role)) {
-        return nil, errors.New("invalid role")
     }
     if token == "" {
         return nil, errors.New("token is required")
@@ -65,7 +60,6 @@ func NewInvitation(teamID, email, invitedBy string, role MemberRole, token strin
         ID:         uuid.New().String(),
         TeamID:     teamID,
         Email:      email,
-        Role:       role,
         Token:      token,
         Status:     InvitationStatusPending,
         InvitedBy:  invitedBy,

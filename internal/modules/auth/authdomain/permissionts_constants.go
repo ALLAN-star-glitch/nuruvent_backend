@@ -7,12 +7,18 @@ type Role string
 
 // Context keys for storing values in Fiber context
 const (
-	ContextKeyUserID    = "user_id"
-	ContextKeyUserRole  = "user_role"
-	ContextKeyUserEmail = "user_email"
-	ContextKeyUserName  = "user_name"
-	ContextKeyDomain    = "domain"
-	ContextKeyUserRoles = "user_roles"
+	ContextKeyUserID       = "user_id"
+	ContextKeyUserRole     = "user_role"
+	ContextKeyUserEmail    = "user_email"
+	ContextKeyUserName     = "user_name"
+	ContextKeyDomain       = "domain"
+	ContextKeyUserRoles    = "user_roles"
+	ContextKeyAccountID    = "account_id"
+	ContextKeyAccountType  = "account_type"
+	ContextKeyTeamID       = "team_id"
+	ContextKeyTeamType     = "team_type"
+	ContextKeyAccessToken  = "access_token"
+	ContextKeyRefreshToken = "refresh_token"
 )
 
 // ============================================================

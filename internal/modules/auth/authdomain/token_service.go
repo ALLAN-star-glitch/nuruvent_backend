@@ -9,4 +9,5 @@ type TokenService interface {
     GenerateAccessToken(ctx *TokenContext) (string, error)
     GenerateRefreshToken(userID string) (string, error)
     ValidateToken(tokenString string) (*TokenContext, error)
+    
 }

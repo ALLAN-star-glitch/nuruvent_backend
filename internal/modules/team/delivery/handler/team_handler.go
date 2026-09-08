@@ -25,6 +25,7 @@ func NewTeamHandler(service service.Service) *TeamHandler {
 // ============================================================
 
 // ValidateInvitation validates an invitation token
+// ✅ REMOVED: Role from response - roles are inherited from account
 func (h *TeamHandler) ValidateInvitation(c fiber.Ctx) error {
 	token := c.Query("token")
 	if token == "" {
@@ -50,12 +51,11 @@ func (h *TeamHandler) ValidateInvitation(c fiber.Ctx) error {
 	return response.Success(c, "Invitation validated successfully", fiber.Map{
 		"valid":         true,
 		"email":         invitation.Email,
-		"role":          string(invitation.Role),
+		// ❌ REMOVED: "role":          string(invitation.Role),
 		"expires_at":    invitation.ExpiresAt,
 		"invitation_id": invitation.ID,
 	})
 }
-
 
 // ============================================================
 // PROTECTED HANDLERS - TEAM OPERATIONS
@@ -195,6 +195,7 @@ func (h *TeamHandler) DeleteTeam(c fiber.Ctx) error {
 // ============================================================
 
 // GetTeamMembers returns all members of a team
+// ✅ REMOVED: Role filter - roles are inherited from account
 func (h *TeamHandler) GetTeamMembers(c fiber.Ctx) error {
 	teamID := c.Params("id")
 	if teamID == "" {
@@ -208,7 +209,7 @@ func (h *TeamHandler) GetTeamMembers(c fiber.Ctx) error {
 		Limit:  limit,
 		Offset: offset,
 		Search: c.Query("search"),
-		Role:   teamdomain.MemberRole(c.Query("role")),
+		// ❌ REMOVED: Role:   teamdomain.MemberRole(c.Query("role")),
 	}
 
 	members, total, err := h.service.GetTeamMembers(c.Context(), teamID, filters)
@@ -230,6 +231,7 @@ func (h *TeamHandler) GetTeamMembers(c fiber.Ctx) error {
 }
 
 // AddMember adds a member to a team
+// ✅ REMOVED: Role from request - roles are inherited from account
 func (h *TeamHandler) AddMember(c fiber.Ctx) error {
 	teamID := c.Params("id")
 	if teamID == "" {
@@ -238,7 +240,7 @@ func (h *TeamHandler) AddMember(c fiber.Ctx) error {
 
 	var req struct {
 		UserID string `json:"user_id"`
-		Role   string `json:"role"`
+		// ❌ REMOVED: Role   string `json:"role"`
 	}
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request body", nil)
@@ -247,16 +249,11 @@ func (h *TeamHandler) AddMember(c fiber.Ctx) error {
 	if req.UserID == "" {
 		return response.BadRequest(c, "user_id is required", nil)
 	}
-	if req.Role == "" {
-		return response.BadRequest(c, "role is required", nil)
-	}
-	if !teamdomain.IsValidRole(req.Role) {
-		return response.BadRequest(c, "Invalid role. Valid roles: account_admin, trainer", nil)
-	}
+	// ❌ REMOVED: Role validation
 
 	addedBy := c.Locals("user_id").(string)
 
-	member, err := h.service.AddMember(c.Context(), teamID, req.UserID, teamdomain.MemberRole(req.Role), addedBy)
+	member, err := h.service.AddMember(c.Context(), teamID, req.UserID, addedBy)
 	if err != nil {
 		if err == teamdomain.ErrTeamNotFound {
 			return response.NotFound(c, "Team not found", nil)
@@ -277,54 +274,8 @@ func (h *TeamHandler) AddMember(c fiber.Ctx) error {
 	})
 }
 
-// UpdateMemberRole updates a member's role
-func (h *TeamHandler) UpdateMemberRole(c fiber.Ctx) error {
-	teamID := c.Params("id")
-	if teamID == "" {
-		return response.BadRequest(c, "Team ID is required", nil)
-	}
-
-	userID := c.Params("userId")
-	if userID == "" {
-		return response.BadRequest(c, "User ID is required", nil)
-	}
-
-	var req struct {
-		Role string `json:"role"`
-	}
-	if err := c.Bind().Body(&req); err != nil {
-		return response.BadRequest(c, "Invalid request body", nil)
-	}
-
-	if req.Role == "" {
-		return response.BadRequest(c, "role is required", nil)
-	}
-	if !teamdomain.IsValidRole(req.Role) {
-		return response.BadRequest(c, "Invalid role. Valid roles: account_admin, trainer", nil)
-	}
-
-	updatedBy := c.Locals("user_id").(string)
-
-	member, err := h.service.UpdateMemberRole(c.Context(), teamID, userID, teamdomain.MemberRole(req.Role), updatedBy)
-	if err != nil {
-		if err == teamdomain.ErrTeamNotFound || err == teamdomain.ErrMemberNotFound {
-			return response.NotFound(c, "Member not found", nil)
-		}
-		if err == teamdomain.ErrPermissionDenied {
-			return response.Forbidden(c, "Permission denied", nil)
-		}
-		if err == teamdomain.ErrCannotChangeOwnRole {
-			return response.BadRequest(c, "Cannot change your own role", nil)
-		}
-		return response.InternalError(c, "Failed to update member role", fiber.Map{
-			"error": err.Error(),
-		})
-	}
-
-	return response.Success(c, "Member role updated successfully", fiber.Map{
-		"member": member,
-	})
-}
+// ❌ REMOVED: UpdateMemberRole - roles cannot be updated at team level
+// Roles are managed at the account level through account_members table
 
 // RemoveMember removes a member from a team
 func (h *TeamHandler) RemoveMember(c fiber.Ctx) error {
@@ -351,9 +302,7 @@ func (h *TeamHandler) RemoveMember(c fiber.Ctx) error {
 		if err == teamdomain.ErrCannotRemoveSelf {
 			return response.BadRequest(c, "Cannot remove yourself from the team", nil)
 		}
-		if err == teamdomain.ErrLastAdminCannotLeave {
-			return response.BadRequest(c, "Cannot remove the last admin of the team", nil)
-		}
+		// ❌ REMOVED: ErrLastAdminCannotLeave check - admin concept is now at account level
 		return response.InternalError(c, "Failed to remove member", fiber.Map{
 			"error": err.Error(),
 		})
@@ -376,9 +325,7 @@ func (h *TeamHandler) LeaveTeam(c fiber.Ctx) error {
 		if err == teamdomain.ErrTeamNotFound || err == teamdomain.ErrMemberNotFound {
 			return response.NotFound(c, "Team or member not found", nil)
 		}
-		if err == teamdomain.ErrLastAdminCannotLeave {
-			return response.BadRequest(c, "Cannot leave as the last admin of the team", nil)
-		}
+		// ❌ REMOVED: ErrLastAdminCannotLeave check - admin concept is now at account level
 		return response.InternalError(c, "Failed to leave team", fiber.Map{
 			"error": err.Error(),
 		})
@@ -392,6 +339,7 @@ func (h *TeamHandler) LeaveTeam(c fiber.Ctx) error {
 // ============================================================
 
 // InviteMember invites a user to join a team
+// ✅ REMOVED: Role from request - roles are inherited from account
 func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 	if userID == "" {
@@ -405,26 +353,23 @@ func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
 
 	var req struct {
 		Email string `json:"email"`
-		Role  string `json:"role"`
+		// ❌ REMOVED: Role  string `json:"role"`
 	}
 	if err := c.Bind().Body(&req); err != nil {
-		return response.BadRequest(c, "Invalid request body", nil)
+		return response.BadRequest(c, "Invalid request body", fiber.Map{
+			"error": err.Error(),
+		})
 	}
 
 	if req.Email == "" {
 		return response.BadRequest(c, "email is required", nil)
 	}
-	if req.Role == "" {
-		return response.BadRequest(c, "role is required", nil)
-	}
-	if !teamdomain.IsValidRole(req.Role) {
-		return response.BadRequest(c, "Invalid role. Valid roles: account_admin, trainer", nil)
-	}
+	// ❌ REMOVED: Role validation
 
 	invitation, err := h.service.InviteMember(c.Context(), service.InviteMemberCommand{
 		TeamID:    teamID,
 		Email:     req.Email,
-		Role:      req.Role,
+		// ❌ REMOVED: Role:      req.Role,
 		InvitedBy: userID,
 	})
 	if err != nil {

@@ -58,7 +58,6 @@ type Repository interface {
 
 // ListMembersFilters provides filtering for listing members
 type ListMembersFilters struct {
-    Role       MemberRole
     Search     string
     Limit      int
     Offset     int

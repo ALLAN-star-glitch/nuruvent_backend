@@ -128,7 +128,7 @@ func (a *TeamAdapter) CreatePersonalTeam(ctx context.Context, userID string, use
 	}, nil
 }
 
-// ✅ Updated: CreateInstitutionTeam with createdBy
+// CreateInstitutionTeam creates an institution team with the creator as member
 func (a *TeamAdapter) CreateInstitutionTeam(ctx context.Context, accountID string, name string, displayName string, slug string, createdBy string) (*authService.TeamInfo, error) {
 	team, err := a.teamSvc.CreateInstitutionTeam(ctx, accountID, name, displayName, slug, createdBy)
 	if err != nil {
@@ -184,6 +184,7 @@ func (a *TeamAdapter) AcceptInvitation(ctx context.Context, token string, userID
 // ============================================================
 
 // GetUserTeamMemberships gets all team memberships for a user
+// ✅ REMOVED: Role from TeamMemberInfo - roles are inherited from account
 func (a *TeamAdapter) GetUserTeamMemberships(ctx context.Context, userID string) ([]*authService.TeamMemberInfo, error) {
 	members, err := a.teamSvc.GetUserTeamMemberships(ctx, userID)
 	if err != nil {
@@ -199,8 +200,8 @@ func (a *TeamAdapter) GetUserTeamMemberships(ctx context.Context, userID string)
 			ID:       m.ID,
 			TeamID:   m.TeamID,
 			UserID:   m.UserID,
-			Role:     m.Role,
 			IsActive: m.IsActive,
+			// ❌ REMOVED: Role:     m.Role,
 		}
 	}
 	return result, nil

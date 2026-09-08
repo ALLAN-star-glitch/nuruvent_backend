@@ -17,6 +17,7 @@ import (
 // ============================================================
 
 // InviteMember invites a user to join a team
+// ✅ REMOVED: Role parameter - roles are inherited from account
 func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand) (*teamdomain.Invitation, error) {
     // 1. Validate input
     if cmd.TeamID == "" {
@@ -25,9 +26,7 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
     if cmd.Email == "" {
         return nil, fmt.Errorf("email is required")
     }
-    if cmd.Role == "" {
-        return nil, fmt.Errorf("role is required")
-    }
+    // ❌ REMOVED: Role validation - roles are inherited from account
     if cmd.InvitedBy == "" {
         return nil, fmt.Errorf("invited by is required")
     }
@@ -40,6 +39,10 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
     if team == nil {
         return nil, teamdomain.ErrTeamNotFound
     }
+
+    // ✅ Debug logging
+    log.Printf("[InviteMember] Team retrieved: ID=%s, Name=%s, Type=%s, IsPersonal=%v", 
+        team.ID, team.Name, team.Type, team.IsPersonal())
 
     // 3. Check permission using domain
     domain := NewTeamDomain(team).String()
@@ -70,19 +73,20 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
         }
 
         // User exists - add directly
-        _, err = s.AddMember(ctx, cmd.TeamID, user.ID, teamdomain.MemberRole(cmd.Role), cmd.InvitedBy)
+        // ✅ REMOVED: role parameter - roles are inherited from account
+        _, err = s.AddMember(ctx, cmd.TeamID, user.ID, cmd.InvitedBy)
         if err != nil {
             return nil, err
         }
 
         // Send notification
+        // ✅ REMOVED: Role from notification
         if err := s.notifSvc.SendTeamInvite(ctx, SendTeamInviteRequest{
             To:         cmd.Email,
             UserName:   user.Name,
             InvitedBy:  cmd.InvitedBy,
             TeamName:   team.DisplayName,
             TeamID:     team.ID,
-            Role:       cmd.Role,
             InviteLink: "https://nuruvent.com/dashboard/teams",
             ExpiresIn:  "N/A",
         }); err != nil {
@@ -96,11 +100,11 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
     token := teamdomain.GenerateToken()
     expiresAt := time.Now().Add(7 * 24 * time.Hour)
 
+    // ✅ REMOVED: role parameter - roles are inherited from account
     invitation, err := teamdomain.NewInvitation(
         cmd.TeamID,
         cmd.Email,
         cmd.InvitedBy,
-        teamdomain.MemberRole(cmd.Role),
         token,
         expiresAt,
     )
@@ -113,12 +117,12 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
     }
 
     // Send invitation email (NO OTP)
+    // ✅ REMOVED: Role from notification
     if err := s.notifSvc.SendTeamInviteRegistration(ctx, SendTeamInviteRegistrationRequest{
         To:               cmd.Email,
         Name:             cmd.Email,
         InvitedBy:        cmd.InvitedBy,
         TeamName:         team.DisplayName,
-        Role:             cmd.Role,
         RegistrationLink: fmt.Sprintf("https://nuruvent.com/register?token=%s", token),
     }); err != nil {
         log.Printf("⚠️ Failed to send invitation email: %v", err)
@@ -153,8 +157,6 @@ func (s *teamService) ValidateInvitationToken(ctx context.Context, token string)
     return invitation, nil
 }
 
-// AcceptInvitation accepts an invitation and adds the user to the team
-// ✅ Updated: No longer returns tokens (Auth handles authentication)
 // AcceptInvitation accepts an invitation and adds the user to the team
 func (s *teamService) AcceptInvitation(ctx context.Context, token, userID string) (*teamdomain.Member, error) {
 	// 1. Get invitation
@@ -201,7 +203,8 @@ func (s *teamService) AcceptInvitation(ctx context.Context, token, userID string
 	var member *teamdomain.Member
 	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
 		// Create team membership
-		m, err := s.AddMember(txCtx, invitation.TeamID, userID, invitation.Role, invitation.InvitedBy)
+		// ✅ REMOVED: invitation.Role parameter - roles are inherited from account
+		m, err := s.AddMember(txCtx, invitation.TeamID, userID, invitation.InvitedBy)
 		if err != nil {
 			return fmt.Errorf("failed to add member: %w", err)
 		}
@@ -226,6 +229,7 @@ func (s *teamService) AcceptInvitation(ctx context.Context, token, userID string
 	go func() {
 		team, err := s.repo.GetTeamByID(context.Background(), invitation.TeamID)
 		if err == nil && team != nil {
+			// ✅ REMOVED: Role from notification
 			if err := s.notifSvc.SendTeamInviteAccepted(context.Background(), SendTeamInviteAcceptedRequest{
 				To:        invitation.InvitedBy,
 				AdminName: "Admin",
@@ -326,12 +330,12 @@ func (s *teamService) ResendInvitation(ctx context.Context, invitationID string)
         return nil, err
     }
 
+    // ✅ REMOVED: Role from notification
     if err := s.notifSvc.SendTeamInviteRegistration(ctx, SendTeamInviteRegistrationRequest{
         To:               invitation.Email,
         Name:             invitation.Email,
         InvitedBy:        invitation.InvitedBy,
         TeamName:         team.DisplayName,
-        Role:             string(invitation.Role),
         RegistrationLink: fmt.Sprintf("https://nuruvent.com/register?token=%s", newToken),
     }); err != nil {
         log.Printf("⚠️ Failed to resend invitation email: %v", err)

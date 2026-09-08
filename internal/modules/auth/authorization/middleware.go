@@ -319,7 +319,40 @@ func getDomainFromRequest(c fiber.Ctx) string {
 
 	teamID = c.Params("teamId")
 	if teamID != "" {
+		// ✅ FIX: Determine team type from token context or query
+		teamType := c.Locals("team_type")
+		if teamType != nil {
+			if tt, ok := teamType.(string); ok && tt == "institution" {
+				return authdomain.InstitutionTeamDomain(teamID)
+			}
+		}
+		// Check query param for team_type
+		if tt := c.Query("team_type"); tt == "institution" {
+			return authdomain.InstitutionTeamDomain(teamID)
+		}
+		// Default to personal
 		return authdomain.PersonalTeamDomain(teamID)
+	}
+
+	// ✅ FIX: Check if this is a team route with ID in the path
+	// For routes like /teams/:id/invite
+	if strings.Contains(path, "/teams/") {
+		extractedTeamID := extractTeamIDFromPath(path)
+		if extractedTeamID != "" {
+			// Try to get team type from context
+			teamType := c.Locals("team_type")
+			if teamType != nil {
+				if tt, ok := teamType.(string); ok && tt == "institution" {
+					return authdomain.InstitutionTeamDomain(extractedTeamID)
+				}
+			}
+			// Check query param
+			if tt := c.Query("team_type"); tt == "institution" {
+				return authdomain.InstitutionTeamDomain(extractedTeamID)
+			}
+			// Default to personal
+			return authdomain.PersonalTeamDomain(extractedTeamID)
+		}
 	}
 
 	accountID = c.Params("accountId")
@@ -335,7 +368,20 @@ func getDomainFromRequest(c fiber.Ctx) string {
 		if strings.Contains(path, "/accounts/") {
 			return authdomain.AccountDomain(id)
 		}
-		if strings.Contains(path, "/users/") || strings.Contains(path, "/teams/") {
+		if strings.Contains(path, "/teams/") {
+			// ✅ FIX: Determine team type
+			teamType := c.Locals("team_type")
+			if teamType != nil {
+				if tt, ok := teamType.(string); ok && tt == "institution" {
+					return authdomain.InstitutionTeamDomain(id)
+				}
+			}
+			if tt := c.Query("team_type"); tt == "institution" {
+				return authdomain.InstitutionTeamDomain(id)
+			}
+			return authdomain.PersonalTeamDomain(id)
+		}
+		if strings.Contains(path, "/users/") {
 			return authdomain.PersonalTeamDomain(id)
 		}
 	}
@@ -357,6 +403,10 @@ func getDomainFromRequest(c fiber.Ctx) string {
 		return authdomain.PersonalTeamDomain(userID)
 	}
 	if teamID = c.Query("teamId"); teamID != "" {
+		// ✅ FIX: Determine team type
+		if tt := c.Query("team_type"); tt == "institution" {
+			return authdomain.InstitutionTeamDomain(teamID)
+		}
 		return authdomain.PersonalTeamDomain(teamID)
 	}
 	if accountID = c.Query("accountId"); accountID != "" {
@@ -378,6 +428,28 @@ func getDomainFromRequest(c fiber.Ctx) string {
 	}
 
 	return authdomain.DomainPlatform
+}
+
+// extractTeamIDFromPath extracts team ID from the path
+func extractTeamIDFromPath(path string) string {
+	parts := strings.Split(path, "/")
+	for i, part := range parts {
+		if part == "teams" && i+1 < len(parts) {
+			nextPart := parts[i+1]
+			// Check if it looks like a UUID (has hyphens and is long enough)
+			if strings.Contains(nextPart, "-") && len(nextPart) > 30 {
+				return nextPart
+			}
+			// Check if the part after that is a UUID (for routes like /teams/:id/invite)
+			if i+2 < len(parts) {
+				nextNextPart := parts[i+2]
+				if strings.Contains(nextNextPart, "-") && len(nextNextPart) > 30 {
+					return nextNextPart
+				}
+			}
+		}
+	}
+	return ""
 }
 
 // getResourceFromRequest extracts the resource from the request path

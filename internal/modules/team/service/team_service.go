@@ -88,8 +88,9 @@ func (s *teamService) CreatePersonalTeam(ctx context.Context, userID, userName s
 		return nil, fmt.Errorf("failed to create personal team: %w", err)
 	}
 
-	// Add user as admin of their personal team
-	member, err := teamdomain.NewMember(team.ID, userID, teamdomain.RoleAccountAdmin)
+	// Add user as member of their personal team
+	// ✅ REMOVED: role parameter - roles are inherited from account
+	member, err := teamdomain.NewMember(team.ID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -103,16 +104,14 @@ func (s *teamService) CreatePersonalTeam(ctx context.Context, userID, userName s
 		log.Printf("⚠️ Failed to add personal team policies: %v", err)
 	}
 
-	// Assign admin role using domain
-	if err := s.casbinSvc.AssignRole(ctx, domain, userID, string(teamdomain.RoleAccountAdmin)); err != nil {
-		log.Printf("⚠️ Failed to assign admin role: %v", err)
-	}
+	// ❌ REMOVED: Casbin role assignment - roles are inherited from account
+	// Account module will handle role assignment via account_members
 
 	log.Printf("✅ Personal team created for user: %s (Team ID: %s, AccountID: %s)", userID, team.ID, team.AccountID)
 	return team, nil
 }
 
-// CreateInstitutionTeam creates an institution team and adds the creator as admin
+// CreateInstitutionTeam creates an institution team and adds the creator as member
 func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug, createdBy string) (*teamdomain.Team, error) {
     if accountID == "" {
         return nil, fmt.Errorf("account ID is required")
@@ -144,10 +143,11 @@ func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name
         return nil, fmt.Errorf("failed to create institution team: %w", err)
     }
 
-    // ✅ Add the creator as admin of the institution team
-    log.Printf("[CreateInstitutionTeam] Adding user %s as admin to institution team", createdBy)
+    // ✅ Add the creator as member of the institution team
+    // ✅ REMOVED: role parameter - roles are inherited from account
+    log.Printf("[CreateInstitutionTeam] Adding user %s as member to institution team", createdBy)
     
-    member, err := teamdomain.NewMember(team.ID, createdBy, teamdomain.RoleAccountAdmin)
+    member, err := teamdomain.NewMember(team.ID, createdBy)
     if err != nil {
         log.Printf("[CreateInstitutionTeam] Failed to create member: %v", err)
         return nil, fmt.Errorf("failed to create member: %w", err)
@@ -157,7 +157,7 @@ func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name
         log.Printf("[CreateInstitutionTeam] Failed to add user to institution team: %v", err)
         return nil, fmt.Errorf("failed to add user to institution team: %w", err)
     }
-    log.Printf("[CreateInstitutionTeam] ✅ User %s added as admin to institution team", createdBy)
+    log.Printf("[CreateInstitutionTeam] ✅ User %s added as member to institution team", createdBy)
 
     // Add Casbin policies for institution team using domain
     domain := NewTeamDomain(team).String()
@@ -165,10 +165,8 @@ func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name
         log.Printf("⚠️ Failed to add institution team policies: %v", err)
     }
 
-    // ✅ Assign admin role to the creator
-    if err := s.casbinSvc.AssignRole(ctx, domain, createdBy, string(teamdomain.RoleAccountAdmin)); err != nil {
-        log.Printf("⚠️ Failed to assign admin role: %v", err)
-    }
+    // ❌ REMOVED: Casbin role assignment - roles are inherited from account
+    // Account module will handle role assignment via account_members
 
     log.Printf("✅ Institution team created: %s (Team ID: %s)", team.Name, team.ID)
     return team, nil
@@ -221,6 +219,7 @@ func (s *teamService) UpdateTeam(ctx context.Context, id string, updates map[str
         return nil, teamdomain.ErrPermissionDenied
     }
 
+    // ✅ Check if user is account admin for this team's account
     isAdmin, err := s.casbinSvc.IsAccountAdmin(ctx, domain, userID)
     if err != nil {
         return nil, fmt.Errorf("permission check failed: %w", err)
@@ -271,6 +270,7 @@ func (s *teamService) DeleteTeam(ctx context.Context, id string) error {
         return teamdomain.ErrPermissionDenied
     }
 
+    // ✅ Check if user is account admin for this team's account
     isAdmin, err := s.casbinSvc.IsAccountAdmin(ctx, domain, userID)
     if err != nil {
         return fmt.Errorf("permission check failed: %w", err)

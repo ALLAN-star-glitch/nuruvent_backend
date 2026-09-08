@@ -73,6 +73,8 @@ func (app *App) SetupRoutes() {
 		app.AuthHandler,
 		app.EventsHandler,
 		app.ProfileHandler,
+		app.TeamHandler,
+		app.AccountHandler,
 	)
 	log.Println("Routes registered successfully")
 }

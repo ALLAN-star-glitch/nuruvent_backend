@@ -126,10 +126,6 @@ func (r *TeamRepository) GetMemberByTeamAndUser(ctx context.Context, teamID, use
 func (r *TeamRepository) GetMembersByTeam(ctx context.Context, teamID string, filters teamdomain.ListMembersFilters) ([]*teamdomain.Member, int64, error) {
     query := r.db.WithContext(ctx).Model(&MemberModel{}).Where("team_id = ?", teamID)
 
-    // Apply filters
-    if filters.Role != "" {
-        query = query.Where("role = ?", filters.Role)
-    }
 
     // Count total
     var total int64

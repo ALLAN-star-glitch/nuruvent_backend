@@ -36,12 +36,11 @@ func (h *TeamHandler) RegisterRoutes(
 		// Member operations
 		protected.Get("/:id/members", authzMiddleware, h.GetTeamMembers)
 		protected.Post("/:id/members", authzMiddleware, h.AddMember)
-		protected.Patch("/:id/members/:userId/role", authzMiddleware, h.UpdateMemberRole)
 		protected.Delete("/:id/members/:userId", authzMiddleware, h.RemoveMember)
 		protected.Post("/:id/leave", authzMiddleware, h.LeaveTeam)
 
 		// Invitation operations
-		protected.Post("/invite", authzMiddleware, h.InviteMember)
+		protected.Post("/:id/invite", authzMiddleware, h.InviteMember)  // ✅ Updated: team ID in URL
 		protected.Get("/:id/invitations", authzMiddleware, h.GetTeamInvitations)
 		protected.Post("/:id/invitations/resend", authzMiddleware, h.ResendInvitation)
 	}
