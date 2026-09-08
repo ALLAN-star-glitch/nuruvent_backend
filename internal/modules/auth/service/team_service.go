@@ -15,10 +15,10 @@ type TeamService interface {
 	CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug, createdBy string) (*TeamInfo, error)
 
 	// Member & Invitation operations
+	// ✅ REMOVED: Role from TeamMemberInfo - roles are inherited from account
 	GetUserTeamMemberships(ctx context.Context, userID string) ([]*TeamMemberInfo, error)
 	GetUserPersonalTeamIDs(ctx context.Context, userID string) ([]string, error)
 	GetUserInstitutionTeamIDs(ctx context.Context, userID string) ([]string, error)
-
 
 	// Process team invitation during user onboarding
 	AcceptInvitation(ctx context.Context, token string, userID string) (*TeamInfo, error)
@@ -45,12 +45,13 @@ type AccountInfo struct {
 }
 
 // TeamMemberInfo represents team member information
+// ✅ REMOVED: Role field - roles are inherited from account
 type TeamMemberInfo struct {
 	ID       string
 	TeamID   string
 	UserID   string
-	Role     string
 	IsActive bool
+	// ❌ REMOVED: Role     string
 }
 
 // WorkspaceContext aggregates primary workspace context for JWT claims
