@@ -22,17 +22,19 @@ func NewNotificationAdapter(notifSvc notificationDomain.NotificationService) acc
 }
 
 // SendAccountInvite maps account invite requests to the underlying team invite notification call
+// ✅ Updated: Uses SendTeamInviteExistingUser (no role)
 func (a *NotificationAdapter) SendAccountInvite(ctx context.Context, req accountService.SendAccountInviteRequest) error {
-	return a.notifSvc.SendTeamInvite(ctx, notificationDomain.SendTeamInviteRequest{
+	return a.notifSvc.SendTeamInviteExistingUser(ctx, notificationDomain.SendTeamInviteExistingUserRequest{
 		To:         req.To,
 		UserName:   req.UserName,
 		InvitedBy:  req.InvitedBy,
 		TeamName:   req.AccountName,
 		TeamID:     req.AccountID,
-		Role:       req.Role,
-		InviteLink: req.InviteLink,
+		AcceptLink: req.InviteLink,
+		ExpiresIn:  "7 days",
 	})
 }
+
 
 // SendAccountWelcome maps account welcome requests to the individual welcome notification call
 func (a *NotificationAdapter) SendAccountWelcome(ctx context.Context, req accountService.SendAccountWelcomeRequest) error {

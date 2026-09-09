@@ -19,6 +19,7 @@ func (h *TeamHandler) RegisterRoutes(
 	{
 		public.Get("/invitations/validate", h.ValidateInvitation)
 	}
+	
 
 	// ============================================================
 	// PROTECTED ROUTES (Auth required)
@@ -26,21 +27,29 @@ func (h *TeamHandler) RegisterRoutes(
 	protected := router.Group("/teams")
 	protected.Use(authMiddleware)
 	{
-		// Team operations
+		// ============================================================
+		// TEAM OPERATIONS
+		// ============================================================
 		protected.Post("/", authzMiddleware, h.CreatePersonalTeam)
 		protected.Get("/", authzMiddleware, h.GetUserTeams)
 		protected.Get("/:id", authzMiddleware, h.GetTeam)
 		protected.Patch("/:id", authzMiddleware, h.UpdateTeam)
 		protected.Delete("/:id", authzMiddleware, h.DeleteTeam)
 
-		// Member operations
+		// ============================================================
+		// MEMBER OPERATIONS
+		// ✅ REMOVED: UpdateMemberRole - roles are managed at account level
+		// ============================================================
 		protected.Get("/:id/members", authzMiddleware, h.GetTeamMembers)
 		protected.Post("/:id/members", authzMiddleware, h.AddMember)
 		protected.Delete("/:id/members/:userId", authzMiddleware, h.RemoveMember)
 		protected.Post("/:id/leave", authzMiddleware, h.LeaveTeam)
 
-		// Invitation operations
-		protected.Post("/:id/invite", authzMiddleware, h.InviteMember)  // ✅ Updated: team ID in URL
+		// ============================================================
+		// INVITATION OPERATIONS
+		// ✅ REMOVED: Role from invitations - roles are inherited from account
+		// ============================================================
+		protected.Post("/:id/invitations", authzMiddleware, h.InviteMember)
 		protected.Get("/:id/invitations", authzMiddleware, h.GetTeamInvitations)
 		protected.Post("/:id/invitations/resend", authzMiddleware, h.ResendInvitation)
 	}

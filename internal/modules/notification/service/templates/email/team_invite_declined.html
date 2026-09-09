@@ -1,43 +1,44 @@
-{{define "team_invite_declined"}}
+{{define "team-invite-declined"}}
 <div class="title">
-    <span class="gold-highlight">Invitation Declined</span>
+    Team Invitation Declined
 </div>
-<div class="subtitle">{{.UserName}} has declined the invitation</div>
+<div class="subtitle">{{.user_name}} declined to join {{.team_name}}</div>
 
 <div class="greeting">
-    Hello {{.AdminName}},
+    Hello {{.admin_name}},
 </div>
 
 <p class="body-text">
-    <strong>{{.UserName}}</strong> has declined your invitation to join <strong>{{.InstitutionName}}</strong> on Nuruvent.
+    <strong>{{.user_name}}</strong> ({{.user_email}}) has declined your invitation to join <strong>{{.team_name}}</strong> on Nuruvent.
 </p>
 
-<div class="alert-warning">
-    <p>
-        <strong>Invitation Status:</strong><br>
-        The invitation sent to {{.UserName}} has been declined. You may send a new invitation if needed.
-    </p>
+<div class="alert-info" style="background: #EEF2FF; padding: 16px; border-radius: 12px; text-align: center; border: 2px solid #1A73E8; margin: 16px 0;">
+    <div style="color: #1A3A6B; font-size: 17px; font-weight: 700;">Invitation Declined</div>
+    <div style="color: #1A3A6B; font-size: 13px; opacity: 0.8;">The user has chosen not to join the team at this time</div>
 </div>
 
 <div class="details-box">
-    <div class="row">
-        <span class="label">Name</span>
-        <span class="value">{{.UserName}}</span>
+    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F0F2F5;">
+        <span style="color: #5F6368; font-size: 13px; font-weight: 500;">User</span>
+        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.user_name}}</span>
     </div>
-    <div class="row">
-        <span class="label">Email</span>
-        <span class="value">{{.UserEmail}}</span>
+    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F0F2F5;">
+        <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Email</span>
+        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.user_email}}</span>
     </div>
-    <div class="row">
-        <span class="label">Institution</span>
-        <span class="value">{{.InstitutionName}}</span>
+    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+        <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Team</span>
+        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.team_name}}</span>
     </div>
 </div>
 
-<div class="alert-info">
-    <p>
-        <strong>Next Steps:</strong><br>
-        You can send a new invitation to {{.UserName}} or invite someone else to join your team.
-    </p>
+<p class="body-text">
+    You can invite other users to join your team at any time.
+</p>
+
+<div class="otp-box" style="padding: 20px;">
+    <a href="https://nuruvent.com/dashboard/teams" style="display: inline-block; background: #1A73E8; color: #FFFFFF; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+        Manage Your Team
+    </a>
 </div>
 {{end}}

@@ -39,7 +39,7 @@ func (a *AuthAdapter) GetUserByID(ctx context.Context, userID string) (*teamServ
 		Name:        user.Name,
 		Phone:       user.Phone,
 		DisplayName: user.DisplayName,
-		AccountID:   accountID, // ✅ Added
+		AccountID:   accountID,
 		IsActive:    user.IsActive,
 	}, nil
 }
@@ -104,6 +104,24 @@ func (a *AuthAdapter) UserExists(ctx context.Context, email string) (bool, error
 func (a *AuthAdapter) GetAccountIDByUserID(ctx context.Context, userID string) (string, error) {
 	return a.getAccountIDByUserID(ctx, userID)
 }
+
+// GetUserRoleInAccount gets a user's role in a specific account
+// ✅ Added: Required for AddMember to assign Casbin team role
+func (a *AuthAdapter) GetUserRoleInAccount(ctx context.Context, userID, accountID string) (string, error) {
+	members, err := a.authRepo.GetAccountMembersByUser(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+
+	for _, member := range members {
+		if member.AccountID == accountID {
+			return member.Role, nil
+		}
+	}
+
+	return "", nil
+}
+
 
 // ============================================================
 // PRIVATE HELPERS

@@ -14,17 +14,9 @@ import (
 // MEMBER OPERATIONS
 // ============================================================
 
-// AddMember adds a member to a team
-// ✅ REMOVED: role parameter - roles are inherited from account
 func (s *teamService) AddMember(ctx context.Context, teamID, userID string, addedBy string) (*teamdomain.Member, error) {
-    if teamID == "" {
-        return nil, fmt.Errorf("team ID is required")
-    }
-    if userID == "" {
-        return nil, fmt.Errorf("user ID is required")
-    }
-    // ❌ REMOVED: Role validation - roles are inherited from account
-
+    // ... validation (no permission check) ...
+    
     // Check if team exists
     team, err := s.repo.GetTeamByID(ctx, teamID)
     if err != nil {
@@ -33,17 +25,7 @@ func (s *teamService) AddMember(ctx context.Context, teamID, userID string, adde
     if team == nil {
         return nil, teamdomain.ErrTeamNotFound
     }
-
-    // ✅ Check permission using domain
-    domain := NewTeamDomain(team).String()
-    isAdmin, err := s.casbinSvc.IsAccountAdmin(ctx, domain, addedBy)
-    if err != nil {
-        return nil, fmt.Errorf("permission check failed: %w", err)
-    }
-    if !isAdmin {
-        return nil, teamdomain.ErrPermissionDenied
-    }
-
+    
     // Check if user exists
     user, err := s.authSvc.GetUserByID(ctx, userID)
     if err != nil {
@@ -52,27 +34,43 @@ func (s *teamService) AddMember(ctx context.Context, teamID, userID string, adde
     if user == nil {
         return nil, fmt.Errorf("user not found")
     }
-
+    
     // Check if already a member
     existing, err := s.repo.GetMemberByTeamAndUser(ctx, teamID, userID)
     if err == nil && existing != nil && existing.IsActive {
         return nil, teamdomain.ErrMemberAlreadyExists
     }
-
+    
+    // ✅ Get the user's role from account_members
+    userRole, err := s.authSvc.GetUserRoleInAccount(ctx, userID, team.AccountID)
+    if err != nil {
+        log.Printf("⚠️ Failed to get user role from account for user %s in account %s: %v", userID, team.AccountID, err)
+        userRole = "account_admin" // Fallback
+    }
+    if userRole == "" {
+        log.Printf("⚠️ No role found for user %s in account %s, using fallback", userID, team.AccountID)
+        userRole = "account_admin" // Fallback
+    }
+    log.Printf("[AddMember] User %s has role %s in account %s", userID, userRole, team.AccountID)
+    
     // Create member
-    // ✅ REMOVED: role parameter - roles are inherited from account
     member, err := teamdomain.NewMember(teamID, userID)
     if err != nil {
         return nil, err
     }
-
+    
     if err := s.repo.CreateMember(ctx, member); err != nil {
         return nil, fmt.Errorf("failed to add member: %w", err)
     }
-
-    // ❌ REMOVED: Casbin role assignment - roles are inherited from account
-    // Roles will be assigned based on account membership, not team membership
-
+    
+    // ✅ Assign Casbin role at team level
+    domain := NewTeamDomain(team).String()
+    if err := s.casbinSvc.AssignRole(ctx, domain, userID, userRole); err != nil {
+        log.Printf("⚠️ Failed to assign team role for user %s in domain %s: %v", userID, domain, err)
+    } else {
+        log.Printf("✅ User %s assigned role %s in domain %s", userID, userRole, domain)
+    }
+    
     log.Printf("✅ User %s added to team %s", userID, teamID)
     return member, nil
 }

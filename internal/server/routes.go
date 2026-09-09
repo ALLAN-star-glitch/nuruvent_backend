@@ -24,7 +24,7 @@ func SetupRoutes(
 	eventsHandler *eventhandler.EventHandler,
 	profileHandler *profileHandler.ProfileHandler,
 	teamHandler *teamHandler.TeamHandler,
-	accountHandler *handler.AccountHandler, // ✅ Add account handler
+	accountHandler *handler.AccountHandler,
 ) {
 	// ================================================
 	// 1. SWAGGER - Must be FIRST to avoid 404

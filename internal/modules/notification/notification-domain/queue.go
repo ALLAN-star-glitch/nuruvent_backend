@@ -46,18 +46,26 @@ type TaskEnqueuer interface {
 	EnqueueLoginNotification(ctx context.Context, task LoginNotificationTask) error
 
 	// ============================================================
-	// ✅ TEAM INVITATION TASKS
+	// ✅ TEAM INVITATION TASKS (UPDATED)
 	// ============================================================
 
-	// EnqueueTeamInvite enqueues a team invitation email task
-	EnqueueTeamInvite(ctx context.Context, task TeamInviteTask) error
+	// EnqueueTeamInviteExistingUser enqueues a team invitation for existing users
+	// Sent when: User already has a Nuruvent account
+	// ✅ NO ROLE - Roles are inherited from account level
+	// ✅ NO OTP - User clicks accept link to join
+	EnqueueTeamInviteExistingUser(ctx context.Context, task TeamInviteExistingUserTask) error
 
-	// EnqueueTeamInviteRegistration enqueues a team invite registration OTP task
+	// EnqueueTeamInviteRegistration enqueues a team invitation for new users
+	// Sent when: User does NOT have a Nuruvent account
+	// ✅ NO ROLE - Roles are inherited from account level
+	// ✅ NO OTP - User clicks registration link with token embedded
 	EnqueueTeamInviteRegistration(ctx context.Context, task TeamInviteRegistrationTask) error
 
-	// EnqueueTeamInviteAccepted enqueues a team invite accepted notification task
+	// EnqueueTeamInviteAccepted enqueues a notification when invitation is accepted
+	// Sent to: Admin who sent the invitation
 	EnqueueTeamInviteAccepted(ctx context.Context, task TeamInviteAcceptedTask) error
 
-	// EnqueueTeamInviteDeclined enqueues a team invite declined notification task
+	// EnqueueTeamInviteDeclined enqueues a notification when invitation is declined
+	// Sent to: Admin who sent the invitation
 	EnqueueTeamInviteDeclined(ctx context.Context, task TeamInviteDeclinedTask) error
 }

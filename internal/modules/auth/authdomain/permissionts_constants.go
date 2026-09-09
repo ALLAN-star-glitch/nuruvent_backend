@@ -374,6 +374,7 @@ func DefaultAccountPermissions() map[Role][]string {
 			"member:update",
 			"member:delete",
 			"member:invite",
+	
 
 			// Profile
 			"profile:read_all",

@@ -62,8 +62,12 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
     mux.HandleFunc(notificationdomain.TaskNewPersonalAccountRegistration, notificationWorker.HandleNewPersonalAccountRegistration)
     mux.HandleFunc(notificationdomain.TaskNewInstitutionAccountRegistration, notificationWorker.HandleNewInstitutionAccountRegistration)
     
-    //  TEAM INVITATION TASK HANDLERS
-    mux.HandleFunc(notificationdomain.TaskTeamInvite, notificationWorker.HandleTeamInvite)
+    // ============================================================
+    // ✅ TEAM INVITATION TASK HANDLERS (UPDATED)
+    // ============================================================
+    // NO ROLE - Roles are inherited from account level
+    // NO OTP - Uses accept link or registration link with token
+    mux.HandleFunc(notificationdomain.TaskTeamInviteExistingUser, notificationWorker.HandleTeamInviteExistingUser)
     mux.HandleFunc(notificationdomain.TaskTeamInviteRegistration, notificationWorker.HandleTeamInviteRegistration)
     mux.HandleFunc(notificationdomain.TaskTeamInviteAccepted, notificationWorker.HandleTeamInviteAccepted)
     mux.HandleFunc(notificationdomain.TaskTeamInviteDeclined, notificationWorker.HandleTeamInviteDeclined)
@@ -75,13 +79,16 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
     log.Printf("   - %s", notificationdomain.TaskWelcomeInstitution)
     log.Printf("   - %s", notificationdomain.TaskPasswordResetConfirm)
     log.Printf("   - %s", notificationdomain.TaskLoginNotification)
+    log.Printf("   - %s", notificationdomain.TaskWelcomeInstitutionKYC)
+    log.Printf("   - %s", notificationdomain.TaskNewPersonalAccountRegistration)
+    log.Printf("   - %s", notificationdomain.TaskNewInstitutionAccountRegistration)
     
-    // ✅ TEAM INVITATION TASKS
-    log.Println("   📋 Team Invitation Tasks:")
-    log.Printf("   - %s", notificationdomain.TaskTeamInvite)
-    log.Printf("   - %s", notificationdomain.TaskTeamInviteRegistration)
-    log.Printf("   - %s", notificationdomain.TaskTeamInviteAccepted)
-    log.Printf("   - %s", notificationdomain.TaskTeamInviteDeclined)
+    // ✅ TEAM INVITATION TASKS (UPDATED)
+    log.Println("   📋 Team Invitation Tasks (NO ROLE, NO OTP):")
+    log.Printf("   - %s (existing users - accept link)", notificationdomain.TaskTeamInviteExistingUser)
+    log.Printf("   - %s (new users - registration link)", notificationdomain.TaskTeamInviteRegistration)
+    log.Printf("   - %s (admin notification - accepted)", notificationdomain.TaskTeamInviteAccepted)
+    log.Printf("   - %s (admin notification - declined)", notificationdomain.TaskTeamInviteDeclined)
 
     // 5. Start Worker in a Background Goroutine
     go func() {

@@ -15,12 +15,32 @@ const (
 	TaskWelcomeInstitutionKYC     = "notification:welcome_institution_kyc" 
 	TaskNewInstitutionAccountRegistration    = "notification:new_account_institution_registration_notice"
 	TaskNewPersonalAccountRegistration = "notification:new_account_personal_registration_notice"
-	// TEAM INVITATION TASKS
-	TaskTeamInvite           = "notification:team_invite"
-	TaskTeamInviteRegistration = "notification:team_invite_registration"
-	TaskTeamInviteAccepted   = "notification:team_invite_accepted"
-	TaskTeamInviteDeclined   = "notification:team_invite_declined"
+	
+	// ============================================================
+	// TEAM INVITATION TASKS (UPDATED)
+	// ============================================================
+	TaskTeamInviteExistingUser  = "notification:team_invite_existing_user"  // ✅ Renamed - for existing users
+	TaskTeamInviteRegistration  = "notification:team_invite_registration"   // ✅ New users (no OTP)
+	TaskTeamInviteAccepted      = "notification:team_invite_accepted"       // ✅ Admin notification
+	TaskTeamInviteDeclined      = "notification:team_invite_declined"       // ✅ Admin notification
 )
+
+// ============================================================
+// AI-GENERATED CONTENT (Future)
+// ============================================================
+
+// PersonalizedInvitationContent represents AI-generated email content
+// ✅ This will be used when AI integration is added
+type PersonalizedInvitationContent struct {
+	Subject      string   // Personalized subject line
+	Greeting     string   // "Hi John,"
+	Intro        string   // Personalized introduction
+	Body         string   // Main message
+	Benefits     []string // What they'll gain
+	CallToAction string   // Button text
+	Closing      string   // Sign-off
+	PSS          string   // P.S. message
+}
 
 // ============================================================
 // TASK DATA STRUCTURES (Pure domain data, no JSON tags)
@@ -86,49 +106,69 @@ type NewPersonalAccountRegistrationTask struct {
 }
 
 // ============================================================
-// ✅ TEAM INVITATION TASK STRUCTS (UPDATED - NO OTP)
+// ✅ TEAM INVITATION TASK STRUCTS (UPDATED - NO ROLE, NO OTP, AI-READY)
 // ============================================================
 
-// TeamInviteTask - Team invitation email task for existing users
-// Sent when: User exists → Direct add, just notify them
-type TeamInviteTask struct {
+// TeamInviteExistingUserTask - Invitation for existing users (has account)
+// Sent when: User already has a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks accept link to join
+// ✅ AI-READY - PersonalizedContent field for future AI integration
+type TeamInviteExistingUserTask struct {
 	To         string // User's email
-	UserName   string // User's name (if known)
+	UserName   string // User's name
 	InvitedBy  string // Name of person who invited them
-	TeamName   string // Name of the team (personal or institution)
+	TeamName   string // Name of the team
 	TeamID     string // ID of the team
-	Role       string // Role: account_admin, event_manager, team_member
-	InviteLink string // Link to accept the invitation
-	ExpiresIn  string // Human-readable expiry (e.g., "7 days", or "N/A" for existing users)
+	AcceptLink string // One-click accept link: https://nuruvent.com/invitations/accept?token=xxx
+	ExpiresIn  string // Human-readable expiry (e.g., "7 days")
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	PersonalizedContent *PersonalizedInvitationContent
 }
 
-// TeamInviteRegistrationTask - Invitation task for new users (with registration link)
-// Sent when: User doesn't exist → Create invitation, send registration link
-// ❌ NO OTP - User clicks the link from their email, which verifies the email
+// TeamInviteRegistrationTask - Invitation for new users (no account yet)
+// Sent when: User does NOT have a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks registration link with token embedded
+// ✅ AI-READY - PersonalizedContent field for future AI integration
 type TeamInviteRegistrationTask struct {
 	To               string // User's email
 	Name             string // User's name (optional, will be set during registration)
-	Role             string // Role: account_admin, event_manager, team_member	
-	TeamName         string // Name of the team
 	InvitedBy        string // Name of person who invited them
-	RegistrationLink string // Link to registration page with token
+	TeamName         string // Name of the team
+	TeamID           string // ID of the team
+	RegistrationLink string // Registration link with token: https://nuruvent.com/register?token=xxx
 	ExpiresIn        string // Human-readable expiry (e.g., "7 days")
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	PersonalizedContent *PersonalizedInvitationContent
 }
 
-// TeamInviteAcceptedTask - Notification when invitation is accepted
+// TeamInviteAcceptedTask - Notification to admin when invitation is accepted
+// ✅ AI-READY - PersonalizedContent field for future AI integration
 type TeamInviteAcceptedTask struct {
 	To        string // Admin's email
 	AdminName string // Admin's name
 	UserName  string // Name of user who accepted
 	UserEmail string // Email of user who accepted
 	TeamName  string // Name of the team
+	TeamID    string // ID of the team
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	PersonalizedContent *PersonalizedInvitationContent
 }
 
-// TeamInviteDeclinedTask - Notification when invitation is declined
+// TeamInviteDeclinedTask - Notification to admin when invitation is declined
+// ✅ AI-READY - PersonalizedContent field for future AI integration
 type TeamInviteDeclinedTask struct {
 	To        string // Admin's email
 	AdminName string // Admin's name
 	UserName  string // Name of user who declined
 	UserEmail string // Email of user who declined
 	TeamName  string // Name of the team
+	TeamID    string // ID of the team
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	PersonalizedContent *PersonalizedInvitationContent
 }

@@ -16,8 +16,6 @@ type taskEnqueuer struct {
 	queue notificationdomain.TaskQueue // ← Outbound Port (interface)
 }
 
-
-
 // ✅ Constructor returns the interface
 func NewTaskEnqueuer(queue notificationdomain.TaskQueue) notificationdomain.TaskEnqueuer {
 	return &taskEnqueuer{
@@ -176,32 +174,39 @@ func (e *taskEnqueuer) EnqueueNewPersonalAccountRegistration(ctx context.Context
 	return nil
 }
 
-
 // ============================================================
-// ✅ TEAM INVITATION ENQUEUE METHODS
+// ✅ TEAM INVITATION ENQUEUE METHODS (UPDATED - NO ROLE, NO OTP, AI-READY)
 // ============================================================
 
-// EnqueueTeamInvite enqueues a team invitation email task
-func (e *taskEnqueuer) EnqueueTeamInvite(ctx context.Context, task notificationdomain.TeamInviteTask) error {
-	log.Printf("📧 [TaskEnqueuer] Enqueuing team invite for %s to join %s", task.To, task.TeamName)
+// EnqueueTeamInviteExistingUser enqueues a team invitation for existing users
+// Sent when: User already has a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks accept link to join
+// ✅ AI-READY - PersonalizedContent field is included in the task
+func (e *taskEnqueuer) EnqueueTeamInviteExistingUser(ctx context.Context, task notificationdomain.TeamInviteExistingUserTask) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing team invite for existing user %s to join %s", task.To, task.TeamName)
 
 	payload, err := json.Marshal(task)
 	if err != nil {
 		return fmt.Errorf("failed to marshal task: %w", err)
 	}
 
-	if err := e.queue.Enqueue(ctx, notificationdomain.TaskTeamInvite, payload); err != nil {
-		log.Printf("❌ [TaskEnqueuer] Failed to enqueue team invite: %v", err)
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskTeamInviteExistingUser, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue team invite for existing user: %v", err)
 		return err
 	}
 
-	log.Printf("✅ [TaskEnqueuer] Team invite enqueued for %s", task.To)
+	log.Printf("✅ [TaskEnqueuer] Team invite for existing user enqueued for %s", task.To)
 	return nil
 }
 
-// EnqueueTeamInviteRegistration enqueues a team invite registration OTP task
+// EnqueueTeamInviteRegistration enqueues a team invitation for new users
+// Sent when: User does NOT have a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks registration link with token embedded
+// ✅ AI-READY - PersonalizedContent field is included in the task
 func (e *taskEnqueuer) EnqueueTeamInviteRegistration(ctx context.Context, task notificationdomain.TeamInviteRegistrationTask) error {
-	log.Printf("📧 [TaskEnqueuer] Enqueuing team invite registration OTP for %s", task.To)
+	log.Printf("📧 [TaskEnqueuer] Enqueuing team invite registration for new user %s", task.To)
 
 	payload, err := json.Marshal(task)
 	if err != nil {
@@ -213,11 +218,12 @@ func (e *taskEnqueuer) EnqueueTeamInviteRegistration(ctx context.Context, task n
 		return err
 	}
 
-	log.Printf("✅ [TaskEnqueuer] Team invite registration OTP enqueued for %s", task.To)
+	log.Printf("✅ [TaskEnqueuer] Team invite registration enqueued for %s", task.To)
 	return nil
 }
 
-// EnqueueTeamInviteAccepted enqueues a team invite accepted notification task
+// EnqueueTeamInviteAccepted enqueues a notification when invitation is accepted
+// Sent to: Admin who sent the invitation
 func (e *taskEnqueuer) EnqueueTeamInviteAccepted(ctx context.Context, task notificationdomain.TeamInviteAcceptedTask) error {
 	log.Printf("📧 [TaskEnqueuer] Enqueuing team invite accepted notification for %s", task.To)
 
@@ -235,7 +241,8 @@ func (e *taskEnqueuer) EnqueueTeamInviteAccepted(ctx context.Context, task notif
 	return nil
 }
 
-// EnqueueTeamInviteDeclined enqueues a team invite declined notification task
+// EnqueueTeamInviteDeclined enqueues a notification when invitation is declined
+// Sent to: Admin who sent the invitation
 func (e *taskEnqueuer) EnqueueTeamInviteDeclined(ctx context.Context, task notificationdomain.TeamInviteDeclinedTask) error {
 	log.Printf("📧 [TaskEnqueuer] Enqueuing team invite declined notification for %s", task.To)
 

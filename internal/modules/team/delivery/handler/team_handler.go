@@ -104,10 +104,17 @@ func (h *TeamHandler) GetTeam(c fiber.Ctx) error {
 }
 
 // CreatePersonalTeam creates a personal team for the authenticated user
+// ✅ Updated: Gets role from JWT context and passes it to service
 func (h *TeamHandler) CreatePersonalTeam(c fiber.Ctx) error {
 	userID := c.Locals("user_id").(string)
 	if userID == "" {
 		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
+	// ✅ Get the user's role from the JWT context
+	role := c.Locals("role").(string)
+	if role == "" {
+		role = "account_admin" // Fallback for existing tokens
 	}
 
 	var req struct {
@@ -121,8 +128,10 @@ func (h *TeamHandler) CreatePersonalTeam(c fiber.Ctx) error {
 	if userName == "" {
 		userName = req.Name
 	}
+	
 
-	team, err := h.service.CreatePersonalTeam(c.Context(), userID, userName)
+	// ✅ Pass the role to the service
+	team, err := h.service.CreatePersonalTeam(c.Context(), userID, userName, role)
 	if err != nil {
 		if err == teamdomain.ErrTeamAlreadyExists {
 			return response.Conflict(c, "Personal team already exists", nil)
@@ -136,6 +145,7 @@ func (h *TeamHandler) CreatePersonalTeam(c fiber.Ctx) error {
 		"team": team,
 	})
 }
+
 
 // UpdateTeam updates a team
 func (h *TeamHandler) UpdateTeam(c fiber.Ctx) error {

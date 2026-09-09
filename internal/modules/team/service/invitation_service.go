@@ -16,8 +16,6 @@ import (
 // INVITATION OPERATIONS
 // ============================================================
 
-// InviteMember invites a user to join a team
-// ✅ REMOVED: Role parameter - roles are inherited from account
 func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand) (*teamdomain.Invitation, error) {
     // 1. Validate input
     if cmd.TeamID == "" {
@@ -26,7 +24,6 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
     if cmd.Email == "" {
         return nil, fmt.Errorf("email is required")
     }
-    // ❌ REMOVED: Role validation - roles are inherited from account
     if cmd.InvitedBy == "" {
         return nil, fmt.Errorf("invited by is required")
     }
@@ -40,67 +37,43 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
         return nil, teamdomain.ErrTeamNotFound
     }
 
-    // ✅ Debug logging
-    log.Printf("[InviteMember] Team retrieved: ID=%s, Name=%s, Type=%s, IsPersonal=%v", 
-        team.ID, team.Name, team.Type, team.IsPersonal())
-
-    // 3. Check permission using domain
-    domain := NewTeamDomain(team).String()
-    isAdmin, err := s.casbinSvc.IsAccountAdmin(ctx, domain, cmd.InvitedBy)
-    if err != nil {
-        return nil, fmt.Errorf("permission check failed: %w", err)
+    // 3. Get inviter details
+    inviter, err := s.authSvc.GetUserByID(ctx, cmd.InvitedBy)
+    inviterName := cmd.InvitedBy // fallback to ID
+    if err == nil && inviter != nil && inviter.DisplayName != "" {
+        inviterName = inviter.DisplayName
     }
-    if !isAdmin {
-        return nil, teamdomain.ErrPermissionDenied
-    }
+    log.Printf("[InviteMember] Inviter: %s (%s)", inviterName, cmd.InvitedBy)
 
-    // 4. Check if user exists (read-only)
+    // 4. Check if user exists
     userExists, err := s.authSvc.UserExists(ctx, cmd.Email)
     if err != nil {
         return nil, fmt.Errorf("failed to check user: %w", err)
     }
 
-    // 5. If user exists, check if already a member
+    var user *UserResult
     if userExists {
-        user, err := s.authSvc.GetUserByEmail(ctx, cmd.Email)
+        user, err = s.authSvc.GetUserByEmail(ctx, cmd.Email)
         if err != nil {
             return nil, fmt.Errorf("failed to get user: %w", err)
         }
 
         existing, err := s.repo.GetMemberByTeamAndUser(ctx, cmd.TeamID, user.ID)
         if err == nil && existing != nil && existing.IsActive {
-            return nil, teamdomain.ErrMemberAlreadyExists
+            return nil, fmt.Errorf("user is already a member of this team")
         }
-
-        // User exists - add directly
-        // ✅ REMOVED: role parameter - roles are inherited from account
-        _, err = s.AddMember(ctx, cmd.TeamID, user.ID, cmd.InvitedBy)
-        if err != nil {
-            return nil, err
-        }
-
-        // Send notification
-        // ✅ REMOVED: Role from notification
-        if err := s.notifSvc.SendTeamInvite(ctx, SendTeamInviteRequest{
-            To:         cmd.Email,
-            UserName:   user.Name,
-            InvitedBy:  cmd.InvitedBy,
-            TeamName:   team.DisplayName,
-            TeamID:     team.ID,
-            InviteLink: "https://nuruvent.com/dashboard/teams",
-            ExpiresIn:  "N/A",
-        }); err != nil {
-            log.Printf("⚠️ Failed to send notification: %v", err)
-        }
-
-        return nil, nil
     }
 
-    // 6. User doesn't exist - create invitation
+    // 5. Check for existing pending invitation
+    existingInvitation, err := s.repo.GetInvitationByEmailAndTeam(ctx, cmd.Email, cmd.TeamID)
+    if err == nil && existingInvitation != nil && existingInvitation.Status == teamdomain.InvitationStatusPending {
+        return nil, fmt.Errorf("an invitation has already been sent to this email")
+    }
+
+    // 6. Create invitation for ALL users
     token := teamdomain.GenerateToken()
     expiresAt := time.Now().Add(7 * 24 * time.Hour)
 
-    // ✅ REMOVED: role parameter - roles are inherited from account
     invitation, err := teamdomain.NewInvitation(
         cmd.TeamID,
         cmd.Email,
@@ -116,45 +89,60 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
         return nil, fmt.Errorf("failed to create invitation: %w", err)
     }
 
-    // Send invitation email (NO OTP)
-    // ✅ REMOVED: Role from notification
-    if err := s.notifSvc.SendTeamInviteRegistration(ctx, SendTeamInviteRegistrationRequest{
-        To:               cmd.Email,
-        Name:             cmd.Email,
-        InvitedBy:        cmd.InvitedBy,
-        TeamName:         team.DisplayName,
-        RegistrationLink: fmt.Sprintf("https://nuruvent.com/register?token=%s", token),
-    }); err != nil {
-        log.Printf("⚠️ Failed to send invitation email: %v", err)
+    // 7. Send invitation email based on user type
+    if userExists {
+        if err := s.notifSvc.SendTeamInviteExistingUser(ctx, SendTeamInviteExistingUserRequest{
+            To:         cmd.Email,
+            UserName:   user.Name,
+            InvitedBy:  inviterName, // ✅ Use display name
+            TeamName:   team.DisplayName,
+            TeamID:     team.ID,
+            AcceptLink: fmt.Sprintf("https://nuruvent.com/invitations/accept?token=%s", token),
+            ExpiresIn:  "7 days",
+        }); err != nil {
+            log.Printf("⚠️ Failed to send invitation email to existing user: %v", err)
+        }
+    } else {
+        if err := s.notifSvc.SendTeamInviteRegistration(ctx, SendTeamInviteRegistrationRequest{
+            To:               cmd.Email,
+            Name:             "",
+            InvitedBy:        inviterName, // ✅ Use display name
+            TeamName:         team.DisplayName,
+            TeamID:           team.ID,
+            RegistrationLink: fmt.Sprintf("https://nuruvent.com/register?token=%s", token),
+            ExpiresIn:        "7 days",
+        }); err != nil {
+            log.Printf("⚠️ Failed to send invitation email to new user: %v", err)
+        }
     }
 
-    log.Printf("✅ Invitation created for %s to join team %s", cmd.Email, team.ID)
+    log.Printf("✅ Invitation created for %s to join team %s (user exists: %v)", cmd.Email, team.ID, userExists)
     return invitation, nil
 }
 
 // ValidateInvitationToken validates an invitation token
 func (s *teamService) ValidateInvitationToken(ctx context.Context, token string) (*teamdomain.Invitation, error) {
-    if token == "" {
-        return nil, fmt.Errorf("token is required")
-    }
+	if token == "" {
+		return nil, fmt.Errorf("token is required")
+	}
 
-    invitation, err := s.repo.GetInvitationByToken(ctx, token)
-    if err != nil {
-        return nil, err
-    }
-    if invitation == nil {
-        return nil, teamdomain.ErrInvitationNotFound
-    }
+	invitation, err := s.repo.GetInvitationByToken(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	if invitation == nil {
+		return nil, teamdomain.ErrInvitationNotFound
+	}
 
-    if invitation.Status != teamdomain.InvitationStatusPending {
-        return nil, teamdomain.ErrInvitationAlreadyAccepted
-    }
+	if invitation.Status != teamdomain.InvitationStatusPending {
+		return nil, teamdomain.ErrInvitationAlreadyAccepted
+	}
 
-    if invitation.IsExpired() {
-        return nil, teamdomain.ErrInvitationExpired
-    }
+	if invitation.IsExpired() {
+		return nil, teamdomain.ErrInvitationExpired
+	}
 
-    return invitation, nil
+	return invitation, nil
 }
 
 // AcceptInvitation accepts an invitation and adds the user to the team
@@ -193,6 +181,7 @@ func (s *teamService) AcceptInvitation(ctx context.Context, token, userID string
 	// 5. Check if already a member
 	existing, err := s.repo.GetMemberByTeamAndUser(ctx, invitation.TeamID, userID)
 	if err == nil && existing != nil && existing.IsActive {
+		// User is already a member - just update invitation status
 		if err := invitation.Accept(); err == nil {
 			_ = s.repo.UpdateInvitation(ctx, invitation)
 		}
@@ -203,7 +192,6 @@ func (s *teamService) AcceptInvitation(ctx context.Context, token, userID string
 	var member *teamdomain.Member
 	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
 		// Create team membership
-		// ✅ REMOVED: invitation.Role parameter - roles are inherited from account
 		m, err := s.AddMember(txCtx, invitation.TeamID, userID, invitation.InvitedBy)
 		if err != nil {
 			return fmt.Errorf("failed to add member: %w", err)
@@ -229,13 +217,13 @@ func (s *teamService) AcceptInvitation(ctx context.Context, token, userID string
 	go func() {
 		team, err := s.repo.GetTeamByID(context.Background(), invitation.TeamID)
 		if err == nil && team != nil {
-			// ✅ REMOVED: Role from notification
 			if err := s.notifSvc.SendTeamInviteAccepted(context.Background(), SendTeamInviteAcceptedRequest{
 				To:        invitation.InvitedBy,
 				AdminName: "Admin",
 				UserName:  user.Name,
 				UserEmail: user.Email,
 				TeamName:  team.DisplayName,
+				TeamID:    team.ID,
 			}); err != nil {
 				log.Printf("⚠️ Failed to send notification: %v", err)
 			}
@@ -246,110 +234,139 @@ func (s *teamService) AcceptInvitation(ctx context.Context, token, userID string
 	return member, nil
 }
 
-// ❌ REMOVED: RegisterAndAcceptInvitation - User registration belongs in Auth module
-// The Auth module should handle registration, then call AcceptInvitation
-
 // DeclineInvitation declines an invitation
 func (s *teamService) DeclineInvitation(ctx context.Context, token, userID string) error {
-    // 1. Get invitation
-    invitation, err := s.repo.GetInvitationByToken(ctx, token)
-    if err != nil {
-        return err
-    }
-    if invitation == nil {
-        return teamdomain.ErrInvitationNotFound
-    }
+	// 1. Get invitation
+	invitation, err := s.repo.GetInvitationByToken(ctx, token)
+	if err != nil {
+		return err
+	}
+	if invitation == nil {
+		return teamdomain.ErrInvitationNotFound
+	}
 
-    // 2. Validate
-    if invitation.Status != teamdomain.InvitationStatusPending {
-        return teamdomain.ErrInvitationAlreadyAccepted
-    }
-    if invitation.IsExpired() {
-        return teamdomain.ErrInvitationExpired
-    }
+	// 2. Validate
+	if invitation.Status != teamdomain.InvitationStatusPending {
+		return teamdomain.ErrInvitationAlreadyAccepted
+	}
+	if invitation.IsExpired() {
+		return teamdomain.ErrInvitationExpired
+	}
 
-    // 3. Get user
-    user, err := s.authSvc.GetUserByID(ctx, userID)
-    if err != nil {
-        return fmt.Errorf("failed to get user: %w", err)
-    }
-    if user == nil {
-        return fmt.Errorf("user not found")
-    }
+	// 3. Get user
+	user, err := s.authSvc.GetUserByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to get user: %w", err)
+	}
+	if user == nil {
+		return fmt.Errorf("user not found")
+	}
 
-    // 4. Check if email matches
-    if user.Email != invitation.Email {
-        return teamdomain.ErrInvitationEmailMismatch
-    }
+	// 4. Check if email matches
+	if user.Email != invitation.Email {
+		return teamdomain.ErrInvitationEmailMismatch
+	}
 
-    // 5. Decline
-    if err := invitation.Decline(); err != nil {
-        return err
-    }
-    if err := s.repo.UpdateInvitation(ctx, invitation); err != nil {
-        return fmt.Errorf("failed to update invitation: %w", err)
-    }
+	// 5. Decline
+	if err := invitation.Decline(); err != nil {
+		return err
+	}
+	if err := s.repo.UpdateInvitation(ctx, invitation); err != nil {
+		return fmt.Errorf("failed to update invitation: %w", err)
+	}
 
-    log.Printf("✅ User %s declined invitation to team %s", user.Email, invitation.TeamID)
-    return nil
+	log.Printf("✅ User %s declined invitation to team %s", user.Email, invitation.TeamID)
+	return nil
 }
 
 // ResendInvitation resends an invitation
 func (s *teamService) ResendInvitation(ctx context.Context, invitationID string) (*teamdomain.Invitation, error) {
-    // 1. Get invitation
-    invitation, err := s.repo.GetInvitationByID(ctx, invitationID)
-    if err != nil {
-        return nil, err
-    }
-    if invitation == nil {
-        return nil, teamdomain.ErrInvitationNotFound
-    }
+	// 1. Get invitation
+	invitation, err := s.repo.GetInvitationByID(ctx, invitationID)
+	if err != nil {
+		return nil, err
+	}
+	if invitation == nil {
+		return nil, teamdomain.ErrInvitationNotFound
+	}
 
-    // 2. Check if already accepted
-    if invitation.Status == teamdomain.InvitationStatusAccepted {
-        return nil, fmt.Errorf("invitation already accepted")
-    }
+	// 2. Check if already accepted
+	if invitation.Status == teamdomain.InvitationStatusAccepted {
+		return nil, fmt.Errorf("invitation already accepted")
+	}
 
-    // 3. Generate new token
-    newToken := teamdomain.GenerateToken()
-    newExpiresAt := time.Now().Add(7 * 24 * time.Hour)
+	// 3. Get inviter name
+	inviter, err := s.authSvc.GetUserByID(ctx, invitation.InvitedBy)
+	inviterName := invitation.InvitedBy // fallback to ID
+	if err == nil && inviter != nil && inviter.DisplayName != "" {
+		inviterName = inviter.DisplayName
+	}
+	log.Printf("[ResendInvitation] Inviter: %s (%s)", inviterName, invitation.InvitedBy)
 
-    // 4. Update invitation
-    invitation.Token = newToken
-    invitation.ExpiresAt = newExpiresAt
-    invitation.Status = teamdomain.InvitationStatusPending
-    invitation.UpdatedAt = time.Now()
+	// 4. Generate new token
+	newToken := teamdomain.GenerateToken()
+	newExpiresAt := time.Now().Add(7 * 24 * time.Hour)
 
-    if err := s.repo.UpdateInvitation(ctx, invitation); err != nil {
-        return nil, fmt.Errorf("failed to update invitation: %w", err)
-    }
+	// 5. Update invitation
+	invitation.Token = newToken
+	invitation.ExpiresAt = newExpiresAt
+	invitation.Status = teamdomain.InvitationStatusPending
+	invitation.UpdatedAt = time.Now()
 
-    // 5. Resend email
-    team, err := s.repo.GetTeamByID(ctx, invitation.TeamID)
-    if err != nil {
-        return nil, err
-    }
+	if err := s.repo.UpdateInvitation(ctx, invitation); err != nil {
+		return nil, fmt.Errorf("failed to update invitation: %w", err)
+	}
 
-    // ✅ REMOVED: Role from notification
-    if err := s.notifSvc.SendTeamInviteRegistration(ctx, SendTeamInviteRegistrationRequest{
-        To:               invitation.Email,
-        Name:             invitation.Email,
-        InvitedBy:        invitation.InvitedBy,
-        TeamName:         team.DisplayName,
-        RegistrationLink: fmt.Sprintf("https://nuruvent.com/register?token=%s", newToken),
-    }); err != nil {
-        log.Printf("⚠️ Failed to resend invitation email: %v", err)
-    }
+	// 6. Resend email
+	team, err := s.repo.GetTeamByID(ctx, invitation.TeamID)
+	if err != nil {
+		return nil, err
+	}
 
-    log.Printf("✅ Invitation resent for %s", invitation.Email)
-    return invitation, nil
+	// Check if user exists to send the right email
+	userExists, err := s.authSvc.UserExists(ctx, invitation.Email)
+	if err != nil {
+		log.Printf("⚠️ Failed to check if user exists: %v", err)
+	}
+
+	if userExists {
+		user, err := s.authSvc.GetUserByEmail(ctx, invitation.Email)
+		if err == nil && user != nil {
+			if err := s.notifSvc.SendTeamInviteExistingUser(ctx, SendTeamInviteExistingUserRequest{
+				To:         invitation.Email,
+				UserName:   user.Name,
+				InvitedBy:  inviterName, // ✅ Use display name
+				TeamName:   team.DisplayName,
+				TeamID:     team.ID,
+				AcceptLink: fmt.Sprintf("https://nuruvent.com/invitations/accept?token=%s", newToken),
+				ExpiresIn:  "7 days",
+			}); err != nil {
+				log.Printf("⚠️ Failed to resend invitation to existing user: %v", err)
+			}
+		}
+	} else {
+		if err := s.notifSvc.SendTeamInviteRegistration(ctx, SendTeamInviteRegistrationRequest{
+			To:               invitation.Email,
+			Name:             "",
+			InvitedBy:        inviterName, // ✅ Use display name
+			TeamName:         team.DisplayName,
+			TeamID:           team.ID,
+			RegistrationLink: fmt.Sprintf("https://nuruvent.com/register?token=%s", newToken),
+			ExpiresIn:        "7 days",
+		}); err != nil {
+			log.Printf("⚠️ Failed to resend invitation to new user: %v", err)
+		}
+	}
+
+	log.Printf("✅ Invitation resent for %s", invitation.Email)
+	return invitation, nil
 }
 
 // GetTeamInvitations retrieves all invitations for a team
 func (s *teamService) GetTeamInvitations(ctx context.Context, teamID string, filters teamdomain.ListInvitationsFilters) ([]*teamdomain.Invitation, int64, error) {
-    if teamID == "" {
-        return nil, 0, fmt.Errorf("team ID is required")
-    }
+	if teamID == "" {
+		return nil, 0, fmt.Errorf("team ID is required")
+	}
 
-    return s.repo.GetInvitationsByTeam(ctx, teamID, filters)
+	return s.repo.GetInvitationsByTeam(ctx, teamID, filters)
 }

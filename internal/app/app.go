@@ -62,6 +62,7 @@ func (app *App) SetupRoutes() {
 	// Create auth middleware
 	authMiddleware := authmiddleware.AuthMiddleware(tokenSvc)
 
+	
 	// ✅ Use the injected permission checker
 	authzMiddleware := authorization.AuthorizationMiddleware(app.PermissionChecker)
 

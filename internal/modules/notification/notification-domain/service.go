@@ -124,15 +124,21 @@ type NotificationService interface {
 	SendPasswordResetConfirm(ctx context.Context, req SendPasswordResetConfirmRequest) error
 
 	// ============================================================
-	// ✅ TEAM INVITATIONS
+	// ✅ TEAM INVITATIONS (UPDATED - NO ROLE, NO OTP, AI-READY)
 	// ============================================================
 	
-	// SendTeamInvite sends a team invitation email to an existing user
-	// User is already registered, so no OTP needed, just notification
-	SendTeamInvite(ctx context.Context, req SendTeamInviteRequest) error
+	// SendTeamInviteExistingUser sends a team invitation to an existing user
+	// Sent when: User already has a Nuruvent account
+	// ✅ NO ROLE - Roles are inherited from account level
+	// ✅ NO OTP - User clicks accept link to join
+	// ✅ AI-READY - PersonalizedContent field for future AI integration
+	SendTeamInviteExistingUser(ctx context.Context, req SendTeamInviteExistingUserRequest) error
 	
-	// SendTeamInviteRegistration sends invitation to a new user with registration link
-	// User is NOT registered, so they get a registration link (OTP during registration)
+	// SendTeamInviteRegistration sends an invitation to a new user with registration link
+	// Sent when: User does NOT have a Nuruvent account
+	// ✅ NO ROLE - Roles are inherited from account level
+	// ✅ NO OTP - User clicks registration link with token embedded
+	// ✅ AI-READY - PersonalizedContent field for future AI integration
 	SendTeamInviteRegistration(ctx context.Context, req SendTeamInviteRegistrationRequest) error
 	
 	// SendTeamInviteAccepted sends notification to admin when user accepts invitation
@@ -224,48 +230,73 @@ type SendLoginNotificationRequest struct {
 }
 
 // ============================================================
-// ✅ TEAM INVITATION COMMANDS (Updated for Team Module)
+// ✅ TEAM INVITATION COMMANDS (UPDATED - NO ROLE, NO OTP, AI-READY)
 // ============================================================
 
-// SendTeamInviteRequest - Team invitation email for existing users
-// Sent when: User already exists → Direct add, just notify them
-type SendTeamInviteRequest struct {
-	To          string // User's email
-	UserName    string // User's name (if known)
-	InvitedBy   string // Name of person who invited them
-	TeamName    string // Name of the team (personal or institution)
-	TeamID      string // ID of the team
-	Role        string // Role: account_admin, event_manager, team_member
-	InviteLink  string // Link to accept the invitation
-	ExpiresIn   string // Human-readable expiry (e.g., "7 days", or "N/A" for existing users)
+// SendTeamInviteExistingUserRequest - Team invitation for existing users
+// Sent when: User already has a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks accept link to join
+// ✅ AI-READY - PersonalizedContent field for future AI integration
+type SendTeamInviteExistingUserRequest struct {
+	To         string // User's email
+	UserName   string // User's name
+	InvitedBy  string // Name of person who invited them
+	TeamName   string // Name of the team
+	TeamID     string // ID of the team
+	AcceptLink string // One-click accept link: https://nuruvent.com/invitations/accept?token=xxx
+	ExpiresIn  string // Human-readable expiry (e.g., "7 days")
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	// Defined in tasks.go
+	PersonalizedContent *PersonalizedInvitationContent
 }
 
-// SendTeamInviteRegistrationRequest - Invitation email for new users (with registration link)
-// Sent when: User doesn't exist → Create invitation, send registration link
+// SendTeamInviteRegistrationRequest - Team invitation for new users (with registration link)
+// Sent when: User does NOT have a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks registration link with token embedded
+// ✅ AI-READY - PersonalizedContent field for future AI integration
 type SendTeamInviteRegistrationRequest struct {
 	To               string // User's email
 	Name             string // User's name (optional, will be set during registration)
 	InvitedBy        string // Name of person who invited them
-	TeamName         string // Name of the team (personal or institution)
-	Role             string // Role: account_admin, event_manager, team_member
-	RegistrationLink string // Link to registration page with token
+	TeamName         string // Name of the team
+	TeamID           string // ID of the team
+	RegistrationLink string // Registration link with token: https://nuruvent.com/register?token=xxx
 	ExpiresIn        string // Human-readable expiry (e.g., "7 days")
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	// Defined in tasks.go
+	PersonalizedContent *PersonalizedInvitationContent
 }
 
 // SendTeamInviteAcceptedRequest - Notification to admin when user accepts invitation
+// ✅ AI-READY - PersonalizedContent field for future AI integration
 type SendTeamInviteAcceptedRequest struct {
 	To         string // Admin's email
 	AdminName  string // Admin's name
 	UserName   string // Name of user who accepted
 	UserEmail  string // Email of user who accepted
 	TeamName   string // Name of the team
+	TeamID     string // ID of the team
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	// Defined in tasks.go
+	PersonalizedContent *PersonalizedInvitationContent
 }
 
 // SendTeamInviteDeclinedRequest - Notification to admin when user declines invitation
+// ✅ AI-READY - PersonalizedContent field for future AI integration
 type SendTeamInviteDeclinedRequest struct {
 	To         string // Admin's email
 	AdminName  string // Admin's name
 	UserName   string // Name of user who declined
 	UserEmail  string // Email of user who declined
 	TeamName   string // Name of the team
+	TeamID     string // ID of the team
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	// Defined in tasks.go
+	PersonalizedContent *PersonalizedInvitationContent
 }

@@ -1,28 +1,24 @@
-{{define "team-invite-registration"}}
+{{define "team-invite-existing-user"}}
 <div class="title">
-    You're Invited to Join!
+    You've Been Invited to Join!
 </div>
-<div class="subtitle">Complete your registration for {{.team_name}}</div>
+<div class="subtitle">Join {{.team_name}} on Nuruvent</div>
 
 <div class="greeting">
-    Hello{{if .name}} {{.name}}{{end}},
+    Hello{{if .user_name}} {{.user_name}}{{end}},
 </div>
 
 <p class="body-text">
-    <strong>{{.invited_by}}</strong> has invited you to join <strong>{{.team_name}}</strong> on Nuruvent.
-</p>
-
-<p class="body-text">
-    To accept this invitation, please complete your registration by clicking the button below.
+    <strong>{{.invited_by}}</strong> has invited you to join the team <strong>{{.team_name}}</strong> on Nuruvent.
 </p>
 
 <div class="alert-success">
-    <div class="message">Complete Your Registration</div>
+    <div class="message">You've been invited!</div>
 </div>
 
 <div class="otp-box" style="padding: 20px;">
-    <a href="{{.registration_link}}" style="display: inline-block; background: #1A73E8; color: #FFFFFF; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
-        Create Account & Join Team
+    <a href="{{.accept_link}}" style="display: inline-block; background: #1A73E8; color: #FFFFFF; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+        Accept Invitation
     </a>
 </div>
 
@@ -48,7 +44,7 @@
 <div class="alert-info" style="background: #EEF2FF; padding: 14px 18px; border-radius: 10px; margin: 14px 0; border-left: 4px solid #1A73E8;">
     <p style="margin: 0; color: #1A3A6B; font-size: 14px;">
         <strong>Already have a Nuruvent account?</strong><br>
-        Simply <a href="https://nuruvent.com/login" style="color: #1A73E8; text-decoration: none;">log in</a> and you'll be automatically added to <strong>{{.team_name}}</strong>.
+        Simply click the button above to log in and accept the invitation instantly.
     </p>
 </div>
 

@@ -11,8 +11,8 @@ type TeamService interface {
 	GetPersonalTeamByUserID(ctx context.Context, userID string) (*TeamInfo, error)
 	GetInstitutionTeamByInstitutionID(ctx context.Context, institutionID string) (*TeamInfo, error)
 	GetAccountByTeamID(ctx context.Context, teamID string) (*AccountInfo, error)
-	CreatePersonalTeam(ctx context.Context, userID, userName string) (*TeamInfo, error)
-	CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug, createdBy string) (*TeamInfo, error)
+	CreatePersonalTeam(ctx context.Context, userID, userName string, role string) (*TeamInfo, error)
+	CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug, createdBy string, role string) (*TeamInfo, error)
 
 	// Member & Invitation operations
 	// ✅ REMOVED: Role from TeamMemberInfo - roles are inherited from account

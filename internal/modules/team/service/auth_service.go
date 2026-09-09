@@ -28,6 +28,9 @@ type AuthService interface {
 
 	// GetAccountIDByUserID gets the account ID for a user
 	GetAccountIDByUserID(ctx context.Context, userID string) (string, error)
+
+
+	GetUserRoleInAccount(ctx context.Context, userID, accountID string) (string, error)
 }
 
 // UserResult represents a user returned from auth service

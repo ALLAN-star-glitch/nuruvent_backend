@@ -122,7 +122,6 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 	return nil
 }
 
-
 // VerifyOTPAndCreateUser verifies OTP and creates user, accounts, and workspace teams.
 func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string) (*authdomain.User, map[string]any, error) {
 	log.Printf("[VerifyOTPAndCreateUser] Starting verification for email: %s", email)
@@ -237,6 +236,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	user.ProfessionalTypeID = professionalTypeID
 
 	var account *authdomain.Account
+	var userRole string
 
 	// ============================================================
 	// ATOMIC TRANSACTION: User, Account, Account Member, Roles
@@ -259,17 +259,17 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 			)
 		} else {
 			log.Printf("[VerifyOTPAndCreateUser] Creating institution account for user: %s", user.ID)
-			
+
 			// ✅ For institution accounts, use the institution name for display name and slug
 			institutionDisplayName := sanitizer.DisplayName(reqInstitutionName)
 			institutionSlug := sanitizer.GenerateSlugFromName(reqInstitutionName)
-			
+
 			account, err = authdomain.NewInstitutionAccount(
-				reqInstitutionName,      // ✅ Institution name becomes account.Name
-				institutionDisplayName,  // ✅ Display Name: "Tech Corp Ltd"
-				institutionSlug,         // ✅ Slug: "tech-corp-ltd"
-				reqInstitutionEmail,     // ✅ Institution email becomes account.Email
-				reqInstitutionPhone,     // ✅ Institution phone becomes account.Phone
+				reqInstitutionName,     // ✅ Institution name becomes account.Name
+				institutionDisplayName, // ✅ Display Name: "Tech Corp Ltd"
+				institutionSlug,        // ✅ Slug: "tech-corp-ltd"
+				reqInstitutionEmail,    // ✅ Institution email becomes account.Email
+				reqInstitutionPhone,    // ✅ Institution phone becomes account.Phone
 				accountTypeID,
 				*institutionTypeID,
 				user.ID,
@@ -286,10 +286,13 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 		}
 		log.Printf("[VerifyOTPAndCreateUser] Account created: %s", account.ID)
 
+		// ✅ Get the role for this user
+		userRole = authdomain.RoleAccountAdmin.String()
+
 		// Create Account Membership
 		log.Printf("[VerifyOTPAndCreateUser] Creating account member for user: %s", user.ID)
 		accountMember, err := authdomain.NewAccountMember(
-			account.ID, user.ID, authdomain.RoleAccountAdmin.String(), user.ID,
+			account.ID, user.ID, userRole, user.ID,
 		)
 		if err != nil {
 			log.Printf("[VerifyOTPAndCreateUser] Failed to construct account member: %v", err)
@@ -300,12 +303,12 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 			log.Printf("[VerifyOTPAndCreateUser] Failed to save account member: %v", err)
 			return fmt.Errorf("failed to save account member: %w", err)
 		}
-		log.Printf("[VerifyOTPAndCreateUser] Account member created")
+		log.Printf("[VerifyOTPAndCreateUser] Account member created with role: %s", userRole)
 
-		// Assign RBAC Policy
+		// Assign RBAC Policy at Account Level
 		accountDomain := authdomain.AccountDomain(account.ID)
 		log.Printf("[VerifyOTPAndCreateUser] Assigning account admin role for user: %s", user.ID)
-		if err := s.roleManager.AssignRole(txCtx, accountDomain, user.ID, authdomain.RoleAccountAdmin.String()); err != nil {
+		if err := s.roleManager.AssignRole(txCtx, accountDomain, user.ID, userRole); err != nil {
 			log.Printf("[VerifyOTPAndCreateUser] Failed to assign account admin role: %v", err)
 			return fmt.Errorf("failed to assign account admin role: %w", err)
 		}
@@ -339,7 +342,8 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	// ============================================================
 	if reqAccountType == types.AccountTypePersonalName {
 		log.Printf("[VerifyOTPAndCreateUser] Creating personal team for user: %s (Personal Account)", user.ID)
-		if err := s.createAndAddToPersonalTeam(ctx, user.ID, cleanName); err != nil {
+		// ✅ Pass the userRole from the transaction
+		if err := s.createAndAddToPersonalTeam(ctx, user.ID, cleanName, userRole); err != nil {
 			log.Printf("[VerifyOTPAndCreateUser] ⚠️ Warning: Failed to create personal team: %v", err)
 		} else {
 			log.Printf("[VerifyOTPAndCreateUser] ✅ Personal team created successfully for user: %s", user.ID)
@@ -353,7 +357,8 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	// ============================================================
 	if reqAccountType == types.AccountTypeInstitutionName && account != nil {
 		log.Printf("[VerifyOTPAndCreateUser] Creating institution team for user: %s (Institution Account)", user.ID)
-		if err := s.createAndAddToInstitutionTeam(ctx, user.ID, account.ID, reqInstitutionName); err != nil {
+		// ✅ Pass the userRole from the transaction
+		if err := s.createAndAddToInstitutionTeam(ctx, user.ID, account.ID, reqInstitutionName, userRole); err != nil {
 			log.Printf("[VerifyOTPAndCreateUser] ⚠️ Warning: Failed to create institution team: %v", err)
 		} else {
 			log.Printf("[VerifyOTPAndCreateUser] ✅ Institution team created successfully for user: %s", user.ID)
@@ -420,7 +425,9 @@ func (s *service) getAccountTypeID(ctx context.Context, accountType string) (str
 	return accountTypeObj.ID, nil
 }
 
-func (s *service) createAndAddToPersonalTeam(ctx context.Context, userID, userName string) error {
+// createAndAddToPersonalTeam creates a personal team and adds the user as a member
+// ✅ Updated: Accepts role parameter and passes it to team service for Casbin assignment
+func (s *service) createAndAddToPersonalTeam(ctx context.Context, userID, userName, role string) error {
 	log.Printf("[createAndAddToPersonalTeam] Checking existing personal team for user: %s", userID)
 	existingTeam, err := s.teamSvc.GetPersonalTeamByUserID(ctx, userID)
 	if err != nil {
@@ -433,7 +440,9 @@ func (s *service) createAndAddToPersonalTeam(ctx context.Context, userID, userNa
 	}
 
 	log.Printf("[createAndAddToPersonalTeam] Creating personal team for user: %s", userID)
-	team, err := s.teamSvc.CreatePersonalTeam(ctx, userID, userName)
+
+	// ✅ Pass the role to team service for Casbin assignment
+	team, err := s.teamSvc.CreatePersonalTeam(ctx, userID, userName, role)
 	if err != nil {
 		log.Printf("[createAndAddToPersonalTeam] Failed to create personal team: %v", err)
 		return fmt.Errorf("failed to create personal team: %w", err)
@@ -442,27 +451,45 @@ func (s *service) createAndAddToPersonalTeam(ctx context.Context, userID, userNa
 	return nil
 }
 
-// createAndAddToInstitutionTeam creates an institution team and adds the user
-func (s *service) createAndAddToInstitutionTeam(ctx context.Context, userID, accountID, institutionName string) error {
-    if institutionName == "" {
-        return errors.New("institution name is required")
-    }
+// createAndAddToInstitutionTeam creates an institution team and adds the user as a member
+// ✅ Updated: Accepts role parameter and passes it to team service for Casbin assignment
+func (s *service) createAndAddToInstitutionTeam(ctx context.Context, userID, accountID, institutionName, role string) error {
+	if institutionName == "" {
+		return errors.New("institution name is required")
+	}
 
-    sanitizer := validation.Sanitize{}
-    displayName := sanitizer.DisplayName(institutionName)
-    slug := sanitizer.GenerateSlugFromName(institutionName)
+	sanitizer := validation.Sanitize{}
+	displayName := sanitizer.DisplayName(institutionName)
+	slug := sanitizer.GenerateSlugFromName(institutionName)
 
-    log.Printf("[createAndAddToInstitutionTeam] Creating institution team for account: %s", accountID)
-    
-    // ✅ Pass the userID as the creator
-    team, err := s.teamSvc.CreateInstitutionTeam(ctx, accountID, institutionName, displayName, slug, userID)
-    if err != nil {
-        log.Printf("[createAndAddToInstitutionTeam] Failed to create institution team: %v", err)
-        return fmt.Errorf("failed to create institution team: %w", err)
-    }
-    log.Printf("[createAndAddToInstitutionTeam] ✅ Institution team created: %s (Team ID: %s)", team.Name, team.ID)
+	log.Printf("[createAndAddToInstitutionTeam] Creating institution team for account: %s", accountID)
 
-    return nil
+	// ✅ Pass the role to team service for Casbin assignment
+	team, err := s.teamSvc.CreateInstitutionTeam(ctx, accountID, institutionName, displayName, slug, userID, role)
+	if err != nil {
+		log.Printf("[createAndAddToInstitutionTeam] Failed to create institution team: %v", err)
+		return fmt.Errorf("failed to create institution team: %w", err)
+	}
+	log.Printf("[createAndAddToInstitutionTeam] ✅ Institution team created: %s (Team ID: %s)", team.Name, team.ID)
+
+	return nil
+}
+
+// getUserRoleInAccount gets a user's role in a specific account
+// ✅ Added: Helper to fetch role from account_members (useful for future flexibility)
+func (s *service) getUserRoleInAccount(ctx context.Context, userID, accountID string) (string, error) {
+	members, err := s.repo.GetAccountMembersByUser(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+
+	for _, member := range members {
+		if member.AccountID == accountID {
+			return member.Role, nil
+		}
+	}
+
+	return "", nil
 }
 
 func (s *service) sendWelcomeEmails(ctx context.Context, user *authdomain.User, userData map[string]string) error {

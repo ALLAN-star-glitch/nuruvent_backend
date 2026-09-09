@@ -108,8 +108,9 @@ func (a *TeamAdapter) GetAccountByTeamID(ctx context.Context, teamID string) (*a
 }
 
 // CreatePersonalTeam creates a personal team for a user
-func (a *TeamAdapter) CreatePersonalTeam(ctx context.Context, userID string, userName string) (*authService.TeamInfo, error) {
-	team, err := a.teamSvc.CreatePersonalTeam(ctx, userID, userName)
+// ✅ Updated: Added role parameter for Casbin assignment
+func (a *TeamAdapter) CreatePersonalTeam(ctx context.Context, userID string, userName string, role string) (*authService.TeamInfo, error) {
+	team, err := a.teamSvc.CreatePersonalTeam(ctx, userID, userName, role)
 	if err != nil {
 		return nil, err
 	}
@@ -129,8 +130,9 @@ func (a *TeamAdapter) CreatePersonalTeam(ctx context.Context, userID string, use
 }
 
 // CreateInstitutionTeam creates an institution team with the creator as member
-func (a *TeamAdapter) CreateInstitutionTeam(ctx context.Context, accountID string, name string, displayName string, slug string, createdBy string) (*authService.TeamInfo, error) {
-	team, err := a.teamSvc.CreateInstitutionTeam(ctx, accountID, name, displayName, slug, createdBy)
+// ✅ Updated: Added role parameter for Casbin assignment
+func (a *TeamAdapter) CreateInstitutionTeam(ctx context.Context, accountID string, name string, displayName string, slug string, createdBy string, role string) (*authService.TeamInfo, error) {
+	team, err := a.teamSvc.CreateInstitutionTeam(ctx, accountID, name, displayName, slug, createdBy, role)
 	if err != nil {
 		return nil, err
 	}

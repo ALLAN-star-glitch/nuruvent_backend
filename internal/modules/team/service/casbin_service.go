@@ -9,20 +9,23 @@ import "context"
 // ============================================================
 
 // CasbinService defines the permission operations needed by the team module
-// ✅ Updated: Roles are now inherited from account, not assigned at team level
+// ✅ Updated: Roles are inherited from account, but we still need to assign
+// users to team domains in Casbin for permission checks
 type CasbinService interface {
     // ============================================================
-    // ROLE MANAGEMENT - DELEGATED TO ACCOUNT MODULE
+    // ROLE MANAGEMENT
     // ============================================================
-    
-    // ❌ REMOVED: AssignRole - Roles are managed at account level
-    // The account module handles role assignment via account_members table
-    
-    // ❌ REMOVED: RemoveRole - Roles are managed at account level
-    // The account module handles role removal via account_members table
-    
-    // ❌ REMOVED: GetUserRoles - Roles are queried from account module
-    // Use authSvc.GetUserRolesInAccount() instead
+
+    // AssignRole assigns a role to a user in a domain
+    // Used to link users to team domains in Casbin
+    // Example: g, {user_id}, {role}, {domain}
+    AssignRole(ctx context.Context, domain string, userID, role string) error
+
+    // RemoveRole removes a role from a user in a domain
+    RemoveRole(ctx context.Context, domain string, userID, role string) error
+
+    // GetUserRoles returns all roles for a user in a domain
+    GetUserRoles(ctx context.Context, domain string, userID string) ([]string, error)
 
     // ============================================================
     // PERMISSION CHECKS
@@ -50,7 +53,7 @@ type CasbinService interface {
     RemoveAccountPolicies(ctx context.Context, domain string) error
 
     // ============================================================
-    // TEAM ROLE CHECKS - NOW QUERY ACCOUNT MODULE
+    // TEAM ROLE CHECKS - QUERY ACCOUNT MODULE
     // ============================================================
 
     // IsAccountAdmin checks if a user is an account admin in the domain
