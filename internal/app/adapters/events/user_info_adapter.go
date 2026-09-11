@@ -4,97 +4,78 @@ package events
 
 import (
 	"context"
+	"fmt"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
-	profileService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/service"
+	accountdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
+	accountsvc "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
+	eventsdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
 
-// UserInfoAdapter adapts the profile module's Service to the events domain's UserInfoProvider
+// UserInfoAdapter implements eventsdomain.UserInfoProvider by delegating
+// to the account module's Service.
 type UserInfoAdapter struct {
-	profileSvc profileService.Service
+	accounts accountsvc.Service
 }
 
-// NewUserInfoAdapter creates a new user info adapter for events
-func NewUserInfoAdapter(profileSvc profileService.Service) domain.UserInfoProvider {
-	return &UserInfoAdapter{
-		profileSvc: profileSvc,
-	}
+// NewUserInfoAdapter wires the account service to the events port.
+func NewUserInfoAdapter(accounts accountsvc.Service) eventsdomain.UserInfoProvider {
+	return &UserInfoAdapter{accounts: accounts}
 }
 
-// GetUserByID retrieves basic user information by ID
-func (a *UserInfoAdapter) GetUserByID(ctx context.Context, userID string) (*domain.UserInfo, error) {
+func (a *UserInfoAdapter) GetUserByID(ctx context.Context, userID string) (*eventsdomain.UserInfo, error) {
 	if userID == "" {
 		return nil, nil
 	}
 
-	userInfo, err := a.profileSvc.GetUserProfile(ctx, userID)
+	user, err := a.accounts.GetUserByID(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get user %s: %w", userID, err)
 	}
-	if userInfo == nil {
-		return nil, nil
-	}
-
-	return &domain.UserInfo{
-		ID:          userInfo.ID,
-		Name:        userInfo.Name,
-		DisplayName: userInfo.DisplayName,
-		AvatarURL:   userInfo.AvatarURL,
-	}, nil
+	return mapToEventsUserInfo(user), nil
 }
 
-// GetUserByIDWithDetails retrieves full user information including email, phone, etc.
-func (a *UserInfoAdapter) GetUserByIDWithDetails(ctx context.Context, userID string) (*domain.UserInfo, error) {
+func (a *UserInfoAdapter) GetUserByIDWithDetails(ctx context.Context, userID string) (*eventsdomain.UserInfo, error) {
 	if userID == "" {
 		return nil, nil
 	}
 
-	userInfo, err := a.profileSvc.GetUserProfileWithDetails(ctx, userID)
+	user, err := a.accounts.GetUserByIDWithDetails(ctx, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get user %s: %w", userID, err)
 	}
-	if userInfo == nil {
-		return nil, nil
-	}
-
-	return &domain.UserInfo{
-		ID:          userInfo.ID,
-		Name:        userInfo.Name,
-		DisplayName: userInfo.DisplayName,
-		Email:       userInfo.Email,
-		Phone:       userInfo.Phone,
-		AccountType: userInfo.AccountType,
-		AvatarURL:   userInfo.AvatarURL,
-		IsActive:    userInfo.IsActive,
-		CreatedAt:   userInfo.CreatedAt,
-		UpdatedAt:   userInfo.UpdatedAt,
-	}, nil
+	return mapToEventsUserInfo(user), nil
 }
 
-// GetAccountByID retrieves account information by ID
-func (a *UserInfoAdapter) GetAccountByID(ctx context.Context, accountID string) (*domain.AccountInfo, error) {
-	if accountID == "" {
-		return nil, nil
+func (a *UserInfoAdapter) GetUsersByIDs(ctx context.Context, userIDs []string) ([]*eventsdomain.UserInfo, error) {
+	if len(userIDs) == 0 {
+		return []*eventsdomain.UserInfo{}, nil
 	}
 
-	accountInfo, err := a.profileSvc.GetAccountProfile(ctx, accountID)
+	users, err := a.accounts.GetUsersByIDs(ctx, userIDs)
 	if err != nil {
-		return nil, err
-	}
-	if accountInfo == nil {
-		return nil, nil
+		return nil, fmt.Errorf("failed to get users: %w", err)
 	}
 
-	return &domain.AccountInfo{
-		ID:          accountInfo.ID,
-		Name:        accountInfo.Name,
-		DisplayName: accountInfo.DisplayName,
-		Slug:        accountInfo.Slug,
-		Type:        accountInfo.Type,
-		LogoURL:     accountInfo.LogoURL,
-		Email:       accountInfo.Email,
-		Phone:       accountInfo.Phone,
-		Website:     accountInfo.Website,
-		Description: accountInfo.Description,
-	}, nil
+	out := make([]*eventsdomain.UserInfo, 0, len(users))
+	for _, u := range users {
+		if mapped := mapToEventsUserInfo(u); mapped != nil {
+			out = append(out, mapped)
+		}
+	}
+	return out, nil
+}
+
+// mapToEventsUserInfo converts an account-module UserInfo into an events-module UserInfo.
+func mapToEventsUserInfo(u *accountdomain.UserInfo) *eventsdomain.UserInfo {
+	if u == nil {
+		return nil
+	}
+	return &eventsdomain.UserInfo{
+		ID:          u.ID,
+		Name:        u.Name,
+		DisplayName: u.DisplayName,
+		Email:       u.Email,
+		Phone:       u.Phone,
+		AvatarURL:   u.AvatarURL,
+	}
 }

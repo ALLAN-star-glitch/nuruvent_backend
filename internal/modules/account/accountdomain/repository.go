@@ -31,4 +31,14 @@ type Repository interface {
     UpdateAccountMember(ctx context.Context, member *AccountMember) error
     DeleteAccountMember(ctx context.Context, accountID, userID string) error
     CountAccountMembers(ctx context.Context, accountID string) (int64, error)
+
+        // User lookups
+    GetUserByID(ctx context.Context, userID string) (*User, error)
+    GetUsersByIDs(ctx context.Context, userIDs []string) ([]*User, error)
+    GetUserBySlug(ctx context.Context, slug string) (*User, error)
+
+
+    UpdateUser(ctx context.Context, user *User) error
+
+
 }

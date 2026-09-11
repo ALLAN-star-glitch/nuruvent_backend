@@ -16,7 +16,7 @@ func (h *EventHandler) RegisterRoutes(
 	{
 		public.Get("/upcoming", h.GetUpcomingEvents)
 		public.Get("/past", h.GetPastEvents)
-		public.Get("/search", h.SearchEvents)   // ⬅️ public search
+		public.Get("/search", h.SearchEvents)   // ⬅️ public search (no token assumed)
 		public.Get("/types", h.GetEventTypes)
 		public.Get("/statuses", h.GetEventStatuses)
 		public.Get("/categories", h.GetCategories)
@@ -35,7 +35,7 @@ func (h *EventHandler) RegisterRoutes(
 	protected.Use(authzMiddleware)
 	{
 		protected.Get("/", h.ListUserEvents)
-		protected.Get("/search", h.SearchEvents)   // ⬅️ protected search (same handler)
+		protected.Get("/me/search", h.SearchEvents)   // ⬅️ authenticated, permission-scoped search
 		protected.Post("/", h.CreateEvent)
 		protected.Post("/draft", h.CreateEventDraft)
 

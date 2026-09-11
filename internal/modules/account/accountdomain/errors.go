@@ -32,4 +32,10 @@ var (
 var (
     ErrPermissionDenied = errors.New("permission denied")
     ErrInsufficientRole = errors.New("insufficient role")
+
+
+
 )
+
+
+var ErrForbidden = errors.New("forbidden")

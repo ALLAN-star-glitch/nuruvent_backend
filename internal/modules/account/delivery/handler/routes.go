@@ -46,6 +46,10 @@ func (h *AccountHandler) RegisterRoutes(
 
 		// ---- LEAVE ----
 		account.Post("/:id/leave", h.LeaveAccount)
+
+		// ---- LOGO ----
+		account.Post("/:id/logo", h.UploadAccountLogo)
+		account.Delete("/:id/logo", h.DeleteAccountLogo)
 	}
 
 	// ============================================================
@@ -76,5 +80,36 @@ func (h *AccountHandler) RegisterRoutes(
 	user.Use(authzMiddleware)
 	{
 		user.Get("/", h.GetMyAccounts)
+	}
+
+	// ============================================================
+	// 5. USER AVATAR ROUTES
+	// ============================================================
+	avatar := router.Group("/users/me/avatar")
+	avatar.Use(authMiddleware)
+	avatar.Use(authzMiddleware)
+	{
+		avatar.Post("/", h.UploadMyAvatar)
+		avatar.Delete("/", h.DeleteMyAvatar)
+	}
+
+	// ============================================================
+	// 6. PUBLIC USER PROFILE ROUTES (No auth)
+	// ============================================================
+	profilePublic := router.Group("/users")
+	{
+		profilePublic.Get("/slug/:slug/profile", h.GetPublicProfileBySlug)
+		profilePublic.Get("/:id/profile", h.GetPublicProfile)
+	}
+
+	// ============================================================
+	// 7. USER'S OWN PROFILE ROUTES (Auth required)
+	// ============================================================
+	profile := router.Group("/users/me/profile")
+	profile.Use(authMiddleware)
+	profile.Use(authzMiddleware)
+	{
+		profile.Get("/", h.GetMyProfile)
+		profile.Put("/", h.UpdateMyProfile)
 	}
 }

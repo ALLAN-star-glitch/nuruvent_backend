@@ -1,20 +1,30 @@
-// internal/modules/auth/authdomain/domain.go
+// internal/modules/account/accountdomain/domains.go
 
-package authdomain
+package accountdomain
 
 import domains "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared"
 
 // ============================================================
-// RE-EXPORTS from internal/shared/domains
+// PUBLIC FACADE — account module's domain-string vocabulary
 // ============================================================
 //
-// The canonical implementation lives in internal/shared/domains. This file
-// re-exports it under the authdomain namespace so existing callers
-// (auth middleware, authorization middleware, profile, etc.) continue to
-// work unchanged.
+// This file re-exports the shared domain builders, checkers, and extractors
+// under the account domain namespace.
 //
-// If you need to add a new domain helper, add it to shared/domains and
-// re-export it here.
+// WHY THIS FILE EXISTS:
+//
+//   - The account module's `accountdomain` package is its public API.
+//     Other modules import from here, not from shared/domains directly.
+//
+//   - When this module is eventually extracted into a separate service,
+//     this facade becomes the boundary. It can be reimplemented to build
+//     domain strings from whatever source the extracted service uses —
+//     without touching any callsite inside the account module.
+//
+//   - Every cross-module consumer of domain strings goes through this file.
+//
+// If you're reading this and thinking "this looks like duplication" —
+// it's intentional. It's the seam.
 
 // ---- Constants ----
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 
+
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
 
@@ -29,13 +30,11 @@ func (s *eventService) GetEventByID(ctx context.Context, id string) (*domain.Eve
 		return nil, domain.ErrEventNotFound
 	}
 
-	// Check if user can view this event using team domain
 	userID := s.getUserIDFromContext(ctx)
 	if !s.canViewEvent(ctx, userID, event) {
 		return nil, domain.ErrEventNotFound
 	}
 
-	// Populate organizer (public-facing - always shown)
 	organizer, err := s.getOrganizerInfo(ctx, event)
 	if err != nil {
 		log.Printf("⚠️ Failed to get organizer info for event %s: %v", event.ID, err)
@@ -43,7 +42,6 @@ func (s *eventService) GetEventByID(ctx context.Context, id string) (*domain.Eve
 		event.Organizer = organizer
 	}
 
-	// Populate creator info (internal - only for authorized users)
 	if userID != "" && s.canViewCreatorInfo(ctx, userID, event) {
 		event.Creator = s.getCreatorInfo(ctx, event.CreatedBy)
 	}
@@ -65,13 +63,11 @@ func (s *eventService) GetEventBySlug(ctx context.Context, slug string) (*domain
 		return nil, domain.ErrEventNotFound
 	}
 
-	// Check if user can view this event using team domain
 	userID := s.getUserIDFromContext(ctx)
 	if !s.canViewEvent(ctx, userID, event) {
 		return nil, domain.ErrEventNotFound
 	}
 
-	// Populate organizer (public-facing - always shown)
 	organizer, err := s.getOrganizerInfo(ctx, event)
 	if err != nil {
 		log.Printf("⚠️ Failed to get organizer info for event %s: %v", event.ID, err)
@@ -79,7 +75,6 @@ func (s *eventService) GetEventBySlug(ctx context.Context, slug string) (*domain
 		event.Organizer = organizer
 	}
 
-	// Populate creator info (internal - only for authorized users)
 	if userID != "" && s.canViewCreatorInfo(ctx, userID, event) {
 		event.Creator = s.getCreatorInfo(ctx, event.CreatedBy)
 	}
@@ -91,29 +86,23 @@ func (s *eventService) GetEventBySlug(ctx context.Context, slug string) (*domain
 func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters) ([]*domain.Event, int64, error) {
 	userID := s.getUserIDFromContext(ctx)
 
-	log.Printf("🔍 SERVICE: IncludeDeleted=%v, OnlyDeleted=%v, IncludeCreator=%v", 
+	log.Printf("🔍 SERVICE: IncludeDeleted=%v, OnlyDeleted=%v, IncludeCreator=%v",
 		filters.IncludeDeleted, filters.OnlyDeleted, filters.IncludeCreator)
 
-	// If user is not authenticated, only show public events
 	if userID == "" {
 		filters.Visibility = string(domain.VisibilityPublic)
-		filters.IncludeCreator = false // Unauthenticated users cannot see creator info
+		filters.IncludeCreator = false
 	}
 
-	// Check if the team filter is set and user has permission
 	if !s.isEmptyTeam(filters.Team) {
-		// Create team domain from team filter
 		teamDomain := s.teamDomainFromTeamFilter(filters.Team)
 
-		// Check if user can read ALL events in this team
 		canReadAll, err := s.permChecker.CanReadAllEvents(ctx, userID, teamDomain)
 		if err != nil {
 			return nil, 0, fmt.Errorf("permission check failed: %w", err)
 		}
 
-		// If user cannot read all, they can only read their own events
 		if !canReadAll {
-			// Check if user can read their own events
 			canReadOwn, err := s.permChecker.CanReadOwnEvents(ctx, userID, teamDomain)
 			if err != nil {
 				return nil, 0, fmt.Errorf("permission check failed: %w", err)
@@ -121,15 +110,8 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 			if !canReadOwn {
 				return nil, 0, errors.New("insufficient permissions to view events")
 			}
-			// Set UserID to current user to filter by their own events
 			filters.UserID = userID
 		}
-	}
-
-	// Use TeamID directly from filter
-	if filters.TeamID != "" {
-		// If we have a direct TeamID, add it to the domain filters
-		// The repository will handle this
 	}
 
 	domainFilters := domain.ListEventsFilters{
@@ -148,18 +130,17 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 		Visibility:     domain.Visibility(filters.Visibility),
 	}
 
-	log.Printf("🔍 DOMAIN FILTERS: IncludeDeleted=%v, OnlyDeleted=%v", domainFilters.IncludeDeleted, domainFilters.OnlyDeleted)
+	log.Printf("🔍 DOMAIN FILTERS: IncludeDeleted=%v, OnlyDeleted=%v",
+		domainFilters.IncludeDeleted, domainFilters.OnlyDeleted)
 
 	events, total, err := s.repo.ListEvents(ctx, domainFilters)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// Filter events by visibility permissions (handles deleted events properly)
 	showDeleted := filters.IncludeDeleted || filters.OnlyDeleted
 	filteredEvents := s.filterEventsByVisibility(ctx, userID, events, showDeleted)
 
-	// Populate organizer for ALL events (public-facing - always shown)
 	for _, event := range filteredEvents {
 		organizer, err := s.getOrganizerInfo(ctx, event)
 		if err != nil {
@@ -169,23 +150,18 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 		event.Organizer = organizer
 	}
 
-	// Populate creator info ONLY if:
-	// 1. IncludeCreator is true
-	// 2. User is authenticated
-	// 3. User has permission (via canViewCreatorInfo)
 	if filters.IncludeCreator && userID != "" {
 		for _, event := range filteredEvents {
 			if s.canViewCreatorInfo(ctx, userID, event) {
 				event.Creator = s.getCreatorInfo(ctx, event.CreatedBy)
 			}
-			// If not allowed, Creator stays nil
 		}
 	}
 
 	return filteredEvents, total, nil
 }
 
-// GetEventsByType retrieves events by event type slug using TeamFilter
+// GetEventsByType retrieves events by event type slug
 func (s *eventService) GetEventsByType(ctx context.Context, eventTypeSlug string, page, pageSize int) ([]*domain.Event, int64, error) {
 	if eventTypeSlug == "" {
 		return nil, 0, errors.New("event type slug is required")
@@ -202,27 +178,20 @@ func (s *eventService) GetEventsByType(ctx context.Context, eventTypeSlug string
 	limit, offset := s.calculatePagination(page, pageSize)
 	userID := s.getUserIDFromContext(ctx)
 
-	// Use ListEvents with TeamFilter and EventTypeID
 	filters := ListEventsFilters{
-		Team:           domain.TeamFilter{}, // Empty = no team filter
+		Team:           domain.TeamFilter{},
 		EventTypeID:    eventType.ID,
 		Limit:          limit,
 		Offset:         offset,
 		Visibility:     string(domain.VisibilityPublic),
-		IncludeCreator: false, // Basic list doesn't need creator info by default
+		IncludeCreator: false,
 	}
 
-	// If user is authenticated, they can see more
 	if userID != "" {
 		filters.Visibility = ""
 	}
 
-	events, total, err := s.ListEvents(ctx, filters)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return events, total, nil
+	return s.ListEvents(ctx, filters)
 }
 
 // GetEventsByTeam retrieves events by team ID
@@ -241,7 +210,6 @@ func (s *eventService) GetEventsByTeam(ctx context.Context, teamID string, page,
 		IncludeCreator: false,
 	}
 
-	// Unauthenticated users only see public events
 	if userID == "" {
 		filters.Visibility = string(domain.VisibilityPublic)
 	}
@@ -252,13 +220,12 @@ func (s *eventService) GetEventsByTeam(ctx context.Context, teamID string, page,
 // GetUpcomingEvents retrieves upcoming events for a team
 func (s *eventService) GetUpcomingEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error) {
 	limit = s.sanitizeLimit(limit, 10, 50)
-	
+
 	events, err := s.repo.GetUpcomingEvents(ctx, teamID, limit)
 	if err != nil {
 		return nil, err
 	}
 
-	// Populate organizer for each event (public-facing)
 	userID := s.getUserIDFromContext(ctx)
 	for _, event := range events {
 		organizer, err := s.getOrganizerInfo(ctx, event)
@@ -268,7 +235,6 @@ func (s *eventService) GetUpcomingEvents(ctx context.Context, teamID string, lim
 		}
 		event.Organizer = organizer
 
-		// Populate creator if user has permission
 		if userID != "" && s.canViewCreatorInfo(ctx, userID, event) {
 			event.Creator = s.getCreatorInfo(ctx, event.CreatedBy)
 		}
@@ -280,13 +246,12 @@ func (s *eventService) GetUpcomingEvents(ctx context.Context, teamID string, lim
 // GetPastEvents retrieves past events for a team
 func (s *eventService) GetPastEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error) {
 	limit = s.sanitizeLimit(limit, 10, 50)
-	
+
 	events, err := s.repo.GetPastEvents(ctx, teamID, limit)
 	if err != nil {
 		return nil, err
 	}
 
-	// Populate organizer for each event (public-facing)
 	userID := s.getUserIDFromContext(ctx)
 	for _, event := range events {
 		organizer, err := s.getOrganizerInfo(ctx, event)
@@ -296,7 +261,6 @@ func (s *eventService) GetPastEvents(ctx context.Context, teamID string, limit i
 		}
 		event.Organizer = organizer
 
-		// Populate creator if user has permission
 		if userID != "" && s.canViewCreatorInfo(ctx, userID, event) {
 			event.Creator = s.getCreatorInfo(ctx, event.CreatedBy)
 		}
@@ -305,7 +269,7 @@ func (s *eventService) GetPastEvents(ctx context.Context, teamID string, limit i
 	return events, nil
 }
 
-// SearchEvents searches events by query and filters using TeamFilter
+// SearchEvents searches events by query and filters
 func (s *eventService) SearchEvents(ctx context.Context, query string, filters SearchFilters) ([]*domain.Event, int64, error) {
 	if query == "" && filters.EventTypeID == "" && filters.TeamID == "" && filters.Team.ID == "" {
 		return nil, 0, errors.New("search query or filter is required")
@@ -313,21 +277,30 @@ func (s *eventService) SearchEvents(ctx context.Context, query string, filters S
 
 	userID := s.getUserIDFromContext(ctx)
 
-	// If user is not authenticated, only search public events
+	// Anonymous callers: force public-only, no creator info
 	if userID == "" {
 		filters.Visibility = string(domain.VisibilityPublic)
-		filters.IncludeCreator = false // Unauthenticated users cannot see creator info
+		filters.IncludeCreator = false
 	}
 
-	// If team filter is set and user is authenticated, check permissions
+	// Team-scoped permission check for authenticated callers
 	if filters.TeamID != "" || !s.isEmptyTeam(filters.Team) {
 		teamID := filters.TeamID
 		if teamID == "" {
 			teamID = filters.Team.ID
 		}
-		
+
 		if userID != "" && teamID != "" {
-			teamDomain := domain.TeamDomain(teamID)
+			// Resolve team type: explicit filter > token context > default
+			teamType := filters.Team.Type
+			if teamType == "" {
+				teamType = domain.GetTeamType(ctx) // from Go context (set by enrichUserContext)
+			}
+
+			teamDomain := domain.BuildTeamDomain(teamType, teamID) // ✅ FIXED
+
+			log.Printf("🔍 SEARCH CHECK: user=%s teamID=%s teamType=%s domain=%s",
+				userID, teamID, teamType, teamDomain)
 
 			canReadAll, err := s.permChecker.CanReadAllEvents(ctx, userID, teamDomain)
 			if err != nil {
@@ -340,7 +313,9 @@ func (s *eventService) SearchEvents(ctx context.Context, query string, filters S
 					return nil, 0, fmt.Errorf("permission check failed: %w", err)
 				}
 				if !canReadOwn {
-					return nil, 0, errors.New("insufficient permissions to search events")
+					log.Printf("❌ SEARCH DENIED: user=%s domain=%s has neither read_all nor read_own",
+						userID, teamDomain)
+					return nil, 0, domain.ErrForbidden
 				}
 				filters.UserID = userID
 			}
@@ -365,11 +340,9 @@ func (s *eventService) SearchEvents(ctx context.Context, query string, filters S
 		return nil, 0, err
 	}
 
-	// Filter events by visibility permissions (handles deleted events properly)
 	showDeleted := filters.IncludeDeleted || filters.OnlyDeleted
 	filteredEvents := s.filterEventsByVisibility(ctx, userID, events, showDeleted)
 
-	// Populate organizer for ALL events (public-facing)
 	for _, event := range filteredEvents {
 		organizer, err := s.getOrganizerInfo(ctx, event)
 		if err != nil {
@@ -378,7 +351,6 @@ func (s *eventService) SearchEvents(ctx context.Context, query string, filters S
 		}
 		event.Organizer = organizer
 
-		// Populate creator info if requested and user has permission
 		if filters.IncludeCreator && userID != "" && s.canViewCreatorInfo(ctx, userID, event) {
 			event.Creator = s.getCreatorInfo(ctx, event.CreatedBy)
 		}
@@ -388,65 +360,59 @@ func (s *eventService) SearchEvents(ctx context.Context, query string, filters S
 }
 
 // ============================================================
-// EVENT TYPES & STATUSES
+// EVENT TYPES, STATUSES, LOOKUPS
 // ============================================================
 
-// GetEventTypes retrieves all event types
 func (s *eventService) GetEventTypes(ctx context.Context) ([]*domain.EventType, error) {
 	return s.repo.GetAllEventTypes(ctx)
 }
 
-// GetEventStatuses retrieves all event statuses
 func (s *eventService) GetEventStatuses(ctx context.Context) ([]*domain.EventStatus, error) {
 	return s.repo.GetAllEventStatuses(ctx)
+}
+
+func (s *eventService) GetTicketTypes(ctx context.Context) ([]*domain.TicketTypeRow, error) {
+	return s.repo.GetAllTicketTypes(ctx)
 }
 
 // ============================================================
 // PRIVATE HELPER FUNCTIONS
 // ============================================================
 
-// getUserIDFromContext extracts user ID from context
+// getUserIDFromContext extracts user ID from context (typed key)
 func (s *eventService) getUserIDFromContext(ctx context.Context) string {
-	// Get user ID from context (set by handler)
-	if userID, ok := ctx.Value("user_id").(string); ok {
-		return userID
-	}
-	return ""
+	return domain.GetUserID(ctx)
 }
 
-// teamDomainFromTeamFilter converts a TeamFilter to a team domain string
+// teamDomainFromTeamFilter converts a TeamFilter to a Casbin team domain string.
 func (s *eventService) teamDomainFromTeamFilter(team domain.TeamFilter) string {
 	if team.ID == "" {
 		return ""
 	}
-	return domain.TeamDomain(team.ID)
+	return domain.BuildTeamDomain(team.Type, team.ID) // ✅ FIXED
 }
 
 // canViewEvent checks if a user can view an event using team domain
 func (s *eventService) canViewEvent(ctx context.Context, userID string, event *domain.Event) bool {
-	// Public events are always viewable
 	if event.IsPublic() {
 		return true
 	}
 
-	// Unlisted events - accessible with direct link
 	if event.IsUnlisted() {
 		return true
 	}
 
-	// Private events - only team members can view
 	if event.IsPrivate() {
 		if userID == "" {
 			return false
 		}
 
-		// Create team domain from event
-		teamDomain := domain.TeamDomain(event.TeamID)
+		// ✅ FIXED — build domain from event's team type + team id
+		teamDomain := domain.BuildTeamDomain(event.TeamType, event.TeamID)
 
-		// Check if user can view events in this team
 		allowed, err := s.permChecker.CanViewEvent(ctx, userID, teamDomain)
 		if err != nil {
-			log.Printf("⚠️ Permission check failed: %v", err)
+			log.Printf("⚠️ Permission check failed (domain=%s): %v", teamDomain, err)
 			return false
 		}
 		return allowed
@@ -457,31 +423,27 @@ func (s *eventService) canViewEvent(ctx context.Context, userID string, event *d
 
 // canViewDeletedEvent checks if a user can view a soft-deleted event
 func (s *eventService) canViewDeletedEvent(ctx context.Context, userID string, event *domain.Event) bool {
-	// Event creator can always view their own deleted events
 	if event.CreatedBy == userID {
 		return true
 	}
 
-	// Create team domain from event
-	teamDomain := domain.TeamDomain(event.TeamID)
+	// ✅ FIXED
+	teamDomain := domain.BuildTeamDomain(event.TeamType, event.TeamID)
 
-	// Check if user can read ALL events in this team (Account Admin or Event Manager)
 	canReadAll, err := s.permChecker.CanReadAllEvents(ctx, userID, teamDomain)
 	if err == nil && canReadAll {
 		return true
 	}
 
-	// Check if user can read OWN events in this team (Team Member)
 	canReadOwn, err := s.permChecker.CanReadOwnEvents(ctx, userID, teamDomain)
 	if err == nil && canReadOwn {
-		// Team members can only see their own deleted events
 		return event.CreatedBy == userID
 	}
 
 	return false
 }
 
-// filterEventsByVisibility filters a list of events based on visibility permissions
+// filterEventsByVisibility filters events based on visibility permissions
 func (s *eventService) filterEventsByVisibility(ctx context.Context, userID string, events []*domain.Event, showDeleted bool) []*domain.Event {
 	if len(events) == 0 {
 		return events
@@ -489,7 +451,6 @@ func (s *eventService) filterEventsByVisibility(ctx context.Context, userID stri
 
 	filtered := make([]*domain.Event, 0, len(events))
 	for _, event := range events {
-		// For deleted events, check if user has permission to view them
 		if event.IsDeleted() {
 			if showDeleted && s.canViewDeletedEvent(ctx, userID, event) {
 				filtered = append(filtered, event)
@@ -497,7 +458,6 @@ func (s *eventService) filterEventsByVisibility(ctx context.Context, userID stri
 			continue
 		}
 
-		// For non-deleted events, check visibility (public, private, unlisted)
 		if s.canViewEvent(ctx, userID, event) {
 			filtered = append(filtered, event)
 		}
@@ -528,8 +488,4 @@ func (s *eventService) sanitizeLimit(limit, defaultLimit, maxLimit int) int {
 		return maxLimit
 	}
 	return limit
-}
-
-func (s *eventService) GetTicketTypes(ctx context.Context) ([]*domain.TicketTypeRow, error) {
-	return s.repo.GetAllTicketTypes(ctx)
 }

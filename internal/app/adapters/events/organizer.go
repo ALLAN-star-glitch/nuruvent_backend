@@ -4,10 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	accountsvc "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 	eventsdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
+
+func normalizeAccountType(raw string) string {
+    return strings.TrimPrefix(raw, "account-type-")
+}
 
 // OrganizerAdapter implements eventsdomain.OrganizerProvider by delegating
 // to the account module's service.
@@ -40,7 +45,7 @@ func (a *OrganizerAdapter) GetOrganizer(ctx context.Context, teamID string) (*ev
 
 	return &eventsdomain.OrganizerInfo{
 		ID:          account.ID,
-		Type:        account.Type,
+		Type:        normalizeAccountType(account.Type),
 		Name:        account.Name,
 		DisplayName: account.DisplayName,
 		Slug:        account.Slug,

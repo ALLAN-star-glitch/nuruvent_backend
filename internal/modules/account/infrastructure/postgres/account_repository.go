@@ -116,18 +116,20 @@ func (r *AccountRepository) GetAccountTypes(ctx context.Context) ([]*accountdoma
 // ============================================================
 
 func (r *AccountRepository) CreateAccount(ctx context.Context, account *accountdomain.Account) error {
-    if account == nil {
-        return fmt.Errorf("account is nil")
-    }
+	if account == nil {
+		return fmt.Errorf("account is nil")
+	}
 
-    model := AccountModel{}
-    model.FromDomain(account)
+	model := AccountModel{}
+	model.FromDomain(account)
 
-    if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
-        return fmt.Errorf("failed to create account: %w", err)
-    }
+	// With `type` removed from the model, Create now writes only real columns:
+	// account_type_id carries the type reference; the slug is resolved on read.
+	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
+		return fmt.Errorf("failed to create account: %w", err)
+	}
 
-    return nil
+	return nil
 }
 
 func (r *AccountRepository) GetAccountByID(ctx context.Context, id string) (*accountdomain.Account, error) {
@@ -159,19 +161,33 @@ func (r *AccountRepository) GetAccountByID(ctx context.Context, id string) (*acc
 }
 
 func (r *AccountRepository) GetAccountByEmail(ctx context.Context, email string) (*accountdomain.Account, error) {
-    if email == "" {
-        return nil, fmt.Errorf("email is required")
-    }
+	if email == "" {
+		return nil, fmt.Errorf("email is required")
+	}
 
-    var model AccountModel
-    if err := r.db.WithContext(ctx).Where("email = ? AND deleted_at IS NULL", email).First(&model).Error; err != nil {
-        if errors.Is(err, gorm.ErrRecordNotFound) {
-            return nil, accountdomain.ErrAccountNotFound
-        }
-        return nil, fmt.Errorf("failed to get account by email: %w", err)
-    }
+	// Join account_types to hydrate the account type slug
+	var result struct {
+		AccountModel
+		AccountTypeSlug string `gorm:"column:account_type_slug"`
+	}
 
-    return model.ToDomain(), nil
+	err := r.db.WithContext(ctx).
+		Table("accounts AS a").
+		Select("a.*, at.slug AS account_type_slug").
+		Joins("LEFT JOIN account_types at ON at.id = a.account_type_id").
+		Where("a.email = ? AND a.deleted_at IS NULL", email).
+		Limit(1).
+		Scan(&result).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account by email: %w", err)
+	}
+	if result.ID == "" {
+		return nil, accountdomain.ErrAccountNotFound
+	}
+
+	account := result.AccountModel.ToDomain()
+	account.Type = result.AccountTypeSlug
+	return account, nil
 }
 
 func (r *AccountRepository) GetAccountBySlug(ctx context.Context, slug string) (*accountdomain.Account, error) {
@@ -191,41 +207,54 @@ func (r *AccountRepository) GetAccountBySlug(ctx context.Context, slug string) (
 }
 
 func (r *AccountRepository) GetAccountsByUserID(ctx context.Context, userID string) ([]*accountdomain.Account, error) {
-    if userID == "" {
-        return nil, fmt.Errorf("user ID is required")
-    }
+	if userID == "" {
+		return nil, fmt.Errorf("user ID is required")
+	}
 
-    var models []AccountModel
-    if err := r.db.WithContext(ctx).
-        Joins("JOIN account_members ON account_members.account_id = accounts.id").
-        Where("account_members.user_id = ? AND account_members.deleted_at IS NULL AND accounts.deleted_at IS NULL", userID).
-        Find(&models).Error; err != nil {
-        return nil, fmt.Errorf("failed to get accounts by user: %w", err)
-    }
+	// Join account_types to resolve the account type slug
+	var results []struct {
+		AccountModel
+		AccountTypeSlug string `gorm:"column:account_type_slug"`
+	}
 
-    accounts := make([]*accountdomain.Account, len(models))
-    for i, model := range models {
-        accounts[i] = model.ToDomain()
-    }
-    return accounts, nil
+	err := r.db.WithContext(ctx).
+		Table("accounts AS a").
+		Select("a.*, at.slug AS account_type_slug").
+		Joins("LEFT JOIN account_types at ON at.id = a.account_type_id").
+		Joins("JOIN account_members ON account_members.account_id = a.id").
+		Where("account_members.user_id = ? AND account_members.deleted_at IS NULL AND a.deleted_at IS NULL", userID).
+		Find(&results).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get accounts by user: %w", err)
+	}
+
+	accounts := make([]*accountdomain.Account, len(results))
+	for i, r := range results {
+		account := r.AccountModel.ToDomain()
+		account.Type = r.AccountTypeSlug   // ← hydrate from join
+		accounts[i] = account
+	}
+	return accounts, nil
 }
 
 func (r *AccountRepository) UpdateAccount(ctx context.Context, account *accountdomain.Account) error {
-    if account == nil {
-        return fmt.Errorf("account is nil")
-    }
-    if account.ID == "" {
-        return accountdomain.ErrAccountNotFound
-    }
+	if account == nil {
+		return fmt.Errorf("account is nil")
+	}
+	if account.ID == "" {
+		return accountdomain.ErrAccountNotFound
+	}
 
-    model := AccountModel{}
-    model.FromDomain(account)
+	model := AccountModel{}
+	model.FromDomain(account)
 
-    if err := r.db.WithContext(ctx).Save(&model).Error; err != nil {
-        return fmt.Errorf("failed to update account: %w", err)
-    }
+	// Same as Create — with the phantom field gone, Save writes only real columns.
+	// Account type changes go through account_type_id, not a `type` column.
+	if err := r.db.WithContext(ctx).Save(&model).Error; err != nil {
+		return fmt.Errorf("failed to update account: %w", err)
+	}
 
-    return nil
+	return nil
 }
 
 func (r *AccountRepository) DeleteAccount(ctx context.Context, id string) error {
@@ -389,4 +418,78 @@ func (r *AccountRepository) CountAccountMembers(ctx context.Context, accountID s
     }
 
     return count, nil
+}
+
+
+func (r *AccountRepository) GetUserByID(ctx context.Context, userID string) (*accountdomain.User, error) {
+	if userID == "" {
+		return nil, nil
+	}
+
+	var model UserModel
+	err := r.db.WithContext(ctx).
+		Where("id = ? AND deleted_at IS NULL", userID).
+		First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+	return model.ToDomain(), nil
+}
+
+func (r *AccountRepository) GetUsersByIDs(ctx context.Context, userIDs []string) ([]*accountdomain.User, error) {
+	if len(userIDs) == 0 {
+		return []*accountdomain.User{}, nil
+	}
+
+	var models []UserModel
+	err := r.db.WithContext(ctx).
+		Where("id IN ? AND deleted_at IS NULL", userIDs).
+		Find(&models).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get users: %w", err)
+	}
+
+	out := make([]*accountdomain.User, len(models))
+	for i, m := range models {
+		out[i] = m.ToDomain()
+	}
+	return out, nil
+}
+
+func (r *AccountRepository) UpdateUser(ctx context.Context, user *accountdomain.User) error {
+	if user == nil {
+		return fmt.Errorf("user is nil")
+	}
+	if user.ID == "" {
+		return fmt.Errorf("user ID is required")
+	}
+
+	model := UserModel{}
+	model.FromDomain(user)
+
+	if err := r.db.WithContext(ctx).Save(&model).Error; err != nil {
+		return fmt.Errorf("failed to update user: %w", err)
+	}
+	return nil
+}
+
+func (r *AccountRepository) GetUserBySlug(ctx context.Context, slug string) (*accountdomain.User, error) {
+	if slug == "" {
+		return nil, nil
+	}
+
+	var model UserModel
+	err := r.db.WithContext(ctx).
+		Where("slug = ? AND deleted_at IS NULL", slug).
+		First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get user by slug: %w", err)
+	}
+	return model.ToDomain(), nil
 }

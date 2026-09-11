@@ -2,128 +2,58 @@
 
 package domain
 
-import "strings"
+import domains "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared"
 
 // ============================================================
-// DOMAIN CONSTANTS
+// RE-EXPORTS from internal/shared/domains
 // ============================================================
+//
+// The canonical implementation lives in internal/shared/domains. This file
+// re-exports it under the events domain namespace so existing callsites
+// (event service, permission helpers, etc.) continue to work unchanged.
+//
+// The events module must not import the auth module directly. Both modules
+// depend on shared/domains instead — that's the only shared contract.
+
+// ---- Constants ----
 
 const (
-	// Team domain prefixes
-	TeamDomainPrefixPersonal    = "personal:team:"
-	TeamDomainPrefixInstitution = "institution:team:"
-	TeamDomainPrefixAccount     = "account:"
+	DomainPlatform              = domains.DomainPlatform
+	TeamDomainPrefixPersonal    = domains.TeamDomainPrefixPersonal
+	TeamDomainPrefixInstitution = domains.TeamDomainPrefixInstitution
+	TeamDomainPrefixAccount     = domains.TeamDomainPrefixAccount
+	TeamTypePersonal            = domains.TeamTypePersonal
+	TeamTypeInstitution         = domains.TeamTypeInstitution
 )
 
-// ============================================================
-// DOMAIN BUILDERS
-// ============================================================
+// ---- Builders ----
 
-// PersonalTeamDomain returns the personal team domain for a user
-// Format: "personal:team:{user_id}"
-func PersonalTeamDomain(userID string) string {
-	if userID == "" {
-		return ""
-	}
-	return TeamDomainPrefixPersonal + userID
-}
+var (
+	PersonalTeamDomain    = domains.PersonalTeamDomain
+	InstitutionTeamDomain = domains.InstitutionTeamDomain
+	AccountDomain         = domains.AccountDomain
+	BuildTeamDomain       = domains.BuildTeamDomain
+	TeamDomainFromClaims  = domains.TeamDomainFromClaims
+)
 
-// InstitutionTeamDomain returns the institution team domain for an account
-// Format: "institution:team:{account_id}"
-func InstitutionTeamDomain(accountID string) string {
-	if accountID == "" {
-		return ""
-	}
-	return TeamDomainPrefixInstitution + accountID
-}
+// ---- Checkers ----
 
-// AccountDomain returns the account domain for an account
-// Format: "account:{account_id}"
-func AccountDomain(accountID string) string {
-	if accountID == "" {
-		return ""
-	}
-	return TeamDomainPrefixAccount + accountID
-}
+var (
+	IsPersonalTeamDomain    = domains.IsPersonalTeamDomain
+	IsInstitutionTeamDomain = domains.IsInstitutionTeamDomain
+	IsAccountDomain         = domains.IsAccountDomain
+	IsTeamDomain            = domains.IsTeamDomain
+	IsPlatformDomain        = domains.IsPlatformDomain
+)
 
-// TeamDomain returns the team domain for a team
-// Format: "team:{team_id}"
-func TeamDomain(teamID string) string {
-	if teamID == "" {
-		return ""
-	}
-	return "team:" + teamID
-}
+// ---- Extractors ----
 
-// ============================================================
-// DOMAIN CHECKERS
-// ============================================================
+var (
+	ExtractTeamID              = domains.ExtractTeamID
+	ExtractAccountIDFromDomain = domains.ExtractAccountIDFromDomain
+	ExtractTeamType            = domains.ExtractTeamType
+)
 
-// IsPersonalTeamDomain checks if a domain is a personal team domain
-func IsPersonalTeamDomain(domain string) bool {
-	return strings.HasPrefix(domain, TeamDomainPrefixPersonal)
-}
+// ---- Higher-level helpers ----
 
-// IsInstitutionTeamDomain checks if a domain is an institution team domain
-func IsInstitutionTeamDomain(domain string) bool {
-	return strings.HasPrefix(domain, TeamDomainPrefixInstitution)
-}
-
-// IsAccountDomain checks if a domain is an account domain
-func IsAccountDomain(domain string) bool {
-	return strings.HasPrefix(domain, TeamDomainPrefixAccount)
-}
-
-// IsTeamDomain checks if a domain is a team domain
-func IsTeamDomain(domain string) bool {
-	return strings.HasPrefix(domain, "team:")
-}
-
-// ============================================================
-// EXTRACTION HELPERS
-// ============================================================
-
-// ExtractTeamID extracts team ID from a team domain
-func ExtractTeamID(domain string) string {
-	if IsPersonalTeamDomain(domain) {
-		return strings.TrimPrefix(domain, TeamDomainPrefixPersonal)
-	}
-	if IsInstitutionTeamDomain(domain) {
-		return strings.TrimPrefix(domain, TeamDomainPrefixInstitution)
-	}
-	if IsAccountDomain(domain) {
-		return strings.TrimPrefix(domain, TeamDomainPrefixAccount)
-	}
-	if IsTeamDomain(domain) {
-		return strings.TrimPrefix(domain, "team:")
-	}
-	return ""
-}
-
-// ExtractAccountIDFromDomain extracts account ID from a domain
-// Works with: "institution:team:{account_id}", "account:{account_id}", "personal:team:{user_id}"
-func ExtractAccountIDFromDomain(domain string) string {
-	if IsInstitutionTeamDomain(domain) {
-		return ExtractTeamID(domain)
-	}
-	if IsAccountDomain(domain) {
-		return ExtractTeamID(domain)
-	}
-	// For personal teams, the account ID is the user ID
-	if IsPersonalTeamDomain(domain) {
-		return ExtractTeamID(domain)
-	}
-	return ""
-}
-
-// ExtractTeamType extracts team type from a team domain
-// Returns: "personal", "institution", or empty string
-func ExtractTeamType(domain string) string {
-	if IsPersonalTeamDomain(domain) {
-		return "personal"
-	}
-	if IsInstitutionTeamDomain(domain) {
-		return "institution"
-	}
-	return ""
-}
+var ResolveEffectiveDomains = domains.ResolveEffectiveDomains

@@ -7,9 +7,10 @@
 package app
 
 import (
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	postgres3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/infrastructure/postgres"
-	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
+	service5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
@@ -18,16 +19,13 @@ import (
 	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
-	postgres4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
-	service7 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
-	postgres6 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
-	service5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
+	postgres5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
+	service6 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
+	postgres4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
+	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
-	handler3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
-	postgres5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/infrastructure/postgres"
-	service6 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/service"
 	handler2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure"
 	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure/postgres"
@@ -79,58 +77,53 @@ func InitializeApp() (*AppDependencies, error) {
 	aiService := infrastructure.NewOpenRouterAIAdapter(configConfig)
 	serviceService := service2.NewTeamService(teamdomainRepository, authService, casbinService, serviceNotificationService, aiService)
 	teamService := NewAuthTeamAdapter(serviceService)
-	service8 := service3.NewService(repository, configConfig, redisClient, queueService, permissionChecker, roleManager, policyManager, tokenService, authdomainNotificationService, enforcer, teamService)
+	service7 := service3.NewService(repository, configConfig, redisClient, queueService, permissionChecker, roleManager, policyManager, tokenService, authdomainNotificationService, enforcer, teamService)
 	accountdomainRepository := postgres3.NewAccountRepository(db)
-	serviceAuthService := NewAccountAuthAdapter(service8)
+	serviceAuthService := NewAccountAuthAdapter(service7)
 	notificationService2 := NewAccountNotificationAdapter(notificationService)
-	service9 := service4.NewAccountService(accountdomainRepository, serviceAuthService, notificationService2)
+	accountdomainPermissionChecker := NewAccountPermissionAdapter(permissionChecker)
 	domainRepository := postgres4.NewPostgresRepository(db)
+	service8 := service4.NewService(domainRepository, client)
+	mediaService := NewAccountMediaAdapter(service8)
+	service9 := service5.NewAccountService(accountdomainRepository, serviceAuthService, notificationService2, accountdomainPermissionChecker, mediaService)
+	repository2 := postgres5.NewPostgresRepository(db)
 	domainPermissionChecker := NewEventsPermissionAdapter(permissionChecker)
-	repository2 := postgres5.NewProfileRepository(db)
-	permissionChecker2 := NewProfilePermissionAdapter(permissionChecker)
-	domainRoleManager := NewProfileRoleManagerAdapter(roleManager)
-	repository3 := postgres6.NewPostgresRepository(db)
-	service10 := service5.NewService(repository3, client)
-	mediaService := NewProfileMediaAdapter(service10)
-	service11 := service6.NewProfileService(repository2, permissionChecker2, domainRoleManager, mediaService)
-	userInfoProvider := NewEventsUserInfoAdapter(service11)
-	domainMediaService := NewEventsMediaAdapter(service10)
+	userInfoProvider := NewEventsUserInfoAdapter(service9)
+	domainMediaService := NewEventsMediaAdapter(service8)
 	organizerProvider := provideOrganizerProvider(service9)
-	service12 := service7.NewService(domainRepository, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider)
-	authHandler := authhandler.NewAuthHandler(service8, configConfig)
+	service10 := service6.NewService(repository2, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider)
+	authHandler := authhandler.NewAuthHandler(service7, configConfig)
 	accountHandler := handler.NewAccountHandler(service9)
 	teamHandler := handler2.NewTeamHandler(serviceService)
-	eventHandler := eventhandler.NewEventHandler(service12)
-	profileHandler := handler3.NewProfileHandler(service11)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, permissionChecker, roleManager, policyManager, service8, tokenService, service9, serviceService, service12, service11, service10, notificationService, authHandler, accountHandler, teamHandler, eventHandler, profileHandler, aiService, organizerProvider)
+	eventHandler := eventhandler.NewEventHandler(service10)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, permissionChecker, roleManager, policyManager, service7, tokenService, service9, serviceService, service10, service8, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, organizerProvider, accountdomainPermissionChecker)
 	return appDependencies, nil
 }
 
 // wire.go:
 
 type AppDependencies struct {
-	Config            *config.Config
-	DB                *gorm.DB
-	App               *fiber.App
-	StorageClient     *storage.Client
-	RedisClient       *redis.Client
-	Enforcer          *authorization.Enforcer
-	PermissionChecker authdomain.PermissionChecker
-	RoleManager       authdomain.RoleManager
-	PolicyManager     authdomain.PolicyManager
-	AuthTokenService  authdomain.TokenService
-	AuthService       service3.Service
-	AccountService    service4.Service
-	TeamService       service2.Service
-	EventsService     service7.Service
-	ProfileService    service6.Service
-	MediaService      service5.Service
-	NotificationSvc   notificationdomain.NotificationService
-	AuthHandler       *authhandler.AuthHandler
-	AccountHandler    *handler.AccountHandler
-	TeamHandler       *handler2.TeamHandler
-	EventsHandler     *eventhandler.EventHandler
-	ProfileHandler    *handler3.ProfileHandler
-	AIService         service2.AIService
-	OrganizerProvider domain.OrganizerProvider
+	Config                    *config.Config
+	DB                        *gorm.DB
+	App                       *fiber.App
+	StorageClient             *storage.Client
+	RedisClient               *redis.Client
+	Enforcer                  *authorization.Enforcer
+	PermissionChecker         authdomain.PermissionChecker
+	RoleManager               authdomain.RoleManager
+	PolicyManager             authdomain.PolicyManager
+	AuthTokenService          authdomain.TokenService
+	AuthService               service3.Service
+	AccountService            service5.Service
+	TeamService               service2.Service
+	EventsService             service6.Service
+	MediaService              service4.Service
+	NotificationSvc           notificationdomain.NotificationService
+	AuthHandler               *authhandler.AuthHandler
+	AccountHandler            *handler.AccountHandler
+	TeamHandler               *handler2.TeamHandler
+	EventsHandler             *eventhandler.EventHandler
+	AIService                 service2.AIService
+	OrganizerProvider         domain.OrganizerProvider
+	AccountsPermissionChecker accountdomain.PermissionChecker
 }

@@ -1,93 +1,63 @@
 {
   "info": {
     "name": "Nuruvent Account API",
-    "description": "Complete Account Management API collection for Nuruvent",
+    "description": "Complete Account Management API collection for Nuruvent, including accounts, members, user profiles, and media (avatars/logos).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    {
-      "key": "base_url",
-      "value": "http://localhost:8080"
-    },
-    {
-      "key": "access_token",
-      "value": ""
-    },
-    {
-      "key": "account_id",
-      "value": ""
-    },
-    {
-      "key": "user_id",
-      "value": ""
-    },
-    {
-      "key": "account_type_id",
-      "value": ""
-    }
+    { "key": "base_url", "value": "http://localhost:8080" },
+    { "key": "access_token", "value": "" },
+    { "key": "account_id", "value": "" },
+    { "key": "user_id", "value": "" },
+    { "key": "account_type_id", "value": "" }
   ],
   "item": [
     {
-      "name": "Account Types (Public)",
+      "name": "1. Account Types (Public)",
       "item": [
         {
-          "name": "1. Get All Account Types",
+          "name": "1.1 Get All Account Types",
           "request": {
             "method": "GET",
             "url": "{{base_url}}/api/v1/account-types",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" }
             ]
           }
         },
         {
-          "name": "2. Get Account Type by ID",
-          "request": {
-            "method": "GET",
-            "url": "{{base_url}}/api/v1/account-types/{{account_type_id}}",
-            "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          }
-        },
-        {
-          "name": "3. Get Account Type by Slug",
+          "name": "1.2 Get Account Type by Slug",
           "request": {
             "method": "GET",
             "url": "{{base_url}}/api/v1/account-types/slug/personal",
             "header": [
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Content-Type", "value": "application/json" }
+            ]
+          }
+        },
+        {
+          "name": "1.3 Get Account Type by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/account-types/{{account_type_id}}",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
             ]
           }
         }
       ]
     },
     {
-      "name": "Account Operations",
+      "name": "2. Account Operations",
       "item": [
         {
-          "name": "1. Create Personal Account",
+          "name": "2.1 Create Personal Account",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/api/v1/accounts/personal",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
@@ -96,19 +66,13 @@
           }
         },
         {
-          "name": "2. Create Institution Account",
+          "name": "2.2 Create Institution Account",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/api/v1/accounts/institution",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
@@ -117,70 +81,46 @@
           }
         },
         {
-          "name": "3. Get My Accounts",
+          "name": "2.3 Get My Accounts",
           "request": {
             "method": "GET",
             "url": "{{base_url}}/api/v1/accounts",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ]
           }
         },
         {
-          "name": "4. Get Account by ID",
-          "request": {
-            "method": "GET",
-            "url": "{{base_url}}/api/v1/accounts/{{account_id}}",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ]
-          }
-        },
-        {
-          "name": "5. Get Account by Slug",
+          "name": "2.4 Get Account by Slug",
           "request": {
             "method": "GET",
             "url": "{{base_url}}/api/v1/accounts/slug/tech-corp-ltd",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ]
           }
         },
         {
-          "name": "6. Update Account",
+          "name": "2.5 Get Account by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ]
+          }
+        },
+        {
+          "name": "2.6 Update Account",
           "request": {
             "method": "PUT",
             "url": "{{base_url}}/api/v1/accounts/{{account_id}}",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
@@ -189,75 +129,77 @@
           }
         },
         {
-          "name": "7. Delete Account",
+          "name": "2.7 Delete Account",
           "request": {
             "method": "DELETE",
             "url": "{{base_url}}/api/v1/accounts/{{account_id}}",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ]
           }
         },
         {
-          "name": "8. Leave Account",
+          "name": "2.8 Leave Account",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/api/v1/accounts/{{account_id}}/leave",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ]
+          }
+        },
+        {
+          "name": "2.9 Upload Account Logo",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}/logo",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "logo", "type": "file", "src": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.10 Delete Account Logo",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/v1/accounts/{{account_id}}/logo",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
             ]
           }
         }
       ]
     },
     {
-      "name": "Account Member Operations",
+      "name": "3. Account Member Operations",
       "item": [
         {
-          "name": "1. Get Account Members",
+          "name": "3.1 Get Account Members",
           "request": {
             "method": "GET",
             "url": "{{base_url}}/api/v1/accounts/{{account_id}}/members",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ]
           }
         },
         {
-          "name": "2. Add Member to Account",
+          "name": "3.2 Add Member to Account",
           "request": {
             "method": "POST",
             "url": "{{base_url}}/api/v1/accounts/{{account_id}}/members",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
@@ -266,19 +208,13 @@
           }
         },
         {
-          "name": "3. Update Member Role",
+          "name": "3.3 Update Member Role",
           "request": {
             "method": "PUT",
             "url": "{{base_url}}/api/v1/accounts/{{account_id}}/members/{{user_id}}/role",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ],
             "body": {
               "mode": "raw",
@@ -287,41 +223,141 @@
           }
         },
         {
-          "name": "4. Remove Member from Account",
+          "name": "3.4 Remove Member from Account",
           "request": {
             "method": "DELETE",
             "url": "{{base_url}}/api/v1/accounts/{{account_id}}/members/{{user_id}}",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ]
           }
         }
       ]
     },
     {
-      "name": "User Account Routes",
+      "name": "4. User Profile (Self)",
       "item": [
         {
-          "name": "Get My Accounts (User)",
+          "name": "4.1 Get My Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/users/me/profile",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ]
+          }
+        },
+        {
+          "name": "4.2 Update My Profile (Full)",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/v1/users/me/profile",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"display_name\": \"Allan Myles\",\n    \"phone\": \"+254712345678\",\n    \"bio\": \"Backend engineer building event tech in Nairobi.\",\n    \"location\": \"Nairobi, Kenya\",\n    \"website\": \"https://allan.dev\",\n    \"social_links\": {\n        \"twitter\": \"https://twitter.com/allan\",\n        \"github\": \"https://github.com/allan\",\n        \"linkedin\": \"https://linkedin.com/in/allan\"\n    }\n}"
+            }
+          }
+        },
+        {
+          "name": "4.3 Update My Profile (Partial — bio only)",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/v1/users/me/profile",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"bio\": \"Now focused on distributed systems.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "4.4 Update My Profile (Clear optional fields)",
+          "request": {
+            "method": "PUT",
+            "url": "{{base_url}}/api/v1/users/me/profile",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"website\": \"\",\n    \"social_links\": {}\n}"
+            }
+          }
+        },
+        {
+          "name": "4.5 Upload My Avatar",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/users/me/avatar",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "avatar", "type": "file", "src": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.6 Delete My Avatar",
+          "request": {
+            "method": "DELETE",
+            "url": "{{base_url}}/api/v1/users/me/avatar",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{access_token}}" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Public Profiles",
+      "item": [
+        {
+          "name": "5.1 Get Public Profile by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/users/{{user_id}}/profile",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ]
+          }
+        },
+        {
+          "name": "5.2 Get Public Profile by Slug",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/api/v1/users/slug/allan-myles/profile",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. User Accounts",
+      "item": [
+        {
+          "name": "6.1 Get My Accounts (User)",
           "request": {
             "method": "GET",
             "url": "{{base_url}}/api/v1/users/me/accounts",
             "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{access_token}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
+              { "key": "Authorization", "value": "Bearer {{access_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
             ]
           }
         }

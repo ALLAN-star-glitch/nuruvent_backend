@@ -3,6 +3,7 @@
 package authorization
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"strings"
@@ -29,9 +30,9 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 		}
 
 		userIDStr, ok := userID.(string)
-		if !ok {
+		if !ok || userIDStr == "" {
 			return response.Unauthorized(c, "Invalid user ID", fiber.Map{
-				"reason": "user_id is not a string",
+				"reason": "user_id is not a valid string",
 			})
 		}
 
@@ -42,32 +43,46 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 		resource := getResourceFromRequest(c)
 		action := getActionFromRequest(c)
 
-		// DEBUG
 		log.Printf("🔍 AUTHZ: user=%s, domain=%s, resource=%s, action=%s",
 			userIDStr, domain, resource, action)
 
-		// ✅ SPECIAL CASE: /users/me/profile - always allow (GET and PUT)
+		// ============================================================
+		// SELF-SERVICE BYPASSES
+		// ============================================================
+		//
+		// These endpoints operate on the caller's own data. The service
+		// scopes the query by the authenticated user, so a domain-scoped
+		// Casbin check is neither necessary nor meaningful. The resolver
+		// would otherwise fall back to the token's team context and gate
+		// the operation on the wrong domain.
+
 		if isOwnProfileRequest(c) {
-			log.Printf("✅ AUTHZ BYPASS: /users/me/profile - allowing access")
+			log.Printf("✅ AUTHZ BYPASS: /users/me/profile")
 			c.Locals(authdomain.ContextKeyDomain, domain)
 			return c.Next()
 		}
-
-		// ✅ SPECIAL CASE: /users/me/avatar - always allow for own avatar
 		if isOwnAvatarRequest(c) {
-			log.Printf("✅ AUTHZ BYPASS: /users/me/avatar - allowing access")
+			log.Printf("✅ AUTHZ BYPASS: /users/me/avatar")
 			c.Locals(authdomain.ContextKeyDomain, domain)
 			return c.Next()
 		}
-
-		// ✅ SPECIAL CASE: /institutions/:id/logo - allow for institution admins
 		if isInstitutionLogoRequest(c) {
-			log.Printf("✅ AUTHZ BYPASS: institution logo request - allowing access")
+			log.Printf("✅ AUTHZ BYPASS: institution logo request")
+			c.Locals(authdomain.ContextKeyDomain, domain)
+			return c.Next()
+		}
+		if isSelfServiceListAccounts(c) {
+			log.Printf("✅ AUTHZ BYPASS: self-service account listing")
+			c.Locals(authdomain.ContextKeyDomain, domain)
+			return c.Next()
+		}
+		if isSelfServiceCreateAccount(c) {
+			log.Printf("✅ AUTHZ BYPASS: self-service account creation")
 			c.Locals(authdomain.ContextKeyDomain, domain)
 			return c.Next()
 		}
 
-		// Store domain for downstream
+		// Store resolved domain for downstream consumers
 		c.Locals(authdomain.ContextKeyDomain, domain)
 
 		// Check permission with fallback chain
@@ -93,331 +108,209 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 	}
 }
 
-// isOwnProfileRequest checks if this is a /users/me/profile request
+// ============================================================
+// BYPASS HELPERS
+// ============================================================
+
 func isOwnProfileRequest(c fiber.Ctx) bool {
-	path := c.Path()
-	return strings.Contains(path, "/users/me/profile")
+	return strings.Contains(c.Path(), "/users/me/profile")
 }
 
-// isOwnAvatarRequest checks if this is a /users/me/avatar request
 func isOwnAvatarRequest(c fiber.Ctx) bool {
-	path := c.Path()
-	return strings.Contains(path, "/users/me/avatar")
+	return strings.Contains(c.Path(), "/users/me/avatar")
 }
 
-// isInstitutionLogoRequest checks if this is an institution logo request
 func isInstitutionLogoRequest(c fiber.Ctx) bool {
 	path := c.Path()
 	return strings.Contains(path, "/institutions/") && strings.Contains(path, "/logo")
 }
 
-// checkPermissionWithFallback checks permissions with a fallback chain
-func checkPermissionWithFallback(
-	c fiber.Ctx,
-	checker authdomain.PermissionChecker,
-	userID string,
-	domain string,
-	resource string,
-	action string,
-) (bool, error) {
-	ctx := c.Context()
-
-	// For read actions: read -> read_all -> read_own
-	if action == authdomain.ActionRead.String() {
-		allowed, err := checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionRead.String())
-		log.Printf("🔍 HasPermission result: allowed=%v, err=%v", allowed, err)
-		if err == nil && allowed {
-			return true, nil
-		}
-
-		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionReadAll.String())
-		if err == nil && allowed {
-			return true, nil
-		}
-
-		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionReadOwn.String())
-		if err == nil && allowed {
-			return true, nil
-		}
-
-		if err != nil {
-			return false, err
-		}
-		return false, nil
+// isSelfServiceListAccounts matches GET /api/v1/accounts (the list endpoint).
+//
+// Rationale: the response is always the caller's own accounts — the service
+// scopes the query by userID. There's no cross-resource boundary to gate.
+// Without this bypass, the domain resolver falls back to the token's team
+// context (e.g. "institution:team:b93e58f9-...") and Casbin finds no
+// account-scoped policy there, producing a spurious 403.
+func isSelfServiceListAccounts(c fiber.Ctx) bool {
+	if c.Method() != http.MethodGet {
+		return false
 	}
+	path := strings.TrimSuffix(c.Path(), "/")
+	return path == "/api/v1/accounts"
+}
 
-	// For update actions: update -> update_all -> update_own
-	if action == authdomain.ActionUpdate.String() {
-		allowed, err := checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionUpdate.String())
-		if err == nil && allowed {
-			return true, nil
-		}
-
-		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionUpdateAll.String())
-		if err == nil && allowed {
-			return true, nil
-		}
-
-		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionUpdateOwn.String())
-		if err == nil && allowed {
-			return true, nil
-		}
-
-		if err != nil {
-			return false, err
-		}
-		return false, nil
+// isSelfServiceCreateAccount matches POST /api/v1/accounts/personal and
+// POST /api/v1/accounts/institution.
+//
+// Rationale: a user creating their own account is a self-service action.
+// The service handles account creation; there's no existing account to
+// authorize against. Gating this on Casbin would require a chicken-and-egg
+// policy — the account doesn't exist yet.
+func isSelfServiceCreateAccount(c fiber.Ctx) bool {
+	if c.Method() != http.MethodPost {
+		return false
 	}
-
-	// For delete actions: delete -> delete_all -> delete_own
-	if action == authdomain.ActionDelete.String() {
-		allowed, err := checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionDelete.String())
-		if err == nil && allowed {
-			return true, nil
-		}
-
-		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionDeleteAll.String())
-		if err == nil && allowed {
-			return true, nil
-		}
-
-		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionDeleteOwn.String())
-		if err == nil && allowed {
-			return true, nil
-		}
-
-		if err != nil {
-			return false, err
-		}
-		return false, nil
-	}
-
-	// For publish actions: publish_all -> publish_own
-	if action == authdomain.ActionPublishAll.String() || action == authdomain.ActionPublishOwn.String() {
-		allowed, err := checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionPublishAll.String())
-		if err == nil && allowed {
-			return true, nil
-		}
-
-		allowed, err = checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionPublishOwn.String())
-		if err == nil && allowed {
-			return true, nil
-		}
-
-		if err != nil {
-			return false, err
-		}
-		return false, nil
-	}
-
-	// For create actions: just check create
-	if action == authdomain.ActionCreate.String() {
-		return checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionCreate.String())
-	}
-
-	// For manage actions: just check manage
-	if action == authdomain.ActionManage.String() {
-		return checker.HasPermission(ctx, userID, domain, resource, authdomain.ActionManage.String())
-	}
-
-	// For all other actions, check exact match
-	return checker.HasPermission(ctx, userID, domain, resource, action)
+	path := strings.TrimSuffix(c.Path(), "/")
+	return path == "/api/v1/accounts/personal" || path == "/api/v1/accounts/institution"
 }
 
 // ============================================================
-// HELPER FUNCTIONS
+// PERMISSION CHECKS
 // ============================================================
 
-// getDomainFromRequest extracts the domain string from the request.
+// checkPermissionWithFallback applies the read/update/delete fallback chains,
+// then falls through to an exact match for other actions.
+func checkPermissionWithFallback(
+	c fiber.Ctx,
+	checker authdomain.PermissionChecker,
+	userID, domain, resource, action string,
+) (bool, error) {
+	ctx := c.Context()
+
+	switch action {
+	case authdomain.ActionRead.String():
+		return checkAny(
+			ctx, checker, userID, domain, resource,
+			[]string{
+				authdomain.ActionRead.String(),
+				authdomain.ActionReadAll.String(),
+				authdomain.ActionReadOwn.String(),
+			},
+		)
+
+	case authdomain.ActionUpdate.String():
+		return checkAny(
+			ctx, checker, userID, domain, resource,
+			[]string{
+				authdomain.ActionUpdate.String(),
+				authdomain.ActionUpdateAll.String(),
+				authdomain.ActionUpdateOwn.String(),
+			},
+		)
+
+	case authdomain.ActionDelete.String():
+		return checkAny(
+			ctx, checker, userID, domain, resource,
+			[]string{
+				authdomain.ActionDelete.String(),
+				authdomain.ActionDeleteAll.String(),
+				authdomain.ActionDeleteOwn.String(),
+			},
+		)
+
+	case authdomain.ActionPublishAll.String(), authdomain.ActionPublishOwn.String():
+		return checkAny(
+			ctx, checker, userID, domain, resource,
+			[]string{
+				authdomain.ActionPublishAll.String(),
+				authdomain.ActionPublishOwn.String(),
+			},
+		)
+	}
+
+	// Exact match for create, manage, and any other action
+	return checker.HasPermission(ctx, userID, domain, resource, action)
+}
+
+// checkAny returns (true, nil) on the first granted permission,
+// (false, err) on the first permission-check error, or (false, nil) if none match.
+func checkAny(
+	ctx context.Context,
+	checker authdomain.PermissionChecker,
+	userID, domain, resource string,
+	actions []string,
+) (bool, error) {
+	for _, action := range actions {
+		allowed, err := checker.HasPermission(ctx, userID, domain, resource, action)
+		if err != nil {
+			return false, err
+		}
+		if allowed {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// ============================================================
+// DOMAIN RESOLUTION
+// ============================================================
+
+// getDomainFromRequest resolves the Casbin domain for a request.
 //
 // Priority order:
-//  1. c.Locals(ContextKeyDomain) — set by an upstream middleware (bypass paths)
-//  2. Query param override (?team_id=... & ?team_type=...) — admin cross-team
-//  3. Query param override (?account_id=...)
-//  4. Token team context (team_id + team_type from JWT) — DEFAULT FOR AUTH'D USERS
-//  5. Profile-specific request paths
-//  6. Path params (:institutionId, :userId, :teamId, :id)
-//  7. /teams/... heuristic
+//  1. Explicit override via c.Locals(ContextKeyDomain) — set by upstream middleware
+//  2. Query param override — ?team_id=X&team_type=Y (admin cross-team)
+//  3. Query param override — ?account_id=X
+//  4. Token team context (team_id + team_type from JWT) — default for auth'd users
+//  5. Profile-specific paths (/users/me/profile, /users/me/avatar)
+//  6. Path params (:institutionId, :userId, :teamId, :accountId, :id)
+//  7. /teams/... path heuristic
 //  8. /me and /my endpoints (personal scope)
-//  9. Legacy query param fallbacks (?institutionId, ?userId, ?teamId, ?accountId)
-// 10. Platform routes (/admin, /platform, /system)
-// 11. Fallback: personal team of the authenticated user
+//  9. Platform routes (/admin, /platform, /system)
+// 10. Fallback: personal team of the authenticated user
 func getDomainFromRequest(c fiber.Ctx) string {
 	path := c.Path()
 
-	// 1. Explicit override via c.Locals(ContextKeyDomain)
+	// 1. Explicit override
 	if domain := c.Locals(authdomain.ContextKeyDomain); domain != nil {
 		if s, ok := domain.(string); ok && s != "" {
 			return s
 		}
 	}
 
-	// 2. Query param override — team
-	teamID := c.Query("team_id")
-	teamType := c.Query("team_type")
-
-	if teamID != "" && teamType != "" {
-		if teamType == "institution" {
-			return authdomain.InstitutionTeamDomain(teamID)
-		}
-		if teamType == "personal" {
-			return authdomain.PersonalTeamDomain(teamID)
-		}
+	// 2. Team override via query
+	if teamID, teamType := c.Query("team_id"), c.Query("team_type"); teamID != "" {
+		return authdomain.BuildTeamDomain(teamType, teamID)
 	}
 
-	// 3. Query param override — account
-	accountID := c.Query("account_id")
-	if accountID != "" {
+	// 3. Account override via query
+	if accountID := c.Query("account_id"); accountID != "" {
 		return authdomain.AccountDomain(accountID)
 	}
 
-	// 4. ✅ TOKEN TEAM CONTEXT — default for authenticated requests
-	//    Set by AuthMiddleware from JWT claims (team_id + team_type).
-	//    This is the primary source for /api/v1/events/... style routes
-	//    where team scope is implicit from the token.
-	if tokenTeamID := c.Locals(authdomain.ContextKeyTeamID); tokenTeamID != nil {
-		if tid, ok := tokenTeamID.(string); ok && tid != "" {
-			teamTypeStr := "personal"
+	// 4. Token team context — default for authenticated requests
+	if domain := domainFromToken(c); domain != "" {
+		return domain
+	}
 
-			if tokenTeamType := c.Locals(authdomain.ContextKeyTeamType); tokenTeamType != nil {
-				if tt, ok := tokenTeamType.(string); ok && tt != "" {
-					teamTypeStr = tt
-				}
-			}
-
-			if teamTypeStr == "institution" {
-				return authdomain.InstitutionTeamDomain(tid)
-			}
-			return authdomain.PersonalTeamDomain(tid)
+	// 5. Profile paths
+	if strings.Contains(path, "/users/me/profile") || strings.Contains(path, "/users/me/avatar") {
+		if domain := personalDomainForCurrentUser(c); domain != "" {
+			return domain
+		}
+	}
+	if strings.Contains(path, "/profile/organizer") {
+		if domain := domainFromScopeQuery(c); domain != "" {
+			return domain
 		}
 	}
 
-	// 5. Profile endpoints
-	if strings.Contains(path, "/profile") {
-		if strings.Contains(path, "/users/me/profile") || strings.Contains(path, "/users/me/avatar") {
-			if uid := c.Locals(authdomain.ContextKeyUserID); uid != nil {
-				if uidStr, ok := uid.(string); ok && uidStr != "" {
-					return authdomain.PersonalTeamDomain(uidStr)
-				}
-			}
-		}
-		// For /profile/organizer?scope=xxx - parse from query
-		if strings.Contains(path, "/profile/organizer") {
-			scopeParam := c.Query("scope")
-			if scopeParam != "" {
-				parts := strings.SplitN(scopeParam, ":", 2)
-				if len(parts) == 2 {
-					switch parts[0] {
-					case "personal":
-						return authdomain.PersonalTeamDomain(parts[1])
-					case "institution":
-						return authdomain.InstitutionTeamDomain(parts[1])
-					case "account":
-						return authdomain.AccountDomain(parts[1])
-					}
-				}
-			}
-		}
-	}
-
-	// Institution logo request
+	// 6. Institution logo path
 	if strings.Contains(path, "/institutions/") && strings.Contains(path, "/logo") {
-		parts := strings.Split(path, "/")
-		for i, part := range parts {
-			if part == "institutions" && i+1 < len(parts) {
-				return authdomain.InstitutionTeamDomain(parts[i+1])
-			}
+		if domain := institutionDomainFromPath(path); domain != "" {
+			return domain
 		}
 	}
 
-	// 6. Path params
-	institutionID := c.Params("institutionId")
-	if institutionID != "" {
-		return authdomain.InstitutionTeamDomain(institutionID)
+	// 7. Path params
+	if domain := domainFromPathParams(c, path); domain != "" {
+		return domain
 	}
 
-	userIDParam := c.Params("userId")
-	if userIDParam != "" {
-		return authdomain.PersonalTeamDomain(userIDParam)
-	}
-
-	pathTeamID := c.Params("teamId")
-	if pathTeamID != "" {
-		// Determine team type from token context or query
-		if tt := getTokenTeamType(c); tt == "institution" {
-			return authdomain.InstitutionTeamDomain(pathTeamID)
-		}
-		if tt := c.Query("team_type"); tt == "institution" {
-			return authdomain.InstitutionTeamDomain(pathTeamID)
-		}
-		return authdomain.PersonalTeamDomain(pathTeamID)
-	}
-
-	// 7. /teams/... route heuristic
+	// 8. /teams/... path heuristic
 	if strings.Contains(path, "/teams/") {
-		extractedTeamID := extractTeamIDFromPath(path)
-		if extractedTeamID != "" {
-			if tt := getTokenTeamType(c); tt == "institution" {
-				return authdomain.InstitutionTeamDomain(extractedTeamID)
-			}
-			if tt := c.Query("team_type"); tt == "institution" {
-				return authdomain.InstitutionTeamDomain(extractedTeamID)
-			}
-			return authdomain.PersonalTeamDomain(extractedTeamID)
+		if domain := domainFromTeamsPath(c, path); domain != "" {
+			return domain
 		}
 	}
 
-	pathAccountID := c.Params("accountId")
-	if pathAccountID != "" {
-		return authdomain.AccountDomain(pathAccountID)
-	}
-
-	id := c.Params("id")
-	if id != "" {
-		if strings.Contains(path, "/institutions/") {
-			return authdomain.InstitutionTeamDomain(id)
-		}
-		if strings.Contains(path, "/accounts/") {
-			return authdomain.AccountDomain(id)
-		}
-		if strings.Contains(path, "/teams/") {
-			if tt := getTokenTeamType(c); tt == "institution" {
-				return authdomain.InstitutionTeamDomain(id)
-			}
-			if tt := c.Query("team_type"); tt == "institution" {
-				return authdomain.InstitutionTeamDomain(id)
-			}
-			return authdomain.PersonalTeamDomain(id)
-		}
-		if strings.Contains(path, "/users/") {
-			return authdomain.PersonalTeamDomain(id)
-		}
-	}
-
-	// 8. /me and /my endpoints (personal scope)
+	// 9. /me and /my endpoints (personal scope)
 	if strings.Contains(path, "/me") || strings.Contains(path, "/my") {
-		if uid := c.Locals(authdomain.ContextKeyUserID); uid != nil {
-			if uidStr, ok := uid.(string); ok && uidStr != "" {
-				return authdomain.PersonalTeamDomain(uidStr)
-			}
+		if domain := personalDomainForCurrentUser(c); domain != "" {
+			return domain
 		}
-	}
-
-	// 9. Legacy query param fallbacks
-	if institutionID := c.Query("institutionId"); institutionID != "" {
-		return authdomain.InstitutionTeamDomain(institutionID)
-	}
-	if userID := c.Query("userId"); userID != "" {
-		return authdomain.PersonalTeamDomain(userID)
-	}
-	if teamID := c.Query("teamId"); teamID != "" {
-		if tt := c.Query("team_type"); tt == "institution" {
-			return authdomain.InstitutionTeamDomain(teamID)
-		}
-		return authdomain.PersonalTeamDomain(teamID)
-	}
-	if accountID := c.Query("accountId"); accountID != "" {
-		return authdomain.AccountDomain(accountID)
 	}
 
 	// 10. Platform routes
@@ -428,40 +321,155 @@ func getDomainFromRequest(c fiber.Ctx) string {
 	}
 
 	// 11. Fallback: personal team of the authenticated user
-	if uid := c.Locals(authdomain.ContextKeyUserID); uid != nil {
-		if uidStr, ok := uid.(string); ok && uidStr != "" {
-			return authdomain.PersonalTeamDomain(uidStr)
-		}
+	if domain := personalDomainForCurrentUser(c); domain != "" {
+		return domain
 	}
 
 	return authdomain.DomainPlatform
 }
 
-// getTokenTeamType returns the team_type stored by AuthMiddleware, or "" if absent.
-func getTokenTeamType(c fiber.Ctx) string {
-	if tt := c.Locals(authdomain.ContextKeyTeamType); tt != nil {
-		if s, ok := tt.(string); ok {
-			return s
+// domainFromToken reads team_id + team_type from Locals and returns the domain.
+// Returns "" if no team context is present.
+func domainFromToken(c fiber.Ctx) string {
+	tidRaw := c.Locals(authdomain.ContextKeyTeamID)
+	if tidRaw == nil {
+		return ""
+	}
+	tid, ok := tidRaw.(string)
+	if !ok || tid == "" {
+		return ""
+	}
+
+	teamType := authdomain.TeamTypePersonal // safe default
+	if ttRaw := c.Locals(authdomain.ContextKeyTeamType); ttRaw != nil {
+		if tt, ok := ttRaw.(string); ok && tt != "" {
+			teamType = tt
+		}
+	}
+
+	return authdomain.BuildTeamDomain(teamType, tid)
+}
+
+// personalDomainForCurrentUser returns personal:team:<user_id> for the auth'd user.
+func personalDomainForCurrentUser(c fiber.Ctx) string {
+	uidRaw := c.Locals(authdomain.ContextKeyUserID)
+	if uidRaw == nil {
+		return ""
+	}
+	uid, ok := uidRaw.(string)
+	if !ok || uid == "" {
+		return ""
+	}
+	return authdomain.PersonalTeamDomain(uid)
+}
+
+// domainFromScopeQuery parses ?scope=<type>:<id> (used by /profile/organizer).
+func domainFromScopeQuery(c fiber.Ctx) string {
+	scope := c.Query("scope")
+	if scope == "" {
+		return ""
+	}
+	parts := strings.SplitN(scope, ":", 2)
+	if len(parts) != 2 {
+		return ""
+	}
+	switch parts[0] {
+	case "personal":
+		return authdomain.PersonalTeamDomain(parts[1])
+	case "institution":
+		return authdomain.InstitutionTeamDomain(parts[1])
+	case "account":
+		return authdomain.AccountDomain(parts[1])
+	}
+	return ""
+}
+
+// institutionDomainFromPath extracts the institution ID from /institutions/:id/logo-style paths.
+func institutionDomainFromPath(path string) string {
+	parts := strings.Split(path, "/")
+	for i, p := range parts {
+		if p == "institutions" && i+1 < len(parts) {
+			return authdomain.InstitutionTeamDomain(parts[i+1])
 		}
 	}
 	return ""
 }
 
-// extractTeamIDFromPath extracts team ID from the path
+// domainFromPathParams resolves the domain from route params, in priority order.
+func domainFromPathParams(c fiber.Ctx, path string) string {
+	if id := c.Params("institutionId"); id != "" {
+		return authdomain.InstitutionTeamDomain(id)
+	}
+	if id := c.Params("userId"); id != "" {
+		return authdomain.PersonalTeamDomain(id)
+	}
+	if id := c.Params("teamId"); id != "" {
+		return teamDomainWithType(c, id)
+	}
+	if id := c.Params("accountId"); id != "" {
+		return authdomain.AccountDomain(id)
+	}
+	if id := c.Params("id"); id != "" {
+		switch {
+		case strings.Contains(path, "/institutions/"):
+			return authdomain.InstitutionTeamDomain(id)
+		case strings.Contains(path, "/accounts/"):
+			return authdomain.AccountDomain(id)
+		case strings.Contains(path, "/teams/"):
+			return teamDomainWithType(c, id)
+		case strings.Contains(path, "/users/"):
+			return authdomain.PersonalTeamDomain(id)
+		}
+	}
+	return ""
+}
+
+// teamDomainWithType picks institution vs personal based on token/query context.
+// Defaults to institution when no explicit type is available.
+func teamDomainWithType(c fiber.Ctx, teamID string) string {
+	if tt := tokenTeamType(c); tt != "" {
+		return authdomain.BuildTeamDomain(tt, teamID)
+	}
+	if tt := c.Query("team_type"); tt != "" {
+		return authdomain.BuildTeamDomain(tt, teamID)
+	}
+	return authdomain.InstitutionTeamDomain(teamID)
+}
+
+// domainFromTeamsPath handles routes like /teams/:id/... where the ID is a UUID.
+func domainFromTeamsPath(c fiber.Ctx, path string) string {
+	teamID := extractTeamIDFromPath(path)
+	if teamID == "" {
+		return ""
+	}
+	return teamDomainWithType(c, teamID)
+}
+
+// tokenTeamType returns the team_type stored by AuthMiddleware, or "" if absent.
+func tokenTeamType(c fiber.Ctx) string {
+	raw := c.Locals(authdomain.ContextKeyTeamType)
+	if raw == nil {
+		return ""
+	}
+	if s, ok := raw.(string); ok {
+		return s
+	}
+	return ""
+}
+
+// extractTeamIDFromPath returns the UUID after /teams/ in the path.
 func extractTeamIDFromPath(path string) string {
 	parts := strings.Split(path, "/")
-	for i, part := range parts {
-		if part == "teams" && i+1 < len(parts) {
-			nextPart := parts[i+1]
-			// Check if it looks like a UUID (has hyphens and is long enough)
-			if strings.Contains(nextPart, "-") && len(nextPart) > 30 {
-				return nextPart
+	for i, p := range parts {
+		if p == "teams" && i+1 < len(parts) {
+			next := parts[i+1]
+			if strings.Contains(next, "-") && len(next) > 30 {
+				return next
 			}
-			// Check if the part after that is a UUID (for routes like /teams/:id/invite)
 			if i+2 < len(parts) {
-				nextNextPart := parts[i+2]
-				if strings.Contains(nextNextPart, "-") && len(nextNextPart) > 30 {
-					return nextNextPart
+				nextNext := parts[i+2]
+				if strings.Contains(nextNext, "-") && len(nextNext) > 30 {
+					return nextNext
 				}
 			}
 		}
@@ -469,86 +477,47 @@ func extractTeamIDFromPath(path string) string {
 	return ""
 }
 
-// getResourceFromRequest extracts the resource from the request path
+// ============================================================
+// RESOURCE RESOLUTION
+// ============================================================
+
+// getResourceFromRequest extracts the Casbin resource from the request path.
 func getResourceFromRequest(c fiber.Ctx) string {
 	path := strings.TrimPrefix(c.Path(), "/api/v1/")
 	segments := strings.Split(path, "/")
 
-	// ✅ Check for invitation routes first
+	// Special-case: invitation POSTs are member/invite actions
 	for _, seg := range segments {
 		if seg == "invitations" || seg == "invitation" {
-			// Check if it's a POST to invitations (inviting a member)
-			if c.Method() == http.MethodPost {
-				return "member" // Resource is member, action will be invite
-			}
-			return "invitation"
+			return authdomain.ResourceMember.String()
 		}
 	}
 
+	// Contextual resource resolution (path-position-aware)
 	for i, seg := range segments {
 		switch seg {
 		case "users", "user":
-			if i+1 < len(segments) && (segments[i+1] == "profile" || strings.Contains(segments[i+1], "profile")) {
-				return authdomain.ResourceProfile.String()
-			}
-			if i+1 < len(segments) && segments[i+1] == "avatar" {
-				return authdomain.ResourceProfile.String()
-			}
-			if i+1 < len(segments) && segments[i] == "me" && (segments[i+1] == "profile" || segments[i+1] == "avatar") {
-				return authdomain.ResourceProfile.String()
-			}
-			if i+2 < len(segments) && segments[i] == "users" && segments[i+1] == "me" && segments[i+2] == "profile" {
-				return authdomain.ResourceProfile.String()
-			}
-			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
-				return authdomain.ResourceEvent.String()
-			}
-			if i+2 < len(segments) && segments[i+2] == "profiles" {
-				return authdomain.ResourceProfile.String()
+			if r := userSubResource(segments, i); r != "" {
+				return r
 			}
 			return authdomain.ResourceUser.String()
-		case "profile":
-			return authdomain.ResourceProfile.String()
 		case "accounts", "account":
-			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
-				return authdomain.ResourceEvent.String()
-			}
-			if i+2 < len(segments) && segments[i+2] == "profile" {
-				return authdomain.ResourceProfile.String()
-			}
-			if i+1 < len(segments) && segments[i+1] == "members" {
-				return authdomain.ResourceMember.String()
+			if r := accountSubResource(segments, i); r != "" {
+				return r
 			}
 			return authdomain.ResourceAccount.String()
 		case "institutions", "institution":
-			if i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event") {
-				return authdomain.ResourceEvent.String()
-			}
-			if i+2 < len(segments) && segments[i+2] == "profile" {
-				return authdomain.ResourceProfile.String()
-			}
-			if i+1 < len(segments) && segments[i+1] == "logo" {
-				return authdomain.ResourceProfile.String()
+			if r := institutionSubResource(segments, i); r != "" {
+				return r
 			}
 			return authdomain.ResourceInstitution.String()
 		case "teams", "team":
-			// ✅ Check if this is a member operation (invitations, members)
-			if i+2 < len(segments) {
-				if segments[i+2] == "invitations" || segments[i+2] == "members" {
-					return authdomain.ResourceMember.String()
-				}
-				if segments[i+2] == "events" || segments[i+2] == "event" {
-					return authdomain.ResourceEvent.String()
-				}
+			if r := teamSubResource(segments, i); r != "" {
+				return r
 			}
 			return authdomain.ResourceTeam.String()
-		case "me":
-			if i+1 < len(segments) && (segments[i+1] == "events" || segments[i+1] == "event") {
-				return authdomain.ResourceEvent.String()
-			}
-			if i+1 < len(segments) && (segments[i+1] == "profile" || segments[i+1] == "avatar") {
-				return authdomain.ResourceProfile.String()
-			}
+		case "profile":
+			return authdomain.ResourceProfile.String()
 		case "avatar":
 			return authdomain.ResourceProfile.String()
 		case "logo":
@@ -560,11 +529,9 @@ func getResourceFromRequest(c fiber.Ctx) string {
 		}
 	}
 
-	// Check for direct matches
+	// Direct resource match
 	for _, seg := range segments {
 		switch seg {
-		case "profile":
-			return authdomain.ResourceProfile.String()
 		case "events", "event":
 			return authdomain.ResourceEvent.String()
 		case "certificates", "certificate":
@@ -575,8 +542,6 @@ func getResourceFromRequest(c fiber.Ctx) string {
 			return authdomain.ResourcePayment.String()
 		case "payouts", "payout":
 			return authdomain.ResourcePayout.String()
-		case "members", "member":
-			return authdomain.ResourceMember.String()
 		case "dashboard":
 			return authdomain.ResourceDashboard.String()
 		case "analytics":
@@ -585,24 +550,89 @@ func getResourceFromRequest(c fiber.Ctx) string {
 			return authdomain.ResourceNotification.String()
 		case "media":
 			return authdomain.ResourceMedia.String()
-		case "billing":
-			return authdomain.ResourceBilling.String()
 		}
 	}
 
 	return ""
 }
 
-// getActionFromRequest maps HTTP method to action
+// ---- Resource sub-resolvers (keep each path family in one place) ----
+
+func userSubResource(segments []string, i int) string {
+	if i+1 >= len(segments) {
+		return ""
+	}
+	next := segments[i+1]
+	switch {
+	case strings.Contains(next, "profile"):
+		return authdomain.ResourceProfile.String()
+	case next == "avatar":
+		return authdomain.ResourceProfile.String()
+	case i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event"):
+		return authdomain.ResourceEvent.String()
+	case i+2 < len(segments) && segments[i+2] == "profiles":
+		return authdomain.ResourceProfile.String()
+	}
+	return ""
+}
+
+func accountSubResource(segments []string, i int) string {
+	if i+1 < len(segments) && segments[i+1] == "members" {
+		return authdomain.ResourceMember.String()
+	}
+	if i+2 < len(segments) {
+		switch segments[i+2] {
+		case "events", "event":
+			return authdomain.ResourceEvent.String()
+		case "profile":
+			return authdomain.ResourceProfile.String()
+		}
+	}
+	return ""
+}
+
+func institutionSubResource(segments []string, i int) string {
+	if i+1 < len(segments) && segments[i+1] == "logo" {
+		return authdomain.ResourceProfile.String()
+	}
+	if i+2 < len(segments) {
+		switch segments[i+2] {
+		case "events", "event":
+			return authdomain.ResourceEvent.String()
+		case "profile":
+			return authdomain.ResourceProfile.String()
+		}
+	}
+	return ""
+}
+
+func teamSubResource(segments []string, i int) string {
+	if i+2 >= len(segments) {
+		return ""
+	}
+	switch segments[i+2] {
+	case "invitations", "members":
+		return authdomain.ResourceMember.String()
+	case "events", "event":
+		return authdomain.ResourceEvent.String()
+	}
+	return ""
+}
+
+// ============================================================
+// ACTION RESOLUTION
+// ============================================================
+
+// getActionFromRequest maps HTTP method to Casbin action.
 func getActionFromRequest(c fiber.Ctx) string {
 	path := c.Path()
 
-	// ✅ Check if this is an invitation POST request
+	// POST /invitations → invite (not create)
 	if strings.Contains(path, "/invitations") && c.Method() == http.MethodPost {
-		return "invite" // Action is invite, not create
+		return authdomain.ActionInvite.String()
 	}
 
-	// For avatar/logo uploads, POST should map to update, not create
+	// POST/DELETE on avatar or logo → update/delete (not create)
 	if strings.Contains(path, "/avatar") || strings.Contains(path, "/logo") {
 		switch c.Method() {
 		case http.MethodPost:

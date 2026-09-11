@@ -73,7 +73,6 @@ func (app *App) SetupRoutes() {
 		authzMiddleware,
 		app.AuthHandler,
 		app.EventsHandler,
-		app.ProfileHandler,
 		app.TeamHandler,
 		app.AccountHandler,
 	)
@@ -103,6 +102,6 @@ func (app *App) Close() {
 			log.Printf("Error closing Redis: %v", err)
 		}
 	}
-
+	
 	log.Println("Application closed successfully")
 }

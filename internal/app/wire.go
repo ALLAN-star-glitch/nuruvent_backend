@@ -14,6 +14,8 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account"
 	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
+	accountDomain  "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
+	
 
 	// Auth Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth"
@@ -21,6 +23,7 @@ import (
 	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
+
 
 	// Events Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events"
@@ -37,10 +40,6 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
 	notificationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 
-	// Profile Module
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile"
-	profileService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/service"
-	profileHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
 
 	// Team Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team"
@@ -76,16 +75,15 @@ type AppDependencies struct {
 	AccountService     accountService.Service
 	TeamService        teamService.Service
 	EventsService      eventsService.Service
-	ProfileService     profileService.Service
 	MediaService       mediaService.Service
 	NotificationSvc    notificationDomain.NotificationService
 	AuthHandler        *authHandler.AuthHandler
 	AccountHandler     *accountHandler.AccountHandler
 	TeamHandler        *teamHandler.TeamHandler
 	EventsHandler      *eventsHandler.EventHandler
-	ProfileHandler     *profileHandler.ProfileHandler
 	AIService          teamService.AIService
 	OrganizerProvider	eventsDomain.OrganizerProvider
+	AccountsPermissionChecker		accountDomain.PermissionChecker
 }
 
 // ============================================================
@@ -116,7 +114,6 @@ func InitializeApp() (*AppDependencies, error) {
 		events.ProviderSet,
 		media.ProviderSet,
 		notification.ProviderSet,
-		profile.ProviderSet,
 		team.ProviderSet,
 
 		// ============================================================
@@ -130,6 +127,8 @@ func InitializeApp() (*AppDependencies, error) {
 		// CROSS-MODULE ADAPTERS - ACCOUNT
 		// ============================================================
 		NewAccountAuthAdapter,
+		NewAccountPermissionAdapter,
+		NewAccountMediaAdapter,
 
 		// ============================================================
 		// CROSS-MODULE ADAPTERS - EVENTS
@@ -139,12 +138,6 @@ func InitializeApp() (*AppDependencies, error) {
 		NewEventsMediaAdapter,
 
 		// ============================================================
-		// CROSS-MODULE ADAPTERS - PROFILE
-		// ============================================================
-		NewProfilePermissionAdapter,
-		NewProfileMediaAdapter,
-
-		// ============================================================
 		// CROSS-MODULE ADAPTERS - TEAM
 		// ============================================================
 		NewTeamAuthAdapter,
@@ -152,7 +145,6 @@ func InitializeApp() (*AppDependencies, error) {
 		NewTeamNotificationAdapter,
 		NewAccountNotificationAdapter,
 
-		NewProfileRoleManagerAdapter,
 
 		provideOrganizerProvider,
 

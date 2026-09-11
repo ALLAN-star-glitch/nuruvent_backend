@@ -1,6 +1,6 @@
-// internal/modules/events/domain/context_keys.go
+// internal/modules/account/accountdomain/context_keys.go
 
-package domain
+package accountdomain
 
 import "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 
@@ -8,9 +8,9 @@ import "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 // RE-EXPORTS from internal/shared/types
 // ============================================================
 //
-// The canonical implementation lives in internal/shared/types. This file
-// re-exports it under the events domain namespace so existing callsites
-// continue to work unchanged.
+// The account module needs access to the same context keys and helpers
+// as auth and events. Rather than duplicating them, re-export from the
+// shared package.
 
 type ContextKey = types.ContextKey
 

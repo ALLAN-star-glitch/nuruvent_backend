@@ -9,12 +9,12 @@ import (
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
+	"github.com/gorilla/schema"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/handlerhelper"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
-
-	"github.com/gorilla/schema"
 )
 
 // ============================================================
@@ -48,10 +48,10 @@ func NewEventHandler(svc service.Service) *EventHandler {
 //
 // NOTE: request body is intentionally NOT consulted — body is untrusted.
 func resolveTeamType(c fiber.Ctx) string {
-	if tt := getTeamType(c); tt != "" {
+	if tt := handlerhelper.GetTeamType(c); tt != "" {
 		return tt
 	}
-	if tt := getQueryString(c, "team_type", ""); tt != "" {
+	if tt := handlerhelper.GetQueryString(c, "team_type", ""); tt != "" {
 		return tt
 	}
 	return "institution"
@@ -63,10 +63,10 @@ func resolveTeamType(c fiber.Ctx) string {
 //
 // NOTE: request body is intentionally NOT consulted.
 func resolveAccountID(c fiber.Ctx) string {
-	if acc := getAccountID(c); acc != "" {
+	if acc := handlerhelper.GetAccountID(c); acc != "" {
 		return acc
 	}
-	return getQueryString(c, "account_id", "")
+	return handlerhelper.GetQueryString(c, "account_id", "")
 }
 
 // resolveTeamIDForUnified returns the target team ID for unified create/list ops:
@@ -74,10 +74,10 @@ func resolveAccountID(c fiber.Ctx) string {
 //   2. Authenticated token context
 //   3. Falls back to the user's personal scope (userID)
 func resolveTeamIDForUnified(c fiber.Ctx, userID string) string {
-	if tid := getQueryString(c, "team_id", ""); tid != "" {
+	if tid := handlerhelper.GetQueryString(c, "team_id", ""); tid != "" {
 		return tid
 	}
-	if tid := getTeamID(c); tid != "" {
+	if tid := handlerhelper.GetTeamID(c); tid != "" {
 		return tid
 	}
 	return userID
@@ -121,7 +121,7 @@ func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	event, err := h.svc.GetEventByID(ctx, id)
 	if err != nil {
@@ -157,7 +157,7 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event slug is required", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	event, err := h.svc.GetEventBySlug(ctx, slug)
 	if err != nil {
@@ -186,12 +186,12 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/upcoming [get]
 func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
-	limit := getQueryInt(c, "limit", 10)
+	limit := handlerhelper.GetQueryInt(c, "limit", 10)
 	if limit > 50 {
 		limit = 50
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	events, err := h.svc.GetUpcomingEvents(ctx, "", limit)
 	if err != nil {
@@ -215,12 +215,12 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/past [get]
 func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
-	limit := getQueryInt(c, "limit", 10)
+	limit := handlerhelper.GetQueryInt(c, "limit", 10)
 	if limit > 50 {
 		limit = 50
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	events, err := h.svc.GetPastEvents(ctx, "", limit)
 	if err != nil {
@@ -258,7 +258,7 @@ func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events [get]
 func (h *EventHandler) ListEvents(c fiber.Ctx) error {
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	var req ListEventsRequest
 	if err := c.Bind().Query(&req); err != nil {
@@ -345,13 +345,13 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 		normalizedSlug = "event-type-" + eventTypeSlug
 	}
 
-	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "page_size", 20)
+	page := handlerhelper.GetQueryInt(c, "page", 1)
+	pageSize := handlerhelper.GetQueryInt(c, "page_size", 20)
 	if pageSize > 100 {
 		pageSize = 100
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	events, total, err := h.svc.GetEventsByType(ctx, normalizedSlug, page, pageSize)
 	if err != nil {
@@ -385,7 +385,7 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/types [get]
 func (h *EventHandler) GetEventTypes(c fiber.Ctx) error {
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	types, err := h.svc.GetEventTypes(ctx)
 	if err != nil {
@@ -406,7 +406,7 @@ func (h *EventHandler) GetEventTypes(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/statuses [get]
 func (h *EventHandler) GetEventStatuses(c fiber.Ctx) error {
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	statuses, err := h.svc.GetEventStatuses(ctx)
 	if err != nil {
@@ -427,7 +427,7 @@ func (h *EventHandler) GetEventStatuses(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/categories [get]
 func (h *EventHandler) GetCategories(c fiber.Ctx) error {
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	categories, err := h.svc.GetCategories(ctx)
 	if err != nil {
@@ -454,70 +454,98 @@ func (h *EventHandler) GetCategories(c fiber.Ctx) error {
 
 // SearchEvents godoc
 // @Summary Search events
-// @Description Search events by title or description
+// @Description Search events. Public route (/events/search) returns only public
+//              events with no creator info. Authenticated route (/events/me/search)
+//              scopes results based on the caller's permissions (read_all vs read_own).
 // @Tags Events
 // @Produce json
-// @Param q query string false "Search query"
-// @Param team_id query string false "Team ID"
-// @Param user_id query string false "User ID (creator)"
+// @Param q query string true "Search query"
+// @Param team_id query string false "Team ID override (authenticated only)"
+// @Param team_type query string false "Team type override: personal | institution"
 // @Param event_type_id query string false "Event Type ID"
 // @Param category_id query string false "Category ID"
-// @Param include_deleted query bool false "Include soft-deleted events"
-// @Param only_deleted query bool false "Show ONLY soft-deleted events"
-// @Param include_creator query bool false "Include creator details"
+// @Param include_deleted query bool false "Include soft-deleted events (authenticated only)"
+// @Param only_deleted query bool false "Show ONLY soft-deleted events (authenticated only)"
+// @Param include_creator query bool false "Include creator details (authenticated only)"
+// @Param visibility query string false "Visibility filter (authenticated only)"
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Param visibility query string false "Visibility (public, private, unlisted)"
 // @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
 // @Failure 400 {object} response.BaseResponse
+// @Failure 403 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/search [get]
+// @Router /api/v1/events/me/search [get]
 func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
-	query := getQueryString(c, "q", "")
+	query := handlerhelper.GetQueryString(c, "q", "")
 	if query == "" {
 		return response.BadRequest(c, "Search query is required", nil)
 	}
 
-	teamID := getQueryString(c, "team_id", "")
-	userID := getQueryString(c, "user_id", "")
-	eventTypeID := getQueryString(c, "event_type_id", "")
-	categoryID := getQueryString(c, "category_id", "")
-	includeDeleted := c.Query("include_deleted") == "true"
-	onlyDeleted := c.Query("only_deleted") == "true"
-	includeCreator := c.Query("include_creator") == "true"
-	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "page_size", 20)
-	visibility := getQueryString(c, "visibility", "")
-
+	page := handlerhelper.GetQueryInt(c, "page", 1)
+	pageSize := handlerhelper.GetQueryInt(c, "page_size", 20)
 	if pageSize > 100 {
 		pageSize = 100
 	}
 
-	team := domain.TeamFilter{}
-	if teamID != "" {
-		team = domain.TeamFilter{ID: teamID, Type: "institution"}
-	} else if userID != "" {
-		team = domain.TeamFilter{ID: userID, Type: "personal"}
+	// ─── Auth context ────────────────────────────────────────────
+	userID := handlerhelper.GetUserIDOptional(c)
+	tokenTeamID := handlerhelper.GetTeamID(c)
+	tokenTeamType := handlerhelper.GetTeamType(c)
+	isAuthenticated := userID != ""
+
+	// ─── Team scope resolution ───────────────────────────────────
+	teamID := handlerhelper.GetQueryString(c, "team_id", "")
+	teamType := handlerhelper.GetQueryString(c, "team_type", "")
+
+	if teamID == "" && isAuthenticated {
+		teamID = tokenTeamID
+		teamType = tokenTeamType
+	}
+	if teamID != "" && teamID == tokenTeamID && teamType == "" {
+		teamType = tokenTeamType
 	}
 
+	team := domain.TeamFilter{}
+	if teamID != "" {
+		team = domain.TeamFilter{ID: teamID, Type: teamType}
+	}
+
+	// ─── Auth-only filters ───────────────────────────────────────
+	includeDeleted := false
+	onlyDeleted := false
+	includeCreator := false
+	visibility := handlerhelper.GetQueryString(c, "visibility", "")
+
+	if isAuthenticated {
+		includeDeleted = handlerhelper.GetQueryBool(c, "include_deleted", false)
+		onlyDeleted = handlerhelper.GetQueryBool(c, "only_deleted", false)
+		includeCreator = handlerhelper.GetQueryBool(c, "include_creator", false)
+	} else {
+		visibility = "public"
+	}
+
+	// ─── Build filters ───────────────────────────────────────────
 	filters := service.SearchFilters{
 		Team:           team,
 		TeamID:         teamID,
-		UserID:         userID,
-		EventTypeID:    eventTypeID,
-		CategoryID:     categoryID,
+		EventTypeID:    handlerhelper.GetQueryString(c, "event_type_id", ""),
+		CategoryID:     handlerhelper.GetQueryString(c, "category_id", ""),
 		IncludeDeleted: includeDeleted,
-		IncludeCreator: includeCreator,
 		OnlyDeleted:    onlyDeleted,
+		IncludeCreator: includeCreator,
 		Limit:          pageSize,
 		Offset:         (page - 1) * pageSize,
 		Visibility:     visibility,
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	events, total, err := h.svc.SearchEvents(ctx, query, filters)
 	if err != nil {
+		if errors.Is(err, domain.ErrForbidden) {
+			return response.Forbidden(c, "You do not have permission to search events", nil)
+		}
 		return response.InternalError(c, "Failed to search events", fiber.Map{
 			"error": err.Error(),
 		})
@@ -561,26 +589,26 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events [get]
 func (h *EventHandler) ListUserEvents(c fiber.Ctx) error {
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	page := getQueryInt(c, "page", 1)
-	pageSize := getQueryInt(c, "page_size", 20)
+	page := handlerhelper.GetQueryInt(c, "page", 1)
+	pageSize := handlerhelper.GetQueryInt(c, "page_size", 20)
 	if pageSize > 100 {
 		pageSize = 100
 	}
 	limit, offset := pageSize, (page-1)*pageSize
 
-	scope := getQueryString(c, "scope", "")
-	overrideTeamID := getQueryString(c, "team_id", "")
+	scope := handlerhelper.GetQueryString(c, "scope", "")
+	overrideTeamID := handlerhelper.GetQueryString(c, "team_id", "")
 
-	includeDeleted := c.Query("include_deleted") == "true"
-	onlyDeleted := c.Query("only_deleted") == "true"
-	includeCreator := c.Query("include_creator") == "true"
+	includeDeleted := handlerhelper.GetQueryBool(c, "include_deleted", false)
+	onlyDeleted := handlerhelper.GetQueryBool(c, "only_deleted", false)
+	includeCreator := handlerhelper.GetQueryBool(c, "include_creator", false)
 
-	tokenTeamID := getTeamID(c)
+	tokenTeamID := handlerhelper.GetTeamID(c)
 	tokenTeamType := resolveTeamType(c)
 
 	filters := service.ListEventsFilters{
@@ -591,9 +619,6 @@ func (h *EventHandler) ListUserEvents(c fiber.Ctx) error {
 		IncludeCreator: includeCreator,
 	}
 
-	// Determine scope:
-	//  - explicit ?scope=team OR explicit ?team_id= OR token carries a team_id → team scope
-	//  - otherwise → personal scope
 	isTeamScope := scope == "team" || overrideTeamID != "" || (scope == "" && tokenTeamID != "")
 
 	if isTeamScope {
@@ -612,7 +637,6 @@ func (h *EventHandler) ListUserEvents(c fiber.Ctx) error {
 
 		filters.TeamID = teamID
 		filters.Team = domain.TeamFilter{ID: teamID, Type: teamType}
-		// No UserID filter — service resolves read-all vs read-own by permission.
 	} else {
 		personalTeamID := tokenTeamID
 		if personalTeamID == "" {
@@ -623,7 +647,7 @@ func (h *EventHandler) ListUserEvents(c fiber.Ctx) error {
 		filters.UserID = userID
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	events, total, err := h.svc.ListEvents(ctx, filters)
 	if err != nil {
@@ -665,7 +689,7 @@ func (h *EventHandler) ListUserEvents(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/draft [post]
 func (h *EventHandler) CreateEventDraft(c fiber.Ctx) error {
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
@@ -677,13 +701,11 @@ func (h *EventHandler) CreateEventDraft(c fiber.Ctx) error {
 		})
 	}
 
-	// Team scope — token-first, body ignored
 	teamID := resolveTeamIDForUnified(c, userID)
 	teamType := resolveTeamType(c)
 	accountID := resolveAccountID(c)
 
-	// Auto-detect personal scope when no explicit team is set
-	if teamID == userID && getTeamID(c) == "" && getQueryString(c, "team_type", "") == "" {
+	if teamID == userID && handlerhelper.GetTeamID(c) == "" && handlerhelper.GetQueryString(c, "team_type", "") == "" {
 		teamType = "personal"
 	}
 
@@ -691,7 +713,7 @@ func (h *EventHandler) CreateEventDraft(c fiber.Ctx) error {
 	cmd.TeamType = teamType
 	cmd.AccountID = accountID
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	event, err := h.svc.CreateDraft(ctx, cmd)
 	if err != nil {
@@ -731,7 +753,7 @@ func (h *EventHandler) CreateEventDraft(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events [post]
 func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
@@ -762,13 +784,11 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Visibility is required (public, private, unlisted)", nil)
 	}
 
-	// Team scope — token-first, body ignored
 	teamID := resolveTeamIDForUnified(c, userID)
 	teamType := resolveTeamType(c)
 	accountID := resolveAccountID(c)
 
-	// Auto-detect personal scope when no explicit team is set
-	if teamID == userID && getTeamID(c) == "" && getQueryString(c, "team_type", "") == "" {
+	if teamID == userID && handlerhelper.GetTeamID(c) == "" && handlerhelper.GetQueryString(c, "team_type", "") == "" {
 		teamType = "personal"
 	}
 
@@ -776,7 +796,7 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 	cmd.TeamType = teamType
 	cmd.AccountID = accountID
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	event, err := h.svc.CreateEvent(ctx, cmd)
 	if err != nil {
@@ -823,7 +843,7 @@ func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
@@ -839,7 +859,7 @@ func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
 	cmd.TeamType = resolveTeamType(c)
 	cmd.AccountID = resolveAccountID(c)
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	event, err := h.svc.UpdateEvent(ctx, cmd)
 	if err != nil {
@@ -881,7 +901,7 @@ func (h *EventHandler) DeleteEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
@@ -889,7 +909,7 @@ func (h *EventHandler) DeleteEvent(c fiber.Ctx) error {
 	teamType := resolveTeamType(c)
 	accountID := resolveAccountID(c)
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	if err := h.svc.DeleteEvent(ctx, id, userID, accountID, teamType); err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
@@ -926,7 +946,7 @@ func (h *EventHandler) PermanentlyDeleteEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
@@ -934,7 +954,7 @@ func (h *EventHandler) PermanentlyDeleteEvent(c fiber.Ctx) error {
 	teamType := resolveTeamType(c)
 	accountID := resolveAccountID(c)
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	if err := h.svc.PermanentlyDeleteEvent(ctx, id, userID, accountID, teamType); err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
@@ -971,7 +991,7 @@ func (h *EventHandler) RestoreEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
@@ -979,7 +999,7 @@ func (h *EventHandler) RestoreEvent(c fiber.Ctx) error {
 	teamType := resolveTeamType(c)
 	accountID := resolveAccountID(c)
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	event, err := h.svc.RestoreEvent(ctx, id, userID, accountID, teamType)
 	if err != nil {
@@ -1030,7 +1050,7 @@ func (h *EventHandler) BulkDeleteEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "Maximum 100 events can be deleted at once", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
@@ -1038,7 +1058,7 @@ func (h *EventHandler) BulkDeleteEvents(c fiber.Ctx) error {
 	teamType := resolveTeamType(c)
 	accountID := resolveAccountID(c)
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	result, err := h.svc.DeleteEvents(ctx, req.IDs, userID, accountID, teamType)
 	if err != nil {
@@ -1079,7 +1099,7 @@ func (h *EventHandler) BulkPermanentlyDeleteEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "Maximum 100 events can be deleted at once", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
@@ -1087,7 +1107,7 @@ func (h *EventHandler) BulkPermanentlyDeleteEvents(c fiber.Ctx) error {
 	teamType := resolveTeamType(c)
 	accountID := resolveAccountID(c)
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	result, err := h.svc.PermanentlyDeleteEvents(ctx, req.IDs, userID, accountID, teamType)
 	if err != nil {
@@ -1128,7 +1148,7 @@ func (h *EventHandler) BulkRestoreEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "Maximum 100 events can be restored at once", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
@@ -1136,7 +1156,7 @@ func (h *EventHandler) BulkRestoreEvents(c fiber.Ctx) error {
 	teamType := resolveTeamType(c)
 	accountID := resolveAccountID(c)
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	result, err := h.svc.RestoreEvents(ctx, req.IDs, userID, accountID, teamType)
 	if err != nil {
@@ -1167,50 +1187,47 @@ func (h *EventHandler) BulkRestoreEvents(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/{id}/publish [post]
 func (h *EventHandler) PublishEvent(c fiber.Ctx) error {
-    id := c.Params("id")
-    if id == "" {
-        return response.BadRequest(c, "Event ID is required", nil)
-    }
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c, "Event ID is required", nil)
+	}
 
-    userID, err := getUserID(c)
-    if err != nil {
-        return response.Unauthorized(c, "User not authenticated", nil)
-    }
+	userID, err := handlerhelper.GetUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
 
-    ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
-    event, err := h.svc.PublishEvent(ctx, id, userID)
-    if err != nil {
-        if errors.Is(err, domain.ErrEventNotFound) {
-            return response.NotFound(c, "Event not found", nil)
-        }
-        if errors.Is(err, domain.ErrForbidden) {
-            return response.Forbidden(c, "You do not have permission to publish this event", nil)
-        }
-        // ⬇️ SURFACE THE VALIDATION ERROR
-        if errors.Is(err, domain.ErrEventScheduleRequired) {
-            return response.BadRequest(c, "Cannot publish: event must have at least one schedule", nil)
-        }
-        if errors.Is(err, domain.ErrEventTicketRequired) {
-            return response.BadRequest(c, "Cannot publish: event must have at least one ticket", nil)
-        }
-        if errors.Is(err, domain.ErrInvalidEventName) {
-            return response.BadRequest(c, "Cannot publish: event name is required", nil)
-        }
-        if errors.Is(err, domain.ErrInvalidEventDescription) {
-            return response.BadRequest(c, "Cannot publish: event description is required", nil)
-        }
-        if errors.Is(err, domain.ErrInvalidEventType) {
-            return response.BadRequest(c, "Cannot publish: event type is required", nil)
-        }
-        // ⬆️ END
+	event, err := h.svc.PublishEvent(ctx, id, userID)
+	if err != nil {
+		if errors.Is(err, domain.ErrEventNotFound) {
+			return response.NotFound(c, "Event not found", nil)
+		}
+		if errors.Is(err, domain.ErrForbidden) {
+			return response.Forbidden(c, "You do not have permission to publish this event", nil)
+		}
+		if errors.Is(err, domain.ErrEventScheduleRequired) {
+			return response.BadRequest(c, "Cannot publish: event must have at least one schedule", nil)
+		}
+		if errors.Is(err, domain.ErrEventTicketRequired) {
+			return response.BadRequest(c, "Cannot publish: event must have at least one ticket", nil)
+		}
+		if errors.Is(err, domain.ErrInvalidEventName) {
+			return response.BadRequest(c, "Cannot publish: event name is required", nil)
+		}
+		if errors.Is(err, domain.ErrInvalidEventDescription) {
+			return response.BadRequest(c, "Cannot publish: event description is required", nil)
+		}
+		if errors.Is(err, domain.ErrInvalidEventType) {
+			return response.BadRequest(c, "Cannot publish: event type is required", nil)
+		}
+		return response.InternalError(c, "Failed to publish event", fiber.Map{
+			"error": err.Error(),
+		})
+	}
 
-        return response.InternalError(c, "Failed to publish event", fiber.Map{
-            "error": err.Error(),
-        })
-    }
-
-    return response.Success(c, "Event published successfully", NewEventResponseFromEventWithCreator(event))
+	return response.Success(c, "Event published successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // CancelEvent godoc
@@ -1233,12 +1250,12 @@ func (h *EventHandler) CancelEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	event, err := h.svc.CancelEvent(ctx, id, userID)
 	if err != nil {
@@ -1276,7 +1293,7 @@ func (h *EventHandler) CompleteEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	event, err := h.svc.CompleteEvent(ctx, id)
 	if err != nil {
@@ -1324,12 +1341,12 @@ func (h *EventHandler) BulkPublishEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "Maximum 100 events can be published at once", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	result, err := h.svc.BulkPublishEvents(ctx, req.IDs, userID)
 	if err != nil {
@@ -1370,12 +1387,12 @@ func (h *EventHandler) BulkCancelEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "Maximum 100 events can be cancelled at once", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	result, err := h.svc.BulkCancelEvents(ctx, req.IDs, userID)
 	if err != nil {
@@ -1416,7 +1433,7 @@ func (h *EventHandler) BulkCompleteEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "Maximum 100 events can be completed at once", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	result, err := h.svc.BulkCompleteEvents(ctx, req.IDs)
 	if err != nil {
@@ -1454,12 +1471,12 @@ func (h *EventHandler) DuplicateEvent(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	var req DuplicateEventRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -1468,10 +1485,9 @@ func (h *EventHandler) DuplicateEvent(c fiber.Ctx) error {
 		})
 	}
 
-	// Target team: query override > token team_id (falls back to original event's team in service)
-	targetTeamID := getQueryString(c, "team_id", "")
+	targetTeamID := handlerhelper.GetQueryString(c, "team_id", "")
 	if targetTeamID == "" {
-		targetTeamID = getTeamID(c)
+		targetTeamID = handlerhelper.GetTeamID(c)
 	}
 
 	cmd := service.DuplicateEventCommand{
@@ -1533,12 +1549,12 @@ func (h *EventHandler) BulkDuplicateEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "Maximum 100 events can be duplicated at once", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	cmd := service.BulkDuplicateCommand{
 		NamePrefix:     req.NamePrefix,
@@ -1584,12 +1600,12 @@ func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	imageFile, err := c.FormFile("image")
 	if err != nil {
@@ -1695,12 +1711,12 @@ func (h *EventHandler) UploadCertificateTemplate(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	certFile, err := c.FormFile("certificate")
 	if err != nil {
@@ -1766,12 +1782,12 @@ func (h *EventHandler) DeleteEventImage(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	if err := h.svc.DeleteEventImage(ctx, eventID, userID); err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
@@ -1808,12 +1824,12 @@ func (h *EventHandler) DeleteEventCertificate(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	if err := h.svc.DeleteEventCertificate(ctx, eventID, userID); err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
@@ -1850,12 +1866,12 @@ func (h *EventHandler) DeleteAllEventMedia(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	if err := h.svc.DeleteAllEventMedia(ctx, eventID, userID); err != nil {
 		if errors.Is(err, domain.ErrEventNotFound) {
@@ -1905,12 +1921,12 @@ func (h *EventHandler) BulkDeleteEventMedia(c fiber.Ctx) error {
 		return response.BadRequest(c, "Maximum 100 events can be processed at once", nil)
 	}
 
-	userID, err := getUserID(c)
+	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	result, err := h.svc.BulkDeleteEventMedia(ctx, req.IDs, userID)
 	if err != nil {
@@ -1931,7 +1947,7 @@ func (h *EventHandler) BulkDeleteEventMedia(c fiber.Ctx) error {
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/events/ticket-types [get]
 func (h *EventHandler) GetTicketTypes(c fiber.Ctx) error {
-	ctx := enrichUserContext(c)
+	ctx := handlerhelper.EnrichUserContext(c)
 
 	ticketTypes, err := h.svc.GetTicketTypes(ctx)
 	if err != nil {

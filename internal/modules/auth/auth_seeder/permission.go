@@ -18,7 +18,7 @@ import (
 // CONSTANTS
 // ============================================================
 
-const CURRENT_POLICY_VERSION = "v10"
+const CURRENT_POLICY_VERSION = "v13"
 
 // ============================================================
 // POLICY VERSION TRACKING
@@ -34,6 +34,7 @@ type PolicyVersion struct {
 func (PolicyVersion) TableName() string {
 	return "policy_versions"
 }
+
 
 // ============================================================
 // PUBLIC ENTRY FUNCTION
@@ -315,64 +316,62 @@ func (s *permissionSeeder) updateTeamPolicies() error {
 }
 
 func (s *permissionSeeder) updatePersonalTeamPolicies() error {
-	var userIDs []string
-	if err := s.db.Table("users").Pluck("id", &userIDs).Error; err != nil {
-		return fmt.Errorf("failed to get user IDs: %w", err)
+	// Personal teams live in the `teams` table with type = 'personal'
+	var teamIDs []string
+	if err := s.db.Table("teams").
+		Where("type = ? AND deleted_at IS NULL", "personal").
+		Pluck("id", &teamIDs).Error; err != nil {
+		return fmt.Errorf("failed to get personal team IDs: %w", err)
 	}
 
-	if len(userIDs) == 0 {
-		log.Println("   No users found to update personal team policies")
+	if len(teamIDs) == 0 {
+		log.Println("   No personal teams found to update personal team policies")
 		return nil
 	}
 
-	userUpdated := 0
-	for _, userID := range userIDs {
-		domain := authdomain.PersonalTeamDomain(userID)
+	updated := 0
+	for _, teamID := range teamIDs {
+		domain := authdomain.PersonalTeamDomain(teamID)
 
 		newPolicies := authorization.GetPersonalTeamPolicies(domain)
 		if _, err := s.enforcer.AddPolicies(newPolicies); err != nil {
-			log.Printf("   ⚠️  Failed to add policies for user %s: %v", userID, err)
+			log.Printf("   ⚠️  Failed to add policies for team %s: %v", teamID, err)
 			continue
 		}
-
-		hasRole := s.enforcer.HasRoleForUserInDomain(userID, authdomain.RoleAccountAdmin.String(), domain)
-		if !hasRole {
-			if _, err := s.enforcer.AddRoleForUserInDomain(userID, authdomain.RoleAccountAdmin.String(), domain); err != nil {
-				log.Printf("   ⚠️  Failed to assign account_admin role for user %s: %v", userID, err)
-			}
-		}
-
-		userUpdated++
+		updated++
 	}
 
-	log.Printf("   ✅ Updated personal team policies for %d users", userUpdated)
+	log.Printf("   ✅ Updated personal team policies for %d teams", updated)
 	return nil
 }
 
 func (s *permissionSeeder) updateInstitutionTeamPolicies() error {
-	var institutionIDs []string
-	if err := s.db.Table("institutions").Pluck("id", &institutionIDs).Error; err != nil {
-		return fmt.Errorf("failed to get institution IDs: %w", err)
+	// Institution teams live in the `teams` table with type = 'institution'
+	var teamIDs []string
+	if err := s.db.Table("teams").
+		Where("type = ? AND deleted_at IS NULL", "institution").
+		Pluck("id", &teamIDs).Error; err != nil {
+		return fmt.Errorf("failed to get institution team IDs: %w", err)
 	}
 
-	if len(institutionIDs) == 0 {
-		log.Println("   No institutions found to update institution team policies")
+	if len(teamIDs) == 0 {
+		log.Println("   No institution teams found to update institution team policies")
 		return nil
 	}
 
-	instUpdated := 0
-	for _, instID := range institutionIDs {
-		domain := authdomain.InstitutionTeamDomain(instID)
+	updated := 0
+	for _, teamID := range teamIDs {
+		domain := authdomain.InstitutionTeamDomain(teamID)
 
 		newPolicies := authorization.GetInstitutionTeamPolicies(domain)
 		if _, err := s.enforcer.AddPolicies(newPolicies); err != nil {
-			log.Printf("   ⚠️  Failed to add policies for institution %s: %v", instID, err)
+			log.Printf("   ⚠️  Failed to add policies for team %s: %v", teamID, err)
 			continue
 		}
-		instUpdated++
+		updated++
 	}
 
-	log.Printf("   ✅ Updated institution team policies for %d institutions", instUpdated)
+	log.Printf("   ✅ Updated institution team policies for %d teams", updated)
 	return nil
 }
 

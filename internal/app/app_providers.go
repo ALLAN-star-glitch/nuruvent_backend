@@ -20,6 +20,7 @@ import (
 	// Account Module
 	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
+	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 
 	// Events Module
 	eventsHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
@@ -31,10 +32,6 @@ import (
 
 	// Notification Module
 	notificationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
-
-	// Profile Module
-	profileHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
-	profileService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/service"
 
 	// Team Module
 	teamHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
@@ -103,17 +100,16 @@ func provideAppDependencies(
 	accountSvc accountService.Service,
 	teamSvc teamService.Service,
 	eventsSvc eventsService.Service,
-	profileSvc profileService.Service,
 	mediaSvc mediaService.Service,
 	notificationSvc notificationDomain.NotificationService,
 	authHndlr *authHandler.AuthHandler,
 	accountHndlr *accountHandler.AccountHandler,
 	teamHndlr *teamHandler.TeamHandler,
 	eventsHndlr *eventsHandler.EventHandler,
-	profileHndlr *profileHandler.ProfileHandler,
 	// ✅ Added AI Service
 	aiSvc teamService.AIService,
 	organizerProvider eventsDomain.OrganizerProvider,
+	accountsPermissionChecker accountDomain.PermissionChecker,
 
 ) *AppDependencies {
 	return &AppDependencies{
@@ -131,15 +127,15 @@ func provideAppDependencies(
 		AccountService:    accountSvc,
 		TeamService:       teamSvc,
 		EventsService:     eventsSvc,
-		ProfileService:    profileSvc,
 		MediaService:      mediaSvc,
 		NotificationSvc:   notificationSvc,
 		AuthHandler:       authHndlr,
 		AccountHandler:    accountHndlr,
 		TeamHandler:       teamHndlr,
 		EventsHandler:     eventsHndlr,
-		ProfileHandler:    profileHndlr,
 		AIService:         aiSvc, // ✅ Added AI Service
 		OrganizerProvider:	organizerProvider,
+		AccountsPermissionChecker: accountsPermissionChecker,
+	
 	}
 }
