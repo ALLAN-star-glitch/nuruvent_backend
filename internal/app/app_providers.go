@@ -18,14 +18,14 @@ import (
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 
 	// Account Module
+	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
-	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 
 	// Events Module
 	eventsHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
-	eventsService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 	eventsDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
+	eventsService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 
 	// Media Module
 	mediaService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
@@ -37,9 +37,8 @@ import (
 	teamHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
 
-	
-
 	// Shared
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
@@ -91,6 +90,7 @@ func provideAppDependencies(
 	app *fiber.App,
 	storageClient *storage.Client,
 	redisClient *redis.Client,
+	aiClient *ai.Client,
 	enforcer *authorization.Enforcer,
 	permChecker authDomain.PermissionChecker,
 	roleManager authDomain.RoleManager,
@@ -136,6 +136,7 @@ func provideAppDependencies(
 		AIService:         aiSvc, // ✅ Added AI Service
 		OrganizerProvider:	organizerProvider,
 		AccountsPermissionChecker: accountsPermissionChecker,
+		AIClient:	aiClient,
 	
 	}
 }

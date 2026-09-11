@@ -21,13 +21,7 @@ var ProviderSet = wire.NewSet(
 	postgres.NewTeamRepository,
 
 	// ✅ AI Adapter (Outbound)
-	// infrastructure.NewOpenAIAIAdapter,
-
-	//infrastructure.NewGeminiAIAdapter,
-
-	//infrastructure.NewGroqAIAdapter,
-
-	infrastructure.NewOpenRouterAIAdapter,
+	infrastructure.NewTeamAIAdapter,
 
 	// Service
 	service.NewTeamService,

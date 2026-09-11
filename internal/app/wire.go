@@ -52,6 +52,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
 
 )
 
@@ -84,6 +85,7 @@ type AppDependencies struct {
 	AIService          teamService.AIService
 	OrganizerProvider	eventsDomain.OrganizerProvider
 	AccountsPermissionChecker		accountDomain.PermissionChecker
+	AIClient					*ai.Client
 }
 
 // ============================================================
@@ -100,6 +102,7 @@ func InitializeApp() (*AppDependencies, error) {
 		queue.ProviderSet,
 		redis.ProviderSet,
 		storage.ProviderSet,
+		ai.ProviderSet,  
 
 		// ============================================================
 		// APP-SPECIFIC
@@ -147,6 +150,7 @@ func InitializeApp() (*AppDependencies, error) {
 
 
 		provideOrganizerProvider,
+
 
 		// ============================================================
 		// FINAL APP DEPENDENCIES

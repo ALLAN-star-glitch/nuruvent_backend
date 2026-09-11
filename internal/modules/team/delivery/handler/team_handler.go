@@ -7,6 +7,7 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
+	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/teamdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
@@ -51,7 +52,7 @@ func (h *TeamHandler) ValidateInvitation(c fiber.Ctx) error {
 	return response.Success(c, "Invitation validated successfully", fiber.Map{
 		"valid":         true,
 		"email":         invitation.Email,
-		// ❌ REMOVED: "role":          string(invitation.Role),
+		// ❌ REMOVED: "role": string(invitation.Role),
 		"expires_at":    invitation.ExpiresAt,
 		"invitation_id": invitation.ID,
 	})
@@ -63,8 +64,8 @@ func (h *TeamHandler) ValidateInvitation(c fiber.Ctx) error {
 
 // GetUserTeams returns all teams for the authenticated user
 func (h *TeamHandler) GetUserTeams(c fiber.Ctx) error {
-	userID := c.Locals("user_id").(string)
-	if userID == "" {
+	userID, ok := c.Locals(authDomain.ContextKeyUserID).(string)
+	if !ok || userID == "" {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
@@ -106,13 +107,13 @@ func (h *TeamHandler) GetTeam(c fiber.Ctx) error {
 // CreatePersonalTeam creates a personal team for the authenticated user
 // ✅ Updated: Gets role from JWT context and passes it to service
 func (h *TeamHandler) CreatePersonalTeam(c fiber.Ctx) error {
-	userID := c.Locals("user_id").(string)
-	if userID == "" {
+	userID, ok := c.Locals(authDomain.ContextKeyUserID).(string)
+	if !ok || userID == "" {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
 	// ✅ Get the user's role from the JWT context
-	role := c.Locals("role").(string)
+	role, _ := c.Locals(authDomain.ContextKeyUserRole).(string)
 	if role == "" {
 		role = "account_admin" // Fallback for existing tokens
 	}
@@ -124,11 +125,10 @@ func (h *TeamHandler) CreatePersonalTeam(c fiber.Ctx) error {
 		return response.BadRequest(c, "Invalid request body", nil)
 	}
 
-	userName := c.Locals("user_name").(string)
+	userName, _ := c.Locals(authDomain.ContextKeyUserName).(string)
 	if userName == "" {
 		userName = req.Name
 	}
-	
 
 	// ✅ Pass the role to the service
 	team, err := h.service.CreatePersonalTeam(c.Context(), userID, userName, role)
@@ -145,7 +145,6 @@ func (h *TeamHandler) CreatePersonalTeam(c fiber.Ctx) error {
 		"team": team,
 	})
 }
-
 
 // UpdateTeam updates a team
 func (h *TeamHandler) UpdateTeam(c fiber.Ctx) error {
@@ -219,7 +218,7 @@ func (h *TeamHandler) GetTeamMembers(c fiber.Ctx) error {
 		Limit:  limit,
 		Offset: offset,
 		Search: c.Query("search"),
-		// ❌ REMOVED: Role:   teamdomain.MemberRole(c.Query("role")),
+		// ❌ REMOVED: Role: teamdomain.MemberRole(c.Query("role")),
 	}
 
 	members, total, err := h.service.GetTeamMembers(c.Context(), teamID, filters)
@@ -250,7 +249,7 @@ func (h *TeamHandler) AddMember(c fiber.Ctx) error {
 
 	var req struct {
 		UserID string `json:"user_id"`
-		// ❌ REMOVED: Role   string `json:"role"`
+		// ❌ REMOVED: Role string `json:"role"`
 	}
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request body", nil)
@@ -261,7 +260,10 @@ func (h *TeamHandler) AddMember(c fiber.Ctx) error {
 	}
 	// ❌ REMOVED: Role validation
 
-	addedBy := c.Locals("user_id").(string)
+	addedBy, ok := c.Locals(authDomain.ContextKeyUserID).(string)
+	if !ok || addedBy == "" {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
 
 	member, err := h.service.AddMember(c.Context(), teamID, req.UserID, addedBy)
 	if err != nil {
@@ -299,7 +301,10 @@ func (h *TeamHandler) RemoveMember(c fiber.Ctx) error {
 		return response.BadRequest(c, "User ID is required", nil)
 	}
 
-	removedBy := c.Locals("user_id").(string)
+	removedBy, ok := c.Locals(authDomain.ContextKeyUserID).(string)
+	if !ok || removedBy == "" {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
 
 	err := h.service.RemoveMember(c.Context(), teamID, userID, removedBy)
 	if err != nil {
@@ -328,7 +333,10 @@ func (h *TeamHandler) LeaveTeam(c fiber.Ctx) error {
 		return response.BadRequest(c, "Team ID is required", nil)
 	}
 
-	userID := c.Locals("user_id").(string)
+	userID, ok := c.Locals(authDomain.ContextKeyUserID).(string)
+	if !ok || userID == "" {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
 
 	err := h.service.LeaveTeam(c.Context(), teamID, userID)
 	if err != nil {
@@ -350,9 +358,10 @@ func (h *TeamHandler) LeaveTeam(c fiber.Ctx) error {
 
 // InviteMember invites a user to join a team
 // ✅ REMOVED: Role from request - roles are inherited from account
+// ✅ FIXED: Reads user ID via the canonical context constant (was: literal "user_id")
 func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
-	userID := c.Locals("user_id").(string)
-	if userID == "" {
+	userID, ok := c.Locals(authDomain.ContextKeyUserID).(string)
+	if !ok || userID == "" {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
@@ -363,7 +372,7 @@ func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
 
 	var req struct {
 		Email string `json:"email"`
-		// ❌ REMOVED: Role  string `json:"role"`
+		// ❌ REMOVED: Role string `json:"role"`
 	}
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request body", fiber.Map{
@@ -377,9 +386,9 @@ func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
 	// ❌ REMOVED: Role validation
 
 	invitation, err := h.service.InviteMember(c.Context(), service.InviteMemberCommand{
-		TeamID:    teamID,
-		Email:     req.Email,
-		// ❌ REMOVED: Role:      req.Role,
+		TeamID: teamID,
+		Email:  req.Email,
+		// ❌ REMOVED: Role: req.Role,
 		InvitedBy: userID,
 	})
 	if err != nil {

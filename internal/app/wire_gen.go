@@ -30,6 +30,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure"
 	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure/postgres"
 	service2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
@@ -53,6 +54,7 @@ func InitializeApp() (*AppDependencies, error) {
 	if err != nil {
 		return nil, err
 	}
+	aiClient := ai.ProvideClient(configConfig)
 	enforcer, err := authorization.NewEnforcer(db, configConfig)
 	if err != nil {
 		return nil, err
@@ -74,7 +76,7 @@ func InitializeApp() (*AppDependencies, error) {
 	authService := NewTeamAuthAdapter(repository)
 	casbinService := NewTeamCasbinAdapter(permissionChecker, roleManager, policyManager)
 	serviceNotificationService := NewTeamNotificationAdapter(notificationService)
-	aiService := infrastructure.NewOpenRouterAIAdapter(configConfig)
+	aiService := infrastructure.NewTeamAIAdapter(aiClient)
 	serviceService := service2.NewTeamService(teamdomainRepository, authService, casbinService, serviceNotificationService, aiService)
 	teamService := NewAuthTeamAdapter(serviceService)
 	service7 := service3.NewService(repository, configConfig, redisClient, queueService, permissionChecker, roleManager, policyManager, tokenService, authdomainNotificationService, enforcer, teamService)
@@ -96,7 +98,7 @@ func InitializeApp() (*AppDependencies, error) {
 	accountHandler := handler.NewAccountHandler(service9)
 	teamHandler := handler2.NewTeamHandler(serviceService)
 	eventHandler := eventhandler.NewEventHandler(service10)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, permissionChecker, roleManager, policyManager, service7, tokenService, service9, serviceService, service10, service8, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, organizerProvider, accountdomainPermissionChecker)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service7, tokenService, service9, serviceService, service10, service8, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, organizerProvider, accountdomainPermissionChecker)
 	return appDependencies, nil
 }
 
@@ -126,4 +128,5 @@ type AppDependencies struct {
 	AIService                 service2.AIService
 	OrganizerProvider         domain.OrganizerProvider
 	AccountsPermissionChecker accountdomain.PermissionChecker
+	AIClient                  *ai.Client
 }

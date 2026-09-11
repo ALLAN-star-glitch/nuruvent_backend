@@ -16,6 +16,7 @@ type CasbinAdapter struct {
 	policyMgr   authDomain.PolicyManager
 }
 
+
 // NewCasbinAdapter creates a new team casbin adapter
 func NewCasbinAdapter(
 	permChecker authDomain.PermissionChecker,
