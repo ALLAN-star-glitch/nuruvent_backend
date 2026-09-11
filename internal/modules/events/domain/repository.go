@@ -2,7 +2,10 @@
 
 package domain
 
-import "context"
+import (
+	"context"
+
+)
 
 // ============================================================
 // LIST OPTIONS
@@ -98,11 +101,16 @@ type Repository interface {
 	GetEventStatusByID(ctx context.Context, id string) (*EventStatus, error)
 	GetEventStatusBySlug(ctx context.Context, slug string) (*EventStatus, error)
 	GetAllEventStatuses(ctx context.Context) ([]*EventStatus, error)
+	GetAllTicketTypes(ctx context.Context) ([]*TicketTypeRow, error)
 
 	// GetEventByIDIncludingDeleted gets an event by ID including soft-deleted ones
 	GetEventByIDIncludingDeleted(ctx context.Context, id string) (*Event, error)
 
 	GetAllCategories(ctx context.Context) ([]*Category, error)
+
+
+	// Recurrence pattern lookups
+GetRecurrencePatternBySlug(ctx context.Context, slug string) (*RecurrencePattern, error)
 }
 
 // ============================================================

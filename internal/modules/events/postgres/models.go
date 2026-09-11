@@ -364,6 +364,9 @@ func (EventStatusModel) TableName() string {
 	return "event_statuses"
 }
 
+
+
+
 // ============================================================
 // EVENT FORMAT MODEL
 // ============================================================

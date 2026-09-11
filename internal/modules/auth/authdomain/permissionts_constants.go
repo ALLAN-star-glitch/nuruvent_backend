@@ -2,23 +2,26 @@
 
 package authdomain
 
+import "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
+
 // Role represents a user role in the system
 type Role string
 
-// Context keys for storing values in Fiber context
+type ContextKey = types.ContextKey
+
 const (
-	ContextKeyUserID       = "user_id"
-	ContextKeyUserRole     = "user_role"
-	ContextKeyUserEmail    = "user_email"
-	ContextKeyUserName     = "user_name"
-	ContextKeyDomain       = "domain"
-	ContextKeyUserRoles    = "user_roles"
-	ContextKeyAccountID    = "account_id"
-	ContextKeyAccountType  = "account_type"
-	ContextKeyTeamID       = "team_id"
-	ContextKeyTeamType     = "team_type"
-	ContextKeyAccessToken  = "access_token"
-	ContextKeyRefreshToken = "refresh_token"
+	ContextKeyUserID       = types.ContextKeyUserID
+	ContextKeyUserRole     = types.ContextKeyUserRole
+	ContextKeyUserEmail    = types.ContextKeyUserEmail
+	ContextKeyUserName     = types.ContextKeyUserName
+	ContextKeyDomain       = types.ContextKeyDomain
+	ContextKeyUserRoles    = types.ContextKeyUserRoles
+	ContextKeyAccountID    = types.ContextKeyAccountID
+	ContextKeyAccountType  = types.ContextKeyAccountType
+	ContextKeyTeamID       = types.ContextKeyTeamID
+	ContextKeyTeamType     = types.ContextKeyTeamType
+	ContextKeyAccessToken  = types.ContextKeyAccessToken
+	ContextKeyRefreshToken = types.ContextKeyRefreshToken
 )
 
 // ============================================================

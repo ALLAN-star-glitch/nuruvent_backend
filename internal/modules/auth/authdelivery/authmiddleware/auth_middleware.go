@@ -237,6 +237,7 @@ func GetCurrentTeamDomain(c fiber.Ctx) string {
 	return authdomain.PersonalTeamDomain(teamID)
 }
 
+
 // GetCurrentTeamID returns the team ID from the current context
 func GetCurrentTeamID(c fiber.Ctx) string {
 	return GetTeamID(c)

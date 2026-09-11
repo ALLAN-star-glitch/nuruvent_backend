@@ -1,5 +1,3 @@
-// internal/modules/events/service/duplicate.go
-
 package service
 
 import (
@@ -20,14 +18,18 @@ import (
 func (s *eventService) DuplicateEvent(ctx context.Context, id string, cmd DuplicateEventCommand) (*domain.Event, error) {
 	log.Printf("📋 Duplicating event: %s", id)
 
+	if cmd.CreatedBy == "" {
+		return nil, errors.New("user ID (CreatedBy) is required")
+	}
+
 	// 1. Get original event
 	original, err := s.getOriginalEvent(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Check permissions using team domain
-	if err := s.checkDuplicatePermission(ctx, original); err != nil {
+	// 2. Check permissions using 2-tier resolution pattern
+	if err := s.checkDuplicatePermission(ctx, original, cmd); err != nil {
 		return nil, err
 	}
 
@@ -35,7 +37,7 @@ func (s *eventService) DuplicateEvent(ctx context.Context, id string, cmd Duplic
 	newName, newDate := s.prepareDuplicateData(original, cmd)
 
 	// 4. Build create command from original
-	createCmd := s.buildDuplicateDraftCommand(original, newName, newDate)
+	createCmd := s.buildDuplicateDraftCommand(original, newName, newDate, cmd.CreatedBy)
 
 	// 5. Create draft using existing CreateDraft method
 	newEvent, err := s.CreateDraft(ctx, createCmd)
@@ -56,6 +58,9 @@ func (s *eventService) BulkDuplicateEvents(ctx context.Context, ids []string, cm
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
 	}
+	if cmd.CreatedBy == "" {
+		return nil, errors.New("user ID (CreatedBy) is required")
+	}
 
 	result := &BulkDuplicateResult{
 		DuplicatedCount: 0,
@@ -68,7 +73,7 @@ func (s *eventService) BulkDuplicateEvents(ctx context.Context, ids []string, cm
 		dupCmd := s.buildDuplicateCommandForBulk(ctx, id, cmd)
 		if dupCmd == nil {
 			result.FailedIDs = append(result.FailedIDs, id)
-			result.Errors = append(result.Errors, fmt.Sprintf("event %s: failed to get event", id))
+			result.Errors = append(result.Errors, fmt.Sprintf("event %s: failed to build duplicate command", id))
 			continue
 		}
 
@@ -106,26 +111,68 @@ func (s *eventService) getOriginalEvent(ctx context.Context, id string) (*domain
 	return original, nil
 }
 
-// checkDuplicatePermission checks if user has permission to duplicate using team domain
-func (s *eventService) checkDuplicatePermission(ctx context.Context, original *domain.Event) error {
-	// TODO: Get user ID from context
-	userID := "" // Will need to be passed in or extracted from context
+// resolveDuplicateTeamDomain dynamically determines personal or institution team domain
+func (s *eventService) resolveDuplicateTeamDomain(original *domain.Event, cmd DuplicateEventCommand) string {
+	targetTeamID := original.TeamID
+	if cmd.TeamID != "" {
+		targetTeamID = cmd.TeamID
+	}
 
+	if cmd.TeamType == "personal" {
+		return domain.PersonalTeamDomain(targetTeamID)
+	}
+
+	if cmd.TeamType == "institution" {
+		return domain.InstitutionTeamDomain(targetTeamID)
+	}
+
+	// Heuristic fallback: if team ID matches the creator's user ID
+	if cmd.CreatedBy != "" && cmd.CreatedBy == targetTeamID {
+		return domain.PersonalTeamDomain(cmd.CreatedBy)
+	}
+
+	return domain.InstitutionTeamDomain(targetTeamID)
+}
+
+// checkDuplicatePermission performs 2-tier domain permission check for duplication
+func (s *eventService) checkDuplicatePermission(ctx context.Context, original *domain.Event, cmd DuplicateEventCommand) error {
+	userID := cmd.CreatedBy
 	if userID == "" {
 		return errors.New("user ID is required")
 	}
 
-	// Create team domain from event
-	teamDomain := domain.TeamDomain(original.TeamID)
+	// Resolve Team domain
+	teamDomain := s.resolveDuplicateTeamDomain(original, cmd)
 
-	// Check if user can manage events in this team
+	log.Printf("🔍 Tier 1: Checking manage permission for user=%s on team domain=%s", userID, teamDomain)
+
+	// Tier 1: Check Team Domain
 	allowed, err := s.permChecker.CanManageEvent(ctx, userID, teamDomain)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
 	}
-	if !allowed {
-		return errors.New("insufficient permissions to duplicate this event")
+
+	// Tier 2: Account Domain Fallback
+	accountID := cmd.AccountID
+	if accountID == "" {
+		accountID = original.AccountID
 	}
+
+	if !allowed && accountID != "" {
+		accountDomain := domain.AccountDomain(accountID)
+		log.Printf("🔍 Tier 2: Team check failed. Falling back to Account domain=%s", accountDomain)
+
+		allowed, err = s.permChecker.CanManageEvent(ctx, userID, accountDomain)
+		if err != nil {
+			return fmt.Errorf("account permission check failed: %w", err)
+		}
+	}
+
+	if !allowed {
+		log.Printf("❌ Permission denied: user %s cannot duplicate event %s", userID, original.ID)
+		return domain.ErrForbidden
+	}
+
 	return nil
 }
 
@@ -151,7 +198,7 @@ func (s *eventService) prepareDuplicateData(original *domain.Event, cmd Duplicat
 // buildDuplicateDraftCommand builds a CreateDraftCommand from the original event
 func (s *eventService) buildDuplicateDraftCommand(
 	original *domain.Event,
-	newName, newDate string,
+	newName, newDate, createdBy string,
 ) CreateDraftCommand {
 	return CreateDraftCommand{
 		Name:             newName,
@@ -161,8 +208,9 @@ func (s *eventService) buildDuplicateDraftCommand(
 		CategoryID:       original.CategoryID,
 		Tags:             original.Tags,
 		Language:         original.Language,
-		CreatedBy:        "", // Will be set by CreateDraft method
+		CreatedBy:        createdBy,
 		TeamID:           original.TeamID,
+		AccountID:        original.AccountID,
 
 		// Schedule - use the new date
 		IsMultiDay:  original.IsMultiDay,
@@ -195,9 +243,9 @@ func (s *eventService) buildDuplicateDraftCommand(
 		InvitedEmails: original.InvitedEmails,
 
 		// Monetization
-		IsFeatured:          original.IsFeatured,
-		CertificateEnabled:  original.CertificateEnabled,
-		CertificatePrice:    original.CertificatePrice,
+		IsFeatured:            original.IsFeatured,
+		CertificateEnabled:    original.CertificateEnabled,
+		CertificatePrice:      original.CertificatePrice,
 		CertificateTemplateID: original.CertificateTemplateID,
 
 		// Speakers
@@ -214,9 +262,11 @@ func (s *eventService) buildDuplicateDraftCommand(
 // buildDuplicateCommandForBulk builds a DuplicateEventCommand for bulk operations
 func (s *eventService) buildDuplicateCommandForBulk(ctx context.Context, id string, cmd BulkDuplicateCommand) *DuplicateEventCommand {
 	dupCmd := &DuplicateEventCommand{
-		Name:    cmd.NamePrefix,
-		IsDraft: cmd.IsDraft,
-		Date:    "",
+		Name:      cmd.NamePrefix,
+		IsDraft:   cmd.IsDraft,
+		CreatedBy: cmd.CreatedBy,
+		AccountID: cmd.AccountID,
+		Date:      "",
 	}
 
 	if cmd.DateOffsetDays != 0 {

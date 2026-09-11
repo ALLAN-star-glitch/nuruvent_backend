@@ -502,3 +502,16 @@ func (s *accountService) LeaveAccount(ctx context.Context, accountID, userID str
     log.Printf("✅ User %s left account %s", userID, accountID)
     return nil
 }
+
+func (s *accountService) GetAccountByTeamID(ctx context.Context, teamID string) (*accountdomain.Account, error) {
+	// resolve team → account_id
+	accountID, err := s.repo.GetAccountIDByTeamID(ctx, teamID)
+	if err != nil {
+		return nil, err
+	}
+	if accountID == "" {
+		return nil, nil
+	}
+	// resolve account
+	return s.repo.GetAccountByID(ctx, accountID)
+}

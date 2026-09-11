@@ -529,3 +529,7 @@ func (s *eventService) sanitizeLimit(limit, defaultLimit, maxLimit int) int {
 	}
 	return limit
 }
+
+func (s *eventService) GetTicketTypes(ctx context.Context) ([]*domain.TicketTypeRow, error) {
+	return s.repo.GetAllTicketTypes(ctx)
+}

@@ -1,5 +1,3 @@
-// internal/modules/events/service/service.go
-
 package service
 
 import (
@@ -66,22 +64,22 @@ type Service interface {
 	// DELETE - Single
 	// ============================================================
 
-	DeleteEvent(ctx context.Context, id, deletedBy string) error
-	PermanentlyDeleteEvent(ctx context.Context, id, deletedBy string) error
-	RestoreEvent(ctx context.Context, id, restoredBy string) (*domain.Event, error)
+	DeleteEvent(ctx context.Context, id, deletedBy, accountID, teamType string) error
+	PermanentlyDeleteEvent(ctx context.Context, id, deletedBy, accountID, teamType string) error
+	RestoreEvent(ctx context.Context, id, restoredBy, accountID, teamType string) (*domain.Event, error)
 
 	// ============================================================
 	// DELETE - Bulk
 	// ============================================================
 
 	// DeleteEvents soft deletes multiple events by IDs
-	DeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error)
+	DeleteEvents(ctx context.Context, ids []string, deletedBy, accountID, teamType string) (*BulkDeleteResult, error)
 
 	// PermanentlyDeleteEvents hard deletes multiple events by IDs
-	PermanentlyDeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error)
+	PermanentlyDeleteEvents(ctx context.Context, ids []string, deletedBy, accountID, teamType string) (*BulkDeleteResult, error)
 
 	// RestoreEvents restores multiple soft-deleted events by IDs
-	RestoreEvents(ctx context.Context, ids []string, restoredBy string) (*BulkRestoreResult, error)
+	RestoreEvents(ctx context.Context, ids []string, restoredBy, accountID, teamType string) (*BulkRestoreResult, error)
 
 	// ============================================================
 	// STATUS - Single
@@ -126,6 +124,7 @@ type Service interface {
 
 	GetEventTypes(ctx context.Context) ([]*domain.EventType, error)
 	GetEventStatuses(ctx context.Context) ([]*domain.EventStatus, error)
+	GetTicketTypes(ctx context.Context) ([]*domain.TicketTypeRow, error)
 
 	GetCategories(ctx context.Context) ([]*domain.Category, error)
 }
@@ -145,9 +144,12 @@ type CreateDraftCommand struct {
 	Tags             []string
 	Language         string
 
-	// Ownership - determines the team
-	CreatedBy string // User ID (required)
-	TeamID    string // Team ID (required)
+	// Ownership & Context - determines the team and domain permission checks
+	CreatedBy  string // User ID (required)
+	TeamID     string // Team ID or User ID for personal team (required)
+	TeamType   string // "institution" or "personal" (optional, populated from request)
+	TeamDomain string // Pre-resolved domain, e.g., "institution:team:xxx" (optional)
+	AccountID  string // Associated Account/Org ID for fallback checks (optional)
 
 	// Schedule
 	Schedules   []ScheduleInput
@@ -180,9 +182,9 @@ type CreateDraftCommand struct {
 	InvitedEmails []string
 
 	// Monetization
-	IsFeatured          bool
-	CertificateEnabled  bool
-	CertificatePrice    float64
+	IsFeatured            bool
+	CertificateEnabled    bool
+	CertificatePrice      float64
 	CertificateTemplateID *string
 
 	// Speakers
@@ -210,9 +212,12 @@ type CreateEventCommand struct {
 	Tags             []string
 	Language         string
 
-	// Ownership - determines the team
-	CreatedBy string // User ID (required)
-	TeamID    string // Team ID (required)
+	// Ownership & Context - determines the team and domain permission checks
+	CreatedBy  string // User ID (required)
+	TeamID     string // Team ID or User ID for personal team (required)
+	TeamType   string // "institution" or "personal" (optional, populated from request)
+	TeamDomain string // Pre-resolved domain, e.g., "institution:team:xxx" (optional)
+	AccountID  string // Associated Account/Org ID for fallback checks (optional)
 
 	// Schedule - Required for published events
 	Schedules   []ScheduleInput
@@ -246,9 +251,9 @@ type CreateEventCommand struct {
 	InvitedEmails []string
 
 	// Monetization
-	IsFeatured          bool
-	CertificateEnabled  bool
-	CertificatePrice    float64
+	IsFeatured            bool
+	CertificateEnabled    bool
+	CertificatePrice      float64
 	CertificateTemplateID *string
 
 	// Speakers
@@ -268,6 +273,10 @@ type CreateEventCommand struct {
 type UpdateEventCommand struct {
 	ID        string
 	UpdatedBy string
+
+	// Scoping & Authorization Context (populated server-side)
+	AccountID string
+	TeamType  string
 
 	// Basic Information (pointers for optional updates)
 	Name             *string
@@ -314,9 +323,9 @@ type UpdateEventCommand struct {
 	InvitedEmails []string
 
 	// Monetization
-	IsFeatured          *bool
-	CertificateEnabled  *bool
-	CertificatePrice    *float64
+	IsFeatured            *bool
+	CertificateEnabled    *bool
+	CertificatePrice      *float64
 	CertificateTemplateID *string
 
 	// Speakers
@@ -337,9 +346,17 @@ type DuplicateEventCommand struct {
 	Name    string
 	Date    string
 	IsDraft bool
+
+	// Context & Permissions
+	CreatedBy string // User ID executing the action (required)
+	TeamID    string // Optional: Target Team ID to copy event into
+	TeamType  string // Optional: "personal" or "institution"
+	AccountID string // Optional: Organization Account ID for fallback checks
 }
 
 type BulkDuplicateCommand struct {
+	CreatedBy      string // User ID executing the action (required)
+	AccountID      string // Optional: Organization Account ID for fallback checks
 	NamePrefix     string
 	DateOffsetDays int
 	IsDraft        bool
@@ -481,16 +498,16 @@ type RecurrenceInput struct {
 }
 
 type TicketInput struct {
-	ID                 *string
-	TicketTypeID       string
-	Name               string
-	Description        string
-	Price              float64
-	Quantity           int
-	MaxPerPerson       *int
-	EarlyBirdDeadline  *string
-	GroupMinAttendees  *int
-	GroupDiscount      *float64
+	ID                *string
+	TicketTypeID      string
+	Name              string
+	Description       string
+	Price             float64
+	Quantity          int
+	MaxPerPerson      *int
+	EarlyBirdDeadline *string
+	GroupMinAttendees *int
+	GroupDiscount     *float64
 }
 
 type SpeakerInput struct {

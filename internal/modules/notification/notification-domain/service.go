@@ -2,7 +2,11 @@
 
 package notificationdomain
 
-import "context"
+import (
+	"context"
+
+	types "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types/emails"
+)
 
 // ============================================================
 // VERIFICATION PURPOSE
@@ -249,7 +253,7 @@ type SendTeamInviteExistingUserRequest struct {
 	
 	// ✅ AI-Ready: Personalized content (optional, for future use)
 	// Defined in tasks.go
-	PersonalizedContent *PersonalizedInvitationContent
+	PersonalizedContent *types.PersonalizedInvitationContent 
 }
 
 // SendTeamInviteRegistrationRequest - Team invitation for new users (with registration link)
@@ -268,7 +272,7 @@ type SendTeamInviteRegistrationRequest struct {
 	
 	// ✅ AI-Ready: Personalized content (optional, for future use)
 	// Defined in tasks.go
-	PersonalizedContent *PersonalizedInvitationContent
+	PersonalizedContent *types.PersonalizedInvitationContent 
 }
 
 // SendTeamInviteAcceptedRequest - Notification to admin when user accepts invitation
@@ -283,7 +287,7 @@ type SendTeamInviteAcceptedRequest struct {
 	
 	// ✅ AI-Ready: Personalized content (optional, for future use)
 	// Defined in tasks.go
-	PersonalizedContent *PersonalizedInvitationContent
+	PersonalizedContent *types.PersonalizedInvitationContent 
 }
 
 // SendTeamInviteDeclinedRequest - Notification to admin when user declines invitation
@@ -298,5 +302,5 @@ type SendTeamInviteDeclinedRequest struct {
 	
 	// ✅ AI-Ready: Personalized content (optional, for future use)
 	// Defined in tasks.go
-	PersonalizedContent *PersonalizedInvitationContent
+	PersonalizedContent *types.PersonalizedInvitationContent 
 }

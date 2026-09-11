@@ -6,6 +6,7 @@ import (
 	"github.com/google/wire"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure/postgres"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
@@ -18,6 +19,15 @@ import (
 var ProviderSet = wire.NewSet(
 	// Repository
 	postgres.NewTeamRepository,
+
+	// ✅ AI Adapter (Outbound)
+	// infrastructure.NewOpenAIAIAdapter,
+
+	//infrastructure.NewGeminiAIAdapter,
+
+	//infrastructure.NewGroqAIAdapter,
+
+	infrastructure.NewOpenRouterAIAdapter,
 
 	// Service
 	service.NewTeamService,

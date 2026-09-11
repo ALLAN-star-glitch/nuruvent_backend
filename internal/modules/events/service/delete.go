@@ -1,5 +1,3 @@
-// internal/modules/events/service/delete.go
-
 package service
 
 import (
@@ -15,8 +13,8 @@ import (
 // DELETE - Single Event
 // ============================================================
 
-// DeleteEvent soft deletes a single event
-func (s *eventService) DeleteEvent(ctx context.Context, id, deletedBy string) error {
+// DeleteEvent soft deletes a single event with 2-tier authorization
+func (s *eventService) DeleteEvent(ctx context.Context, id, deletedBy, accountID, teamType string) error {
 	// 1. Validate input
 	if id == "" {
 		return errors.New("event ID is required")
@@ -25,8 +23,8 @@ func (s *eventService) DeleteEvent(ctx context.Context, id, deletedBy string) er
 		return errors.New("deleted by is required")
 	}
 
-	// 2. Get event and check permissions
-	event, err := s.getEventAndCheckDeletePermission(ctx, id, deletedBy)
+	// 2. Get event and check permissions using caller context fallbacks
+	event, err := s.getEventAndCheckDeletePermission(ctx, id, deletedBy, accountID, teamType)
 	if err != nil {
 		return err
 	}
@@ -43,8 +41,8 @@ func (s *eventService) DeleteEvent(ctx context.Context, id, deletedBy string) er
 	return nil
 }
 
-// PermanentlyDeleteEvent hard deletes a single event
-func (s *eventService) PermanentlyDeleteEvent(ctx context.Context, id, deletedBy string) error {
+// PermanentlyDeleteEvent hard deletes a single event with 2-tier authorization
+func (s *eventService) PermanentlyDeleteEvent(ctx context.Context, id, deletedBy, accountID, teamType string) error {
 	// 1. Validate input
 	if id == "" {
 		return errors.New("event ID is required")
@@ -54,7 +52,7 @@ func (s *eventService) PermanentlyDeleteEvent(ctx context.Context, id, deletedBy
 	}
 
 	// 2. Get event including soft-deleted and check permissions
-	if err := s.checkDeletePermissionForEvent(ctx, id, deletedBy); err != nil {
+	if err := s.checkDeletePermissionForEvent(ctx, id, deletedBy, accountID, teamType); err != nil {
 		return err
 	}
 
@@ -74,8 +72,8 @@ func (s *eventService) PermanentlyDeleteEvent(ctx context.Context, id, deletedBy
 	return nil
 }
 
-// RestoreEvent restores a soft-deleted event
-func (s *eventService) RestoreEvent(ctx context.Context, id, restoredBy string) (*domain.Event, error) {
+// RestoreEvent restores a soft-deleted event with 2-tier authorization
+func (s *eventService) RestoreEvent(ctx context.Context, id, restoredBy, accountID, teamType string) (*domain.Event, error) {
 	// 1. Validate input
 	if id == "" {
 		return nil, errors.New("event ID is required")
@@ -85,7 +83,7 @@ func (s *eventService) RestoreEvent(ctx context.Context, id, restoredBy string) 
 	}
 
 	// 2. Get event (including soft-deleted) and check permissions
-	event, err := s.getEventAndCheckUpdatePermissionIncludingDeleted(ctx, id, restoredBy)
+	event, err := s.getEventAndCheckUpdatePermissionIncludingDeleted(ctx, id, restoredBy, accountID, teamType)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +105,7 @@ func (s *eventService) RestoreEvent(ctx context.Context, id, restoredBy string) 
 // ============================================================
 
 // DeleteEvents soft deletes multiple events
-func (s *eventService) DeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error) {
+func (s *eventService) DeleteEvents(ctx context.Context, ids []string, deletedBy, accountID, teamType string) (*BulkDeleteResult, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
 	}
@@ -122,7 +120,7 @@ func (s *eventService) DeleteEvents(ctx context.Context, ids []string, deletedBy
 	}
 
 	for _, id := range ids {
-		if err := s.DeleteEvent(ctx, id, deletedBy); err != nil {
+		if err := s.DeleteEvent(ctx, id, deletedBy, accountID, teamType); err != nil {
 			result.FailedIDs = append(result.FailedIDs, id)
 			result.Errors = append(result.Errors, fmt.Sprintf("event %s: %v", id, err))
 			continue
@@ -134,7 +132,7 @@ func (s *eventService) DeleteEvents(ctx context.Context, ids []string, deletedBy
 }
 
 // PermanentlyDeleteEvents hard deletes multiple events
-func (s *eventService) PermanentlyDeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error) {
+func (s *eventService) PermanentlyDeleteEvents(ctx context.Context, ids []string, deletedBy, accountID, teamType string) (*BulkDeleteResult, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
 	}
@@ -149,7 +147,7 @@ func (s *eventService) PermanentlyDeleteEvents(ctx context.Context, ids []string
 	}
 
 	for _, id := range ids {
-		if err := s.PermanentlyDeleteEvent(ctx, id, deletedBy); err != nil {
+		if err := s.PermanentlyDeleteEvent(ctx, id, deletedBy, accountID, teamType); err != nil {
 			result.FailedIDs = append(result.FailedIDs, id)
 			result.Errors = append(result.Errors, fmt.Sprintf("event %s: %v", id, err))
 			continue
@@ -161,7 +159,7 @@ func (s *eventService) PermanentlyDeleteEvents(ctx context.Context, ids []string
 }
 
 // RestoreEvents restores multiple soft-deleted events
-func (s *eventService) RestoreEvents(ctx context.Context, ids []string, restoredBy string) (*BulkRestoreResult, error) {
+func (s *eventService) RestoreEvents(ctx context.Context, ids []string, restoredBy, accountID, teamType string) (*BulkRestoreResult, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
 	}
@@ -176,7 +174,7 @@ func (s *eventService) RestoreEvents(ctx context.Context, ids []string, restored
 	}
 
 	for _, id := range ids {
-		if _, err := s.RestoreEvent(ctx, id, restoredBy); err != nil {
+		if _, err := s.RestoreEvent(ctx, id, restoredBy, accountID, teamType); err != nil {
 			result.FailedIDs = append(result.FailedIDs, id)
 			result.Errors = append(result.Errors, fmt.Sprintf("event %s: %v", id, err))
 			continue
@@ -191,17 +189,78 @@ func (s *eventService) RestoreEvents(ctx context.Context, ids []string, restored
 // PRIVATE HELPERS
 // ============================================================
 
-// getTeamDomainFromEvent returns the team domain string for an event
-func (s *eventService) getTeamDomainFromEvent(event *domain.Event) string {
-	if event == nil {
-		return ""
+// validateDeletePermission performs 2-tier domain authorization check for event deletion
+func (s *eventService) validateDeletePermission(ctx context.Context, event *domain.Event, userID, fallbackAccountID, fallbackTeamType string) error {
+	// Fallback scoping parameters if event aggregate root lacks stored values
+	if event.AccountID == "" {
+		event.AccountID = fallbackAccountID
 	}
-	return domain.TeamDomain(event.TeamID)
+	if event.TeamType == "" {
+		event.TeamType = fallbackTeamType
+	}
+
+	teamDomain := s.resolveEventTeamDomain(event)
+
+	// Tier 1: Check Team Domain
+	allowed, err := s.permChecker.CanDeleteEvent(ctx, userID, teamDomain)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+
+	// Tier 2: Check Account Domain fallback (if present)
+	if !allowed && event.AccountID != "" {
+		accountDomain := domain.AccountDomain(event.AccountID)
+		allowed, err = s.permChecker.CanDeleteEvent(ctx, userID, accountDomain)
+		if err != nil {
+			return fmt.Errorf("account permission check failed: %w", err)
+		}
+	}
+
+	if !allowed {
+		log.Printf("❌ Permission denied: user %s cannot delete event %s in domain %s", userID, event.ID, teamDomain)
+		return domain.ErrForbidden
+	}
+
+	return nil
+}
+
+// validateRestorePermission performs 2-tier domain authorization check for event restore (update action)
+func (s *eventService) validateRestorePermission(ctx context.Context, event *domain.Event, userID, fallbackAccountID, fallbackTeamType string) error {
+	// Fallback scoping parameters if event aggregate root lacks stored values
+	if event.AccountID == "" {
+		event.AccountID = fallbackAccountID
+	}
+	if event.TeamType == "" {
+		event.TeamType = fallbackTeamType
+	}
+
+	teamDomain := s.resolveEventTeamDomain(event)
+
+	// Tier 1: Check Team Domain
+	allowed, err := s.permChecker.CanUpdateEvent(ctx, userID, teamDomain)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+
+	// Tier 2: Check Account Domain fallback (if present)
+	if !allowed && event.AccountID != "" {
+		accountDomain := domain.AccountDomain(event.AccountID)
+		allowed, err = s.permChecker.CanUpdateEvent(ctx, userID, accountDomain)
+		if err != nil {
+			return fmt.Errorf("account permission check failed: %w", err)
+		}
+	}
+
+	if !allowed {
+		log.Printf("❌ Permission denied: user %s cannot restore event %s in domain %s", userID, event.ID, teamDomain)
+		return domain.ErrForbidden
+	}
+
+	return nil
 }
 
 // checkDeletePermissionForEvent checks if user has permission to delete an event
-// Uses GetEventByIDIncludingDeleted to find soft-deleted events
-func (s *eventService) checkDeletePermissionForEvent(ctx context.Context, id, deletedBy string) error {
+func (s *eventService) checkDeletePermissionForEvent(ctx context.Context, id, deletedBy, accountID, teamType string) error {
 	event, err := s.repo.GetEventByIDIncludingDeleted(ctx, id)
 	if err != nil {
 		return err
@@ -210,21 +269,11 @@ func (s *eventService) checkDeletePermissionForEvent(ctx context.Context, id, de
 		return domain.ErrEventNotFound
 	}
 
-	teamDomain := s.getTeamDomainFromEvent(event)
-
-	allowed, err := s.permChecker.CanDeleteEvent(ctx, deletedBy, teamDomain)
-	if err != nil {
-		return fmt.Errorf("permission check failed: %w", err)
-	}
-	if !allowed {
-		return errors.New("insufficient permissions to delete this event")
-	}
-
-	return nil
+	return s.validateDeletePermission(ctx, event, deletedBy, accountID, teamType)
 }
 
 // getEventAndCheckDeletePermission gets event and checks delete permission
-func (s *eventService) getEventAndCheckDeletePermission(ctx context.Context, id, deletedBy string) (*domain.Event, error) {
+func (s *eventService) getEventAndCheckDeletePermission(ctx context.Context, id, deletedBy, accountID, teamType string) (*domain.Event, error) {
 	event, err := s.repo.GetEventByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -233,21 +282,15 @@ func (s *eventService) getEventAndCheckDeletePermission(ctx context.Context, id,
 		return nil, domain.ErrEventNotFound
 	}
 
-	teamDomain := s.getTeamDomainFromEvent(event)
-
-	allowed, err := s.permChecker.CanDeleteEvent(ctx, deletedBy, teamDomain)
-	if err != nil {
-		return nil, fmt.Errorf("permission check failed: %w", err)
-	}
-	if !allowed {
-		return nil, errors.New("insufficient permissions to delete this event")
+	if err := s.validateDeletePermission(ctx, event, deletedBy, accountID, teamType); err != nil {
+		return nil, err
 	}
 
 	return event, nil
 }
 
 // getEventAndCheckUpdatePermissionIncludingDeleted gets event (including soft-deleted) and checks update permission
-func (s *eventService) getEventAndCheckUpdatePermissionIncludingDeleted(ctx context.Context, id, restoredBy string) (*domain.Event, error) {
+func (s *eventService) getEventAndCheckUpdatePermissionIncludingDeleted(ctx context.Context, id, restoredBy, accountID, teamType string) (*domain.Event, error) {
 	event, err := s.repo.GetEventByIDIncludingDeleted(ctx, id)
 	if err != nil {
 		return nil, err
@@ -256,14 +299,8 @@ func (s *eventService) getEventAndCheckUpdatePermissionIncludingDeleted(ctx cont
 		return nil, domain.ErrEventNotFound
 	}
 
-	teamDomain := s.getTeamDomainFromEvent(event)
-
-	allowed, err := s.permChecker.CanUpdateEvent(ctx, restoredBy, teamDomain)
-	if err != nil {
-		return nil, fmt.Errorf("permission check failed: %w", err)
-	}
-	if !allowed {
-		return nil, errors.New("insufficient permissions to restore this event")
+	if err := s.validateRestorePermission(ctx, event, restoredBy, accountID, teamType); err != nil {
+		return nil, err
 	}
 
 	return event, nil

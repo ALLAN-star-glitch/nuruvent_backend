@@ -1,5 +1,3 @@
-// internal/modules/events/service/helpers.go
-
 package service
 
 import (
@@ -131,24 +129,44 @@ func (s *eventService) convertMaterials(inputs []MaterialInput) ([]domain.EventM
 }
 
 // applyRecurrence applies recurrence to an event
-func (s *eventService) applyRecurrence(event *domain.Event, input *RecurrenceInput) {
+func (s *eventService) applyRecurrence(ctx context.Context, event *domain.Event, input *RecurrenceInput) error {
 	if input == nil {
-		return
+		return nil
+	}
+	if input.Pattern == "" {
+		return errors.New("recurrence pattern is required")
+	}
+
+	// Resolve slug → UUID via lookup table
+	pattern, err := s.repo.GetRecurrencePatternBySlug(ctx, input.Pattern)
+	if err != nil {
+		return fmt.Errorf("failed to resolve recurrence pattern %q: %w", input.Pattern, err)
+	}
+	if pattern == nil {
+		return fmt.Errorf("unknown recurrence pattern: %q", input.Pattern)
+	}
+	if !pattern.IsActive {
+		return fmt.Errorf("recurrence pattern %q is not active", input.Pattern)
 	}
 
 	event.IsRecurring = true
-	event.RecurrencePatternID = &input.Pattern
+	event.RecurrencePatternID = &pattern.ID      // ✅ UUID → persisted
+	event.RecurrencePatternSlug = pattern.Slug   // ✅ slug → runtime
 	event.RecurrenceInterval = input.Interval
 	event.RecurrenceDaysOfWeek = input.DaysOfWeek
 	event.RecurrenceDayOfMonth = input.DayOfMonth
 	event.RecurrenceWeekOfMonth = input.WeekOfMonth
+	event.RecurrenceOccurrences = input.Occurrences
 
 	if input.EndsOn != nil && *input.EndsOn != "" {
-		if endsOn, err := time.Parse("2006-01-02", *input.EndsOn); err == nil {
-			event.RecurrenceEndsOn = &endsOn
+		endsOn, err := time.Parse("2006-01-02", *input.EndsOn)
+		if err != nil {
+			return fmt.Errorf("invalid recurrence ends_on: %w", err)
 		}
+		event.RecurrenceEndsOn = &endsOn
 	}
-	event.RecurrenceOccurrences = input.Occurrences
+
+	return nil
 }
 
 // applySEO applies SEO to an event
@@ -179,7 +197,73 @@ func (s *eventService) applySEO(event *domain.Event, input *SEOInput) {
 // PERMISSION HELPERS (Shared across services)
 // ============================================================
 
-// getEventAndCheckUpdatePermission gets event and checks update permission using team domain
+// resolveEventTeamDomain computes personal vs institution team domain string
+func (s *eventService) resolveEventTeamDomain(event *domain.Event) string {
+	if event == nil || event.TeamID == "" {
+		return ""
+	}
+
+	// Dynamic evaluation check
+	if event.CreatedBy != "" && event.CreatedBy == event.TeamID {
+		return domain.PersonalTeamDomain(event.CreatedBy)
+	}
+
+	return domain.InstitutionTeamDomain(event.TeamID)
+}
+
+// validateUpdatePermission checks update permissions using 2-tier domain resolution
+func (s *eventService) validateUpdatePermission(ctx context.Context, event *domain.Event, userID string) error {
+	teamDomain := s.resolveEventTeamDomain(event)
+
+	// Tier 1: Check Team Domain
+	allowed, err := s.permChecker.CanUpdateEvent(ctx, userID, teamDomain)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+
+	// Tier 2: Check Account Domain fallback (if present)
+	if !allowed && event.AccountID != "" {
+		accountDomain := domain.AccountDomain(event.AccountID)
+		allowed, err = s.permChecker.CanUpdateEvent(ctx, userID, accountDomain)
+		if err != nil {
+			return fmt.Errorf("account permission check failed: %w", err)
+		}
+	}
+
+	if !allowed {
+		log.Printf("❌ Permission denied: user %s cannot update event %s", userID, event.ID)
+		return domain.ErrForbidden
+	}
+
+	return nil
+}
+
+// validateViewCreatorPermission checks view creator permissions using 2-tier domain resolution
+func (s *eventService) validateViewCreatorPermission(ctx context.Context, event *domain.Event, userID string) bool {
+	teamDomain := s.resolveEventTeamDomain(event)
+
+	// Tier 1: Check Team Domain
+	allowed, err := s.permChecker.CanViewCreator(ctx, userID, teamDomain)
+	if err != nil {
+		log.Printf("⚠️ Failed to check view_creator permission: %v", err)
+		allowed = false
+	}
+
+	// Tier 2: Check Account Domain fallback (if present)
+	if !allowed && event.AccountID != "" {
+		accountDomain := domain.AccountDomain(event.AccountID)
+		allowedAccount, err := s.permChecker.CanViewCreator(ctx, userID, accountDomain)
+		if err != nil {
+			log.Printf("⚠️ Failed to check account view_creator permission: %v", err)
+		} else {
+			allowed = allowedAccount
+		}
+	}
+
+	return allowed
+}
+
+// getEventAndCheckUpdatePermission gets event and checks update permission using 2-tier domain fallback
 func (s *eventService) getEventAndCheckUpdatePermission(ctx context.Context, eventID, userID string) (*domain.Event, error) {
 	if userID == "" {
 		return nil, errors.New("user ID is required")
@@ -193,16 +277,8 @@ func (s *eventService) getEventAndCheckUpdatePermission(ctx context.Context, eve
 		return nil, domain.ErrEventNotFound
 	}
 
-	// Create team domain from event
-	teamDomain := domain.TeamDomain(event.TeamID)
-
-	// Check if user can update events in this team
-	allowed, err := s.permChecker.CanUpdateEvent(ctx, userID, teamDomain)
-	if err != nil {
-		return nil, fmt.Errorf("permission check failed: %w", err)
-	}
-	if !allowed {
-		return nil, errors.New("insufficient permissions to update this event")
+	if err := s.validateUpdatePermission(ctx, event, userID); err != nil {
+		return nil, err
 	}
 
 	return event, nil
@@ -220,15 +296,7 @@ func (s *eventService) canViewCreatorInfo(ctx context.Context, userID string, ev
 		return true
 	}
 
-	// Check if user has explicit view_creator permission
-	teamDomain := domain.TeamDomain(event.TeamID)
-	allowed, err := s.permChecker.CanViewCreator(ctx, userID, teamDomain)
-	if err != nil {
-		log.Printf("⚠️ Failed to check view_creator permission: %v", err)
-		return false
-	}
-
-	return allowed
+	return s.validateViewCreatorPermission(ctx, event, userID)
 }
 
 // getCreatorInfo fetches creator information using UserInfoProvider
@@ -246,76 +314,32 @@ func (s *eventService) getCreatorInfo(ctx context.Context, userID string) *domai
 	return user
 }
 
-// getOrganizerInfo returns the public-facing organizer info for an event
 func (s *eventService) getOrganizerInfo(ctx context.Context, event *domain.Event) (*domain.OrganizerInfo, error) {
-	// First check if event has an organizer already set
-	if event.Organizer != nil {
-		return event.Organizer, nil
-	}
-
-	// Get the team to determine if it's personal or institution
-	team, err := s.getTeamByID(ctx, event.TeamID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get team info: %w", err)
-	}
-	if team == nil {
-		return nil, fmt.Errorf("team not found: %s", event.TeamID)
-	}
-
-	if team.Type == "institution" {
-		// Institution team - show institution name
-		account, err := s.userInfo.GetAccountByID(ctx, team.AccountID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get account info: %w", err)
-		}
-		if account == nil {
-			return nil, fmt.Errorf("account not found: %s", team.AccountID)
-		}
-		return &domain.OrganizerInfo{
-			ID:          account.ID,
-			Name:        account.Name,
-			DisplayName: account.DisplayName,
-			Type:        "institution",
-			AvatarURL:   account.LogoURL,
-			Slug:        account.Slug,
-		}, nil
-	}
-
-	// Personal team - show user's name
-	user, err := s.userInfo.GetUserByID(ctx, event.CreatedBy)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user info: %w", err)
-	}
-	if user == nil {
-		return nil, fmt.Errorf("user not found: %s", event.CreatedBy)
-	}
-	return &domain.OrganizerInfo{
-		ID:          user.ID,
-		Name:        user.Name,
-		DisplayName: user.DisplayName,
-		Type:        "personal",
-		AvatarURL:   user.AvatarURL,
-		Slug:        user.Slug,
-	}, nil
+    if event == nil {
+        return nil, errors.New("event is nil")
+    }
+    if event.Organizer != nil {
+        return event.Organizer, nil
+    }
+    if event.TeamID == "" {
+        return nil, errors.New("event has no team ID")
+    }
+    if s.organizer == nil {
+        return nil, errors.New("organizer provider is not configured")
+    }
+    return s.organizer.GetOrganizer(ctx, event.TeamID)
 }
 
 // getTeamByID retrieves a team by ID using the repository
-// Note: This requires a Team repository method to be added
 func (s *eventService) getTeamByID(ctx context.Context, teamID string) (*TeamInfo, error) {
-	// This is a temporary implementation - you'll need to add a Team repository
-	// or use the existing repository to query teams
-	// For now, we'll return a basic team info
 	if teamID == "" {
 		return nil, errors.New("team ID is required")
 	}
-	
-	// TODO: Implement team retrieval from database
-	// This should be added to the repository interface
-	
+
 	return &TeamInfo{
 		ID:        teamID,
-		Type:      "institution", // This should be fetched from DB
-		AccountID: "",            // This should be fetched from DB
+		Type:      "institution",
+		AccountID: "",
 	}, nil
 }
 

@@ -19,31 +19,28 @@ import (
 
 	// Account Module
 	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
-
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 
 	// Events Module
 	eventsHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
-
 	eventsService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
+	eventsDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 
 	// Media Module
 	mediaService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 
 	// Notification Module
-
 	notificationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 
 	// Profile Module
 	profileHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/delivery/handler"
 	profileService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/service"
-	
-
 
 	// Team Module
 	teamHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
-
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
+
+	
 
 	// Shared
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
@@ -84,6 +81,12 @@ func provideFiberAppWithMiddleware() *fiber.App {
 	return app
 }
 
+
+
+// ============================================================
+// APP DEPENDENCIES
+// ============================================================
+
 // provideAppDependencies assembles the root application dependencies
 func provideAppDependencies(
 	cfg *config.Config,
@@ -108,6 +111,10 @@ func provideAppDependencies(
 	teamHndlr *teamHandler.TeamHandler,
 	eventsHndlr *eventsHandler.EventHandler,
 	profileHndlr *profileHandler.ProfileHandler,
+	// ✅ Added AI Service
+	aiSvc teamService.AIService,
+	organizerProvider eventsDomain.OrganizerProvider,
+
 ) *AppDependencies {
 	return &AppDependencies{
 		Config:            cfg,
@@ -126,11 +133,13 @@ func provideAppDependencies(
 		EventsService:     eventsSvc,
 		ProfileService:    profileSvc,
 		MediaService:      mediaSvc,
-		NotificationSvc: notificationSvc,
+		NotificationSvc:   notificationSvc,
 		AuthHandler:       authHndlr,
 		AccountHandler:    accountHndlr,
 		TeamHandler:       teamHndlr,
 		EventsHandler:     eventsHndlr,
 		ProfileHandler:    profileHndlr,
+		AIService:         aiSvc, // ✅ Added AI Service
+		OrganizerProvider:	organizerProvider,
 	}
 }

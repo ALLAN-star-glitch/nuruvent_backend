@@ -60,4 +60,7 @@ var (
 
     // Ticket errors
 	ErrInvalidTicket = errors.New("invalid ticket")
+
+
+    ErrForbidden = errors.New("insufficient permissions to create events for this team")
 )

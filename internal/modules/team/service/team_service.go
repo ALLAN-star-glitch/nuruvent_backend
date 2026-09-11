@@ -17,6 +17,7 @@ type teamService struct {
 	authSvc     AuthService
 	casbinSvc   CasbinService
 	notifSvc    NotificationService
+	aiSvc       AIService
 }
 
 // NewTeamService creates a new team service
@@ -25,12 +26,14 @@ func NewTeamService(
 	authSvc AuthService,
 	casbinSvc CasbinService,
 	notifSvc NotificationService,
+	aiSvc AIService,
 ) Service {
 	return &teamService{
 		repo:      repo,
 		authSvc:   authSvc,
 		casbinSvc: casbinSvc,
 		notifSvc:  notifSvc,
+		aiSvc: aiSvc,
 	}
 }
 
@@ -423,4 +426,75 @@ func (s *teamService) GetUserInstitutionTeamDomains(ctx context.Context, userID 
 	}
 
 	return domains, nil
+}
+
+
+ // internal/modules/team/service/team_service.go
+
+// ============================================================
+// AI CONTEXT HELPERS
+// ============================================================
+
+// getUserRole gets a user's role in a specific account
+func (s *teamService) getUserRole(ctx context.Context, userID, accountID string) string {
+	role, err := s.authSvc.GetUserRoleInAccount(ctx, userID, accountID)
+	if err != nil || role == "" {
+		return "member"
+	}
+	return role
+}
+
+// getUserDisplayName gets a user's display name
+func getUserDisplayName(user *UserResult) string {
+	if user == nil {
+		return ""
+	}
+	if user.DisplayName != "" {
+		return user.DisplayName
+	}
+	return user.Name
+}
+
+// getTeamMemberCount gets the number of members in a team
+func (s *teamService) getTeamMemberCount(ctx context.Context, teamID string) int {
+	count, err := s.repo.CountMembersByTeam(ctx, teamID)
+	if err != nil {
+		return 0
+	}
+	return int(count)
+}
+
+// getTeamEventCount gets the number of events in a team
+// Note: This is a placeholder - you'll need to implement this when you have an event service
+func (s *teamService) getTeamEventCount(ctx context.Context, teamID string) int {
+	// TODO: Implement when event module is ready
+	return 0
+}
+
+// getRecentEventNames gets recent event names for a team
+// Note: This is a placeholder - you'll need to implement this when you have an event service
+func (s *teamService) getRecentEventNames(ctx context.Context, teamID string, limit int) []string {
+	// TODO: Implement when event module is ready
+	return []string{}
+}
+
+// getTeamMemberNames gets names of team members
+func (s *teamService) getTeamMemberNames(ctx context.Context, teamID string, limit int) []string {
+	members, _, err := s.repo.GetMembersByTeam(ctx, teamID, teamdomain.ListMembersFilters{Limit: limit})
+	if err != nil || len(members) == 0 {
+		return []string{}
+	}
+	
+	names := make([]string, 0, len(members))
+	for _, m := range members {
+		user, err := s.authSvc.GetUserByID(ctx, m.UserID)
+		if err == nil && user != nil {
+			if user.DisplayName != "" {
+				names = append(names, user.DisplayName)
+			} else {
+				names = append(names, user.Name)
+			}
+		}
+	}
+	return names
 }

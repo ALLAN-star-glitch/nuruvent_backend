@@ -20,27 +20,6 @@ func NewTeamNotificationAdapter(notifSvc notificationdomain.NotificationService)
 }
 
 // ============================================================
-// TYPE CONVERSION HELPERS
-// ============================================================
-
-// convertPersonalizedContent converts from teamService type to notificationdomain type
-func convertPersonalizedContent(src *teamService.PersonalizedInvitationContent) *notificationdomain.PersonalizedInvitationContent {
-	if src == nil {
-		return nil
-	}
-	return &notificationdomain.PersonalizedInvitationContent{
-		Subject:      src.Subject,
-		Greeting:     src.Greeting,
-		Intro:        src.Intro,
-		Body:         src.Body,
-		Benefits:     src.Benefits,
-		CallToAction: src.CallToAction,
-		Closing:      src.Closing,
-		PSS:          src.PSS,
-	}
-}
-
-// ============================================================
 // ✅ TEAM INVITATION METHODS (UPDATED - NO ROLE, AI-READY)
 // ============================================================
 
@@ -58,7 +37,7 @@ func (a *TeamNotificationAdapter) SendTeamInviteExistingUser(ctx context.Context
 		TeamID:              req.TeamID,
 		AcceptLink:          req.AcceptLink,
 		ExpiresIn:           req.ExpiresIn,
-		PersonalizedContent: convertPersonalizedContent(req.PersonalizedContent),
+		PersonalizedContent: req.PersonalizedContent, // ✅ No conversion needed - same type
 	}
 	return a.notifSvc.SendTeamInviteExistingUser(ctx, notifReq)
 }
@@ -77,7 +56,7 @@ func (a *TeamNotificationAdapter) SendTeamInviteRegistration(ctx context.Context
 		TeamID:              req.TeamID,
 		RegistrationLink:    req.RegistrationLink,
 		ExpiresIn:           req.ExpiresIn,
-		PersonalizedContent: convertPersonalizedContent(req.PersonalizedContent),
+		PersonalizedContent: req.PersonalizedContent, // ✅ No conversion needed - same type
 	}
 	return a.notifSvc.SendTeamInviteRegistration(ctx, notifReq)
 }
@@ -92,7 +71,7 @@ func (a *TeamNotificationAdapter) SendTeamInviteAccepted(ctx context.Context, re
 		UserEmail:           req.UserEmail,
 		TeamName:            req.TeamName,
 		TeamID:              req.TeamID,
-		PersonalizedContent: convertPersonalizedContent(req.PersonalizedContent),
+		PersonalizedContent: req.PersonalizedContent, // ✅ No conversion needed - same type
 	}
 	return a.notifSvc.SendTeamInviteAccepted(ctx, notifReq)
 }
@@ -107,7 +86,7 @@ func (a *TeamNotificationAdapter) SendTeamInviteDeclined(ctx context.Context, re
 		UserEmail:           req.UserEmail,
 		TeamName:            req.TeamName,
 		TeamID:              req.TeamID,
-		PersonalizedContent: convertPersonalizedContent(req.PersonalizedContent),
+		PersonalizedContent: req.PersonalizedContent, // ✅ No conversion needed - same type
 	}
 	return a.notifSvc.SendTeamInviteDeclined(ctx, notifReq)
 }

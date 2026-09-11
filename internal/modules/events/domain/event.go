@@ -1,5 +1,3 @@
-// internal/modules/events/domain/event.go
-
 package domain
 
 import (
@@ -16,10 +14,10 @@ type Visibility string
 const (
 	// VisibilityPublic - Anyone can view the event
 	VisibilityPublic Visibility = "public"
-	
+
 	// VisibilityPrivate - Only team members can view the event
 	VisibilityPrivate Visibility = "private"
-	
+
 	// VisibilityUnlisted - Anyone with the direct link can view
 	VisibilityUnlisted Visibility = "unlisted"
 )
@@ -45,22 +43,24 @@ type Event struct {
 	// ============================================================
 	// Relations (Seeded Lookup Data)
 	// ============================================================
-	EventTypeID          string
-	EventStatusID        string
-	CategoryID           *string
-	Category             *Category 
-	EventType            *EventType
-	EventStatus          *EventStatus
-	EventFormatID        *string
+	EventTypeID           string
+	EventStatusID         string
+	CategoryID            *string
+	Category              *Category
+	EventType             *EventType
+	EventStatus           *EventStatus
+	EventFormatID         *string
 	CertificateTemplateID *string
 
 	// ============================================================
-	// Ownership
+	// Ownership & Authorization Scope
 	// ============================================================
-	TeamID      string       // Team ID this event belongs to (required)
-	CreatedBy   string       // User ID who created this event
-	Creator     *UserInfo
-	Organizer   *OrganizerInfo 
+	TeamID    string // Team ID this event belongs to (required)
+	TeamType  string // "personal" or "institution"
+	AccountID string // Account ID for multi-tenant fallback/inheritance
+	CreatedBy string // User ID who created this event
+	Creator   *UserInfo
+	Organizer *OrganizerInfo
 
 	// ============================================================
 	// Schedule & Venue
@@ -73,6 +73,7 @@ type Event struct {
 	// Recurrence
 	RecurrencePatternID   *string
 	RecurrenceInterval    int
+	RecurrencePatternSlug string
 	RecurrenceEndsOn      *time.Time
 	RecurrenceOccurrences *int
 	RecurrenceDaysOfWeek  []string
@@ -119,13 +120,13 @@ type Event struct {
 	// ============================================================
 	// Monetization & Add-ons
 	// ============================================================
-	IsFeatured          bool
-	FeaturedUntil       *time.Time
-	CertificateEnabled  bool
-	CertificatePrice    float64
+	IsFeatured                  bool
+	FeaturedUntil               *time.Time
+	CertificateEnabled          bool
+	CertificatePrice            float64
 	EarlyBirdDiscountPercentage *int
-	GroupDiscountPercentage *int
-	GroupMinAttendees   *int
+	GroupDiscountPercentage     *int
+	GroupMinAttendees           *int
 
 	// ============================================================
 	// Child Entities (Value Objects - will be loaded separately)
@@ -140,12 +141,12 @@ type Event struct {
 	// SEO & Marketing
 	// ============================================================
 	SEO struct {
-		Title         string
-		Description   string
-		Keywords      []string
-		CanonicalURL  string
-		Robots        string
-		NoIndex       bool
+		Title        string
+		Description  string
+		Keywords     []string
+		CanonicalURL string
+		Robots       string
+		NoIndex      bool
 	}
 	OpenGraph struct {
 		Title       string
@@ -200,6 +201,23 @@ type Event struct {
 }
 
 // ============================================================
+// DOMAIN RESOLUTION METHODS
+// ============================================================
+
+// ResolveTeamDomain returns the domain string corresponding to the team scope using domains.go helpers
+func (e *Event) ResolveTeamDomain() string {
+	if e.TeamType == "personal" || (e.CreatedBy != "" && e.CreatedBy == e.TeamID) {
+		return PersonalTeamDomain(e.CreatedBy)
+	}
+	return InstitutionTeamDomain(e.TeamID)
+}
+
+// ResolveAccountDomain returns the account domain string for inheritance fallback
+func (e *Event) ResolveAccountDomain() string {
+	return AccountDomain(e.AccountID)
+}
+
+// ============================================================
 // CHILD ENTITY DEFINITIONS
 // ============================================================
 
@@ -223,19 +241,19 @@ type EventSchedule struct {
 
 // EventTicket represents a ticket type for an event
 type EventTicket struct {
-	ID                 string
-	EventID            string
-	TicketTypeID       string
-	Name               string
-	Description        string
-	Price              float64
-	Quantity           int
-	MaxPerPerson       *int
-	EarlyBirdDeadline  *time.Time
-	GroupMinAttendees  *int
-	GroupDiscount      *float64
-	SortOrder          int
-	IsActive           bool
+	ID                string
+	EventID           string
+	TicketTypeID      string
+	Name              string
+	Description       string
+	Price             float64
+	Quantity          int
+	MaxPerPerson      *int
+	EarlyBirdDeadline *time.Time
+	GroupMinAttendees *int
+	GroupDiscount     *float64
+	SortOrder         int
+	IsActive          bool
 }
 
 // EventSpeaker represents a speaker for an event
@@ -308,27 +326,27 @@ func NewEvent(
 	slug := generateSlug(displayName)
 
 	return &Event{
-		ID:          uuid.New().String(),
-		Slug:        slug,
-		Name:        name,
-		DisplayName: displayName,
-		Description: description,
-		EventTypeID: eventTypeID,
+		ID:            uuid.New().String(),
+		Slug:          slug,
+		Name:          name,
+		DisplayName:   displayName,
+		Description:   description,
+		EventTypeID:   eventTypeID,
 		EventStatusID: "",
-		TeamID:      teamID,
-		CreatedBy:   createdBy,
-		IsVirtual:   true,
-		Visibility:  "public",
-		Language:    "en",
-		Version:     1,
-		IsActive:    true,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-		Tags:        []string{},
+		TeamID:        teamID,
+		CreatedBy:     createdBy,
+		IsVirtual:     true,
+		Visibility:    "public",
+		Language:      "en",
+		Version:       1,
+		IsActive:      true,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+		Tags:          []string{},
 		InvitedEmails: []string{},
-		SocialLinks: make(map[string]string),
-		Metadata:    make(map[string]interface{}),
-		SchemaOrg:   make(map[string]interface{}),
+		SocialLinks:   make(map[string]string),
+		Metadata:      make(map[string]interface{}),
+		SchemaOrg:     make(map[string]interface{}),
 		OpenGraph: struct {
 			Title       string
 			Description string
@@ -413,7 +431,7 @@ func (e *Event) ValidateForPublish() error {
 	// 4. VENUE & MEETING LINK CHECKS
 	// ============================================================
 	hasEventLevelLink := e.VirtualPlatformURL != "" || e.ZoomLink != "" || e.MeetLink != ""
-	
+
 	hasScheduleLevelLink := false
 	if len(e.Schedules) > 0 {
 		for _, schedule := range e.Schedules {
@@ -423,11 +441,11 @@ func (e *Event) ValidateForPublish() error {
 			}
 		}
 	}
-	
+
 	hasMeetingLink := hasEventLevelLink || hasScheduleLevelLink
 
 	if e.IsVirtual && !hasMeetingLink {
-		validationErrors = append(validationErrors, 
+		validationErrors = append(validationErrors,
 			"meeting link is required for virtual events. Provide zoom_link or meet_link at event level or in at least one schedule")
 	}
 
@@ -437,11 +455,11 @@ func (e *Event) ValidateForPublish() error {
 
 	if e.IsHybrid {
 		if !hasMeetingLink {
-			validationErrors = append(validationErrors, 
+			validationErrors = append(validationErrors,
 				"meeting link is required for hybrid events (virtual component)")
 		}
 		if e.InPersonLocation == "" {
-			validationErrors = append(validationErrors, 
+			validationErrors = append(validationErrors,
 				"in-person location is required for hybrid events")
 		}
 	}
@@ -465,9 +483,9 @@ func (e *Event) ValidateForPublish() error {
 			}
 			totalQuantity += ticket.Quantity
 		}
-		
+
 		if e.Capacity != nil && *e.Capacity > 0 && totalQuantity > *e.Capacity {
-			validationErrors = append(validationErrors, 
+			validationErrors = append(validationErrors,
 				fmt.Sprintf("total ticket quantity (%d) exceeds capacity (%d)", totalQuantity, *e.Capacity))
 		}
 	}
@@ -506,20 +524,19 @@ func (e *Event) ValidateForPublish() error {
 		if e.RecurrencePatternID == nil || *e.RecurrencePatternID == "" {
 			validationErrors = append(validationErrors, "recurrence pattern is required for recurring events")
 		}
-		
-		if e.RecurrencePatternID != nil {
-			switch *e.RecurrencePatternID {
-			case "weekly":
-				if len(e.RecurrenceDaysOfWeek) == 0 {
-					validationErrors = append(validationErrors, "days of week are required for weekly recurrence")
-				}
-			case "monthly":
-				if e.RecurrenceDayOfMonth == nil && e.RecurrenceWeekOfMonth == nil {
-					validationErrors = append(validationErrors, "day of month or week of month is required for monthly recurrence")
-				}
+
+		// Compare on the SLUG, not the ID (which is a UUID).
+		switch e.RecurrencePatternSlug {
+		case "weekly":
+			if len(e.RecurrenceDaysOfWeek) == 0 {
+				validationErrors = append(validationErrors, "days of week are required for weekly recurrence")
+			}
+		case "monthly":
+			if e.RecurrenceDayOfMonth == nil && e.RecurrenceWeekOfMonth == nil {
+				validationErrors = append(validationErrors, "day of month or week of month is required for monthly recurrence")
 			}
 		}
-		
+
 		if e.RecurrenceEndsOn == nil && e.RecurrenceOccurrences == nil {
 			validationErrors = append(validationErrors, "recurrence must have an end date or number of occurrences")
 		}
@@ -763,7 +780,7 @@ func (e *Event) RemoveMaterial(materialID string) error {
 	if e.IsDeleted() {
 		return errors.New("cannot modify a deleted event")
 	}
-	
+
 	for i, m := range e.Materials {
 		if m.ID == materialID {
 			e.Materials = append(e.Materials[:i], e.Materials[i+1:]...)
@@ -771,7 +788,7 @@ func (e *Event) RemoveMaterial(materialID string) error {
 			return nil
 		}
 	}
-	
+
 	return fmt.Errorf("material with ID %s not found", materialID)
 }
 
@@ -841,14 +858,12 @@ func generateSlug(displayName string) string {
 	slug := strings.ToLower(displayName)
 	slug = strings.ReplaceAll(slug, " ", "-")
 	slug = strings.ReplaceAll(slug, "_", "-")
-	// Remove special characters
 	slug = strings.Map(func(r rune) rune {
 		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
 			return r
 		}
 		return -1
 	}, slug)
-	// Add timestamp for uniqueness
 	if slug == "" {
 		slug = "event"
 	}

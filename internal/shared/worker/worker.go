@@ -27,6 +27,7 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
         EMAIL_API_KEY: cfg.Email.APIKey,
         EMAIL_FROM:    cfg.Email.From,
     }
+    
 
     emailChannel := service.NewEmailChannel(emailConfig)
     notificationWorker := service.NewNotificationWorker(emailChannel)
@@ -106,6 +107,7 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
         log.Println("✅ Embedded worker stopped")
     }
 }
+
 
 // maskString masks a string for logging (shows first 4 and last 4 characters)
 func maskString(s string) string {

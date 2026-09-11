@@ -1,3 +1,5 @@
+// internal/modules/notification/service/email_channel.go
+
 package service
 
 import (
@@ -7,6 +9,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/resend/resend-go/v3"
@@ -30,13 +33,53 @@ type EmailChannelConfig struct {
 	EMAIL_FROM    string
 }
 
+// ============================================================
+// TEMPLATE FUNCTIONS
+// ============================================================
+
+// templateFuncMap returns the custom template functions
+func templateFuncMap() template.FuncMap {
+    return template.FuncMap{
+        // trim strips leading/trailing whitespace
+        "trim": strings.TrimSpace,
+        // split splits a string by a separator
+        "split": func(sep, s string) []string {
+            if s == "" {
+                return []string{}
+            }
+            return strings.Split(s, sep)
+        },
+        // join joins a slice of strings with a separator
+        "join": func(sep string, s []string) string {
+            return strings.Join(s, sep)
+        },
+        // contains checks if a string contains a substring
+        "contains": func(substr, s string) bool {
+            return strings.Contains(s, substr)
+        },
+        // hasPrefix checks if a string has a prefix
+        "hasPrefix": func(prefix, s string) bool {
+            return strings.HasPrefix(s, prefix)
+        },
+        // hasSuffix checks if a string has a suffix
+        "hasSuffix": func(suffix, s string) bool {
+            return strings.HasSuffix(s, suffix)
+        },
+    }
+}
+
 // NewEmailChannel creates a new email channel
 func NewEmailChannel(cfg EmailChannelConfig) notificationdomain.Channel {
-	// Parse all templates from embedded filesystem
-	tmpl, err := template.ParseFS(templateFS, "templates/email/*.html")
+	// Parse all templates from embedded filesystem with custom functions
+	tmpl, err := template.New("").
+		Funcs(templateFuncMap()).
+		ParseFS(templateFS, "templates/email/*.html")
 	if err != nil {
 		log.Fatalf("[EmailChannel] Failed to parse email templates: %v", err)
 	}
+
+	log.Println("[EmailChannel] ✅ Email templates parsed successfully with custom functions")
+	log.Println("[EmailChannel] Available template functions: split, join, contains, hasPrefix, hasSuffix")
 
 	return &EmailChannel{
 		client: resend.NewClient(cfg.EMAIL_API_KEY),
@@ -191,7 +234,7 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 	case notificationdomain.TypeNewPersonalAccountRegistration:
 		data["name"] = req.Meta["name"]
 
-	// ✅ TEAM INVITATION CASES (UPDATED - NO ROLE, TEAM FOCUS)
+	// ✅ TEAM INVITATION CASES (UPDATED - WITH AI SUPPORT)
 	case notificationdomain.TypeTeamInviteExistingUser:
 		data["user_name"] = req.Meta["user_name"]
 		data["invited_by"] = req.Meta["invited_by"]
@@ -199,16 +242,30 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["team_id"] = req.Meta["team_id"]
 		data["accept_link"] = req.Meta["accept_link"]
 		data["expires_in"] = req.Meta["expires_in"]
-		
-		// ✅ AI-Ready: If AI content exists, add it
+
+		// ✅ AI content
 		if req.Meta["ai_subject"] != "" {
 			data["ai_subject"] = req.Meta["ai_subject"]
+		}
+		if req.Meta["ai_greeting"] != "" {
 			data["ai_greeting"] = req.Meta["ai_greeting"]
+		}
+		if req.Meta["ai_intro"] != "" {
 			data["ai_intro"] = req.Meta["ai_intro"]
+		}
+		if req.Meta["ai_body"] != "" {
 			data["ai_body"] = req.Meta["ai_body"]
+		}
+		if req.Meta["ai_benefits"] != "" {
 			data["ai_benefits"] = req.Meta["ai_benefits"]
+		}
+		if req.Meta["ai_call_to_action"] != "" {
 			data["ai_call_to_action"] = req.Meta["ai_call_to_action"]
+		}
+		if req.Meta["ai_closing"] != "" {
 			data["ai_closing"] = req.Meta["ai_closing"]
+		}
+		if req.Meta["ai_pss"] != "" {
 			data["ai_pss"] = req.Meta["ai_pss"]
 		}
 
@@ -219,16 +276,30 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["team_id"] = req.Meta["team_id"]
 		data["registration_link"] = req.Meta["registration_link"]
 		data["expires_in"] = req.Meta["expires_in"]
-		
-		// ✅ AI-Ready: If AI content exists, add it
+
+		// ✅ AI content
 		if req.Meta["ai_subject"] != "" {
 			data["ai_subject"] = req.Meta["ai_subject"]
+		}
+		if req.Meta["ai_greeting"] != "" {
 			data["ai_greeting"] = req.Meta["ai_greeting"]
+		}
+		if req.Meta["ai_intro"] != "" {
 			data["ai_intro"] = req.Meta["ai_intro"]
+		}
+		if req.Meta["ai_body"] != "" {
 			data["ai_body"] = req.Meta["ai_body"]
+		}
+		if req.Meta["ai_benefits"] != "" {
 			data["ai_benefits"] = req.Meta["ai_benefits"]
+		}
+		if req.Meta["ai_call_to_action"] != "" {
 			data["ai_call_to_action"] = req.Meta["ai_call_to_action"]
+		}
+		if req.Meta["ai_closing"] != "" {
 			data["ai_closing"] = req.Meta["ai_closing"]
+		}
+		if req.Meta["ai_pss"] != "" {
 			data["ai_pss"] = req.Meta["ai_pss"]
 		}
 
@@ -238,12 +309,21 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["user_email"] = req.Meta["user_email"]
 		data["team_name"] = req.Meta["team_name"]
 		data["team_id"] = req.Meta["team_id"]
-		
-		// ✅ AI-Ready: If AI content exists, add it
+
+		// ✅ AI content
 		if req.Meta["ai_subject"] != "" {
 			data["ai_subject"] = req.Meta["ai_subject"]
+		}
+		if req.Meta["ai_greeting"] != "" {
 			data["ai_greeting"] = req.Meta["ai_greeting"]
+		}
+		if req.Meta["ai_intro"] != "" {
+			data["ai_intro"] = req.Meta["ai_intro"]
+		}
+		if req.Meta["ai_body"] != "" {
 			data["ai_body"] = req.Meta["ai_body"]
+		}
+		if req.Meta["ai_closing"] != "" {
 			data["ai_closing"] = req.Meta["ai_closing"]
 		}
 
@@ -253,12 +333,21 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["user_email"] = req.Meta["user_email"]
 		data["team_name"] = req.Meta["team_name"]
 		data["team_id"] = req.Meta["team_id"]
-		
-		// ✅ AI-Ready: If AI content exists, add it
+
+		// ✅ AI content
 		if req.Meta["ai_subject"] != "" {
 			data["ai_subject"] = req.Meta["ai_subject"]
+		}
+		if req.Meta["ai_greeting"] != "" {
 			data["ai_greeting"] = req.Meta["ai_greeting"]
+		}
+		if req.Meta["ai_intro"] != "" {
+			data["ai_intro"] = req.Meta["ai_intro"]
+		}
+		if req.Meta["ai_body"] != "" {
 			data["ai_body"] = req.Meta["ai_body"]
+		}
+		if req.Meta["ai_closing"] != "" {
 			data["ai_closing"] = req.Meta["ai_closing"]
 		}
 	}

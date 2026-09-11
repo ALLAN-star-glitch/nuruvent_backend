@@ -1,61 +1,85 @@
 {{define "team-invite-registration"}}
-<div class="title">
-    You're Invited to Join!
-</div>
-<div class="subtitle">Complete your registration for {{.team_name}}</div>
-
-<div class="greeting">
-    Hello{{if .name}} {{.name}}{{end}},
-</div>
-
-<p class="body-text">
-    <strong>{{.invited_by}}</strong> has invited you to join <strong>{{.team_name}}</strong> on Nuruvent.
-</p>
-
-<p class="body-text">
-    To accept this invitation, please complete your registration by clicking the button below.
-</p>
-
-<div class="alert-success">
-    <div class="message">Complete Your Registration</div>
-</div>
-
-<div class="otp-box" style="padding: 20px;">
-    <a href="{{.registration_link}}" style="display: inline-block; background: #1A73E8; color: #FFFFFF; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
-        Create Account & Join Team
-    </a>
-</div>
-
-<p style="text-align: center; color: #5F6368; font-size: 13px; margin-top: 12px;">
-    This invitation will expire in <strong>{{.expires_in}}</strong>
-</p>
-
-<div class="details-box">
-    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F0F2F5;">
-        <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Team</span>
-        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.team_name}}</span>
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #2D3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 24px; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;">
+    
+    <!-- Header -->
+    <div style="font-size: 22px; font-weight: 700; color: #1A202C; margin-bottom: 6px; text-align: center;">
+        {{if .ai_subject}}{{.ai_subject}}{{else}}You're invited to join {{.team_name}}!{{end}}
     </div>
-    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F0F2F5;">
-        <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Invited By</span>
-        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.invited_by}}</span>
+    <div style="font-size: 14px; color: #718096; text-align: center; margin-bottom: 24px;">
+        Complete your registration to start collaborating on Nuruvent
     </div>
-    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
-        <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Expires In</span>
-        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.expires_in}}</span>
-    </div>
-</div>
 
-<div class="alert-info" style="background: #EEF2FF; padding: 14px 18px; border-radius: 10px; margin: 14px 0; border-left: 4px solid #1A73E8;">
-    <p style="margin: 0; color: #1A3A6B; font-size: 14px;">
-        <strong>Already have a Nuruvent account?</strong><br>
-        Simply <a href="https://nuruvent.com/login" style="color: #1A73E8; text-decoration: none;">log in</a> and you'll be automatically added to <strong>{{.team_name}}</strong>.
+    <!-- Greeting & Intro -->
+    <div style="font-size: 16px; font-weight: 600; color: #2D3748; margin-bottom: 12px;">
+        {{if .ai_greeting}}{{.ai_greeting}}{{else}}Hey there,{{end}}
+    </div>
+
+    {{if .ai_intro}}
+    <p style="font-size: 15px; color: #4A5568; margin-bottom: 12px;">{{.ai_intro}}</p>
+    {{end}}
+
+    <p style="font-size: 15px; color: #4A5568; margin-bottom: 20px;">
+        {{if .ai_body}}{{.ai_body}}{{else}}<strong>{{.invited_by}}</strong> has invited you to join <strong>{{.team_name}}</strong> on Nuruvent. Come join the team and help organize awesome events together!{{end}}
     </p>
-</div>
 
-<div class="alert-warning" style="background: #FEF3C7; padding: 14px 18px; border-radius: 10px; margin: 14px 0; border-left: 4px solid #FBBC04;">
-    <p style="margin: 0; color: #92400E; font-size: 14px;">
-        <strong>Didn't expect this invitation?</strong><br>
-        If you were not expecting an invitation from <strong>{{.team_name}}</strong>, please ignore this email.
-    </p>
+   <!-- Value / Benefits Section -->
+            {{$benefits := split "|" .ai_benefits}}
+            {{if and .ai_benefits (ne (trim .ai_benefits) "") (ne (trim .ai_benefits) "|")}}
+            <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 20px; margin-bottom: 28px;">
+                <div style="font-weight: 600; font-size: 14px; color: #1E293B; margin-bottom: 12px;">
+                    Here is what you can do with {{.team_name}}:
+                </div>
+                
+                {{range $benefit := $benefits}}
+                    {{$clean := trim $benefit}}
+                    {{if ne $clean ""}}
+                    <div style="display: flex; align-items: flex-start; margin-bottom: 8px; font-size: 14px; color: #475569; line-height: 1.5;">
+                        <span style="color: #2563EB; margin-right: 10px; font-weight: bold; font-size: 16px;">•</span>
+                        <span>{{$clean}}</span>
+                    </div>
+                    {{end}}
+                {{end}}
+            </div>
+            {{end}}
+
+    <!-- Call to Action -->
+    <div style="text-align: center; margin: 28px 0;">
+        <a href="{{.registration_link}}" style="display: inline-block; background: #3182CE; color: #FFFFFF; padding: 14px 36px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px; box-shadow: 0 2px 4px rgba(49, 130, 206, 0.2);">
+            {{if .ai_call_to_action}}{{.ai_call_to_action}}{{else}}Accept Invite & Create Account{{end}}
+        </a>
+        <div style="color: #A0AEC0; font-size: 12px; margin-top: 10px;">
+            This invitation token will expire in <strong>{{.expires_in}}</strong>
+        </div>
+    </div>
+
+    <!-- Metadata Card -->
+    <div style="background: #FFFFFF; border: 1px solid #EDF2F7; border-radius: 8px; padding: 12px 16px; margin-bottom: 24px;">
+        <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #F7FAFC; font-size: 13px;">
+            <span style="color: #718096;">Team</span>
+            <span style="color: #2D3748; font-weight: 600;">{{.team_name}}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px;">
+            <span style="color: #718096;">Invited By</span>
+            <span style="color: #2D3748; font-weight: 600;">{{.invited_by}}</span>
+        </div>
+    </div>
+
+    <!-- Closing & PS -->
+    {{if .ai_closing}}
+    <div style="color: #4A5568; font-size: 14px; margin-bottom: 12px;">
+        {{.ai_closing}}
+    </div>
+    {{end}}
+
+    {{if .ai_pss}}
+    <div style="margin: 16px 0; padding: 12px 16px; background: #EBF8FF; border-radius: 8px; color: #2B6CB0; font-size: 13px; border-left: 3px solid #3182CE;">
+        {{.ai_pss}}
+    </div>
+    {{end}}
+
+    <!-- Account & Expiry Notices -->
+    <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #EDF2F7; font-size: 13px; color: #718096; text-align: center;">
+        Already have an account? <a href="https://nuruvent.com/login" style="color: #3182CE; text-decoration: none; font-weight: 500;">Log in here</a> to accept automatically.
+    </div>
 </div>
 {{end}}

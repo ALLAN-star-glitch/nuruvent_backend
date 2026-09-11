@@ -27,6 +27,10 @@ func NewAuthNotificationAdapter(notifSvc notificationDomain.NotificationService)
 	return auth.NewNotificationAdapter(notifSvc)
 }
 
+func provideOrganizerProvider(accounts accountService.Service) eventsDomain.OrganizerProvider {
+	return events.NewOrganizerAdapter(accounts)
+}
+
 // NewQueueAdapter creates a new queue adapter for auth
 func NewQueueAdapter(q notificationDomain.TaskQueue) authDomain.QueueService {
 	return auth.NewQueueAdapter(q)

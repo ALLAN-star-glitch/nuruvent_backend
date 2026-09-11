@@ -74,20 +74,53 @@ func (s *eventService) logCreateEvent(cmd CreateEventCommand) {
 
 // validatePublishedEventPermissions checks if user has permission to create published event
 func (s *eventService) validatePublishedEventPermissions(ctx context.Context, cmd CreateEventCommand) error {
-	// Create domain string for the team
-	teamDomain := domain.TeamDomain(cmd.TeamID)
+    // 1. Resolve exact Team Domain (institution:team:<id> or personal:team:<id>)
+    teamDomain := s.resolvePublishedTeamDomain(cmd)
 
-	// Check if user can create events in this team
-	allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, teamDomain)
-	if err != nil {
-		return fmt.Errorf("permission check failed: %w", err)
-	}
-	if !allowed {
-		log.Printf("❌ Permission denied: user %s cannot create events for team %s", cmd.CreatedBy, cmd.TeamID)
-		return errors.New("insufficient permissions to create events for this team")
-	}
+    log.Printf("🔍 Tier 1: Checking team permission for user=%s on domain=%s", cmd.CreatedBy, teamDomain)
 
-	return nil
+    // Check Team-level permission
+    allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, teamDomain)
+    if err != nil {
+        return fmt.Errorf("permission check failed: %w", err)
+    }
+
+    // 2. Fallback check: If Team check fails and AccountID is present, check Account Domain
+    if !allowed && cmd.AccountID != "" {
+        accountDomain := domain.AccountDomain(cmd.AccountID)
+        log.Printf("🔍 Tier 2: Team permission failed. Falling back to Account permission on domain=%s", accountDomain)
+        
+        allowed, err = s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, accountDomain)
+        if err != nil {
+            return fmt.Errorf("account permission check failed: %w", err)
+        }
+    }
+
+    if !allowed {
+        log.Printf("❌ Permission denied: user %s cannot create events for team %s", cmd.CreatedBy, cmd.TeamID)
+        return domain.ErrForbidden
+    }
+
+    return nil
+}
+
+// resolvePublishedTeamDomain dynamically determines if the domain is institution or personal
+func (s *eventService) resolvePublishedTeamDomain(cmd CreateEventCommand) string {
+    if cmd.TeamType == "personal" {
+        return domain.PersonalTeamDomain(cmd.TeamID)
+    }
+    
+    if cmd.TeamType == "institution" {
+        return domain.InstitutionTeamDomain(cmd.TeamID)
+    }
+
+    // Heuristic fallback: If creator ID matches the team ID, it is a personal team
+    if cmd.CreatedBy != "" && cmd.CreatedBy == cmd.TeamID {
+        return domain.PersonalTeamDomain(cmd.CreatedBy)
+    }
+
+    // Default fallback
+    return domain.InstitutionTeamDomain(cmd.TeamID)
 }
 
 // validatePublishedEventFields validates required fields for published events
@@ -203,7 +236,7 @@ func (s *eventService) buildPublishedEvent(
 		event.ID, event.Name, event.Slug, event.DisplayName, event.TeamID)
 
 	// Populate all fields
-	s.populatePublishedEventFields(event, cmd)
+	s.populatePublishedEventFields(ctx, event, cmd)
 
 	// Handle schedules separately (needs parsing)
 	if err := s.populateEventSchedules(ctx, event, cmd.Schedules); err != nil {
@@ -214,7 +247,7 @@ func (s *eventService) buildPublishedEvent(
 }
 
 // populatePublishedEventFields fills all non-schedule fields for published events
-func (s *eventService) populatePublishedEventFields(event *domain.Event, cmd CreateEventCommand) {
+func (s *eventService) populatePublishedEventFields(ctx context.Context, event *domain.Event, cmd CreateEventCommand) {
 	event.ShortDescription = cmd.ShortDescription
 	event.Tags = cmd.Tags
 	event.Language = cmd.Language
@@ -224,7 +257,7 @@ func (s *eventService) populatePublishedEventFields(event *domain.Event, cmd Cre
 	event.IsRecurring = cmd.IsRecurring
 
 	if cmd.Recurrence != nil {
-		s.applyRecurrence(event, cmd.Recurrence)
+		s.applyRecurrence(ctx, event, cmd.Recurrence)
 	}
 
 	// Venue fields

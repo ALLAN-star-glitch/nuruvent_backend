@@ -3,6 +3,8 @@
 package domain
 
 import (
+	"time"
+
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types"
 )
 
@@ -164,4 +166,57 @@ func GetTicketTypeByDisplayName(displayName string) (TicketTypeInfo, bool) {
 		}
 	}
 	return TicketTypeInfo{}, false
+}
+
+
+
+// ============================================================
+// TICKET TYPE ROW - Database-backed ticket type with UUID
+// ============================================================
+
+// TicketTypeRow represents a persisted ticket_types table row.
+//
+// Unlike TicketTypeInfo (a static registry entry keyed by the TicketType enum),
+// this carries the actual database UUID so clients can reference it as a
+// foreign key when creating events (event_tickets.ticket_type_id).
+//
+// Use cases:
+//   - GET /api/v1/events/ticket-types (API response)
+//   - Frontend dropdown: id → ticket_type_id in create-event payloads
+//   - Runtime metadata when DB is source of truth
+type TicketTypeRow struct {
+	ID          string
+	Slug        string
+	Name        string // e.g. "ticket_type_general"
+	DisplayName string
+	Description string
+	SortOrder   int
+	IsActive    bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+// ToTicketTypeInfo converts a DB row to the registry shape (drops UUID & timestamps).
+// Useful when you only need display metadata.
+func (r *TicketTypeRow) ToTicketTypeInfo() TicketTypeInfo {
+	if r == nil {
+		return TicketTypeInfo{}
+	}
+	return TicketTypeInfo{
+		Slug:        r.Slug,
+		Name:        r.Name,
+		DisplayName: r.DisplayName,
+		Description: r.Description,
+		SortOrder:   r.SortOrder,
+		IsActive:    r.IsActive,
+	}
+}
+
+// AsTicketType converts the DB row's Name to the enum.
+// Returns false if the row's name is not a known ticket type.
+func (r *TicketTypeRow) AsTicketType() (TicketTypeValue, bool) {
+	if r == nil {
+		return "", false
+	}
+	return types.ParseTicketType(r.Name)
 }

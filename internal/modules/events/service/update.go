@@ -253,7 +253,7 @@ func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.E
 		}
 	}
 	if cmd.Recurrence != nil {
-		s.applyRecurrence(event, cmd.Recurrence)
+		s.applyRecurrence(ctx, event, cmd.Recurrence)
 	}
 }
 

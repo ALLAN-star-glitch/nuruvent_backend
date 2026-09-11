@@ -2,6 +2,8 @@
 
 package notificationdomain
 
+import types "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types/emails"
+
 // ============================================================
 // TASK TYPES (Queue task names with "notification:" prefix)
 // ============================================================
@@ -25,22 +27,7 @@ const (
 	TaskTeamInviteDeclined      = "notification:team_invite_declined"       // ✅ Admin notification
 )
 
-// ============================================================
-// AI-GENERATED CONTENT (Future)
-// ============================================================
 
-// PersonalizedInvitationContent represents AI-generated email content
-// ✅ This will be used when AI integration is added
-type PersonalizedInvitationContent struct {
-	Subject      string   // Personalized subject line
-	Greeting     string   // "Hi John,"
-	Intro        string   // Personalized introduction
-	Body         string   // Main message
-	Benefits     []string // What they'll gain
-	CallToAction string   // Button text
-	Closing      string   // Sign-off
-	PSS          string   // P.S. message
-}
 
 // ============================================================
 // TASK DATA STRUCTURES (Pure domain data, no JSON tags)
@@ -124,7 +111,7 @@ type TeamInviteExistingUserTask struct {
 	ExpiresIn  string // Human-readable expiry (e.g., "7 days")
 	
 	// ✅ AI-Ready: Personalized content (optional, for future use)
-	PersonalizedContent *PersonalizedInvitationContent
+	PersonalizedContent *types.PersonalizedInvitationContent
 }
 
 // TeamInviteRegistrationTask - Invitation for new users (no account yet)
@@ -142,7 +129,7 @@ type TeamInviteRegistrationTask struct {
 	ExpiresIn        string // Human-readable expiry (e.g., "7 days")
 	
 	// ✅ AI-Ready: Personalized content (optional, for future use)
-	PersonalizedContent *PersonalizedInvitationContent
+	PersonalizedContent *types.PersonalizedInvitationContent 
 }
 
 // TeamInviteAcceptedTask - Notification to admin when invitation is accepted
@@ -156,7 +143,7 @@ type TeamInviteAcceptedTask struct {
 	TeamID    string // ID of the team
 	
 	// ✅ AI-Ready: Personalized content (optional, for future use)
-	PersonalizedContent *PersonalizedInvitationContent
+	PersonalizedContent *types.PersonalizedInvitationContent 
 }
 
 // TeamInviteDeclinedTask - Notification to admin when invitation is declined
@@ -170,5 +157,8 @@ type TeamInviteDeclinedTask struct {
 	TeamID    string // ID of the team
 	
 	// ✅ AI-Ready: Personalized content (optional, for future use)
-	PersonalizedContent *PersonalizedInvitationContent
+	PersonalizedContent *types.PersonalizedInvitationContent 
 }
+
+
+

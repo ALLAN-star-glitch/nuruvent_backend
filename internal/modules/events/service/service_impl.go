@@ -15,6 +15,7 @@ type eventService struct {
 	mediaSvc    domain.MediaService
 	userInfo    domain.UserInfoProvider 
 	validator   *validation.Validator
+	organizer domain.OrganizerProvider
 }
 
 func NewService(
@@ -22,6 +23,7 @@ func NewService(
 	permChecker domain.PermissionChecker,
 	userInfo domain.UserInfoProvider,
 	mediaSvc domain.MediaService,
+	organizerProvider domain.OrganizerProvider,
 ) Service {
 	return &eventService{
 		repo:        repo,
@@ -29,6 +31,7 @@ func NewService(
 		mediaSvc:    mediaSvc,
 		userInfo: userInfo,
 		validator:   validation.New(),
+		organizer: organizerProvider,
 	}
 }
 

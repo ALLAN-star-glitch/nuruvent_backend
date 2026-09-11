@@ -14,6 +14,7 @@ type Service interface {
     GetAccountTypes(ctx context.Context) ([]*accountdomain.AccountType, error)
     GetAccountTypeByID(ctx context.Context, id string) (*accountdomain.AccountType, error)
     GetAccountTypeBySlug(ctx context.Context, slug string) (*accountdomain.AccountType, error)
+    GetAccountByTeamID(ctx context.Context, teamID string) (*accountdomain.Account, error)
 
     // Account operations
     CreatePersonalAccount(ctx context.Context, cmd CreatePersonalAccountCommand) (*accountdomain.Account, error)

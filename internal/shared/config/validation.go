@@ -8,6 +8,7 @@ import (
 )
 
 func (c *Config) Validate() error {
+	
 	var errors []string
 
 	// Validate Server

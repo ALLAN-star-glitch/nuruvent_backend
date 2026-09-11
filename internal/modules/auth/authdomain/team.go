@@ -26,12 +26,6 @@ type Team struct {
 	DeletedAt   *time.Time
 }
 
-// Team type constants
-const (
-	TeamTypePersonal    = "personal"
-	TeamTypeInstitution = "institution"
-)
-
 // NewTeam creates a new team
 func NewTeam(accountID, name, displayName, slug, teamType, createdBy string) (*Team, error) {
 	if accountID == "" {

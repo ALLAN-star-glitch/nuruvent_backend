@@ -100,6 +100,16 @@ func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*doma
 		return nil, err
 	}
 
+	// Hydrate recurrence pattern slug if recurring
+	if event.RecurrencePatternID != nil && *event.RecurrencePatternID != "" {
+		var pattern RecurrencePatternModel
+		if err := r.db.WithContext(ctx).
+			Where("id = ?", *event.RecurrencePatternID).
+			First(&pattern).Error; err == nil {
+			event.RecurrencePatternSlug = pattern.Slug
+		}
+	}
+
 	return event, nil
 }
 
@@ -796,4 +806,59 @@ func (r *PostgresRepository) saveMaterials(ctx context.Context, eventID string, 
 
 func (r *PostgresRepository) deleteMaterials(ctx context.Context, eventID string) error {
 	return r.db.WithContext(ctx).Where("event_id = ?", eventID).Delete(&EventMaterialModel{}).Error
+}
+
+
+func (r *PostgresRepository) GetAllTicketTypes(ctx context.Context) ([]*domain.TicketTypeRow, error) {
+	var models []TicketTypeModel
+
+	err := r.db.WithContext(ctx).
+		Where("is_active = ?", true).
+		Order("sort_order ASC").
+		Find(&models).Error
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]*domain.TicketTypeRow, len(models))
+	for i, m := range models {
+		out[i] = &domain.TicketTypeRow{
+			ID:          m.ID,
+			Slug:        m.Slug,
+			Name:        m.Name,
+			DisplayName: m.DisplayName,
+			Description: m.Description,
+			SortOrder:   m.SortOrder,
+			IsActive:    m.IsActive,
+			CreatedAt:   m.CreatedAt,
+			UpdatedAt:   m.UpdatedAt,
+		}
+	}
+	return out, nil
+}
+
+func (r *PostgresRepository) GetRecurrencePatternBySlug(ctx context.Context, slug string) (*domain.RecurrencePattern, error) {
+	if slug == "" {
+		return nil, errors.New("slug is required")
+	}
+
+	var model RecurrencePatternModel
+	err := r.db.WithContext(ctx).
+		Where("slug = ? AND deleted_at IS NULL", slug).
+		First(&model).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get recurrence pattern: %w", err)
+	}
+
+	return &domain.RecurrencePattern{
+		ID:          model.ID,
+		Slug:        model.Slug,
+		Name:        model.Name,
+		DisplayName: model.DisplayName,
+		Description: model.Description,
+		IsActive:    model.IsActive,
+	}, nil
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
 	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	postgres4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
 	service7 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 	postgres6 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
@@ -28,6 +29,7 @@ import (
 	postgres5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/infrastructure/postgres"
 	service6 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/profile/service"
 	handler2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure"
 	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure/postgres"
 	service2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
@@ -74,7 +76,8 @@ func InitializeApp() (*AppDependencies, error) {
 	authService := NewTeamAuthAdapter(repository)
 	casbinService := NewTeamCasbinAdapter(permissionChecker, roleManager, policyManager)
 	serviceNotificationService := NewTeamNotificationAdapter(notificationService)
-	serviceService := service2.NewTeamService(teamdomainRepository, authService, casbinService, serviceNotificationService)
+	aiService := infrastructure.NewOpenRouterAIAdapter(configConfig)
+	serviceService := service2.NewTeamService(teamdomainRepository, authService, casbinService, serviceNotificationService, aiService)
 	teamService := NewAuthTeamAdapter(serviceService)
 	service8 := service3.NewService(repository, configConfig, redisClient, queueService, permissionChecker, roleManager, policyManager, tokenService, authdomainNotificationService, enforcer, teamService)
 	accountdomainRepository := postgres3.NewAccountRepository(db)
@@ -92,13 +95,14 @@ func InitializeApp() (*AppDependencies, error) {
 	service11 := service6.NewProfileService(repository2, permissionChecker2, domainRoleManager, mediaService)
 	userInfoProvider := NewEventsUserInfoAdapter(service11)
 	domainMediaService := NewEventsMediaAdapter(service10)
-	service12 := service7.NewService(domainRepository, domainPermissionChecker, userInfoProvider, domainMediaService)
+	organizerProvider := provideOrganizerProvider(service9)
+	service12 := service7.NewService(domainRepository, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider)
 	authHandler := authhandler.NewAuthHandler(service8, configConfig)
 	accountHandler := handler.NewAccountHandler(service9)
 	teamHandler := handler2.NewTeamHandler(serviceService)
 	eventHandler := eventhandler.NewEventHandler(service12)
 	profileHandler := handler3.NewProfileHandler(service11)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, permissionChecker, roleManager, policyManager, service8, tokenService, service9, serviceService, service12, service11, service10, notificationService, authHandler, accountHandler, teamHandler, eventHandler, profileHandler)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, enforcer, permissionChecker, roleManager, policyManager, service8, tokenService, service9, serviceService, service12, service11, service10, notificationService, authHandler, accountHandler, teamHandler, eventHandler, profileHandler, aiService, organizerProvider)
 	return appDependencies, nil
 }
 
@@ -127,4 +131,6 @@ type AppDependencies struct {
 	TeamHandler       *handler2.TeamHandler
 	EventsHandler     *eventhandler.EventHandler
 	ProfileHandler    *handler3.ProfileHandler
+	AIService         service2.AIService
+	OrganizerProvider domain.OrganizerProvider
 }

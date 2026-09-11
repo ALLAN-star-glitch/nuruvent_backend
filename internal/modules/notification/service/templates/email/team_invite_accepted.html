@@ -1,15 +1,19 @@
 {{define "team-invite-accepted"}}
 <div class="title">
-    Team Invitation Accepted
+    {{if .ai_subject}}{{.ai_subject}}{{else}}Team Invitation Accepted{{end}}
 </div>
 <div class="subtitle">{{.user_name}} has joined {{.team_name}}</div>
 
 <div class="greeting">
-    Hello {{.admin_name}},
+    {{if .ai_greeting}}{{.ai_greeting}}{{else}}Hello {{.admin_name}},{{end}}
 </div>
 
+{{if .ai_intro}}
+<p class="body-text">{{.ai_intro}}</p>
+{{end}}
+
 <p class="body-text">
-    <strong>{{.user_name}}</strong> ({{.user_email}}) has accepted your invitation and joined <strong>{{.team_name}}</strong> on Nuruvent.
+    {{if .ai_body}}{{.ai_body}}{{else}}<strong>{{.user_name}}</strong> ({{.user_email}}) has accepted your invitation and joined <strong>{{.team_name}}</strong> on Nuruvent.{{end}}
 </p>
 
 <div class="alert-success" style="background: #D1FAE5; padding: 16px; border-radius: 12px; text-align: center; border: 2px solid #34A853; margin: 16px 0;">
@@ -31,6 +35,12 @@
         <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.team_name}}</span>
     </div>
 </div>
+
+{{if .ai_closing}}
+<div style="margin-top: 20px; color: #202124; font-size: 14px; line-height: 1.6;">
+    {{.ai_closing}}
+</div>
+{{end}}
 
 <p class="body-text">
     You can view your updated team members list in your dashboard.

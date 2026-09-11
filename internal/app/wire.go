@@ -26,6 +26,8 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events"
 	eventsHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	eventsService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
+	eventsDomain  "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
+
 
 	// Media Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media"
@@ -51,7 +53,9 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
+
 )
+
 
 // ============================================================
 // APP DEPENDENCIES
@@ -80,6 +84,8 @@ type AppDependencies struct {
 	TeamHandler        *teamHandler.TeamHandler
 	EventsHandler      *eventsHandler.EventHandler
 	ProfileHandler     *profileHandler.ProfileHandler
+	AIService          teamService.AIService
+	OrganizerProvider	eventsDomain.OrganizerProvider
 }
 
 // ============================================================
@@ -147,6 +153,8 @@ func InitializeApp() (*AppDependencies, error) {
 		NewAccountNotificationAdapter,
 
 		NewProfileRoleManagerAdapter,
+
+		provideOrganizerProvider,
 
 		// ============================================================
 		// FINAL APP DEPENDENCIES

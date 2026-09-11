@@ -11,6 +11,7 @@ type Repository interface {
     GetAccountTypeByName(ctx context.Context, name string) (*AccountType, error)
     GetAccountTypeBySlug(ctx context.Context, slug string) (*AccountType, error)
     GetAccountTypes(ctx context.Context) ([]*AccountType, error)
+    GetAccountIDByTeamID(ctx context.Context, teamID string) (string, error)
 
     // Account operations
     CreateAccount(ctx context.Context, account *Account) error

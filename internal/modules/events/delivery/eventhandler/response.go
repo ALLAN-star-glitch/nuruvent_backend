@@ -131,7 +131,7 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 			Occurrences: 0,
 		}
 		if event.RecurrencePatternID != nil {
-			recurrence.Pattern = *event.RecurrencePatternID
+			recurrence.Pattern = event.RecurrencePatternSlug
 		}
 		if event.RecurrenceDayOfMonth != nil {
 			recurrence.DayOfMonth = *event.RecurrenceDayOfMonth

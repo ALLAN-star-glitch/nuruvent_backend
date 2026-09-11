@@ -9,6 +9,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
 
@@ -123,8 +124,8 @@ func (s *eventService) BulkPublishEvents(ctx context.Context, ids []string, publ
 		if _, err := s.PublishEvent(ctx, id, publishedBy); err != nil {
 			result.FailedIDs = append(result.FailedIDs, id)
 			errMsg := err.Error()
-			if strings.HasPrefix(errMsg, "validation failed: ") {
-				errMsg = strings.TrimPrefix(errMsg, "validation failed: ")
+			if after, ok :=strings.CutPrefix(errMsg, "validation failed: "); ok  {
+				errMsg = after
 			}
 			result.Errors = append(result.Errors, errMsg)
 			continue
@@ -193,7 +194,11 @@ func (s *eventService) BulkCompleteEvents(ctx context.Context, ids []string) (*B
 // PRIVATE HELPER FUNCTIONS
 // ============================================================
 
-// getEventAndCheckPublishPermission gets event and checks publish permission using team domain
+// getEventAndCheckPublishPermission gets event and checks publish permission using team domain.
+//
+// Uses the 2-tier domain resolution:
+//   Tier 1: institution:team:{team_id} or personal:team:{team_id}
+//   Tier 2: account:{account_id}  (fallback if Tier 1 denied)
 func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
 	if publishedBy == "" {
 		return nil, errors.New("published by is required")
@@ -207,15 +212,31 @@ func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id
 		return nil, domain.ErrEventNotFound
 	}
 
-	// Create team domain from event
-	teamDomain := domain.TeamDomain(event.TeamID)
+	// ✅ Build domain from event's team_type + team_id (both populated by repository)
+	teamDomain := authdomain.BuildTeamDomain(event.TeamType, event.TeamID)
 
-	// Check if user can publish events in this team
+	log.Printf("🔍 PUBLISH CHECK: user=%s teamID=%s teamType=%s domain=%s",
+		publishedBy, event.TeamID, event.TeamType, teamDomain)
+
+	// Tier 1: check team domain
 	allowed, err := s.permChecker.CanPublishEvent(ctx, publishedBy, teamDomain)
 	if err != nil {
 		return nil, fmt.Errorf("permission check failed: %w", err)
 	}
+
+	// Tier 2: fallback to account domain if Tier 1 denied
+	if !allowed && event.AccountID != "" {
+		accountDomain := authdomain.AccountDomain(event.AccountID)
+		log.Printf("🔍 Tier 2: Team permission failed. Falling back to account domain=%s", accountDomain)
+
+		allowed, err = s.permChecker.CanPublishEvent(ctx, publishedBy, accountDomain)
+		if err != nil {
+			return nil, fmt.Errorf("account permission check failed: %w", err)
+		}
+	}
+
 	if !allowed {
+		log.Printf("❌ Publish permission denied: user=%s teamDomain=%s", publishedBy, teamDomain)
 		return nil, errors.New("insufficient permissions to publish this event")
 	}
 

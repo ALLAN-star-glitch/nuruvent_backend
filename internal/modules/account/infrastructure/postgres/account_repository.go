@@ -22,6 +22,30 @@ func NewAccountRepository(db *gorm.DB) accountdomain.Repository {
     return &AccountRepository{db: db}
 }
 
+
+func (r *AccountRepository) GetAccountIDByTeamID(ctx context.Context, teamID string) (string, error) {
+    if teamID == "" {
+        return "", fmt.Errorf("team ID is required")
+    }
+
+    var result struct {
+        AccountID *string `gorm:"column:account_id"`
+    }
+
+    err := r.db.WithContext(ctx).
+        Table("teams").
+        Select("account_id").
+        Where("id = ? AND deleted_at IS NULL", teamID).
+        Scan(&result).Error
+
+    if err != nil {
+        return "", fmt.Errorf("failed to resolve team %s: %w", teamID, err)
+    }
+    if result.AccountID == nil {
+        return "", nil  // team not found, or has no account
+    }
+    return *result.AccountID, nil
+}
 // ============================================================
 // ACCOUNT TYPE OPERATIONS
 // ============================================================
@@ -107,19 +131,31 @@ func (r *AccountRepository) CreateAccount(ctx context.Context, account *accountd
 }
 
 func (r *AccountRepository) GetAccountByID(ctx context.Context, id string) (*accountdomain.Account, error) {
-    if id == "" {
-        return nil, accountdomain.ErrAccountNotFound
-    }
+	if id == "" {
+		return nil, accountdomain.ErrAccountNotFound
+	}
 
-    var model AccountModel
-    if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&model).Error; err != nil {
-        if errors.Is(err, gorm.ErrRecordNotFound) {
-            return nil, accountdomain.ErrAccountNotFound
-        }
-        return nil, fmt.Errorf("failed to get account: %w", err)
-    }
+	var result struct {
+		AccountModel
+		AccountTypeSlug string `gorm:"column:account_type_slug"`
+	}
 
-    return model.ToDomain(), nil
+	err := r.db.WithContext(ctx).
+		Table("accounts AS a").
+		Select("a.*, at.slug AS account_type_slug").
+		Joins("LEFT JOIN account_types at ON at.id = a.account_type_id").
+		Where("a.id = ? AND a.deleted_at IS NULL", id).
+		Scan(&result).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account: %w", err)
+	}
+	if result.ID == "" {
+		return nil, accountdomain.ErrAccountNotFound
+	}
+
+	account := result.AccountModel.ToDomain()
+	account.Type = result.AccountTypeSlug   // populate from the join
+	return account, nil
 }
 
 func (r *AccountRepository) GetAccountByEmail(ctx context.Context, email string) (*accountdomain.Account, error) {

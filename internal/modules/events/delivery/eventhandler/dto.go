@@ -389,6 +389,8 @@ type TicketTypeDTO struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
 	Description string `json:"description"`
+	SortOrder   int    `json:"sort_order"`
+	IsActive    bool   `json:"is_active"`
 }
 
 // CertificateTemplateDTO - Certificate template information
@@ -514,6 +516,8 @@ type CreatorDTO struct {
 	Phone       string `json:"phone,omitempty"`
 	Avatar      string `json:"avatar,omitempty"`
 }
+
+
 
 // EventResponse - Complete event response
 type EventResponse struct {

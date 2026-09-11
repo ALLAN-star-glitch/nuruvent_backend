@@ -69,22 +69,53 @@ func (s *eventService) logCreateDraft(cmd CreateDraftCommand) {
 
 // validateDraftPermissions checks if user has permission to create draft
 func (s *eventService) validateDraftPermissions(ctx context.Context, cmd CreateDraftCommand) error {
-	// Create domain string for the team
-	// We need to determine if this is a personal or institution team
-	// For now, we'll use the team domain directly
-	teamDomain := domain.TeamDomain(cmd.TeamID)
-	
-	// Check if user can create events in this team
-	allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, teamDomain)
-	if err != nil {
-		return fmt.Errorf("permission check failed: %w", err)
-	}
-	if !allowed {
-		log.Printf("❌ Permission denied: user %s cannot create events for team %s", cmd.CreatedBy, cmd.TeamID)
-		return errors.New("insufficient permissions to create events for this team")
-	}
+    // 1. Resolve exact Team Domain (institution:team:<id> or personal:team:<id>)
+    teamDomain := s.resolveTeamDomain(cmd)
 
-	return nil
+    log.Printf("🔍 Tier 1: Checking team permission for user=%s on domain=%s", cmd.CreatedBy, teamDomain)
+
+    // Check Team-level permission
+    allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, teamDomain)
+    if err != nil {
+        return fmt.Errorf("permission check failed: %w", err)
+    }
+
+    // 2. Fallback check: If Team check fails and AccountID is present, check Account Domain
+    if !allowed && cmd.AccountID != "" {
+        accountDomain := domain.AccountDomain(cmd.AccountID)
+        log.Printf("🔍 Tier 2: Team permission failed. Falling back to Account permission on domain=%s", accountDomain)
+        
+        allowed, err = s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, accountDomain)
+        if err != nil {
+            return fmt.Errorf("account permission check failed: %w", err)
+        }
+    }
+
+    if !allowed {
+        log.Printf("❌ Permission denied: user %s cannot create events for team %s", cmd.CreatedBy, cmd.TeamID)
+        return domain.ErrForbidden // Or errors.New("insufficient permissions to create events for this team") if ErrForbidden isn't exported yet
+    }
+
+    return nil
+}
+
+// resolveTeamDomain dynamically determines if the domain is institution or personal
+func (s *eventService) resolveTeamDomain(cmd CreateDraftCommand) string {
+    if cmd.TeamType == "personal" {
+        return domain.PersonalTeamDomain(cmd.TeamID)
+    }
+    
+    if cmd.TeamType == "institution" {
+        return domain.InstitutionTeamDomain(cmd.TeamID)
+    }
+
+    // Heuristic fallback: If creator ID matches the team ID, it is a personal team
+    if cmd.CreatedBy != "" && cmd.CreatedBy == cmd.TeamID {
+        return domain.PersonalTeamDomain(cmd.CreatedBy)
+    }
+
+    // Default fallback
+    return domain.InstitutionTeamDomain(cmd.TeamID)
 }
 
 // generateEventIdentifiers creates name, display name, and slug from user input
@@ -202,7 +233,7 @@ func (s *eventService) buildDraftEvent(
 		event.ID, event.Name, event.Slug, event.DisplayName, event.TeamID)
 
 	// Populate all fields
-	s.populateEventFields(event, cmd)
+	s.populateEventFields(ctx, event, cmd)
 
 	// Handle schedules separately (needs parsing)
 	if err := s.populateSchedules(ctx, event, cmd.Schedules); err != nil {
@@ -213,7 +244,7 @@ func (s *eventService) buildDraftEvent(
 }
 
 // populateEventFields fills all non-schedule fields
-func (s *eventService) populateEventFields(event *domain.Event, cmd CreateDraftCommand) {
+func (s *eventService) populateEventFields(ctx context.Context, event *domain.Event, cmd CreateDraftCommand) {
 	event.ShortDescription = cmd.ShortDescription
 	event.Tags = cmd.Tags
 	event.Language = cmd.Language
@@ -223,7 +254,7 @@ func (s *eventService) populateEventFields(event *domain.Event, cmd CreateDraftC
 	event.IsRecurring = cmd.IsRecurring
 
 	if cmd.Recurrence != nil {
-		s.applyRecurrence(event, cmd.Recurrence)
+		s.applyRecurrence(ctx, event, cmd.Recurrence)
 	}
 
 	// Venue fields
