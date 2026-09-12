@@ -114,13 +114,19 @@ type Service interface {
 
 // InviteMemberCommand represents a request to invite a member.
 //
-// Roles are inherited from the account, so there is no role field here.
-// The invitee must already be an account member to be added to a team,
-// but the invitation can be extended to a new email address when the
-// account admin is inviting someone into the account for the first time.
+// The Role field describes the invitee's ACCOUNT role. It is applied when
+// the invitation is accepted and the invitee is not yet an account member.
+//
+// If the invitee is already an account member, the invited role is
+// ignored; the existing role wins. Role changes require a separate
+// operation.
+//
+// Invitation roles are scoped to the account the team belongs to. Teams
+// do not have their own roles.
 type InviteMemberCommand struct {
 	TeamID    string
 	Email     string
+	Role      string // "account_admin" or "trainer"
 	InvitedBy string
 }
 
@@ -175,6 +181,7 @@ type TeamInfo struct {
 type InvitationInfo struct {
 	ID            string
 	Email         string
+	Role          string
 	Status        string
 	ExpiresAt     string
 	CreatedAt     string

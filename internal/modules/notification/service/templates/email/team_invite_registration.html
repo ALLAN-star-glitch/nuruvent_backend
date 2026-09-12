@@ -1,6 +1,6 @@
 {{define "team-invite-registration"}}
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #2D3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 24px; background: #FFFFFF; border-radius: 12px; border: 1px solid #E2E8F0;">
-    
+
     <!-- Header -->
     <div style="font-size: 22px; font-weight: 700; color: #1A202C; margin-bottom: 6px; text-align: center;">
         {{if .ai_subject}}{{.ai_subject}}{{else}}You're invited to join {{.team_name}}!{{end}}
@@ -19,28 +19,28 @@
     {{end}}
 
     <p style="font-size: 15px; color: #4A5568; margin-bottom: 20px;">
-        {{if .ai_body}}{{.ai_body}}{{else}}<strong>{{.invited_by}}</strong> has invited you to join <strong>{{.team_name}}</strong> on Nuruvent. Come join the team and help organize awesome events together!{{end}}
+        {{if .ai_body}}{{.ai_body}}{{else}}<strong>{{.invited_by}}</strong> has invited you to join <strong>{{.team_name}}</strong>{{if .role}} as a <strong>{{role_display .role}}</strong>{{end}} on Nuruvent. Come join the team and help organize awesome events together!{{end}}
     </p>
 
-   <!-- Value / Benefits Section -->
-            {{$benefits := split "|" .ai_benefits}}
-            {{if and .ai_benefits (ne (trim .ai_benefits) "") (ne (trim .ai_benefits) "|")}}
-            <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 20px; margin-bottom: 28px;">
-                <div style="font-weight: 600; font-size: 14px; color: #1E293B; margin-bottom: 12px;">
-                    Here is what you can do with {{.team_name}}:
-                </div>
-                
-                {{range $benefit := $benefits}}
-                    {{$clean := trim $benefit}}
-                    {{if ne $clean ""}}
-                    <div style="display: flex; align-items: flex-start; margin-bottom: 8px; font-size: 14px; color: #475569; line-height: 1.5;">
-                        <span style="color: #2563EB; margin-right: 10px; font-weight: bold; font-size: 16px;">•</span>
-                        <span>{{$clean}}</span>
-                    </div>
-                    {{end}}
-                {{end}}
+    <!-- Value / Benefits Section -->
+    {{$benefits := split "|" .ai_benefits}}
+    {{if and .ai_benefits (ne (trim .ai_benefits) "") (ne (trim .ai_benefits) "|")}}
+    <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 20px; margin-bottom: 28px;">
+        <div style="font-weight: 600; font-size: 14px; color: #1E293B; margin-bottom: 12px;">
+            Here is what you can do with {{.team_name}}:
+        </div>
+
+        {{range $benefit := $benefits}}
+            {{$clean := trim $benefit}}
+            {{if ne $clean ""}}
+            <div style="display: flex; align-items: flex-start; margin-bottom: 8px; font-size: 14px; color: #475569; line-height: 1.5;">
+                <span style="color: #2563EB; margin-right: 10px; font-weight: bold; font-size: 16px;">•</span>
+                <span>{{$clean}}</span>
             </div>
             {{end}}
+        {{end}}
+    </div>
+    {{end}}
 
     <!-- Call to Action -->
     <div style="text-align: center; margin: 28px 0;">
@@ -58,6 +58,12 @@
             <span style="color: #718096;">Team</span>
             <span style="color: #2D3748; font-weight: 600;">{{.team_name}}</span>
         </div>
+        {{if .role}}
+        <div style="display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #F7FAFC; font-size: 13px;">
+            <span style="color: #718096;">Your Role</span>
+            <span style="color: #2D3748; font-weight: 600;">{{role_display .role}}</span>
+        </div>
+        {{end}}
         <div style="display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px;">
             <span style="color: #718096;">Invited By</span>
             <span style="color: #2D3748; font-weight: 600;">{{.invited_by}}</span>

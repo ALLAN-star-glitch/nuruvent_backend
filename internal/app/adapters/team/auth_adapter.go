@@ -4,6 +4,7 @@ package team
 
 import (
 	"context"
+	"fmt"
 
 	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
@@ -105,6 +106,33 @@ func (a *AuthAdapter) GetAccountIDByUserID(ctx context.Context, userID string) (
 	return a.getAccountIDByUserID(ctx, userID)
 }
 
+func (a *AuthAdapter) AddAccountMember(ctx context.Context, accountID, userID, role string) error {
+	// Validate inputs.
+	if accountID == "" {
+		return fmt.Errorf("account ID is required")
+	}
+	if userID == "" {
+		return fmt.Errorf("user ID is required")
+	}
+	if role == "" {
+		return fmt.Errorf("role is required")
+	}
+
+	
+	// Construct the domain entity.
+	member, err := authDomain.NewAccountMember(accountID, userID, role, userID)
+	if err != nil {
+		return fmt.Errorf("failed to construct account member: %w", err)
+	}
+
+	// Persist via the auth repository.
+	if err := a.authRepo.CreateAccountMember(ctx, member); err != nil {
+		return fmt.Errorf("failed to create account member: %w", err)
+	}
+
+	return nil
+}
+
 // GetUserRoleInAccount gets a user's role in a specific account
 // ✅ Added: Required for AddMember to assign Casbin team role
 func (a *AuthAdapter) GetUserRoleInAccount(ctx context.Context, userID, accountID string) (string, error) {
@@ -139,3 +167,5 @@ func (a *AuthAdapter) getAccountIDByUserID(ctx context.Context, userID string) (
 	// Use the first account (primary)
 	return members[0].AccountID, nil
 }
+
+

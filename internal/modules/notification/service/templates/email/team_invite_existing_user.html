@@ -16,11 +16,15 @@
     {{if .ai_body}}{{.ai_body}}{{else}}<strong>{{.invited_by}}</strong> has invited you to join the team <strong>{{.team_name}}</strong> on Nuruvent.{{end}}
 </p>
 
-{{if .ai_benefits}}
+{{$benefits := split "|" .ai_benefits}}
+{{if and .ai_benefits (ne (trim .ai_benefits) "") (ne (trim .ai_benefits) "|")}}
 <div class="details-box" style="background: #F8F9FA; padding: 16px 20px; border-radius: 12px; margin: 16px 0; border: 1px solid #E8EAED;">
     <div style="font-weight: 600; margin-bottom: 8px; color: #202124;">What you'll gain:</div>
-    {{range $benefit := split .ai_benefits "|"}}
-    <div style="padding: 4px 0; color: #3C4043; font-size: 14px;">• {{$benefit}}</div>
+    {{range $benefit := $benefits}}
+        {{$clean := trim $benefit}}
+        {{if ne $clean ""}}
+        <div style="padding: 4px 0; color: #3C4043; font-size: 14px;">• {{$clean}}</div>
+        {{end}}
     {{end}}
 </div>
 {{end}}
@@ -44,6 +48,12 @@
         <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Team</span>
         <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.team_name}}</span>
     </div>
+    {{if .role}}
+    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F0F2F5;">
+        <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Your Role</span>
+        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{role_display .role}}</span>
+    </div>
+    {{end}}
     <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F0F2F5;">
         <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Invited By</span>
         <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.invited_by}}</span>

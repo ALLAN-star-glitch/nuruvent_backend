@@ -12,7 +12,7 @@ func (h *TeamHandler) RegisterRoutes(
 	authMiddleware fiber.Handler,
 	authzMiddleware fiber.Handler,
 ) {
-	// ============================================================
+	//  ============================================================
 	// PUBLIC ROUTES (No auth required)
 	// ============================================================
 	public := router.Group("/teams")

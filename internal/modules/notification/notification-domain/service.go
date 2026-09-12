@@ -248,6 +248,7 @@ type SendTeamInviteExistingUserRequest struct {
 	InvitedBy  string // Name of person who invited them
 	TeamName   string // Name of the team
 	TeamID     string // ID of the team
+	Role	   string
 	AcceptLink string // One-click accept link: https://nuruvent.com/invitations/accept?token=xxx
 	ExpiresIn  string // Human-readable expiry (e.g., "7 days")
 	
@@ -267,6 +268,7 @@ type SendTeamInviteRegistrationRequest struct {
 	InvitedBy        string // Name of person who invited them
 	TeamName         string // Name of the team
 	TeamID           string // ID of the team
+	Role			string
 	RegistrationLink string // Registration link with token: https://nuruvent.com/register?token=xxx
 	ExpiresIn        string // Human-readable expiry (e.g., "7 days")
 	
@@ -284,6 +286,7 @@ type SendTeamInviteAcceptedRequest struct {
 	UserEmail  string // Email of user who accepted
 	TeamName   string // Name of the team
 	TeamID     string // ID of the team
+	Role	   string
 	
 	// ✅ AI-Ready: Personalized content (optional, for future use)
 	// Defined in tasks.go
@@ -299,6 +302,7 @@ type SendTeamInviteDeclinedRequest struct {
 	UserEmail  string // Email of user who declined
 	TeamName   string // Name of the team
 	TeamID     string // ID of the team
+	Role		string
 	
 	// ✅ AI-Ready: Personalized content (optional, for future use)
 	// Defined in tasks.go

@@ -121,6 +121,7 @@ type InvitationModel struct {
     TeamID     string     `gorm:"column:team_id;not null;index"`
     Email      string     `gorm:"column:email;not null;index"`
     Token      string     `gorm:"column:token;not null;uniqueIndex"`
+    Role        string    `gorm:"column:role;not null"`
     Status     string     `gorm:"column:status;not null;default:'pending'"`
     InvitedBy  string     `gorm:"column:invited_by;not null"`
     ExpiresAt  time.Time  `gorm:"column:expires_at;not null"`
@@ -144,6 +145,7 @@ func (m *InvitationModel) ToDomain() *teamdomain.Invitation {
         TeamID:     m.TeamID,
         Email:      m.Email,
         Token:      m.Token,
+        Role:       m.Role, 
         Status:     teamdomain.InvitationStatus(m.Status),
         InvitedBy:  m.InvitedBy,
         ExpiresAt:  m.ExpiresAt,
@@ -163,6 +165,7 @@ func (m *InvitationModel) FromDomain(invitation *teamdomain.Invitation) {
     m.TeamID = invitation.TeamID
     m.Email = invitation.Email
     m.Token = invitation.Token
+    m.Role = invitation.Role
     m.Status = string(invitation.Status)
     m.InvitedBy = invitation.InvitedBy
     m.ExpiresAt = invitation.ExpiresAt

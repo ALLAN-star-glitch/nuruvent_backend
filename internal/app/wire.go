@@ -150,6 +150,7 @@ func InitializeApp() (*AppDependencies, error) {
 		NewAccountNotificationAdapter,
 
 
+		
 		provideOrganizerProvider,
 
 

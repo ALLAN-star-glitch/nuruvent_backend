@@ -402,6 +402,7 @@ func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
 
 	var req struct {
 		Email string `json:"email"`
+		Role  string `json:"role"`
 	}
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request body", fiber.Map{
@@ -412,10 +413,17 @@ func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
 	if req.Email == "" {
 		return response.BadRequest(c, "email is required", nil)
 	}
+	if req.Role == "" {
+		return response.BadRequest(c, "role is required", nil)
+	}
+	if req.Role != "account_admin" && req.Role != "trainer" {
+		return response.BadRequest(c, "invalid role; must be account_admin or trainer", nil)
+	}
 
 	invitation, err := h.service.InviteMember(c.Context(), service.InviteMemberCommand{
 		TeamID:    teamID,
 		Email:     req.Email,
+		Role:      req.Role,
 		InvitedBy: userID,
 	})
 	if err != nil {
@@ -424,6 +432,8 @@ func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
 			return response.NotFound(c, "Team not found", nil)
 		case teamdomain.ErrMemberAlreadyExists:
 			return response.Conflict(c, "User is already a member of this team", nil)
+		case teamdomain.ErrInvitationPending:
+			return response.Conflict(c, "An invitation is already pending for this email", nil)
 		case teamdomain.ErrPermissionDenied:
 			return response.Forbidden(c, "Permission denied", nil)
 		}

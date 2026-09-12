@@ -35,6 +35,13 @@ func NewCasbinAdapter(
 	}
 }
 
+
+
+// internal/app/adapters/team/casbin_adapter.go
+func (a *CasbinAdapter) ReloadPolicies(ctx context.Context) error {
+	return a.roleManager.ReloadPolicies(ctx)
+}
+
 // ============================================================
 // ROLE (GROUPING) MANAGEMENT
 // ============================================================
@@ -63,11 +70,9 @@ func (a *CasbinAdapter) CanCreateTeam(ctx context.Context, userID, domain string
 	return a.permChecker.CanCreateTeam(ctx, userID, domain)
 }
 
-
 func (a *CasbinAdapter) CanManageTeam(ctx context.Context, userID, domain string) (bool, error) {
 	return a.permChecker.CanManageTeam(ctx, userID, domain)
 }
-
 
 func (a *CasbinAdapter) CanDeleteTeam(ctx context.Context, userID, domain string) (bool, error) {
 	return a.permChecker.CanDeleteTeam(ctx, userID, domain)

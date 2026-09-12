@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	authdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
@@ -106,6 +107,8 @@ type Service interface {
 
 	// ✅ GetAccountIDByUserID gets the account ID for a user
 	GetAccountIDByUserID(ctx context.Context, userID string) (string, error)
+
+	AddAccountMember(ctx context.Context, accountID, userID, role string) error
 }
 
 // ============================================================
@@ -195,4 +198,18 @@ func (s *service) GetAccountTypeByID(ctx context.Context, id string) (*authdomai
 
 func (s *service) GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error) {
 	return s.repo.GetProfessionalTypeByID(ctx, id)
+}
+
+func (s *service) AddAccountMember(ctx context.Context, accountID, userID, role string) error {
+	if accountID == "" || userID == "" || role == "" {
+		return fmt.Errorf("accountID, userID, and role are required")
+	}
+	if !authdomain.IsAccountRole(role) {
+		return fmt.Errorf("invalid role: %q", role)
+	}
+	member, err := authdomain.NewAccountMember(accountID, userID, role, userID)
+	if err != nil {
+		return err
+	}
+	return s.repo.CreateAccountMember(ctx, member)
 }

@@ -164,6 +164,7 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 		Phone:            req.Phone,
 		AccountType:      req.AccountType,
 		ProfessionalType: req.ProfessionalType,
+		InviteToken:      req.InviteToken, 
 	}
 
 	if req.AccountType == types.AccountTypeInstitutionName {

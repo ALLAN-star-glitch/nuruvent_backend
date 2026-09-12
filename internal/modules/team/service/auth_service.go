@@ -31,6 +31,8 @@ type AuthService interface {
 
 
 	GetUserRoleInAccount(ctx context.Context, userID, accountID string) (string, error)
+
+	AddAccountMember(ctx context.Context, accountID, userID, role string) error
 }
 
 // UserResult represents a user returned from auth service
