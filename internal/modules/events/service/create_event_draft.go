@@ -16,7 +16,7 @@ import (
 // PUBLIC METHOD - Entry Point
 // ============================================================
 
-// CreateDraft creates a draft event
+// CreateDraft creates a draft event.
 func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) (*domain.Event, error) {
 	// 1. Validate required fields
 	if cmd.TeamID == "" {
@@ -28,27 +28,34 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 
 	s.logCreateDraft(cmd)
 
-	// 2. Check permissions using domain string
+	// 2. Resolve the parent account (required for authz and event ownership)
+	accountID, err := s.resolveAccountForTeam(ctx, cmd.TeamID, cmd.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	cmd.AccountID = accountID
+
+	// 3. Check permissions using the account domain
 	if err := s.validateDraftPermissions(ctx, cmd); err != nil {
 		return nil, err
 	}
 
-	// 3. Generate identifiers
+	// 4. Generate identifiers
 	displayName, name, slug := s.generateEventIdentifiers(ctx, cmd.Name)
 
-	// 4. Get or validate event type
+	// 5. Get or validate event type
 	eventTypeID, err := s.resolveEventType(ctx, cmd.EventTypeID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 5. Create and populate domain entity
+	// 6. Create and populate domain entity
 	event, err := s.buildDraftEvent(ctx, cmd, name, displayName, slug, eventTypeID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 6. Set status and save
+	// 7. Set status and save
 	if err := s.setDraftStatusAndSave(ctx, event); err != nil {
 		return nil, err
 	}
@@ -61,64 +68,59 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 // HELPER FUNCTIONS
 // ============================================================
 
-// logCreateDraft logs the draft creation request
 func (s *eventService) logCreateDraft(cmd CreateDraftCommand) {
 	log.Printf("🔄 CreateDraft called: Name='%s', TypeID='%s', TeamID='%s', CreatedBy='%s'",
 		cmd.Name, cmd.EventTypeID, cmd.TeamID, cmd.CreatedBy)
 }
 
-// validateDraftPermissions checks if user has permission to create draft
+// resolveAccountForTeam returns the account ID for a team.
+//
+// If the caller already supplied AccountID, that value is used. Otherwise,
+// the repository resolves it from the teams table.
+func (s *eventService) resolveAccountForTeam(ctx context.Context, teamID, providedAccountID string) (string, error) {
+	if providedAccountID != "" {
+		return providedAccountID, nil
+	}
+
+	accountID, err := s.repo.AccountIDForTeam(ctx, teamID)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve account for team %s: %w", teamID, err)
+	}
+	if accountID == "" {
+		return "", fmt.Errorf("team %s has no parent account", teamID)
+	}
+	return accountID, nil
+}
+
+// validateDraftPermissions checks whether the caller may create events in
+// this account.
+//
+// POST-REVAMP: a single Casbin check against the account domain. Teams are
+// not authorization domains. Team visibility (if it matters for event
+// creation) is enforced separately by the service layer as data.
 func (s *eventService) validateDraftPermissions(ctx context.Context, cmd CreateDraftCommand) error {
-    // 1. Resolve exact Team Domain (institution:team:<id> or personal:team:<id>)
-    teamDomain := s.resolveTeamDomain(cmd)
+	accountDomain := domain.AccountDomain(cmd.AccountID)
+	if accountDomain == "" {
+		return errors.New("cannot resolve account domain: AccountID is empty")
+	}
 
-    log.Printf("🔍 Tier 1: Checking team permission for user=%s on domain=%s", cmd.CreatedBy, teamDomain)
+	log.Printf("🔍 AUTHZ: checking event:create for user=%s on domain=%s",
+		cmd.CreatedBy, accountDomain)
 
-    // Check Team-level permission
-    allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, teamDomain)
-    if err != nil {
-        return fmt.Errorf("permission check failed: %w", err)
-    }
+	allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, accountDomain)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
+		log.Printf("❌ Permission denied: user %s cannot create events in account %s",
+			cmd.CreatedBy, cmd.AccountID)
+		return domain.ErrForbidden
+	}
 
-    // 2. Fallback check: If Team check fails and AccountID is present, check Account Domain
-    if !allowed && cmd.AccountID != "" {
-        accountDomain := domain.AccountDomain(cmd.AccountID)
-        log.Printf("🔍 Tier 2: Team permission failed. Falling back to Account permission on domain=%s", accountDomain)
-        
-        allowed, err = s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, accountDomain)
-        if err != nil {
-            return fmt.Errorf("account permission check failed: %w", err)
-        }
-    }
-
-    if !allowed {
-        log.Printf("❌ Permission denied: user %s cannot create events for team %s", cmd.CreatedBy, cmd.TeamID)
-        return domain.ErrForbidden // Or errors.New("insufficient permissions to create events for this team") if ErrForbidden isn't exported yet
-    }
-
-    return nil
+	return nil
 }
 
-// resolveTeamDomain dynamically determines if the domain is institution or personal
-func (s *eventService) resolveTeamDomain(cmd CreateDraftCommand) string {
-    if cmd.TeamType == "personal" {
-        return domain.PersonalTeamDomain(cmd.TeamID)
-    }
-    
-    if cmd.TeamType == "institution" {
-        return domain.InstitutionTeamDomain(cmd.TeamID)
-    }
-
-    // Heuristic fallback: If creator ID matches the team ID, it is a personal team
-    if cmd.CreatedBy != "" && cmd.CreatedBy == cmd.TeamID {
-        return domain.PersonalTeamDomain(cmd.CreatedBy)
-    }
-
-    // Default fallback
-    return domain.InstitutionTeamDomain(cmd.TeamID)
-}
-
-// generateEventIdentifiers creates name, display name, and slug from user input
+// generateEventIdentifiers creates name, display name, and slug from user input.
 func (s *eventService) generateEventIdentifiers(ctx context.Context, rawInput string) (string, string, string) {
 	if rawInput == "" {
 		rawInput = "Untitled Event"
@@ -160,7 +162,7 @@ func (s *eventService) generateEventIdentifiers(ctx context.Context, rawInput st
 	return displayName, name, uniqueSlug
 }
 
-// resolveEventType gets or validates event type
+// resolveEventType gets or validates event type.
 func (s *eventService) resolveEventType(ctx context.Context, eventTypeID string) (string, error) {
 	if eventTypeID == "" {
 		return s.getDefaultEventType(ctx)
@@ -168,7 +170,7 @@ func (s *eventService) resolveEventType(ctx context.Context, eventTypeID string)
 	return s.validateEventType(ctx, eventTypeID)
 }
 
-// getDefaultEventType returns the uncategorized event type ID
+// getDefaultEventType returns the uncategorized event type ID.
 func (s *eventService) getDefaultEventType(ctx context.Context) (string, error) {
 	log.Printf("ℹ️ No event type provided - using default: %s", domain.EventTypeUncategorized.GetDisplayName())
 
@@ -185,7 +187,7 @@ func (s *eventService) getDefaultEventType(ctx context.Context) (string, error) 
 	return uncategorized.ID, nil
 }
 
-// validateEventType validates that the event type exists
+// validateEventType validates that the event type exists.
 func (s *eventService) validateEventType(ctx context.Context, eventTypeID string) (string, error) {
 	log.Printf("🔍 Validating event type: %s", eventTypeID)
 	eventType, err := s.repo.GetEventTypeByID(ctx, eventTypeID)
@@ -201,7 +203,7 @@ func (s *eventService) validateEventType(ctx context.Context, eventTypeID string
 	return eventType.ID, nil
 }
 
-// buildDraftEvent creates and populates the domain entity
+// buildDraftEvent creates and populates the domain entity.
 func (s *eventService) buildDraftEvent(
 	ctx context.Context,
 	cmd CreateDraftCommand,
@@ -228,14 +230,13 @@ func (s *eventService) buildDraftEvent(
 	}
 
 	event.Slug = slug
+	event.AccountID = cmd.AccountID // set explicitly so ResolveAccountDomain works downstream
 
-	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s, TeamID=%s",
-		event.ID, event.Name, event.Slug, event.DisplayName, event.TeamID)
+	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s, TeamID=%s, AccountID=%s",
+		event.ID, event.Name, event.Slug, event.DisplayName, event.TeamID, event.AccountID)
 
-	// Populate all fields
 	s.populateEventFields(ctx, event, cmd)
 
-	// Handle schedules separately (needs parsing)
 	if err := s.populateSchedules(ctx, event, cmd.Schedules); err != nil {
 		return nil, err
 	}
@@ -243,7 +244,7 @@ func (s *eventService) buildDraftEvent(
 	return event, nil
 }
 
-// populateEventFields fills all non-schedule fields
+// populateEventFields fills all non-schedule fields.
 func (s *eventService) populateEventFields(ctx context.Context, event *domain.Event, cmd CreateDraftCommand) {
 	event.ShortDescription = cmd.ShortDescription
 	event.Tags = cmd.Tags
@@ -274,7 +275,6 @@ func (s *eventService) populateEventFields(ctx context.Context, event *domain.Ev
 	event.IsFreeEvent = cmd.IsFree
 	event.Capacity = cmd.Capacity
 
-	// Convert and set tickets for draft
 	if len(cmd.Tickets) > 0 {
 		tickets, err := s.convertTickets(cmd.Tickets)
 		if err != nil {
@@ -305,7 +305,7 @@ func (s *eventService) populateEventFields(ctx context.Context, event *domain.Ev
 	}
 }
 
-// populateSchedules converts and sets schedules
+// populateSchedules converts and sets schedules.
 func (s *eventService) populateSchedules(ctx context.Context, event *domain.Event, schedules []ScheduleInput) error {
 	if len(schedules) == 0 {
 		return nil
@@ -317,7 +317,6 @@ func (s *eventService) populateSchedules(ctx context.Context, event *domain.Even
 	}
 	event.Schedules = converted
 
-	// Set start date from first schedule
 	startDate, err := time.Parse("2006-01-02", schedules[0].StartDate)
 	if err == nil {
 		event.StartDate = startDate
@@ -325,7 +324,7 @@ func (s *eventService) populateSchedules(ctx context.Context, event *domain.Even
 	return nil
 }
 
-// setDraftStatusAndSave sets status to DRAFT, validates, and saves
+// setDraftStatusAndSave sets status to DRAFT, validates, and saves.
 func (s *eventService) setDraftStatusAndSave(ctx context.Context, event *domain.Event) error {
 	log.Printf("🔍 Getting status by slug: %s", domain.EventStatusDraft.GetSlug())
 	status, err := s.repo.GetEventStatusBySlug(ctx, domain.EventStatusDraft.GetSlug())

@@ -13,18 +13,16 @@ RUN go install github.com/pressly/goose/v3/cmd/goose@latest
 # Install Air for hot reload
 RUN go install github.com/air-verse/air@latest
 
-#- Install Wire for dependency injection
+# Install Wire for dependency injection
 RUN go install github.com/google/wire/cmd/wire@latest
 
-# - Install Swag for documentation
+# Install Swag for documentation
 RUN go install github.com/swaggo/swag/cmd/swag@latest
 
 COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-
-COPY configs /root/configs
 
 EXPOSE 8080
 

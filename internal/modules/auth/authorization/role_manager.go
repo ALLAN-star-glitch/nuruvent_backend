@@ -15,6 +15,11 @@ type RoleManager struct {
 	enforcer *Enforcer
 }
 
+// RemoveAllRolesInDomain implements [authdomain.RoleManager].
+func (m *RoleManager) RemoveAllRolesInDomain(ctx context.Context, domain string) error {
+	panic("unimplemented")
+}
+
 // NewRoleManager creates a new role manager
 func NewRoleManager(enforcer *Enforcer) authdomain.RoleManager {
 	return &RoleManager{enforcer: enforcer}
@@ -111,4 +116,10 @@ func (m *RoleManager) RemoveAccountAdmin(ctx context.Context, domain string, use
 // domain: account:{account_id}
 func (m *RoleManager) RemoveTrainer(ctx context.Context, domain string, userID string) error {
 	return m.RemoveRole(ctx, domain, userID, authdomain.RoleTrainer.String())
+}
+
+// ReloadPolicies forces the enforcer to refresh its in-memory model from
+// the adapter.
+func (m *RoleManager) ReloadPolicies(ctx context.Context) error {
+	return m.enforcer.LoadPolicy()
 }

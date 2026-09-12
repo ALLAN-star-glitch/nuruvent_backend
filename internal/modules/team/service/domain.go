@@ -2,120 +2,76 @@
 
 package service
 
-import "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/teamdomain"
-
-// Domain represents a permission domain
-type Domain interface {
-    IsPersonal() bool
-    IsInstitution() bool
-    GetID() string
-    String() string // Returns the domain string for Casbin
-}
+import domains "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared"
 
 // ============================================================
-// DOMAIN IMPLEMENTATIONS
+// RE-EXPORTS from internal/shared/domains
 // ============================================================
+//
+// The canonical implementation lives in internal/shared/domains. This file
+// re-exports it under the team service namespace so existing call sites
+// (team service, permission helpers, etc.) continue to work unchanged.
+//
+// The team module must not import the auth module directly. Both modules
+// depend on shared/domains instead — that's the only shared contract.
+//
+// DOMAIN MODEL (post-revamp):
+//
+//   "platform"        — Nuruvent staff only
+//   "account:<uuid>"  — every tenant account
+//
+// Teams are NOT authorization domains. A team's authorization is checked
+// against its parent ACCOUNT domain ("account:<team.account_id>"). Team
+// membership is enforced as data (team_members) in the service layer, not
+// through Casbin.
+//
+// REMOVED TYPES (migration reference):
+//
+//   - Domain (interface)
+//   - PersonalTeamDomain    (type + constructor)
+//   - InstitutionTeamDomain (type + constructor)
+//   - AccountDomain         (type + constructor)
+//   - NewTeamDomain / NewDomainFromTeam / NewDomainFromTeamID
+//
+// Callers should:
+//
+//   - Use AccountDomain(team.AccountID) to obtain the authz domain for
+//     a team.
+//   - Use team_members table queries for team visibility checks.
 
-// PersonalTeamDomain represents a personal team domain
-// Format: personal:team:{team_id}
-type PersonalTeamDomain struct {
-    TeamID string
-}
+// ---- Constants ----
 
-func NewPersonalTeamDomain(teamID string) PersonalTeamDomain {
-    return PersonalTeamDomain{TeamID: teamID}
-}
+const (
+	// DomainPlatform is the static domain for Nuruvent staff.
+	DomainPlatform = domains.DomainPlatform
 
-func (d PersonalTeamDomain) IsPersonal() bool {
-    return true
-}
+	// AccountDomainPrefix is prepended to an account UUID to form its domain.
+	AccountDomainPrefix = domains.AccountDomainPrefix
+)
 
-func (d PersonalTeamDomain) IsInstitution() bool {
-    return false
-}
+// ---- Builders ----
 
-func (d PersonalTeamDomain) GetID() string {
-    return d.TeamID
-}
+var (
+	// AccountDomain returns "account:<accountID>".
+	AccountDomain = domains.AccountDomain
+)
 
-func (d PersonalTeamDomain) String() string {
-    return "personal:team:" + d.TeamID
-}
+// ---- Checkers ----
 
-// InstitutionTeamDomain represents an institution team domain
-// Format: institution:team:{team_id}
-type InstitutionTeamDomain struct {
-    TeamID string
-}
+var (
+	IsAccountDomain  = domains.IsAccountDomain
+	IsPlatformDomain = domains.IsPlatformDomain
+	IsKnownDomain    = domains.IsKnownDomain
+)
 
-func NewInstitutionTeamDomain(teamID string) InstitutionTeamDomain {
-    return InstitutionTeamDomain{TeamID: teamID}
-}
+// ---- Extractors ----
 
-func (d InstitutionTeamDomain) IsPersonal() bool {
-    return false
-}
+var (
+	ExtractAccountIDFromDomain = domains.ExtractAccountIDFromDomain
+)
 
-func (d InstitutionTeamDomain) IsInstitution() bool {
-    return true
-}
+// ---- Parsers ----
 
-func (d InstitutionTeamDomain) GetID() string {
-    return d.TeamID
-}
-
-func (d InstitutionTeamDomain) String() string {
-    return "institution:team:" + d.TeamID
-}
-
-// AccountDomain represents an account domain
-// Format: account:{account_id}
-type AccountDomain struct {
-    AccountID string
-}
-
-func NewAccountDomain(accountID string) AccountDomain {
-    return AccountDomain{AccountID: accountID}
-}
-
-func (d AccountDomain) IsPersonal() bool {
-    return false
-}
-
-func (d AccountDomain) IsInstitution() bool {
-    return false
-}
-
-func (d AccountDomain) GetID() string {
-    return d.AccountID
-}
-
-func (d AccountDomain) String() string {
-    return "account:" + d.AccountID
-}
-
-// ============================================================
-// HELPER FUNCTIONS
-// ============================================================
-
-// NewTeamDomain creates a domain from a team
-func NewTeamDomain(team *teamdomain.Team) Domain {
-    if team.IsPersonal() {
-        return NewPersonalTeamDomain(team.ID)
-    }
-    return NewInstitutionTeamDomain(team.ID)
-}
-
-// NewDomainFromTeam creates a domain from a team
-// Alias for NewTeamDomain
-func NewDomainFromTeam(team *teamdomain.Team) Domain {
-    return NewTeamDomain(team)
-}
-
-// NewDomainFromTeamID creates a domain from team ID and type
-func NewDomainFromTeamID(teamID, teamType string) Domain {
-    if teamType == "personal" {
-        return NewPersonalTeamDomain(teamID)
-    }
-    return NewInstitutionTeamDomain(teamID)
-}
+var (
+	ParseDomain = domains.ParseDomain
+)

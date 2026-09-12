@@ -10,188 +10,52 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 )
 
-// PolicyManager implements authdomain.PolicyManager
+// PolicyManager implements authdomain.PolicyManager.
+//
+// POST-REVAMP SCOPE:
+//
+// Policies (p rules) are static. They are seeded once via GetAccountPolicies()
+// and GetPlatformPolicies() with wildcard domains ("account:*"). No per-account
+// policy materialization happens at runtime.
+//
+// This manager handles:
+//
+//   - Platform policy seeding (one-time, at bootstrap)
+//   - Account cleanup when an account is deleted (removes the account's g rules)
+//
+// It does NOT:
+//
+//   - Seed policies for new accounts (the wildcard covers them)
+//   - Seed policies for teams (teams are not authz domains)
+//   - Manage team membership (that's data, not policy)
+//
+// User role assignments (g rules) are managed by the RoleManager, not here.
 type PolicyManager struct {
 	enforcer *Enforcer
 }
 
-// NewPolicyManager creates a new policy manager
+// NewPolicyManager creates a new policy manager.
 func NewPolicyManager(enforcer *Enforcer) authdomain.PolicyManager {
 	return &PolicyManager{enforcer: enforcer}
-}
-
-// ============================================================
-// TEAM POLICY MANAGEMENT
-// ============================================================
-
-// AddTeamPolicies adds default policies for a team domain
-func (m *PolicyManager) AddTeamPolicies(ctx context.Context, domain string) error {
-	if domain == "" {
-		return fmt.Errorf("invalid domain: empty string")
-	}
-
-	var policies [][]string
-	if authdomain.IsPersonalTeamDomain(domain) {
-		log.Printf("Adding personal team policies for domain: %s", domain)
-		policies = GetPersonalTeamPolicies(domain)
-	} else if authdomain.IsInstitutionTeamDomain(domain) {
-		log.Printf("Adding institution team policies for domain: %s", domain)
-		policies = GetInstitutionTeamPolicies(domain)
-	} else {
-		return fmt.Errorf("invalid team domain: %s", domain)
-	}
-
-	// Add policies
-	_, err := m.enforcer.AddPolicies(policies)
-	if err != nil {
-		return fmt.Errorf("failed to add team policies: %w", err)
-	}
-
-	// Add role hierarchy
-	hierarchy := GetTeamRoleHierarchy(domain)
-	_, err = m.enforcer.AddGroupingPolicies(hierarchy)
-	if err != nil {
-		return fmt.Errorf("failed to add role hierarchy: %w", err)
-	}
-
-	log.Printf("✅ Added %d policies and %d hierarchy rules for domain: %s",
-		len(policies), len(hierarchy), domain)
-	return nil
-}
-
-// RemoveTeamPolicies removes all policies for a team domain
-func (m *PolicyManager) RemoveTeamPolicies(ctx context.Context, domain string) error {
-	if domain == "" {
-		return fmt.Errorf("invalid domain: empty string")
-	}
-
-	log.Printf("Removing team policies for domain: %s", domain)
-
-	// Remove policy rules
-	policies, err := m.enforcer.GetFilteredPolicy(1, domain)
-	if err != nil {
-		return fmt.Errorf("failed to get policies: %w", err)
-	}
-
-	if len(policies) > 0 {
-		_, err := m.enforcer.RemovePolicies(policies)
-		if err != nil {
-			return fmt.Errorf("failed to remove policies: %w", err)
-		}
-	}
-
-	// Remove grouping policies
-	groupingPolicies, err := m.enforcer.GetFilteredGroupingPolicy(2, domain)
-	if err != nil {
-		return fmt.Errorf("failed to get grouping policies: %w", err)
-	}
-
-	if len(groupingPolicies) > 0 {
-		_, err := m.enforcer.RemoveGroupingPolicies(groupingPolicies)
-		if err != nil {
-			return fmt.Errorf("failed to remove grouping policies: %w", err)
-		}
-	}
-
-	log.Printf("✅ Removed %d policies and %d grouping policies for domain: %s",
-		len(policies), len(groupingPolicies), domain)
-	return nil
-}
-
-// ============================================================
-// ACCOUNT POLICY MANAGEMENT (NEW)
-// ============================================================
-
-// AddAccountPolicies adds default policies for an account domain
-func (m *PolicyManager) AddAccountPolicies(ctx context.Context, domain string) error {
-	if domain == "" {
-		return fmt.Errorf("invalid domain: empty string")
-	}
-
-	if !authdomain.IsAccountDomain(domain) {
-		return fmt.Errorf("invalid account domain: %s", domain)
-	}
-
-	log.Printf("Adding account policies for domain: %s", domain)
-
-	policies := GetAccountPolicies(domain)
-	_, err := m.enforcer.AddPolicies(policies)
-	if err != nil {
-		return fmt.Errorf("failed to add account policies: %w", err)
-	}
-
-	// Add role hierarchy for account
-	hierarchy := GetAccountRoleHierarchy(domain)
-	_, err = m.enforcer.AddGroupingPolicies(hierarchy)
-	if err != nil {
-		return fmt.Errorf("failed to add account role hierarchy: %w", err)
-	}
-
-	log.Printf("✅ Added %d account policies and %d hierarchy rules for domain: %s",
-		len(policies), len(hierarchy), domain)
-	return nil
-}
-
-// RemoveAccountPolicies removes all policies for an account domain
-func (m *PolicyManager) RemoveAccountPolicies(ctx context.Context, domain string) error {
-	if domain == "" {
-		return fmt.Errorf("invalid domain: empty string")
-	}
-
-	if !authdomain.IsAccountDomain(domain) {
-		return fmt.Errorf("invalid account domain: %s", domain)
-	}
-
-	log.Printf("Removing account policies for domain: %s", domain)
-
-	// Remove policy rules
-	policies, err := m.enforcer.GetFilteredPolicy(1, domain)
-	if err != nil {
-		return fmt.Errorf("failed to get policies: %w", err)
-	}
-
-	if len(policies) > 0 {
-		_, err := m.enforcer.RemovePolicies(policies)
-		if err != nil {
-			return fmt.Errorf("failed to remove policies: %w", err)
-		}
-	}
-
-	// Remove grouping policies
-	groupingPolicies, err := m.enforcer.GetFilteredGroupingPolicy(2, domain)
-	if err != nil {
-		return fmt.Errorf("failed to get grouping policies: %w", err)
-	}
-
-	if len(groupingPolicies) > 0 {
-		_, err := m.enforcer.RemoveGroupingPolicies(groupingPolicies)
-		if err != nil {
-			return fmt.Errorf("failed to remove grouping policies: %w", err)
-		}
-	}
-
-	log.Printf("✅ Removed %d account policies and %d grouping policies for domain: %s",
-		len(policies), len(groupingPolicies), domain)
-	return nil
 }
 
 // ============================================================
 // PLATFORM POLICY MANAGEMENT
 // ============================================================
 
-// AddPlatformPolicies adds default platform policies
+// AddPlatformPolicies seeds the static platform policies. Runs once at
+// system bootstrap. Safe to call more than once — Casbin's AddPolicies
+// is idempotent for identical rules.
 func (m *PolicyManager) AddPlatformPolicies(ctx context.Context) error {
 	log.Println("Adding platform policies")
 
 	platformPolicies := GetPlatformPolicies()
-	_, err := m.enforcer.AddPolicies(platformPolicies)
-	if err != nil {
+	if _, err := m.enforcer.AddPolicies(platformPolicies); err != nil {
 		return fmt.Errorf("failed to add platform policies: %w", err)
 	}
 
 	hierarchy := GetPlatformRoleHierarchy()
-	_, err = m.enforcer.AddGroupingPolicies(hierarchy)
-	if err != nil {
+	if _, err := m.enforcer.AddGroupingPolicies(hierarchy); err != nil {
 		return fmt.Errorf("failed to add platform role hierarchy: %w", err)
 	}
 
@@ -200,32 +64,29 @@ func (m *PolicyManager) AddPlatformPolicies(ctx context.Context) error {
 	return nil
 }
 
-// RemovePlatformPolicies removes all platform policies
+// RemovePlatformPolicies removes all platform-domain policies and grouping
+// rules. Used only for full resets, not in normal operation.
 func (m *PolicyManager) RemovePlatformPolicies(ctx context.Context) error {
 	log.Println("Removing platform policies")
 
-	// Remove policy rules
 	policies, err := m.enforcer.GetFilteredPolicy(1, authdomain.DomainPlatform)
 	if err != nil {
 		return fmt.Errorf("failed to get platform policies: %w", err)
 	}
 
 	if len(policies) > 0 {
-		_, err := m.enforcer.RemovePolicies(policies)
-		if err != nil {
+		if _, err := m.enforcer.RemovePolicies(policies); err != nil {
 			return fmt.Errorf("failed to remove platform policies: %w", err)
 		}
 	}
 
-	// Remove grouping policies
 	groupingPolicies, err := m.enforcer.GetFilteredGroupingPolicy(2, authdomain.DomainPlatform)
 	if err != nil {
 		return fmt.Errorf("failed to get grouping policies: %w", err)
 	}
 
 	if len(groupingPolicies) > 0 {
-		_, err := m.enforcer.RemoveGroupingPolicies(groupingPolicies)
-		if err != nil {
+		if _, err := m.enforcer.RemoveGroupingPolicies(groupingPolicies); err != nil {
 			return fmt.Errorf("failed to remove grouping policies: %w", err)
 		}
 	}
@@ -236,30 +97,16 @@ func (m *PolicyManager) RemovePlatformPolicies(ctx context.Context) error {
 }
 
 // ============================================================
-// HELPER METHODS (Internal)
+// ACCOUNT POLICY MANAGEMENT
 // ============================================================
 
-// ensureTeamPoliciesExist ensures policies exist for a team domain
-func (m *PolicyManager) ensureTeamPoliciesExist(ctx context.Context, domain string) error {
-	if domain == "" {
-		return fmt.Errorf("invalid domain: empty string")
-	}
-
-	policies, err := m.enforcer.GetFilteredPolicy(1, domain)
-	if err != nil {
-		return fmt.Errorf("failed to check existing policies: %w", err)
-	}
-
-	if len(policies) == 0 {
-		log.Printf("No policies found for domain %s, adding default policies", domain)
-		return m.AddTeamPolicies(ctx, domain)
-	}
-
-	return nil
-}
-
-// ensureAccountPoliciesExist ensures policies exist for an account domain
-func (m *PolicyManager) ensureAccountPoliciesExist(ctx context.Context, domain string) error {
+// RemoveAccountPolicies removes all Casbin rules tied to a specific account
+// domain. Call this when an account is deleted.
+//
+// NOTE: Static policies use the wildcard "account:*", so they are NOT
+// per-account. Only the account's grouping rules (user → role bindings)
+// need to be removed.
+func (m *PolicyManager) RemoveAccountPolicies(ctx context.Context, domain string) error {
 	if domain == "" {
 		return fmt.Errorf("invalid domain: empty string")
 	}
@@ -268,15 +115,22 @@ func (m *PolicyManager) ensureAccountPoliciesExist(ctx context.Context, domain s
 		return fmt.Errorf("invalid account domain: %s", domain)
 	}
 
-	policies, err := m.enforcer.GetFilteredPolicy(1, domain)
+	log.Printf("Removing account grouping policies for domain: %s", domain)
+
+	// Remove user-to-role g rules for this concrete account domain.
+	// Do NOT touch the wildcard "account:*" policies.
+	groupingPolicies, err := m.enforcer.GetFilteredGroupingPolicy(2, domain)
 	if err != nil {
-		return fmt.Errorf("failed to check existing policies: %w", err)
+		return fmt.Errorf("failed to get grouping policies: %w", err)
 	}
 
-	if len(policies) == 0 {
-		log.Printf("No policies found for account domain %s, adding default policies", domain)
-		return m.AddAccountPolicies(ctx, domain)
+	if len(groupingPolicies) > 0 {
+		if _, err := m.enforcer.RemoveGroupingPolicies(groupingPolicies); err != nil {
+			return fmt.Errorf("failed to remove grouping policies: %w", err)
+		}
 	}
 
+	log.Printf("✅ Removed %d grouping policies for account domain: %s",
+		len(groupingPolicies), domain)
 	return nil
 }

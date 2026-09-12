@@ -102,7 +102,7 @@ func NewTeamCasbinAdapter(
 	roleManager authDomain.RoleManager,
 	policyManager authDomain.PolicyManager,
 ) teamService.CasbinService {
-	return team.NewCasbinAdapter(permChecker, roleManager, policyManager)
+	return team.NewCasbinAdapter(permChecker, roleManager)
 }
 
 // NewTeamNotificationAdapter creates a new team notification adapter

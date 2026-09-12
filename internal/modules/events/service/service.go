@@ -26,32 +26,15 @@ type Service interface {
 	BulkDuplicateEvents(ctx context.Context, ids []string, cmd BulkDuplicateCommand) (*BulkDuplicateResult, error)
 
 	// ============================================================
-	// READ - One method to rule them all
+	// READ
 	// ============================================================
 
-	// GetEventByID retrieves a single event by ID
 	GetEventByID(ctx context.Context, id string) (*domain.Event, error)
-
-	// GetEventBySlug retrieves a single event by slug
 	GetEventBySlug(ctx context.Context, slug string) (*domain.Event, error)
-
-	// ListEvents is the PRIMARY query method - handles ALL list/filter scenarios
-	// Use TeamFilter to filter by team (personal or institution)
-	// Use EventTypeID, EventStatusID, CategoryID for additional filters
-	// Use IncludeCreator to populate creator info
-	// Use IncludeDeleted/OnlyDeleted for soft-delete filtering
 	ListEvents(ctx context.Context, filters ListEventsFilters) ([]*domain.Event, int64, error)
-
-	// GetEventsByType retrieves events by event type slug
 	GetEventsByType(ctx context.Context, eventTypeSlug string, page, pageSize int) ([]*domain.Event, int64, error)
-
-	// GetUpcomingEvents is a convenience method for homepage/upcoming section
 	GetUpcomingEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error)
-
-	// GetPastEvents is a convenience method for archives/past section
 	GetPastEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error)
-
-	// SearchEvents for full-text search
 	SearchEvents(ctx context.Context, query string, filters SearchFilters) ([]*domain.Event, int64, error)
 
 	// ============================================================
@@ -64,6 +47,9 @@ type Service interface {
 	// DELETE - Single
 	// ============================================================
 
+	// The accountID and teamType parameters are retained for backward
+	// compatibility. teamType is ignored — authorization is checked against
+	// the event's parent account domain.
 	DeleteEvent(ctx context.Context, id, deletedBy, accountID, teamType string) error
 	PermanentlyDeleteEvent(ctx context.Context, id, deletedBy, accountID, teamType string) error
 	RestoreEvent(ctx context.Context, id, restoredBy, accountID, teamType string) (*domain.Event, error)
@@ -72,13 +58,8 @@ type Service interface {
 	// DELETE - Bulk
 	// ============================================================
 
-	// DeleteEvents soft deletes multiple events by IDs
 	DeleteEvents(ctx context.Context, ids []string, deletedBy, accountID, teamType string) (*BulkDeleteResult, error)
-
-	// PermanentlyDeleteEvents hard deletes multiple events by IDs
 	PermanentlyDeleteEvents(ctx context.Context, ids []string, deletedBy, accountID, teamType string) (*BulkDeleteResult, error)
-
-	// RestoreEvents restores multiple soft-deleted events by IDs
 	RestoreEvents(ctx context.Context, ids []string, restoredBy, accountID, teamType string) (*BulkRestoreResult, error)
 
 	// ============================================================
@@ -98,43 +79,31 @@ type Service interface {
 	BulkCompleteEvents(ctx context.Context, ids []string) (*BulkStatusResult, error)
 
 	// ============================================================
-	// MEDIA - Upload
+	// MEDIA
 	// ============================================================
 
 	UploadEventImage(ctx context.Context, cmd UploadEventImageCommand) (*MediaInfo, error)
 	UploadCertificateTemplate(ctx context.Context, cmd UploadCertificateCommand) (*MediaInfo, error)
 
-	// ============================================================
-	// MEDIA - Delete Single
-	// ============================================================
-
 	DeleteEventImage(ctx context.Context, eventID string, deletedBy string) error
 	DeleteEventCertificate(ctx context.Context, eventID string, deletedBy string) error
 	DeleteAllEventMedia(ctx context.Context, eventID string, deletedBy string) error
 
-	// ============================================================
-	// MEDIA - Delete Bulk
-	// ============================================================
-
 	BulkDeleteEventMedia(ctx context.Context, eventIDs []string, deletedBy string) (*BulkDeleteResult, error)
 
 	// ============================================================
-	// EVENT TYPES & STATUSES (Value Objects)
+	// EVENT TYPES & STATUSES
 	// ============================================================
 
 	GetEventTypes(ctx context.Context) ([]*domain.EventType, error)
 	GetEventStatuses(ctx context.Context) ([]*domain.EventStatus, error)
 	GetTicketTypes(ctx context.Context) ([]*domain.TicketTypeRow, error)
-
 	GetCategories(ctx context.Context) ([]*domain.Category, error)
-
 
 	// ============================================================
 	// AI-ASSISTED DRAFTING
 	// ============================================================
 
-	// GenerateEventDraft returns a publishable event draft generated
-	// from a natural-language prompt. The draft is not persisted.
 	GenerateEventDraft(ctx context.Context, req GenerateEventDraftRequest) (*GenerateEventDraftResult, error)
 }
 
@@ -143,7 +112,6 @@ type Service interface {
 // ============================================================
 
 type CreateDraftCommand struct {
-	// Basic Information
 	Name             string
 	DisplayName      string
 	Description      string
@@ -153,20 +121,17 @@ type CreateDraftCommand struct {
 	Tags             []string
 	Language         string
 
-	// Ownership & Context - determines the team and domain permission checks
-	CreatedBy  string // User ID (required)
-	TeamID     string // Team ID or User ID for personal team (required)
-	TeamType   string // "institution" or "personal" (optional, populated from request)
-	TeamDomain string // Pre-resolved domain, e.g., "institution:team:xxx" (optional)
-	AccountID  string // Associated Account/Org ID for fallback checks (optional)
+	CreatedBy  string
+	TeamID     string
+	TeamType   string // legacy; ignored for authz
+	TeamDomain string // legacy; ignored for authz
+	AccountID  string // resolved from TeamID if empty
 
-	// Schedule
 	Schedules   []ScheduleInput
 	IsMultiDay  bool
 	IsRecurring bool
 	Recurrence  *RecurrenceInput
 
-	// Venue
 	IsVirtual          bool
 	IsHybrid           bool
 	InPersonLocation   string
@@ -179,31 +144,23 @@ type CreateDraftCommand struct {
 	VenueCity          string
 	VenueCountry       string
 
-	// Tickets
 	IsFree   bool
 	Capacity *int
 	Tickets  []TicketInput
 
-	// Access & Privacy
 	Visibility    string
 	Password      *string
 	InviteOnly    bool
 	InvitedEmails []string
 
-	// Monetization
 	IsFeatured            bool
 	CertificateEnabled    bool
 	CertificatePrice      float64
 	CertificateTemplateID *string
 
-	// Speakers
-	Speakers []SpeakerInput
-
-	// Materials
+	Speakers  []SpeakerInput
 	Materials []MaterialInput
-
-	// SEO
-	SEO *SEOInput
+	SEO       *SEOInput
 }
 
 // ============================================================
@@ -211,7 +168,6 @@ type CreateDraftCommand struct {
 // ============================================================
 
 type CreateEventCommand struct {
-	// Basic Information
 	Name             string
 	DisplayName      string
 	Description      string
@@ -221,26 +177,22 @@ type CreateEventCommand struct {
 	Tags             []string
 	Language         string
 
-	// Ownership & Context - determines the team and domain permission checks
-	CreatedBy  string // User ID (required)
-	TeamID     string // Team ID or User ID for personal team (required)
-	TeamType   string // "institution" or "personal" (optional, populated from request)
-	TeamDomain string // Pre-resolved domain, e.g., "institution:team:xxx" (optional)
-	AccountID  string // Associated Account/Org ID for fallback checks (optional)
+	CreatedBy  string
+	TeamID     string
+	TeamType   string // legacy; ignored for authz
+	TeamDomain string // legacy; ignored for authz
+	AccountID  string // resolved from TeamID if empty
 
-	// Schedule - Required for published events
 	Schedules   []ScheduleInput
 	IsMultiDay  bool
 	IsRecurring bool
 	Recurrence  *RecurrenceInput
 
-	// Tickets - Required for published events
 	IsFree   bool
 	Capacity *int
 	Waitlist bool
 	Tickets  []TicketInput
 
-	// Venue - Required for published events
 	IsVirtual          bool
 	IsHybrid           bool
 	InPersonLocation   string
@@ -253,26 +205,19 @@ type CreateEventCommand struct {
 	VenueCity          string
 	VenueCountry       string
 
-	// Access & Privacy
 	Visibility    string
 	Password      *string
 	InviteOnly    bool
 	InvitedEmails []string
 
-	// Monetization
 	IsFeatured            bool
 	CertificateEnabled    bool
 	CertificatePrice      float64
 	CertificateTemplateID *string
 
-	// Speakers
-	Speakers []SpeakerInput
-
-	// Materials
+	Speakers  []SpeakerInput
 	Materials []MaterialInput
-
-	// SEO
-	SEO *SEOInput
+	SEO       *SEOInput
 }
 
 // ============================================================
@@ -283,11 +228,9 @@ type UpdateEventCommand struct {
 	ID        string
 	UpdatedBy string
 
-	// Scoping & Authorization Context (populated server-side)
 	AccountID string
-	TeamType  string
+	TeamType  string // legacy; ignored for authz
 
-	// Basic Information (pointers for optional updates)
 	Name             *string
 	DisplayName      *string
 	Description      *string
@@ -297,16 +240,13 @@ type UpdateEventCommand struct {
 	Tags             []string
 	Language         *string
 
-	// Team ID (optional - can change team)
 	TeamID *string
 
-	// Schedule
 	Schedules   []ScheduleInput
 	IsMultiDay  *bool
 	IsRecurring *bool
 	Recurrence  *RecurrenceInput
 
-	// Venue
 	IsVirtual          *bool
 	IsHybrid           *bool
 	InPersonLocation   *string
@@ -319,32 +259,24 @@ type UpdateEventCommand struct {
 	VenueCity          *string
 	VenueCountry       *string
 
-	// Tickets
 	IsFree   *bool
 	Capacity *int
 	Waitlist *bool
 	Tickets  []TicketInput
 
-	// Access & Privacy
 	Visibility    *string
 	Password      *string
 	InviteOnly    *bool
 	InvitedEmails []string
 
-	// Monetization
 	IsFeatured            *bool
 	CertificateEnabled    *bool
 	CertificatePrice      *float64
 	CertificateTemplateID *string
 
-	// Speakers
-	Speakers []SpeakerInput
-
-	// Materials
+	Speakers  []SpeakerInput
 	Materials []MaterialInput
-
-	// SEO
-	SEO *SEOInput
+	SEO       *SEOInput
 }
 
 // ============================================================
@@ -356,16 +288,15 @@ type DuplicateEventCommand struct {
 	Date    string
 	IsDraft bool
 
-	// Context & Permissions
-	CreatedBy string // User ID executing the action (required)
-	TeamID    string // Optional: Target Team ID to copy event into
-	TeamType  string // Optional: "personal" or "institution"
-	AccountID string // Optional: Organization Account ID for fallback checks
+	CreatedBy string
+	TeamID    string // optional target team
+	TeamType  string // legacy; ignored for authz
+	AccountID string // target account; resolved from original if empty
 }
 
 type BulkDuplicateCommand struct {
-	CreatedBy      string // User ID executing the action (required)
-	AccountID      string // Optional: Organization Account ID for fallback checks
+	CreatedBy      string
+	AccountID      string
 	NamePrefix     string
 	DateOffsetDays int
 	IsDraft        bool
@@ -395,84 +326,91 @@ type UploadCertificateCommand struct {
 // FILTERS
 // ============================================================
 
-// ListEventsFilters provides comprehensive filtering for ListEvents
+// ListEventsFilters provides comprehensive filtering for ListEvents.
 type ListEventsFilters struct {
-	// TeamFilter filters events by team (personal or institution)
+	// Team filters events by team (data filter, not authz boundary).
 	Team domain.TeamFilter
 
-	// TeamID filters events by a specific team ID
+	// Account filters events by account. Used as the authorization scope
+	// when no team is specified.
+	Account domain.AccountFilter
+
+	// TeamID filters events by a specific team ID.
 	TeamID string
 
-	// UserID filters events by the creator (created_by)
+	// UserID filters events by the creator (created_by).
 	UserID string
 
-	// EventTypeID filters events by their type
+	// EventTypeID filters events by their type.
 	EventTypeID string
 
-	// EventStatusID filters events by their status
+	// EventStatusID filters events by their status.
 	EventStatusID string
 
-	// CategoryID filters events by their category
+	// CategoryID filters events by their category.
 	CategoryID string
 
-	// IncludeDeleted controls whether soft-deleted events are included
+	// IncludeDeleted controls whether soft-deleted events are included.
 	IncludeDeleted bool
 
-	// OnlyDeleted controls whether ONLY soft-deleted events are returned
+	// OnlyDeleted controls whether ONLY soft-deleted events are returned.
 	OnlyDeleted bool
 
-	// IncludeCreator controls whether creator user info is populated
+	// IncludeCreator controls whether creator user info is populated.
 	IncludeCreator bool
 
-	// Limit controls the maximum number of events returned
+	// Limit controls the maximum number of events returned.
 	Limit int
 
-	// Offset controls pagination offset
+	// Offset controls pagination offset.
 	Offset int
 
-	// SortBy specifies the field to sort by
+	// SortBy specifies the field to sort by.
 	SortBy string
 
-	// SortOrder specifies the sort direction
+	// SortOrder specifies the sort direction.
 	SortOrder string
 
-	// Visibility filters events by their visibility level
+	// Visibility filters events by their visibility level.
 	Visibility string
 }
 
-// SearchFilters provides filtering for the SearchEvents method
+// SearchFilters provides filtering for the SearchEvents method.
 type SearchFilters struct {
-	// TeamFilter filters search results by team
+	// Team filters search results by team (data filter).
 	Team domain.TeamFilter
 
-	// TeamID filters search results by a specific team ID
+	// Account filters search results by account.
+	Account domain.AccountFilter
+
+	// TeamID filters search results by a specific team ID.
 	TeamID string
 
-	// UserID filters search results by creator
+	// UserID filters search results by creator.
 	UserID string
 
-	// EventTypeID filters search results by event type
+	// EventTypeID filters search results by event type.
 	EventTypeID string
 
-	// CategoryID filters search results by category
+	// CategoryID filters search results by category.
 	CategoryID string
 
-	// IncludeDeleted controls whether soft-deleted events are included in search
+	// IncludeDeleted controls whether soft-deleted events are included in search.
 	IncludeDeleted bool
 
-	// OnlyDeleted controls whether ONLY soft-deleted events are returned in search
+	// OnlyDeleted controls whether ONLY soft-deleted events are returned in search.
 	OnlyDeleted bool
 
-	// Limit controls the maximum number of search results
+	// Limit controls the maximum number of search results.
 	Limit int
 
-	// Offset controls pagination offset for search results
+	// Offset controls pagination offset for search results.
 	Offset int
 
-	// Visibility filters search results by visibility level
+	// Visibility filters search results by visibility level.
 	Visibility string
 
-	// IncludeCreator controls whether creator user info is populated
+	// IncludeCreator controls whether creator user info is populated.
 	IncludeCreator bool
 }
 

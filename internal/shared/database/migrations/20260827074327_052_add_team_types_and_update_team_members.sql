@@ -1,1 +1,14 @@
-SELECT * FROM casbin_rule WHERE v0='1a4dbaec-9a19-4cbd-9ae2-7ff867c6f084' AND (v1='super_admin' OR v1='admin') AND v2='platform';
+-- +goose Up
+-- No-op migration.
+--
+-- The original contents of this file were a stray debugging query:
+--   SELECT * FROM casbin_rule WHERE v0='...' AND ...;
+-- That line was never a valid migration. It was committed by accident
+-- and causes Goose to fail parsing the file.
+--
+-- The team_types table is created and modified by other migrations in
+-- this directory (see 20260827075558_054 and later files). This file is
+-- retained purely to preserve the version sequence.
+
+-- +goose Down
+-- No-op.

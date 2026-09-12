@@ -9,7 +9,24 @@ import (
 	"github.com/google/uuid"
 )
 
-// Team represents a team (personal or institution)
+// ============================================================
+// TEAM TYPE CONSTANTS
+// ============================================================
+//
+// Team types are data, not authorization domains. They determine:
+//   - Whether a team lives under a personal or institution account
+//   - UI behavior and default settings
+//   - Onboarding flows
+//
+// They do NOT affect Casbin domains. Both personal and institution teams
+// resolve to their parent account domain for authorization.
+
+const (
+	TeamTypePersonal    = "personal"
+	TeamTypeInstitution = "institution"
+)
+
+// Team represents a team (personal or institution).
 type Team struct {
 	ID          string
 	AccountID   string
@@ -26,7 +43,7 @@ type Team struct {
 	DeletedAt   *time.Time
 }
 
-// NewTeam creates a new team
+// NewTeam creates a new team.
 func NewTeam(accountID, name, displayName, slug, teamType, createdBy string) (*Team, error) {
 	if accountID == "" {
 		return nil, errors.New("account ID is required")
@@ -59,32 +76,48 @@ func NewTeam(accountID, name, displayName, slug, teamType, createdBy string) (*T
 	}, nil
 }
 
-// IsPersonal checks if team is personal
+// IsPersonal reports whether the team is a personal team.
 func (t *Team) IsPersonal() bool {
 	return t.Type == TeamTypePersonal
 }
 
-// IsInstitution checks if team is institution
+// IsInstitution reports whether the team is an institution team.
 func (t *Team) IsInstitution() bool {
 	return t.Type == TeamTypeInstitution
 }
 
-// Deactivate deactivates the team
+// Deactivate marks the team inactive.
 func (t *Team) Deactivate() {
 	t.IsActive = false
 	t.UpdatedAt = time.Now()
 }
 
-// Activate activates the team
+// Activate marks the team active.
 func (t *Team) Activate() {
 	t.IsActive = true
 	t.UpdatedAt = time.Now()
 }
 
-// GetDomain returns the Casbin domain for this team
-func (t *Team) GetDomain() string {
-	if t.IsPersonal() {
-		return PersonalTeamDomain(t.ID)
-	}
-	return InstitutionTeamDomain(t.ID)
-}
+// ============================================================
+// AUTHORIZATION NOTE
+// ============================================================
+//
+// Teams do NOT have their own Casbin domains. The previous GetDomain()
+// method returned "personal:team:<id>" or "institution:team:<id>", which
+// are no longer valid.
+//
+// To authorize a team-scoped action:
+//
+//   1. Resolve the team's parent account:
+//        accountDomain := AccountDomain(team.AccountID)
+//
+//   2. Check the user's role permission in that account domain:
+//        allowed, _ := checker.HasPermission(ctx, userID, accountDomain, resource, action)
+//
+//   3. Enforce team visibility separately (in the service layer):
+//        isMember, _ := teamRepo.IsMember(ctx, userID, team.ID)
+//
+// Gate 1 is role-permission on the account domain.
+// Gate 2 is team membership, enforced as data.
+//
+// See "Authorization Revamp Design Document" §2.3 and §2.4.

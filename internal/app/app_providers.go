@@ -48,7 +48,7 @@ import (
 // APP-SPECIFIC PROVIDERS
 // ============================================================
 
-// provideFiberAppWithMiddleware creates the Fiber app with middleware
+// provideFiberAppWithMiddleware creates the Fiber app with middleware.
 func provideFiberAppWithMiddleware() *fiber.App {
 	app := fiber.New(fiber.Config{
 		AppName:      "Nuruvent API",
@@ -77,13 +77,12 @@ func provideFiberAppWithMiddleware() *fiber.App {
 	return app
 }
 
-
-
 // ============================================================
 // APP DEPENDENCIES
 // ============================================================
 
-// provideAppDependencies assembles the root application dependencies
+
+// provideAppDependencies assembles the root application dependencies.
 func provideAppDependencies(
 	cfg *config.Config,
 	db *gorm.DB,
@@ -106,39 +105,36 @@ func provideAppDependencies(
 	accountHndlr *accountHandler.AccountHandler,
 	teamHndlr *teamHandler.TeamHandler,
 	eventsHndlr *eventsHandler.EventHandler,
-	// ✅ Added AI Service
 	aiSvc teamService.AIService,
-	eventsAIService  eventsService.AIService,
+	eventsAIService eventsService.AIService,
 	organizerProvider eventsDomain.OrganizerProvider,
 	accountsPermissionChecker accountDomain.PermissionChecker,
-
 ) *AppDependencies {
 	return &AppDependencies{
-		Config:            cfg,
-		DB:                db,
-		App:               app,
-		StorageClient:     storageClient,
-		RedisClient:       redisClient,
-		Enforcer:          enforcer,
-		PermissionChecker: permChecker,
-		RoleManager:       roleManager,
-		PolicyManager:     policyManager,
-		AuthService:       authSvc,
-		AuthTokenService:  authTokenService,
-		AccountService:    accountSvc,
-		TeamService:       teamSvc,
-		EventsService:     eventsSvc,
-		MediaService:      mediaSvc,
-		NotificationSvc:   notificationSvc,
-		AuthHandler:       authHndlr,
-		AccountHandler:    accountHndlr,
-		TeamHandler:       teamHndlr,
-		EventsHandler:     eventsHndlr,
-		AIService:         aiSvc, // ✅ Added AI Service
-		OrganizerProvider:	organizerProvider,
+		Config:                    cfg,
+		DB:                        db,
+		App:                       app,
+		StorageClient:             storageClient,
+		RedisClient:               redisClient,
+		Enforcer:                  enforcer,
+		PermissionChecker:         permChecker,
+		RoleManager:               roleManager,
+		PolicyManager:             policyManager,
+		AuthService:               authSvc,
+		AuthTokenService:          authTokenService,
+		AccountService:            accountSvc,
+		TeamService:               teamSvc,
+		EventsService:             eventsSvc,
+		MediaService:              mediaSvc,
+		NotificationSvc:           notificationSvc,
+		AuthHandler:               authHndlr,
+		AccountHandler:            accountHndlr,
+		TeamHandler:               teamHndlr,
+		EventsHandler:             eventsHndlr,
+		AIService:                 aiSvc,
+		OrganizerProvider:         organizerProvider,
 		AccountsPermissionChecker: accountsPermissionChecker,
-		AIClient:	aiClient,
-		EventsAIService: eventsAIService,
-	
+		AIClient:                  aiClient,
+		EventsAIService:           eventsAIService,
 	}
 }

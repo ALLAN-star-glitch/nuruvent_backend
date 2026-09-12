@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
@@ -18,7 +19,7 @@ import (
 // CONSTANTS
 // ============================================================
 
-const CURRENT_POLICY_VERSION = "v14"
+const CURRENT_POLICY_VERSION = "v15"
 
 // ============================================================
 // POLICY VERSION TRACKING
@@ -34,7 +35,6 @@ type PolicyVersion struct {
 func (PolicyVersion) TableName() string {
 	return "policy_versions"
 }
-
 
 // ============================================================
 // PUBLIC ENTRY FUNCTION
@@ -128,16 +128,10 @@ func (s *permissionSeeder) cleanAllPolicies() error {
 	if err := s.cleanPlatformPolicies(); err != nil {
 		return err
 	}
-
-	if err := s.cleanTeamPolicies(); err != nil {
-		return err
-	}
-
 	if err := s.cleanAccountPolicies(); err != nil {
 		return err
 	}
-
-	if err := s.cleanGroupingPolicies(); err != nil {
+	if err := s.cleanTeamDomainPolicies(); err != nil {
 		return err
 	}
 
@@ -171,32 +165,6 @@ func (s *permissionSeeder) cleanPlatformPolicies() error {
 	return nil
 }
 
-func (s *permissionSeeder) cleanTeamPolicies() error {
-	allPolicies, err := s.enforcer.GetPolicy()
-	if err != nil {
-		return fmt.Errorf("failed to get all policies: %w", err)
-	}
-
-	var teamPolicies [][]string
-	for _, policy := range allPolicies {
-		if len(policy) >= 4 {
-			domain := policy[1]
-			if authdomain.IsPersonalTeamDomain(domain) || authdomain.IsInstitutionTeamDomain(domain) {
-				teamPolicies = append(teamPolicies, policy)
-			}
-		}
-	}
-
-	if len(teamPolicies) > 0 {
-		if _, err := s.enforcer.RemovePolicies(teamPolicies); err != nil {
-			return fmt.Errorf("failed to remove team policies: %w", err)
-		}
-		log.Printf("   ✅ Removed %d team policies", len(teamPolicies))
-	}
-
-	return nil
-}
-
 func (s *permissionSeeder) cleanAccountPolicies() error {
 	allPolicies, err := s.enforcer.GetPolicy()
 	if err != nil {
@@ -205,9 +173,9 @@ func (s *permissionSeeder) cleanAccountPolicies() error {
 
 	var accountPolicies [][]string
 	for _, policy := range allPolicies {
-		if len(policy) >= 4 {
+		if len(policy) >= 2 {
 			domain := policy[1]
-			if authdomain.IsAccountDomain(domain) {
+			if strings.HasPrefix(domain, "account:") {
 				accountPolicies = append(accountPolicies, policy)
 			}
 		}
@@ -223,9 +191,53 @@ func (s *permissionSeeder) cleanAccountPolicies() error {
 	return nil
 }
 
-func (s *permissionSeeder) cleanGroupingPolicies() error {
-	log.Println("   ℹ️  Skipping grouping policy cleanup to preserve user roles")
-	log.Println("   ℹ️  User roles will be managed separately via team_members table")
+func (s *permissionSeeder) cleanTeamDomainPolicies() error {
+	allPolicies, err := s.enforcer.GetPolicy()
+	if err != nil {
+		return fmt.Errorf("failed to get all policies: %w", err)
+	}
+
+	var teamPolicies [][]string
+	for _, policy := range allPolicies {
+		if len(policy) >= 2 {
+			domain := policy[1]
+			if strings.HasPrefix(domain, "personal:team:") ||
+				strings.HasPrefix(domain, "institution:team:") {
+				teamPolicies = append(teamPolicies, policy)
+			}
+		}
+	}
+
+	if len(teamPolicies) > 0 {
+		if _, err := s.enforcer.RemovePolicies(teamPolicies); err != nil {
+			return fmt.Errorf("failed to remove team-domain policies: %w", err)
+		}
+		log.Printf("   ✅ Removed %d team-domain policies", len(teamPolicies))
+	}
+
+	allGrouping, err := s.enforcer.GetGroupingPolicy()
+	if err != nil {
+		return fmt.Errorf("failed to get grouping policies: %w", err)
+	}
+
+	var teamGrouping [][]string
+	for _, rule := range allGrouping {
+		if len(rule) >= 3 {
+			domain := rule[2]
+			if strings.HasPrefix(domain, "personal:team:") ||
+				strings.HasPrefix(domain, "institution:team:") {
+				teamGrouping = append(teamGrouping, rule)
+			}
+		}
+	}
+
+	if len(teamGrouping) > 0 {
+		if _, err := s.enforcer.RemoveGroupingPolicies(teamGrouping); err != nil {
+			return fmt.Errorf("failed to remove team-domain grouping: %w", err)
+		}
+		log.Printf("   ✅ Removed %d team-domain grouping rules", len(teamGrouping))
+	}
+
 	return nil
 }
 
@@ -239,12 +251,16 @@ func (s *permissionSeeder) freshSeed() error {
 	if err := s.cleanAllPolicies(); err != nil {
 		return err
 	}
-
 	if err := s.seedPlatformPolicies(); err != nil {
 		return err
 	}
-
 	if err := s.seedPlatformRoleHierarchy(); err != nil {
+		return err
+	}
+	if err := s.seedAccountPolicies(); err != nil {
+		return err
+	}
+	if err := s.seedAccountRoleHierarchy(); err != nil {
 		return err
 	}
 
@@ -253,25 +269,21 @@ func (s *permissionSeeder) freshSeed() error {
 }
 
 func (s *permissionSeeder) migratePolicies() error {
-	log.Println("🔄 Migrating policies to new schema...")
+	log.Println("🔄 Migrating policies to account-only model...")
 
 	if err := s.cleanAllPolicies(); err != nil {
 		return err
 	}
-
 	if err := s.seedPlatformPolicies(); err != nil {
 		return err
 	}
-
 	if err := s.seedPlatformRoleHierarchy(); err != nil {
 		return err
 	}
-
-	if err := s.updateTeamPolicies(); err != nil {
+	if err := s.seedAccountPolicies(); err != nil {
 		return err
 	}
-
-	if err := s.updateAccountPolicies(); err != nil {
+	if err := s.seedAccountRoleHierarchy(); err != nil {
 		return err
 	}
 
@@ -297,115 +309,21 @@ func (s *permissionSeeder) seedPlatformRoleHierarchy() error {
 	return nil
 }
 
-// ============================================================
-// TEAM POLICY UPDATE METHODS
-// ============================================================
-
-func (s *permissionSeeder) updateTeamPolicies() error {
-	log.Println("📝 Updating team policies for existing users and institutions...")
-
-	if err := s.updatePersonalTeamPolicies(); err != nil {
-		return err
+func (s *permissionSeeder) seedAccountPolicies() error {
+	policies := authorization.GetAccountPolicies()
+	if _, err := s.enforcer.AddPolicies(policies); err != nil {
+		return fmt.Errorf("failed to add account policies: %w", err)
 	}
-
-	if err := s.updateInstitutionTeamPolicies(); err != nil {
-		return err
-	}
-
+	log.Printf("   ✅ Seeded %d account policies", len(policies))
 	return nil
 }
 
-func (s *permissionSeeder) updatePersonalTeamPolicies() error {
-	// Personal teams live in the `teams` table with type = 'personal'
-	var teamIDs []string
-	if err := s.db.Table("teams").
-		Where("type = ? AND deleted_at IS NULL", "personal").
-		Pluck("id", &teamIDs).Error; err != nil {
-		return fmt.Errorf("failed to get personal team IDs: %w", err)
+func (s *permissionSeeder) seedAccountRoleHierarchy() error {
+	hierarchy := authorization.GetAccountRoleHierarchy()
+	if _, err := s.enforcer.AddGroupingPolicies(hierarchy); err != nil {
+		return fmt.Errorf("failed to add account role hierarchy: %w", err)
 	}
-
-	if len(teamIDs) == 0 {
-		log.Println("   No personal teams found to update personal team policies")
-		return nil
-	}
-
-	updated := 0
-	for _, teamID := range teamIDs {
-		domain := authdomain.PersonalTeamDomain(teamID)
-
-		newPolicies := authorization.GetPersonalTeamPolicies(domain)
-		if _, err := s.enforcer.AddPolicies(newPolicies); err != nil {
-			log.Printf("   ⚠️  Failed to add policies for team %s: %v", teamID, err)
-			continue
-		}
-		updated++
-	}
-
-	log.Printf("   ✅ Updated personal team policies for %d teams", updated)
-	return nil
-}
-
-func (s *permissionSeeder) updateInstitutionTeamPolicies() error {
-	// Institution teams live in the `teams` table with type = 'institution'
-	var teamIDs []string
-	if err := s.db.Table("teams").
-		Where("type = ? AND deleted_at IS NULL", "institution").
-		Pluck("id", &teamIDs).Error; err != nil {
-		return fmt.Errorf("failed to get institution team IDs: %w", err)
-	}
-
-	if len(teamIDs) == 0 {
-		log.Println("   No institution teams found to update institution team policies")
-		return nil
-	}
-
-	updated := 0
-	for _, teamID := range teamIDs {
-		domain := authdomain.InstitutionTeamDomain(teamID)
-
-		newPolicies := authorization.GetInstitutionTeamPolicies(domain)
-		if _, err := s.enforcer.AddPolicies(newPolicies); err != nil {
-			log.Printf("   ⚠️  Failed to add policies for team %s: %v", teamID, err)
-			continue
-		}
-		updated++
-	}
-
-	log.Printf("   ✅ Updated institution team policies for %d teams", updated)
-	return nil
-}
-
-// ============================================================
-// ACCOUNT POLICY UPDATE METHODS (NEW)
-// ============================================================
-
-func (s *permissionSeeder) updateAccountPolicies() error {
-	log.Println("📝 Updating account policies for existing accounts...")
-
-	var accountIDs []string
-	if err := s.db.Table("accounts").Pluck("id", &accountIDs).Error; err != nil {
-		log.Printf("   ℹ️  No accounts found to update account policies (table may not exist yet)")
-		return nil
-	}
-
-	if len(accountIDs) == 0 {
-		log.Println("   No accounts found to update account policies")
-		return nil
-	}
-
-	accountUpdated := 0
-	for _, accountID := range accountIDs {
-		domain := authdomain.AccountDomain(accountID)
-
-		newPolicies := authorization.GetAccountPolicies(domain)
-		if _, err := s.enforcer.AddPolicies(newPolicies); err != nil {
-			log.Printf("   ⚠️  Failed to add policies for account %s: %v", accountID, err)
-			continue
-		}
-		accountUpdated++
-	}
-
-	log.Printf("   ✅ Updated account policies for %d accounts", accountUpdated)
+	log.Printf("   ✅ Seeded %d account role hierarchy entries", len(hierarchy))
 	return nil
 }
 
@@ -434,204 +352,10 @@ func GetCurrentVersion(db *gorm.DB) (string, error) {
 }
 
 // ============================================================
-// TEAM POLICY SEEDING (for individual teams)
+// ACCOUNT ROLE ASSIGNMENT HELPERS
 // ============================================================
 
-func SeedPersonalTeamPolicies(db *gorm.DB, userID string) error {
-	log.Printf("📦 Adding personal team policies for user: %s", userID)
-
-	cfg := config.Load()
-
-	enforcer, err := authorization.NewEnforcer(db, cfg)
-	if err != nil {
-		return fmt.Errorf("failed to init enforcer: %w", err)
-	}
-	defer enforcer.Close()
-
-	ctx := context.Background()
-	policyManager := authorization.NewPolicyManager(enforcer)
-	roleManager := authorization.NewRoleManager(enforcer)
-
-	domain := authdomain.PersonalTeamDomain(userID)
-
-	if err := policyManager.AddTeamPolicies(ctx, domain); err != nil {
-		return fmt.Errorf("failed to add personal team policies: %w", err)
-	}
-
-	if err := roleManager.AssignRole(ctx, domain, userID, authdomain.RoleAccountAdmin.String()); err != nil {
-		return fmt.Errorf("failed to assign account admin role: %w", err)
-	}
-
-	log.Printf("✅ Personal team policies seeded for user: %s", userID)
-	return nil
-}
-
-func SeedInstitutionTeamPolicies(db *gorm.DB, institutionID string) error {
-	log.Printf("📦 Adding institution team policies for institution: %s", institutionID)
-
-	cfg := config.Load()
-
-	enforcer, err := authorization.NewEnforcer(db, cfg)
-	if err != nil {
-		return fmt.Errorf("failed to init enforcer: %w", err)
-	}
-	defer enforcer.Close()
-
-	ctx := context.Background()
-	policyManager := authorization.NewPolicyManager(enforcer)
-
-	domain := authdomain.InstitutionTeamDomain(institutionID)
-
-	if err := policyManager.AddTeamPolicies(ctx, domain); err != nil {
-		return fmt.Errorf("failed to add institution team policies: %w", err)
-	}
-
-	log.Printf("✅ Institution team policies seeded for institution: %s", institutionID)
-	return nil
-}
-
-// ============================================================
-// ACCOUNT POLICY SEEDING (NEW)
-// ============================================================
-
-func SeedAccountPolicies(db *gorm.DB, accountID string) error {
-	log.Printf("📦 Adding account policies for account: %s", accountID)
-
-	cfg := config.Load()
-
-	enforcer, err := authorization.NewEnforcer(db, cfg)
-	if err != nil {
-		return fmt.Errorf("failed to init enforcer: %w", err)
-	}
-	defer enforcer.Close()
-
-	ctx := context.Background()
-	policyManager := authorization.NewPolicyManager(enforcer)
-
-	domain := authdomain.AccountDomain(accountID)
-
-	if err := policyManager.AddAccountPolicies(ctx, domain); err != nil {
-		return fmt.Errorf("failed to add account policies: %w", err)
-	}
-
-	log.Printf("✅ Account policies seeded for account: %s", accountID)
-	return nil
-}
-
-// ============================================================
-// BULK SEEDING FUNCTIONS
-// ============================================================
-
-func SeedPersonalTeamPoliciesForAllUsers(db *gorm.DB) error {
-	log.Println("📦 Adding personal team policies for all users...")
-
-	cfg := config.Load()
-
-	enforcer, err := authorization.NewEnforcer(db, cfg)
-	if err != nil {
-		return fmt.Errorf("failed to init enforcer: %w", err)
-	}
-	defer enforcer.Close()
-
-	ctx := context.Background()
-	policyManager := authorization.NewPolicyManager(enforcer)
-	roleManager := authorization.NewRoleManager(enforcer)
-
-	var userIDs []string
-	if err := db.Table("users").Pluck("id", &userIDs).Error; err != nil {
-		return fmt.Errorf("failed to get user IDs: %w", err)
-	}
-
-	if len(userIDs) == 0 {
-		log.Println("No users found to seed personal team policies for")
-		return nil
-	}
-
-	successCount := 0
-	for _, userID := range userIDs {
-		domain := authdomain.PersonalTeamDomain(userID)
-
-		roles, err := roleManager.GetUserRoles(ctx, userID, domain)
-		if err != nil {
-			log.Printf("⚠️  Failed to get roles for user %s: %v", userID, err)
-			continue
-		}
-
-		if len(roles) > 0 {
-			continue
-		}
-
-		if err := policyManager.AddTeamPolicies(ctx, domain); err != nil {
-			log.Printf("⚠️  Failed to seed personal team policies for user %s: %v", userID, err)
-			continue
-		}
-
-		if err := roleManager.AssignRole(ctx, domain, userID, authdomain.RoleAccountAdmin.String()); err != nil {
-			log.Printf("⚠️  Failed to assign account admin role for user %s: %v", userID, err)
-			continue
-		}
-
-		successCount++
-	}
-
-	log.Printf("✅ Seeded personal team policies for %d out of %d users", successCount, len(userIDs))
-	return nil
-}
-
-func SeedInstitutionTeamPoliciesForAllInstitutions(db *gorm.DB) error {
-	log.Println("📦 Adding institution team policies for all institutions...")
-
-	cfg := config.Load()
-
-	enforcer, err := authorization.NewEnforcer(db, cfg)
-	if err != nil {
-		return fmt.Errorf("failed to init enforcer: %w", err)
-	}
-	defer enforcer.Close()
-
-	ctx := context.Background()
-	policyManager := authorization.NewPolicyManager(enforcer)
-
-	var institutionIDs []string
-	if err := db.Table("institutions").Pluck("id", &institutionIDs).Error; err != nil {
-		return fmt.Errorf("failed to get institution IDs: %w", err)
-	}
-
-	if len(institutionIDs) == 0 {
-		log.Println("No institutions found to seed institution team policies for")
-		return nil
-	}
-
-	successCount := 0
-	for _, institutionID := range institutionIDs {
-		domain := authdomain.InstitutionTeamDomain(institutionID)
-
-		policies, err := enforcer.GetFilteredPolicy(1, domain)
-		if err != nil {
-			log.Printf("⚠️  Failed to check policies for institution %s: %v", institutionID, err)
-			continue
-		}
-
-		if len(policies) > 0 {
-			continue
-		}
-
-		if err := policyManager.AddTeamPolicies(ctx, domain); err != nil {
-			log.Printf("⚠️  Failed to seed institution team policies for institution %s: %v", institutionID, err)
-			continue
-		}
-
-		successCount++
-	}
-
-	log.Printf("✅ Seeded institution team policies for %d out of %d institutions", successCount, len(institutionIDs))
-	return nil
-}
-
-// ============================================================
-// ASSIGN ROLE FUNCTIONS
-// ============================================================
-
+// AssignAccountAdmin assigns the account_admin role to a user in an account.
 func AssignAccountAdmin(db *gorm.DB, accountID, userID string) error {
 	cfg := config.Load()
 
@@ -654,6 +378,7 @@ func AssignAccountAdmin(db *gorm.DB, accountID, userID string) error {
 	return nil
 }
 
+// AssignTrainer assigns the trainer role to a user in an account.
 func AssignTrainer(db *gorm.DB, accountID, userID string) error {
 	cfg := config.Load()
 
@@ -674,9 +399,4 @@ func AssignTrainer(db *gorm.DB, accountID, userID string) error {
 
 	log.Printf("✅ Assigned trainer role for account %s to user %s", accountID, userID)
 	return nil
-}
-
-// Deprecated: Use AssignAccountAdmin instead
-func AssignInstitutionAdmin(db *gorm.DB, institutionID, userID string) error {
-	return AssignAccountAdmin(db, institutionID, userID)
 }

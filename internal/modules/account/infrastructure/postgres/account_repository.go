@@ -257,22 +257,36 @@ func (r *AccountRepository) UpdateAccount(ctx context.Context, account *accountd
 	return nil
 }
 
+// DeleteAccount permanently deletes the account row.
+//
+// DB-level cascade:
+//   - account_members  (ON DELETE CASCADE)
+//   - teams            (ON DELETE CASCADE)
+//     - team_members    (ON DELETE CASCADE)
+//     - team_invitations (ON DELETE CASCADE)
+//     - events.team_id  (ON DELETE SET NULL — events survive as orphans)
+//
+// Users are NOT touched (no FK from users → accounts).
+// Casbin rules are NOT touched (casbin_rule has no FK to accounts).
+//
+// Both of those are the service layer's responsibility.
 func (r *AccountRepository) DeleteAccount(ctx context.Context, id string) error {
-    if id == "" {
-        return accountdomain.ErrAccountNotFound
-    }
+	if id == "" {
+		return accountdomain.ErrAccountNotFound
+	}
 
-    // Soft delete
-    result := r.db.WithContext(ctx).Model(&AccountModel{}).Where("id = ?", id).Update("deleted_at", time.Now())
-    if result.Error != nil {
-        return fmt.Errorf("failed to delete account: %w", result.Error)
-    }
+	result := r.db.WithContext(ctx).
+		Where("id = ?", id).
+		Delete(&AccountModel{})
 
-    if result.RowsAffected == 0 {
-        return accountdomain.ErrAccountNotFound
-    }
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete account: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return accountdomain.ErrAccountNotFound
+	}
 
-    return nil
+	return nil
 }
 
 // ============================================================

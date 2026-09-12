@@ -1,3 +1,5 @@
+// internal/modules/events/service/helpers.go
+
 package service
 
 import (
@@ -14,7 +16,7 @@ import (
 // CONVERTER HELPERS
 // ============================================================
 
-// convertSchedules converts schedule inputs to domain schedules
+// convertSchedules converts schedule inputs to domain schedules.
 func (s *eventService) convertSchedules(inputs []ScheduleInput) ([]domain.EventSchedule, error) {
 	if len(inputs) == 0 {
 		return nil, nil
@@ -54,7 +56,7 @@ func (s *eventService) convertSchedules(inputs []ScheduleInput) ([]domain.EventS
 	return schedules, nil
 }
 
-// convertTickets converts ticket inputs to domain tickets
+// convertTickets converts ticket inputs to domain tickets.
 func (s *eventService) convertTickets(inputs []TicketInput) ([]domain.EventTicket, error) {
 	if len(inputs) == 0 {
 		return nil, nil
@@ -87,7 +89,7 @@ func (s *eventService) convertTickets(inputs []TicketInput) ([]domain.EventTicke
 	return tickets, nil
 }
 
-// convertSpeakers converts speaker inputs to domain speakers
+// convertSpeakers converts speaker inputs to domain speakers.
 func (s *eventService) convertSpeakers(inputs []SpeakerInput) ([]domain.EventSpeaker, error) {
 	if len(inputs) == 0 {
 		return nil, nil
@@ -108,7 +110,7 @@ func (s *eventService) convertSpeakers(inputs []SpeakerInput) ([]domain.EventSpe
 	return speakers, nil
 }
 
-// convertMaterials converts material inputs to domain materials
+// convertMaterials converts material inputs to domain materials.
 func (s *eventService) convertMaterials(inputs []MaterialInput) ([]domain.EventMaterial, error) {
 	if len(inputs) == 0 {
 		return nil, nil
@@ -128,7 +130,7 @@ func (s *eventService) convertMaterials(inputs []MaterialInput) ([]domain.EventM
 	return materials, nil
 }
 
-// applyRecurrence applies recurrence to an event
+// applyRecurrence applies recurrence to an event.
 func (s *eventService) applyRecurrence(ctx context.Context, event *domain.Event, input *RecurrenceInput) error {
 	if input == nil {
 		return nil
@@ -137,7 +139,6 @@ func (s *eventService) applyRecurrence(ctx context.Context, event *domain.Event,
 		return errors.New("recurrence pattern is required")
 	}
 
-	// Resolve slug → UUID via lookup table
 	pattern, err := s.repo.GetRecurrencePatternBySlug(ctx, input.Pattern)
 	if err != nil {
 		return fmt.Errorf("failed to resolve recurrence pattern %q: %w", input.Pattern, err)
@@ -150,8 +151,8 @@ func (s *eventService) applyRecurrence(ctx context.Context, event *domain.Event,
 	}
 
 	event.IsRecurring = true
-	event.RecurrencePatternID = &pattern.ID      // ✅ UUID → persisted
-	event.RecurrencePatternSlug = pattern.Slug   // ✅ slug → runtime
+	event.RecurrencePatternID = &pattern.ID
+	event.RecurrencePatternSlug = pattern.Slug
 	event.RecurrenceInterval = input.Interval
 	event.RecurrenceDaysOfWeek = input.DaysOfWeek
 	event.RecurrenceDayOfMonth = input.DayOfMonth
@@ -169,7 +170,7 @@ func (s *eventService) applyRecurrence(ctx context.Context, event *domain.Event,
 	return nil
 }
 
-// applySEO applies SEO to an event
+// applySEO applies SEO to an event.
 func (s *eventService) applySEO(event *domain.Event, input *SEOInput) {
 	if input == nil {
 		return
@@ -194,42 +195,36 @@ func (s *eventService) applySEO(event *domain.Event, input *SEOInput) {
 }
 
 // ============================================================
-// PERMISSION HELPERS (Shared across services)
+// PERMISSION HELPERS (shared across services)
 // ============================================================
+//
+// POST-REVAMP: every permission check runs against the event's parent
+// ACCOUNT domain. Teams are not authorization domains. Team membership
+// is enforced by the service as data (team_members) when it matters.
+//
+// Every event must have an AccountID. If it's missing on a loaded event,
+// the caller is responsible for backfilling it (usually by resolving
+// through the team).
 
-// resolveEventTeamDomain computes personal vs institution team domain string
-func (s *eventService) resolveEventTeamDomain(event *domain.Event) string {
-	if event == nil || event.TeamID == "" {
-		return ""
-	}
-
-	// Dynamic evaluation check
-	if event.CreatedBy != "" && event.CreatedBy == event.TeamID {
-		return domain.PersonalTeamDomain(event.CreatedBy)
-	}
-
-	return domain.InstitutionTeamDomain(event.TeamID)
-}
-
-// validateUpdatePermission checks update permissions using 2-tier domain resolution
+// validateUpdatePermission checks whether the user may update this event.
 func (s *eventService) validateUpdatePermission(ctx context.Context, event *domain.Event, userID string) error {
-	teamDomain := s.resolveEventTeamDomain(event)
+	if event == nil {
+		return errors.New("event is nil")
+	}
 
-	// Tier 1: Check Team Domain
-	allowed, err := s.permChecker.CanUpdateEvent(ctx, userID, teamDomain)
+	accountID := event.AccountID
+	if accountID == "" {
+		return errors.New("event has no account ID; cannot authorize update")
+	}
+
+	accountDomain := domain.AccountDomain(accountID)
+	log.Printf("🔍 AUTHZ: event:update check user=%s domain=%s event=%s",
+		userID, accountDomain, event.ID)
+
+	allowed, err := s.permChecker.CanUpdateEvent(ctx, userID, accountDomain)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
 	}
-
-	// Tier 2: Check Account Domain fallback (if present)
-	if !allowed && event.AccountID != "" {
-		accountDomain := domain.AccountDomain(event.AccountID)
-		allowed, err = s.permChecker.CanUpdateEvent(ctx, userID, accountDomain)
-		if err != nil {
-			return fmt.Errorf("account permission check failed: %w", err)
-		}
-	}
-
 	if !allowed {
 		log.Printf("❌ Permission denied: user %s cannot update event %s", userID, event.ID)
 		return domain.ErrForbidden
@@ -238,32 +233,33 @@ func (s *eventService) validateUpdatePermission(ctx context.Context, event *doma
 	return nil
 }
 
-// validateViewCreatorPermission checks view creator permissions using 2-tier domain resolution
+// validateViewCreatorPermission checks whether the user may see the
+// event's creator details.
+//
+// Returns false on denial. Permission-check errors are logged and treated
+// as denial (fail closed).
 func (s *eventService) validateViewCreatorPermission(ctx context.Context, event *domain.Event, userID string) bool {
-	teamDomain := s.resolveEventTeamDomain(event)
+	if event == nil {
+		return false
+	}
 
-	// Tier 1: Check Team Domain
-	allowed, err := s.permChecker.CanViewCreator(ctx, userID, teamDomain)
+	accountID := event.AccountID
+	if accountID == "" {
+		log.Printf("⚠️ event %s has no AccountID; denying view_creator", event.ID)
+		return false
+	}
+
+	accountDomain := domain.AccountDomain(accountID)
+	allowed, err := s.permChecker.CanViewCreator(ctx, userID, accountDomain)
 	if err != nil {
 		log.Printf("⚠️ Failed to check view_creator permission: %v", err)
-		allowed = false
+		return false
 	}
-
-	// Tier 2: Check Account Domain fallback (if present)
-	if !allowed && event.AccountID != "" {
-		accountDomain := domain.AccountDomain(event.AccountID)
-		allowedAccount, err := s.permChecker.CanViewCreator(ctx, userID, accountDomain)
-		if err != nil {
-			log.Printf("⚠️ Failed to check account view_creator permission: %v", err)
-		} else {
-			allowed = allowedAccount
-		}
-	}
-
 	return allowed
 }
 
-// getEventAndCheckUpdatePermission gets event and checks update permission using 2-tier domain fallback
+// getEventAndCheckUpdatePermission loads the event and verifies the user
+// may update it.
 func (s *eventService) getEventAndCheckUpdatePermission(ctx context.Context, eventID, userID string) (*domain.Event, error) {
 	if userID == "" {
 		return nil, errors.New("user ID is required")
@@ -284,28 +280,23 @@ func (s *eventService) getEventAndCheckUpdatePermission(ctx context.Context, eve
 	return event, nil
 }
 
-// canViewCreatorInfo checks if a user can view creator info for an event
+// canViewCreatorInfo checks whether a user may see creator info for an event.
 func (s *eventService) canViewCreatorInfo(ctx context.Context, userID string, event *domain.Event) bool {
-	// If no user, cannot view creator info
 	if userID == "" {
 		return false
 	}
-
-	// Event creator can always see their own info
 	if event.CreatedBy == userID {
 		return true
 	}
-
 	return s.validateViewCreatorPermission(ctx, event, userID)
 }
 
-// getCreatorInfo fetches creator information using UserInfoProvider
+// getCreatorInfo fetches creator information using the UserInfoProvider.
 func (s *eventService) getCreatorInfo(ctx context.Context, userID string) *domain.UserInfo {
 	if userID == "" {
 		return nil
 	}
 
-	// Get full user details with email, phone, etc.
 	user, err := s.userInfo.GetUserByIDWithDetails(ctx, userID)
 	if err != nil {
 		log.Printf("⚠️ Failed to get user info for %s: %v", userID, err)
@@ -314,47 +305,58 @@ func (s *eventService) getCreatorInfo(ctx context.Context, userID string) *domai
 	return user
 }
 
+// getOrganizerInfo returns organizer information for an event.
 func (s *eventService) getOrganizerInfo(ctx context.Context, event *domain.Event) (*domain.OrganizerInfo, error) {
-    if event == nil {
-        return nil, errors.New("event is nil")
-    }
-    if event.Organizer != nil {
-        return event.Organizer, nil
-    }
-    if event.TeamID == "" {
-        return nil, errors.New("event has no team ID")
-    }
-    if s.organizer == nil {
-        return nil, errors.New("organizer provider is not configured")
-    }
-    return s.organizer.GetOrganizer(ctx, event.TeamID)
+	if event == nil {
+		return nil, errors.New("event is nil")
+	}
+	if event.Organizer != nil {
+		return event.Organizer, nil
+	}
+	if event.TeamID == "" {
+		return nil, errors.New("event has no team ID")
+	}
+	if s.organizer == nil {
+		return nil, errors.New("organizer provider is not configured")
+	}
+	return s.organizer.GetOrganizer(ctx, event.TeamID)
 }
 
-// getTeamByID retrieves a team by ID using the repository
-func (s *eventService) getTeamByID(ctx context.Context, teamID string) (*TeamInfo, error) {
-	if teamID == "" {
-		return nil, errors.New("team ID is required")
+// checkEventCreatePermission is the shared authorization check used by
+// CreateDraft, CreateEvent, and any other event-creation path.
+//
+// POST-REVAMP: single check against the account domain. The teamID and
+// teamType arguments are accepted for signature compatibility but are no
+// longer used for authorization.
+func (s *eventService) checkEventCreatePermission(
+	ctx context.Context,
+	userID, teamID, teamType, accountID string,
+) error {
+	if userID == "" {
+		return errors.New("user ID is required")
+	}
+	if accountID == "" {
+		return errors.New("account ID is required for permission check")
 	}
 
-	return &TeamInfo{
-		ID:        teamID,
-		Type:      "institution",
-		AccountID: "",
-	}, nil
-}
+	accountDomain := domain.AccountDomain(accountID)
+	log.Printf("🔍 AUTHZ: event:create check user=%s domain=%s", userID, accountDomain)
 
-// TeamInfo represents basic team information
-type TeamInfo struct {
-	ID        string
-	Type      string // "personal" or "institution"
-	AccountID string
+	allowed, err := s.permChecker.CanCreateEvent(ctx, userID, accountDomain)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
+		return domain.ErrForbidden
+	}
+	return nil
 }
 
 // ============================================================
 // LOGGING HELPERS
 // ============================================================
 
-// logBulkStatusResult logs the result of a bulk status operation
+// logBulkStatusResult logs the result of a bulk status operation.
 func (s *eventService) logBulkStatusResult(operation string, result *BulkStatusResult, total int) {
 	if result.ProcessedCount == total {
 		log.Printf("✅ Bulk %s complete: %d events processed", operation, result.ProcessedCount)
@@ -366,65 +368,22 @@ func (s *eventService) logBulkStatusResult(operation string, result *BulkStatusR
 	}
 }
 
-// isEmptyTeam checks if a TeamFilter is empty
+// isEmptyTeam checks if a TeamFilter is empty.
 func (s *eventService) isEmptyTeam(team domain.TeamFilter) bool {
 	return team.ID == "" || team.Type == ""
 }
 
+// ============================================================
+// TEAM INFO (kept for handlers that still need it)
+// ============================================================
 
-
-// checkEventCreatePermission is the shared authorization check used by
-// CreateDraft, CreateEvent, and GenerateEventDraft.
+// TeamInfo represents basic team information for handlers.
 //
-// It runs a two-tier Casbin check:
-//   Tier 1: event:create against the resolved team domain
-//   Tier 2: event:create against the account domain (fallback)
-func (s *eventService) checkEventCreatePermission(
-	ctx context.Context,
-	userID, teamID, teamType, accountID string,
-) error {
-	if userID == "" {
-		return fmt.Errorf("user ID is required")
-	}
-	if teamID == "" {
-		return fmt.Errorf("team ID is required")
-	}
-
-	teamDomain := s.resolveTeamDomainFromParts(teamID, teamType, userID)
-	log.Printf("🔍 Tier 1: event:create check user=%s domain=%s", userID, teamDomain)
-
-	allowed, err := s.permChecker.CanCreateEvent(ctx, userID, teamDomain)
-	if err != nil {
-		return fmt.Errorf("permission check failed: %w", err)
-	}
-
-	if !allowed && accountID != "" {
-		accountDomain := domain.AccountDomain(accountID)
-		log.Printf("🔍 Tier 2: event:create check user=%s domain=%s", userID, accountDomain)
-
-		allowed, err = s.permChecker.CanCreateEvent(ctx, userID, accountDomain)
-		if err != nil {
-			return fmt.Errorf("account permission check failed: %w", err)
-		}
-	}
-
-	if !allowed {
-		return domain.ErrForbidden
-	}
-	return nil
-}
-
-// resolveTeamDomainFromParts is the primitive form of resolveTeamDomain.
-// Handy when callers don't have a CreateDraftCommand.
-func (s *eventService) resolveTeamDomainFromParts(teamID, teamType, userID string) string {
-	if teamType == "personal" {
-		return domain.PersonalTeamDomain(teamID)
-	}
-	if teamType == "institution" {
-		return domain.InstitutionTeamDomain(teamID)
-	}
-	if userID != "" && userID == teamID {
-		return domain.PersonalTeamDomain(userID)
-	}
-	return domain.InstitutionTeamDomain(teamID)
+// Note: this is a read-only DTO for display and query purposes. It is not
+// used for authorization. If you need the team's parent account ID, call
+// the repository's AccountIDForTeam method directly.
+type TeamInfo struct {
+	ID        string
+	Type      string // "personal" or "institution"
+	AccountID string
 }

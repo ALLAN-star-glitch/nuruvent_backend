@@ -153,9 +153,6 @@ func (a *PermissionAdapter) CanViewCreator(ctx context.Context, userID string, d
 // USER INFORMATION METHODS
 // ============================================================
 
-func (a *PermissionAdapter) GetUserTeamDomains(ctx context.Context, userID string) ([]string, error) {
-	return a.authPermChecker.GetUserTeamDomains(ctx, userID)
-}
 
 func (a *PermissionAdapter) GetUserAccountIDs(ctx context.Context, userID string) ([]string, error) {
 	return a.authPermChecker.GetUserAccountIDs(ctx, userID)

@@ -16,7 +16,7 @@ import (
 // PUBLIC METHOD - Entry Point
 // ============================================================
 
-// CreateEvent creates a published event
+// CreateEvent creates a published event.
 func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) (*domain.Event, error) {
 	// 1. Validate required fields
 	if cmd.TeamID == "" {
@@ -28,32 +28,39 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 
 	s.logCreateEvent(cmd)
 
-	// 2. Check permissions using domain string
+	// 2. Resolve the parent account (required for authz and event ownership)
+	accountID, err := s.resolveAccountForTeam(ctx, cmd.TeamID, cmd.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	cmd.AccountID = accountID
+
+	// 3. Check permissions using the account domain
 	if err := s.validatePublishedEventPermissions(ctx, cmd); err != nil {
 		return nil, err
 	}
 
-	// 3. Validate required fields for published events
+	// 4. Validate required fields for published events
 	if err := s.validatePublishedEventFields(cmd); err != nil {
 		return nil, err
 	}
 
-	// 4. Generate identifiers
+	// 5. Generate identifiers
 	displayName, name, slug := s.generateEventIdentifiersForPublished(ctx, cmd.Name)
 
-	// 5. Validate event type
+	// 6. Validate event type
 	eventTypeID, err := s.validateEventTypeForPublished(ctx, cmd.EventTypeID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 6. Create and populate domain entity
+	// 7. Create and populate domain entity
 	event, err := s.buildPublishedEvent(ctx, cmd, name, displayName, slug, eventTypeID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 7. Set status to PUBLISHED, validate, and save
+	// 8. Set status to PUBLISHED, validate, and save
 	if err := s.setPublishedStatusAndSave(ctx, event); err != nil {
 		return nil, err
 	}
@@ -66,64 +73,39 @@ func (s *eventService) CreateEvent(ctx context.Context, cmd CreateEventCommand) 
 // HELPER FUNCTIONS
 // ============================================================
 
-// logCreateEvent logs the event creation request
 func (s *eventService) logCreateEvent(cmd CreateEventCommand) {
 	log.Printf("🔄 CreateEvent called: Name='%s', TypeID='%s', TeamID='%s', CreatedBy='%s'",
 		cmd.Name, cmd.EventTypeID, cmd.TeamID, cmd.CreatedBy)
 }
 
-// validatePublishedEventPermissions checks if user has permission to create published event
+// validatePublishedEventPermissions checks whether the caller may create
+// published events in this account.
+//
+// POST-REVAMP: a single Casbin check against the account domain. Teams are
+// not authorization domains.
 func (s *eventService) validatePublishedEventPermissions(ctx context.Context, cmd CreateEventCommand) error {
-    // 1. Resolve exact Team Domain (institution:team:<id> or personal:team:<id>)
-    teamDomain := s.resolvePublishedTeamDomain(cmd)
+	accountDomain := domain.AccountDomain(cmd.AccountID)
+	if accountDomain == "" {
+		return errors.New("cannot resolve account domain: AccountID is empty")
+	}
 
-    log.Printf("🔍 Tier 1: Checking team permission for user=%s on domain=%s", cmd.CreatedBy, teamDomain)
+	log.Printf("🔍 AUTHZ: checking event:create for user=%s on domain=%s",
+		cmd.CreatedBy, accountDomain)
 
-    // Check Team-level permission
-    allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, teamDomain)
-    if err != nil {
-        return fmt.Errorf("permission check failed: %w", err)
-    }
+	allowed, err := s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, accountDomain)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
+		log.Printf("❌ Permission denied: user %s cannot create events in account %s",
+			cmd.CreatedBy, cmd.AccountID)
+		return domain.ErrForbidden
+	}
 
-    // 2. Fallback check: If Team check fails and AccountID is present, check Account Domain
-    if !allowed && cmd.AccountID != "" {
-        accountDomain := domain.AccountDomain(cmd.AccountID)
-        log.Printf("🔍 Tier 2: Team permission failed. Falling back to Account permission on domain=%s", accountDomain)
-        
-        allowed, err = s.permChecker.CanCreateEvent(ctx, cmd.CreatedBy, accountDomain)
-        if err != nil {
-            return fmt.Errorf("account permission check failed: %w", err)
-        }
-    }
-
-    if !allowed {
-        log.Printf("❌ Permission denied: user %s cannot create events for team %s", cmd.CreatedBy, cmd.TeamID)
-        return domain.ErrForbidden
-    }
-
-    return nil
+	return nil
 }
 
-// resolvePublishedTeamDomain dynamically determines if the domain is institution or personal
-func (s *eventService) resolvePublishedTeamDomain(cmd CreateEventCommand) string {
-    if cmd.TeamType == "personal" {
-        return domain.PersonalTeamDomain(cmd.TeamID)
-    }
-    
-    if cmd.TeamType == "institution" {
-        return domain.InstitutionTeamDomain(cmd.TeamID)
-    }
-
-    // Heuristic fallback: If creator ID matches the team ID, it is a personal team
-    if cmd.CreatedBy != "" && cmd.CreatedBy == cmd.TeamID {
-        return domain.PersonalTeamDomain(cmd.CreatedBy)
-    }
-
-    // Default fallback
-    return domain.InstitutionTeamDomain(cmd.TeamID)
-}
-
-// validatePublishedEventFields validates required fields for published events
+// validatePublishedEventFields validates required fields for published events.
 func (s *eventService) validatePublishedEventFields(cmd CreateEventCommand) error {
 	if cmd.Name == "" {
 		return domain.ErrInvalidEventName
@@ -146,7 +128,7 @@ func (s *eventService) validatePublishedEventFields(cmd CreateEventCommand) erro
 	return nil
 }
 
-// generateEventIdentifiersForPublished creates name, display name, and slug from user input
+// generateEventIdentifiersForPublished creates name, display name, and slug from user input.
 func (s *eventService) generateEventIdentifiersForPublished(ctx context.Context, rawInput string) (string, string, string) {
 	if rawInput == "" {
 		rawInput = "Untitled Event"
@@ -188,7 +170,7 @@ func (s *eventService) generateEventIdentifiersForPublished(ctx context.Context,
 	return displayName, name, uniqueSlug
 }
 
-// validateEventTypeForPublished validates that the event type exists
+// validateEventTypeForPublished validates that the event type exists.
 func (s *eventService) validateEventTypeForPublished(ctx context.Context, eventTypeID string) (string, error) {
 	log.Printf("🔍 Validating event type: %s", eventTypeID)
 	eventType, err := s.repo.GetEventTypeByID(ctx, eventTypeID)
@@ -204,7 +186,7 @@ func (s *eventService) validateEventTypeForPublished(ctx context.Context, eventT
 	return eventType.ID, nil
 }
 
-// buildPublishedEvent creates and populates the domain entity
+// buildPublishedEvent creates and populates the domain entity.
 func (s *eventService) buildPublishedEvent(
 	ctx context.Context,
 	cmd CreateEventCommand,
@@ -231,14 +213,13 @@ func (s *eventService) buildPublishedEvent(
 	}
 
 	event.Slug = slug
+	event.AccountID = cmd.AccountID // set explicitly so ResolveAccountDomain works downstream
 
-	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s, TeamID=%s",
-		event.ID, event.Name, event.Slug, event.DisplayName, event.TeamID)
+	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s, TeamID=%s, AccountID=%s",
+		event.ID, event.Name, event.Slug, event.DisplayName, event.TeamID, event.AccountID)
 
-	// Populate all fields
 	s.populatePublishedEventFields(ctx, event, cmd)
 
-	// Handle schedules separately (needs parsing)
 	if err := s.populateEventSchedules(ctx, event, cmd.Schedules); err != nil {
 		return nil, err
 	}
@@ -246,7 +227,7 @@ func (s *eventService) buildPublishedEvent(
 	return event, nil
 }
 
-// populatePublishedEventFields fills all non-schedule fields for published events
+// populatePublishedEventFields fills all non-schedule fields for published events.
 func (s *eventService) populatePublishedEventFields(ctx context.Context, event *domain.Event, cmd CreateEventCommand) {
 	event.ShortDescription = cmd.ShortDescription
 	event.Tags = cmd.Tags
@@ -308,7 +289,7 @@ func (s *eventService) populatePublishedEventFields(ctx context.Context, event *
 	}
 }
 
-// populateEventSchedules converts and sets schedules
+// populateEventSchedules converts and sets schedules.
 func (s *eventService) populateEventSchedules(ctx context.Context, event *domain.Event, schedules []ScheduleInput) error {
 	if len(schedules) == 0 {
 		return nil
@@ -327,7 +308,7 @@ func (s *eventService) populateEventSchedules(ctx context.Context, event *domain
 	return nil
 }
 
-// setPublishedStatusAndSave sets status to PUBLISHED, validates, and saves
+// setPublishedStatusAndSave sets status to PUBLISHED, validates, and saves.
 func (s *eventService) setPublishedStatusAndSave(ctx context.Context, event *domain.Event) error {
 	log.Printf("🔍 Getting status by slug: %s", domain.EventStatusPublished.GetSlug())
 	status, err := s.repo.GetEventStatusBySlug(ctx, domain.EventStatusPublished.GetSlug())

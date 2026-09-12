@@ -8,19 +8,20 @@ import (
 	"log"
 	"time"
 
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/teamdomain"
 )
 
-// TeamService implements the Service interface
+// TeamService implements the Service interface.
 type teamService struct {
-	repo        teamdomain.Repository
-	authSvc     AuthService
-	casbinSvc   CasbinService
-	notifSvc    NotificationService
-	aiSvc       AIService
+	repo      teamdomain.Repository
+	authSvc   AuthService
+	casbinSvc CasbinService
+	notifSvc  NotificationService
+	aiSvc     AIService
 }
 
-// NewTeamService creates a new team service
+// NewTeamService creates a new team service.
 func NewTeamService(
 	repo teamdomain.Repository,
 	authSvc AuthService,
@@ -33,17 +34,35 @@ func NewTeamService(
 		authSvc:   authSvc,
 		casbinSvc: casbinSvc,
 		notifSvc:  notifSvc,
-		aiSvc: aiSvc,
+		aiSvc:     aiSvc,
 	}
 }
 
 // ============================================================
+// ============================================================
 // TEAM OPERATIONS
 // ============================================================
+//
+// POST-REVAMP: teams are NOT authorization domains. Every team-scoped
+// permission check is performed against the team's parent ACCOUNT domain:
+//
+//     accountdomain.AccountDomain(team.AccountID)
+//
+// Team membership is stored as data (team_members). We do not write to
+// Casbin for team membership changes.
+//
+// Creating a team does not touch Casbin. The creator's account role
+// already covers the new team.
 
-// CreatePersonalTeam creates a personal team for a user
-// ✅ Updated: Accepts role parameter for Casbin assignment
-func (s *teamService) CreatePersonalTeam(ctx context.Context, userID, userName, role string) (*teamdomain.Team, error) {
+// CreatePersonalTeam creates a personal team for a user.
+//
+// No permission check: users implicitly have access to their own personal
+// account and its teams. The caller is the user themselves.
+//
+// Roles are not assigned at team creation. The user's account role
+// (assigned during registration) already covers this team. No Casbin
+// writes happen here.
+func (s *teamService) CreatePersonalTeam(ctx context.Context, userID, userName string) (*teamdomain.Team, error) {
 	if userID == "" {
 		return nil, fmt.Errorf("user ID is required")
 	}
@@ -51,7 +70,7 @@ func (s *teamService) CreatePersonalTeam(ctx context.Context, userID, userName, 
 		return nil, fmt.Errorf("user name is required")
 	}
 
-	log.Printf("[CreatePersonalTeam] Creating personal team for user: %s with role: %s", userID, role)
+	log.Printf("[CreatePersonalTeam] Creating personal team for user: %s", userID)
 
 	// Check if personal team already exists
 	teams, err := s.repo.GetTeamsByUserID(ctx, userID)
@@ -65,7 +84,6 @@ func (s *teamService) CreatePersonalTeam(ctx context.Context, userID, userName, 
 		}
 	}
 
-	// Get user with account ID
 	user, err := s.authSvc.GetUserByIDWithAccount(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user: %w", err)
@@ -73,26 +91,19 @@ func (s *teamService) CreatePersonalTeam(ctx context.Context, userID, userName, 
 	if user == nil {
 		return nil, fmt.Errorf("user not found")
 	}
-
-	log.Printf("[CreatePersonalTeam] User: %s, AccountID: %s", user.ID, user.AccountID)
-
 	if user.AccountID == "" {
 		return nil, fmt.Errorf("user has no account ID")
 	}
 
-	// Create personal team with the user's AccountID
 	team, err := teamdomain.NewPersonalTeamWithAccount(userID, userName, user.AccountID)
 	if err != nil {
 		return nil, err
 	}
 
-	log.Printf("[CreatePersonalTeam] Team created with AccountID: %s, Name: %s", team.AccountID, team.Name)
-
 	if err := s.repo.CreateTeam(ctx, team); err != nil {
 		return nil, fmt.Errorf("failed to create personal team: %w", err)
 	}
 
-	// Add user as member of their personal team
 	member, err := teamdomain.NewMember(team.ID, userID)
 	if err != nil {
 		return nil, err
@@ -101,30 +112,21 @@ func (s *teamService) CreatePersonalTeam(ctx context.Context, userID, userName, 
 		return nil, fmt.Errorf("failed to add user to personal team: %w", err)
 	}
 
-	// Add Casbin policies for personal team using domain
-	domain := NewTeamDomain(team).String()
-	if err := s.casbinSvc.AddTeamPolicies(ctx, domain); err != nil {
-		log.Printf("⚠️ Failed to add personal team policies: %v", err)
-	}
+	// NO Casbin writes. The user's account role already covers this team.
 
-	// ✅ Assign the user to the team domain with their account role
-	if role != "" {
-		if err := s.casbinSvc.AssignRole(ctx, domain, userID, role); err != nil {
-			log.Printf("⚠️ Failed to assign user to team domain: %v", err)
-		} else {
-			log.Printf("✅ User %s assigned role %s in domain %s", userID, role, domain)
-		}
-	} else {
-		log.Printf("⚠️ No role provided for user %s in personal team", userID)
-	}
-
-	log.Printf("✅ Personal team created for user: %s (Team ID: %s, AccountID: %s)", userID, team.ID, team.AccountID)
+	log.Printf("✅ Personal team created for user: %s (Team ID: %s, AccountID: %s)",
+		userID, team.ID, team.AccountID)
 	return team, nil
 }
 
-// CreateInstitutionTeam creates an institution team and adds the creator as member
-// ✅ Updated: Accepts role parameter for Casbin assignment
-func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug, createdBy, role string) (*teamdomain.Team, error) {
+// CreateInstitutionTeam creates an institution team and adds the creator
+// as its first member.
+//
+// Authorization: the creator must hold `team:create` in the account.
+//
+// Roles are not assigned at team creation. The creator's account role
+// already covers this team. No Casbin writes happen here.
+func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name, displayName, slug, createdBy string) (*teamdomain.Team, error) {
 	if accountID == "" {
 		return nil, fmt.Errorf("account ID is required")
 	}
@@ -138,9 +140,23 @@ func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name
 		return nil, fmt.Errorf("created by is required")
 	}
 
-	log.Printf("[CreateInstitutionTeam] Creating institution team for account: %s, created by: %s, role: %s", accountID, createdBy, role)
+	log.Printf("[CreateInstitutionTeam] account=%s createdBy=%s", accountID, createdBy)
 
-	// Check if team with slug already exists
+	// Permission: createdBy must be allowed to create teams in this account.
+	accountDomain := accountdomain.AccountDomain(accountID)
+	if accountDomain == "" {
+		return nil, fmt.Errorf("invalid account ID: %q", accountID)
+	}
+
+	allowed, err := s.casbinSvc.CanCreateTeam(ctx, createdBy, accountDomain)
+	if err != nil {
+		return nil, fmt.Errorf("permission check failed: %w", err)
+	}
+	if !allowed {
+		return nil, teamdomain.ErrPermissionDenied
+	}
+
+	// Check slug uniqueness
 	existing, err := s.repo.GetTeamBySlug(ctx, slug)
 	if err == nil && existing != nil {
 		return nil, teamdomain.ErrTeamAlreadyExists
@@ -155,43 +171,24 @@ func (s *teamService) CreateInstitutionTeam(ctx context.Context, accountID, name
 		return nil, fmt.Errorf("failed to create institution team: %w", err)
 	}
 
-	// Add the creator as member of the institution team
-	log.Printf("[CreateInstitutionTeam] Adding user %s as member to institution team", createdBy)
-
 	member, err := teamdomain.NewMember(team.ID, createdBy)
 	if err != nil {
-		log.Printf("[CreateInstitutionTeam] Failed to create member: %v", err)
 		return nil, fmt.Errorf("failed to create member: %w", err)
 	}
-
 	if err := s.repo.CreateMember(ctx, member); err != nil {
-		log.Printf("[CreateInstitutionTeam] Failed to add user to institution team: %v", err)
 		return nil, fmt.Errorf("failed to add user to institution team: %w", err)
 	}
-	log.Printf("[CreateInstitutionTeam] ✅ User %s added as member to institution team", createdBy)
 
-	// Add Casbin policies for institution team using domain
-	domain := NewTeamDomain(team).String()
-	if err := s.casbinSvc.AddTeamPolicies(ctx, domain); err != nil {
-		log.Printf("⚠️ Failed to add institution team policies: %v", err)
-	}
-
-	// ✅ Assign the user to the team domain with their account role
-	if role != "" {
-		if err := s.casbinSvc.AssignRole(ctx, domain, createdBy, role); err != nil {
-			log.Printf("⚠️ Failed to assign user to team domain: %v", err)
-		} else {
-			log.Printf("✅ User %s assigned role %s in domain %s", createdBy, role, domain)
-		}
-	} else {
-		log.Printf("⚠️ No role provided for user %s in institution team", createdBy)
-	}
+	// NO Casbin writes. The creator's account role already covers this team.
 
 	log.Printf("✅ Institution team created: %s (Team ID: %s)", team.Name, team.ID)
 	return team, nil
 }
 
-// GetTeamByID retrieves a team by ID
+// GetTeamByID retrieves a team by ID.
+//
+// No permission check — callers that need authorization should verify
+// against the returned team's parent account. This is a lookup primitive.
 func (s *teamService) GetTeamByID(ctx context.Context, id string) (*teamdomain.Team, error) {
 	if id == "" {
 		return nil, fmt.Errorf("team ID is required")
@@ -208,16 +205,25 @@ func (s *teamService) GetTeamByID(ctx context.Context, id string) (*teamdomain.T
 	return team, nil
 }
 
-// GetUserTeams retrieves all teams a user belongs to
+// GetUserTeams retrieves all teams a user belongs to.
+//
+// Self-service read: no permission check. Returns teams where the user
+// is a member.
 func (s *teamService) GetUserTeams(ctx context.Context, userID string) ([]*teamdomain.Team, error) {
 	if userID == "" {
 		return nil, fmt.Errorf("user ID is required")
 	}
-
 	return s.repo.GetTeamsByUserID(ctx, userID)
 }
 
-// UpdateTeam updates a team
+// UpdateTeam updates a team.
+//
+// Authorization: the updater must hold `team:update` in the team's parent
+// account.
+//
+// NOTE: the previous version read userID from ctx.Value("user_id"). That's
+// fragile (contexts should be typed) and no longer supported. Callers must
+// pass the actor's user ID explicitly. See the signature change note.
 func (s *teamService) UpdateTeam(ctx context.Context, id string, updates map[string]interface{}) (*teamdomain.Team, error) {
 	if id == "" {
 		return nil, fmt.Errorf("team ID is required")
@@ -231,18 +237,21 @@ func (s *teamService) UpdateTeam(ctx context.Context, id string, updates map[str
 		return nil, teamdomain.ErrTeamNotFound
 	}
 
-	// Check permission using domain
-	domain := NewTeamDomain(team).String()
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := actorFromContext(ctx)
+	if userID == "" {
 		return nil, teamdomain.ErrPermissionDenied
 	}
 
-	isAdmin, err := s.casbinSvc.IsAccountAdmin(ctx, domain, userID)
+	accountDomain := accountdomain.AccountDomain(team.AccountID)
+	if accountDomain == "" {
+		return nil, fmt.Errorf("team %s has no valid account", id)
+	}
+
+	allowed, err := s.casbinSvc.CanManageTeam(ctx, userID, accountDomain)
 	if err != nil {
 		return nil, fmt.Errorf("permission check failed: %w", err)
 	}
-	if !isAdmin {
+	if !allowed {
 		return nil, teamdomain.ErrPermissionDenied
 	}
 
@@ -266,13 +275,18 @@ func (s *teamService) UpdateTeam(ctx context.Context, id string, updates map[str
 	return team, nil
 }
 
-// DeleteTeam deletes a team
+// DeleteTeam deletes a team.
+//
+// Authorization: the deleter must hold `team:delete` in the team's parent
+// account.
+//
+// No Casbin writes happen here — team membership isn't in Casbin, and no
+// per-team policies exist.
 func (s *teamService) DeleteTeam(ctx context.Context, id string) error {
 	if id == "" {
 		return fmt.Errorf("team ID is required")
 	}
 
-	// Get team
 	team, err := s.repo.GetTeamByID(ctx, id)
 	if err != nil {
 		return err
@@ -281,29 +295,26 @@ func (s *teamService) DeleteTeam(ctx context.Context, id string) error {
 		return teamdomain.ErrTeamNotFound
 	}
 
-	// Check permission using domain
-	domain := NewTeamDomain(team).String()
-	userID, ok := ctx.Value("user_id").(string)
-	if !ok || userID == "" {
+	userID := actorFromContext(ctx)
+	if userID == "" {
 		return teamdomain.ErrPermissionDenied
 	}
 
-	isAdmin, err := s.casbinSvc.IsAccountAdmin(ctx, domain, userID)
+	accountDomain := accountdomain.AccountDomain(team.AccountID)
+	if accountDomain == "" {
+		return fmt.Errorf("team %s has no valid account", id)
+	}
+
+	allowed, err := s.casbinSvc.CanDeleteTeam(ctx, userID, accountDomain)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
 	}
-	if !isAdmin {
+	if !allowed {
 		return teamdomain.ErrPermissionDenied
 	}
 
-	// Delete team (soft delete)
 	if err := s.repo.DeleteTeam(ctx, id); err != nil {
 		return fmt.Errorf("failed to delete team: %w", err)
-	}
-
-	// Remove Casbin policies using domain
-	if err := s.casbinSvc.RemoveTeamPolicies(ctx, domain); err != nil {
-		log.Printf("⚠️ Failed to remove team policies: %v", err)
 	}
 
 	log.Printf("✅ Team deleted: %s (ID: %s)", team.Name, team.ID)
@@ -311,10 +322,10 @@ func (s *teamService) DeleteTeam(ctx context.Context, id string) error {
 }
 
 // ============================================================
-// TEAM MEMBERSHIP QUERIES (For Auth Module)
+// TEAM MEMBERSHIP QUERIES (for Auth module and handlers)
 // ============================================================
 
-// GetPersonalTeamByUserID gets a user's personal team
+// GetPersonalTeamByUserID gets a user's personal team.
 func (s *teamService) GetPersonalTeamByUserID(ctx context.Context, userID string) (*teamdomain.Team, error) {
 	if userID == "" {
 		return nil, fmt.Errorf("user ID is required")
@@ -330,21 +341,21 @@ func (s *teamService) GetPersonalTeamByUserID(ctx context.Context, userID string
 			return team, nil
 		}
 	}
-
 	return nil, nil
 }
 
-// GetInstitutionTeamByInstitutionID gets an institution's team
+// GetInstitutionTeamByInstitutionID gets an institution's team.
+//
+// Deprecated: this treated institutionID as a teamID, which is no longer
+// the model. Use GetTeamByID with an actual team ID instead.
 func (s *teamService) GetInstitutionTeamByInstitutionID(ctx context.Context, institutionID string) (*teamdomain.Team, error) {
 	if institutionID == "" {
 		return nil, fmt.Errorf("institution ID is required")
 	}
-
-	// Note: In the new design, institutionID is the account ID
 	return s.repo.GetTeamByID(ctx, institutionID)
 }
 
-// GetAccountByTeamID gets the account for a team
+// GetAccountByTeamID gets the account for a team.
 func (s *teamService) GetAccountByTeamID(ctx context.Context, teamID string) (*AccountInfo, error) {
 	if teamID == "" {
 		return nil, fmt.Errorf("team ID is required")
@@ -360,37 +371,53 @@ func (s *teamService) GetAccountByTeamID(ctx context.Context, teamID string) (*A
 
 	return &AccountInfo{
 		ID:   team.AccountID,
-		Name: "", // Would need to fetch from account service
+		Name: "", // populate from account service if needed
 	}, nil
 }
 
-// GetTeamDomain returns the domain string for a team
+// GetTeamDomain returns the authz domain for a team.
+//
+// POST-REVAMP: teams are not authz domains, so this returns the team's
+// PARENT ACCOUNT domain: "account:<team.account_id>".
+//
+// The name is retained for backward compatibility, but the semantics have
+// changed. If you're writing new code, use GetAccountDomainForTeam.
 func (s *teamService) GetTeamDomain(ctx context.Context, teamID string) (string, error) {
+	return s.GetAccountDomainForTeam(ctx, teamID)
+}
+
+// GetAccountDomainForTeam returns the account domain for the team with
+// the given ID.
+func (s *teamService) GetAccountDomainForTeam(ctx context.Context, teamID string) (string, error) {
 	if teamID == "" {
 		return "", fmt.Errorf("team ID is required")
 	}
 
-	team, err := s.repo.GetTeamByID(ctx, teamID)
+	accountID, err := s.repo.AccountIDForTeam(ctx, teamID)
 	if err != nil {
 		return "", err
 	}
-	if team == nil {
+	if accountID == "" {
 		return "", teamdomain.ErrTeamNotFound
 	}
 
-	return NewTeamDomain(team).String(), nil
+	return accountdomain.AccountDomain(accountID), nil
 }
 
-// GetAccountDomain returns the domain string for an account
+// GetAccountDomain returns the domain for an account.
 func (s *teamService) GetAccountDomain(ctx context.Context, accountID string) (string, error) {
 	if accountID == "" {
 		return "", fmt.Errorf("account ID is required")
 	}
-
-	return "account:" + accountID, nil
+	return accountdomain.AccountDomain(accountID), nil
 }
 
-// GetUserPersonalTeamDomain returns the personal team domain for a user
+// GetUserPersonalTeamDomain returns the account domain for a user's
+// personal team.
+//
+// POST-REVAMP: the "personal team domain" no longer exists as a distinct
+// concept. This returns the personal team's parent account domain, which
+// for a personal team is the user's personal account.
 func (s *teamService) GetUserPersonalTeamDomain(ctx context.Context, userID string) (string, error) {
 	if userID == "" {
 		return "", fmt.Errorf("user ID is required")
@@ -404,10 +431,15 @@ func (s *teamService) GetUserPersonalTeamDomain(ctx context.Context, userID stri
 		return "", nil
 	}
 
-	return NewTeamDomain(team).String(), nil
+	return accountdomain.AccountDomain(team.AccountID), nil
 }
 
-// GetUserInstitutionTeamDomains returns all institution team domains for a user
+// GetUserInstitutionTeamDomains returns the account domains for every
+// institution team a user belongs to.
+//
+// POST-REVAMP: each entry is the account domain of the team's parent
+// account, deduplicated (a user in 3 teams under the same account gets
+// one entry, not three).
 func (s *teamService) GetUserInstitutionTeamDomains(ctx context.Context, userID string) ([]string, error) {
 	if userID == "" {
 		return nil, fmt.Errorf("user ID is required")
@@ -418,24 +450,26 @@ func (s *teamService) GetUserInstitutionTeamDomains(ctx context.Context, userID 
 		return nil, err
 	}
 
+	seen := make(map[string]bool)
 	var domains []string
 	for _, team := range teams {
-		if team.IsInstitution() {
-			domains = append(domains, NewTeamDomain(team).String())
+		if !team.IsInstitution() {
+			continue
 		}
+		domain := accountdomain.AccountDomain(team.AccountID)
+		if domain == "" || seen[domain] {
+			continue
+		}
+		seen[domain] = true
+		domains = append(domains, domain)
 	}
-
 	return domains, nil
 }
-
-
- // internal/modules/team/service/team_service.go
 
 // ============================================================
 // AI CONTEXT HELPERS
 // ============================================================
 
-// getUserRole gets a user's role in a specific account
 func (s *teamService) getUserRole(ctx context.Context, userID, accountID string) string {
 	role, err := s.authSvc.GetUserRoleInAccount(ctx, userID, accountID)
 	if err != nil || role == "" {
@@ -444,7 +478,6 @@ func (s *teamService) getUserRole(ctx context.Context, userID, accountID string)
 	return role
 }
 
-// getUserDisplayName gets a user's display name
 func getUserDisplayName(user *UserResult) string {
 	if user == nil {
 		return ""
@@ -455,7 +488,6 @@ func getUserDisplayName(user *UserResult) string {
 	return user.Name
 }
 
-// getTeamMemberCount gets the number of members in a team
 func (s *teamService) getTeamMemberCount(ctx context.Context, teamID string) int {
 	count, err := s.repo.CountMembersByTeam(ctx, teamID)
 	if err != nil {
@@ -464,27 +496,22 @@ func (s *teamService) getTeamMemberCount(ctx context.Context, teamID string) int
 	return int(count)
 }
 
-// getTeamEventCount gets the number of events in a team
-// Note: This is a placeholder - you'll need to implement this when you have an event service
 func (s *teamService) getTeamEventCount(ctx context.Context, teamID string) int {
 	// TODO: Implement when event module is ready
 	return 0
 }
 
-// getRecentEventNames gets recent event names for a team
-// Note: This is a placeholder - you'll need to implement this when you have an event service
 func (s *teamService) getRecentEventNames(ctx context.Context, teamID string, limit int) []string {
 	// TODO: Implement when event module is ready
 	return []string{}
 }
 
-// getTeamMemberNames gets names of team members
 func (s *teamService) getTeamMemberNames(ctx context.Context, teamID string, limit int) []string {
 	members, _, err := s.repo.GetMembersByTeam(ctx, teamID, teamdomain.ListMembersFilters{Limit: limit})
 	if err != nil || len(members) == 0 {
 		return []string{}
 	}
-	
+
 	names := make([]string, 0, len(members))
 	for _, m := range members {
 		user, err := s.authSvc.GetUserByID(ctx, m.UserID)

@@ -204,16 +204,12 @@ type Event struct {
 // DOMAIN RESOLUTION METHODS
 // ============================================================
 
-// ResolveTeamDomain returns the domain string corresponding to the team scope using domains.go helpers
-func (e *Event) ResolveTeamDomain() string {
-	if e.TeamType == "personal" || (e.CreatedBy != "" && e.CreatedBy == e.TeamID) {
-		return PersonalTeamDomain(e.CreatedBy)
-	}
-	return InstitutionTeamDomain(e.TeamID)
-}
 
 // ResolveAccountDomain returns the account domain string for inheritance fallback
 func (e *Event) ResolveAccountDomain() string {
+	if e.AccountID == "" {
+		return ""
+	}
 	return AccountDomain(e.AccountID)
 }
 

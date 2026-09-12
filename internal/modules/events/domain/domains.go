@@ -9,51 +9,53 @@ import domains "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared"
 // ============================================================
 //
 // The canonical implementation lives in internal/shared/domains. This file
-// re-exports it under the events domain namespace so existing callsites
+// re-exports it under the events domain namespace so existing call sites
 // (event service, permission helpers, etc.) continue to work unchanged.
 //
 // The events module must not import the auth module directly. Both modules
 // depend on shared/domains instead — that's the only shared contract.
+//
+// DOMAIN MODEL (post-revamp):
+//
+//   "platform"        — Nuruvent staff only
+//   "account:<uuid>"  — every tenant account
+//
+// Teams are NOT authorization domains. Team membership is enforced as
+// data (team_members) in the service layer, not through Casbin.
 
 // ---- Constants ----
 
 const (
-	DomainPlatform              = domains.DomainPlatform
-	TeamDomainPrefixPersonal    = domains.TeamDomainPrefixPersonal
-	TeamDomainPrefixInstitution = domains.TeamDomainPrefixInstitution
-	TeamDomainPrefixAccount     = domains.TeamDomainPrefixAccount
-	TeamTypePersonal            = domains.TeamTypePersonal
-	TeamTypeInstitution         = domains.TeamTypeInstitution
+	// DomainPlatform is the static domain for Nuruvent staff.
+	DomainPlatform = domains.DomainPlatform
+
+	// AccountDomainPrefix is prepended to an account UUID to form its domain.
+	AccountDomainPrefix = domains.AccountDomainPrefix
 )
 
 // ---- Builders ----
 
 var (
-	PersonalTeamDomain    = domains.PersonalTeamDomain
-	InstitutionTeamDomain = domains.InstitutionTeamDomain
-	AccountDomain         = domains.AccountDomain
-	BuildTeamDomain       = domains.BuildTeamDomain
-	TeamDomainFromClaims  = domains.TeamDomainFromClaims
+	// AccountDomain returns "account:<accountID>".
+	AccountDomain = domains.AccountDomain
 )
 
 // ---- Checkers ----
 
 var (
-	IsPersonalTeamDomain    = domains.IsPersonalTeamDomain
-	IsInstitutionTeamDomain = domains.IsInstitutionTeamDomain
-	IsAccountDomain         = domains.IsAccountDomain
-	IsTeamDomain            = domains.IsTeamDomain
-	IsPlatformDomain        = domains.IsPlatformDomain
+	IsAccountDomain  = domains.IsAccountDomain
+	IsPlatformDomain = domains.IsPlatformDomain
+	IsKnownDomain    = domains.IsKnownDomain
 )
 
 // ---- Extractors ----
 
 var (
-	ExtractTeamID              = domains.ExtractTeamID
 	ExtractAccountIDFromDomain = domains.ExtractAccountIDFromDomain
-	ExtractTeamType            = domains.ExtractTeamType
 )
 
-// ---- Higher-level helpers ----
+// ---- Parsers ----
 
-var ResolveEffectiveDomains = domains.ResolveEffectiveDomains
+var (
+	ParseDomain = domains.ParseDomain
+)

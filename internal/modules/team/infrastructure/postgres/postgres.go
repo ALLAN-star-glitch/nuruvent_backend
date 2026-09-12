@@ -293,3 +293,21 @@ func (r *TeamRepository) GetPendingInvitations(ctx context.Context) ([]*teamdoma
     }
     return invitations, nil
 }
+
+// AccountIDForTeam resolves a team ID to its parent account ID.
+func (r *TeamRepository) AccountIDForTeam(ctx context.Context, teamID string) (string, error) {
+	if teamID == "" {
+		return "", fmt.Errorf("team ID is required")
+	}
+
+	var accountID string
+	err := r.db.WithContext(ctx).
+		Table("teams").
+		Select("account_id").
+		Where("id = ? AND deleted_at IS NULL", teamID).
+		Scan(&accountID).Error
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve account for team %s: %w", teamID, err)
+	}
+	return accountID, nil
+}

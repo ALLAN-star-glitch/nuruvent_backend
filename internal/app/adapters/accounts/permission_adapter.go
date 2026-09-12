@@ -52,7 +52,7 @@ func (a *PermissionAdapter) CanManageAccount(ctx context.Context, userID, domain
 }
 
 func (a *PermissionAdapter) CanManageAccountMembers(ctx context.Context, userID, domain string) (bool, error) {
-	return a.checker.CanManageAccountMembers(ctx, userID, domain)
+	return a.checker.CanManageAccount(ctx, userID, domain)
 }
 
 func (a *PermissionAdapter) CanViewAccount(ctx context.Context, userID, domain string) (bool, error) {

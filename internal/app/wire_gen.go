@@ -20,7 +20,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	infrastructure2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/infrastructure"
-	postgres5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
+	postgres5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/infrastructure/postgres"
 	service6 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 	postgres4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
 	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"

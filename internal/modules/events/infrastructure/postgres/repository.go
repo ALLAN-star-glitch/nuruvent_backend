@@ -862,3 +862,16 @@ func (r *PostgresRepository) GetRecurrencePatternBySlug(ctx context.Context, slu
 		IsActive:    model.IsActive,
 	}, nil
 }
+
+func (r *PostgresRepository) AccountIDForTeam(ctx context.Context, teamID string) (string, error) {
+    var accountID string
+    err := r.db.WithContext(ctx).
+        Table("teams").
+        Select("account_id").
+        Where("id = ? AND deleted_at IS NULL", teamID).
+        Scan(&accountID).Error
+    if err != nil {
+        return "", err
+    }
+    return accountID, nil
+}

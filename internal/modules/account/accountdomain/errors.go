@@ -39,3 +39,6 @@ var (
 
 
 var ErrForbidden = errors.New("forbidden")
+
+
+var ErrAccountNotDeletable = errors.New("account is not deletable through this operation")

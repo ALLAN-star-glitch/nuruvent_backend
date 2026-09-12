@@ -12,21 +12,21 @@ import (
 	"github.com/gofiber/fiber/v3/middleware/cors"
 )
 
-// App wraps the application dependencies
+// App wraps the application dependencies.
 type App struct {
 	*AppDependencies
 }
 
-// NewApp creates and initializes the application
+// NewApp creates and initializes the application.
 func NewApp() (*App, error) {
-	// Wire handles ALL initialization
+	// Wire handles ALL initialization.
 	deps, err := InitializeApp()
 	if err != nil {
 		return nil, err
 	}
 	log.Println("✅ Application dependencies initialized successfully")
 
-	// Add CORS middleware to the Fiber app
+	// Add CORS middleware to the Fiber app.
 	app := deps.App
 	app.Use(cors.New(cors.Config{
 		AllowOrigins: []string{
@@ -54,18 +54,23 @@ func NewApp() (*App, error) {
 	return &App{AppDependencies: deps}, nil
 }
 
-// SetupRoutes registers all API routes
+// SetupRoutes registers all API routes.
 func (app *App) SetupRoutes() {
-	// Get token service from app dependencies
+	// Get token service from app dependencies.
 	tokenSvc := app.AuthTokenService
 
-	// Create auth middleware
+	// Create auth middleware.
 	authMiddleware := authmiddleware.AuthMiddleware(tokenSvc)
 
-	
-	// ✅ Use the injected permission checker
-	authzMiddleware := authorization.AuthorizationMiddleware(app.PermissionChecker)
+	// Authorization middleware now requires a TeamResolver in addition to
+	// the permission checker. The resolver translates team IDs into their
+	// parent account IDs so team-scoped routes resolve to the correct
+	// account domain.
+	authzMiddleware := authorization.AuthorizationMiddleware(
+		app.PermissionChecker,
+	)
 
+	
 	server.SetupRoutes(
 		app.App,
 		app.Config,
@@ -79,13 +84,13 @@ func (app *App) SetupRoutes() {
 	log.Println("Routes registered successfully")
 }
 
-// Run starts the server
+// Run starts the server.
 func (app *App) Run() error {
 	log.Printf("Server starting on port %s", app.Config.Server.Port)
 	return app.App.Listen(":" + app.Config.Server.Port)
 }
 
-// Close gracefully shuts down the application
+// Close gracefully shuts down the application.
 func (app *App) Close() {
 	log.Println("Shutting down application...")
 
@@ -102,6 +107,6 @@ func (app *App) Close() {
 			log.Printf("Error closing Redis: %v", err)
 		}
 	}
-	
+
 	log.Println("Application closed successfully")
 }

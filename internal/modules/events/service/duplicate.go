@@ -1,3 +1,5 @@
+// internal/modules/events/service/duplicate_event.go
+
 package service
 
 import (
@@ -14,7 +16,7 @@ import (
 // DUPLICATE - Single Event
 // ============================================================
 
-// DuplicateEvent creates a copy of an existing event
+// DuplicateEvent creates a copy of an existing event.
 func (s *eventService) DuplicateEvent(ctx context.Context, id string, cmd DuplicateEventCommand) (*domain.Event, error) {
 	log.Printf("📋 Duplicating event: %s", id)
 
@@ -28,18 +30,34 @@ func (s *eventService) DuplicateEvent(ctx context.Context, id string, cmd Duplic
 		return nil, err
 	}
 
-	// 2. Check permissions using 2-tier resolution pattern
+	// 2. Resolve target account for the new event
+	targetAccountID := cmd.AccountID
+	if targetAccountID == "" {
+		targetAccountID = original.AccountID
+	}
+	if targetAccountID == "" {
+		// Fallback: resolve from the original's team
+		resolved, err := s.resolveAccountForTeam(ctx, original.TeamID, "")
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve target account: %w", err)
+		}
+		targetAccountID = resolved
+	}
+	cmd.AccountID = targetAccountID
+
+	// 3. Check permissions using account domain
 	if err := s.checkDuplicatePermission(ctx, original, cmd); err != nil {
 		return nil, err
 	}
 
-	// 3. Prepare duplication data
+	// 4. Prepare duplication data
 	newName, newDate := s.prepareDuplicateData(original, cmd)
 
-	// 4. Build create command from original
+	// 5. Build create command from original
 	createCmd := s.buildDuplicateDraftCommand(original, newName, newDate, cmd.CreatedBy)
+	createCmd.AccountID = targetAccountID
 
-	// 5. Create draft using existing CreateDraft method
+	// 6. Create draft using existing CreateDraft method
 	newEvent, err := s.CreateDraft(ctx, createCmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to duplicate event: %w", err)
@@ -53,7 +71,7 @@ func (s *eventService) DuplicateEvent(ctx context.Context, id string, cmd Duplic
 // DUPLICATE - Bulk Events
 // ============================================================
 
-// BulkDuplicateEvents creates copies of multiple existing events
+// BulkDuplicateEvents creates copies of multiple existing events.
 func (s *eventService) BulkDuplicateEvents(ctx context.Context, ids []string, cmd BulkDuplicateCommand) (*BulkDuplicateResult, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
@@ -99,7 +117,7 @@ func (s *eventService) BulkDuplicateEvents(ctx context.Context, ids []string, cm
 // PRIVATE HELPER FUNCTIONS
 // ============================================================
 
-// getOriginalEvent retrieves the original event by ID
+// getOriginalEvent retrieves the original event by ID.
 func (s *eventService) getOriginalEvent(ctx context.Context, id string) (*domain.Event, error) {
 	original, err := s.repo.GetEventByID(ctx, id)
 	if err != nil {
@@ -111,72 +129,47 @@ func (s *eventService) getOriginalEvent(ctx context.Context, id string) (*domain
 	return original, nil
 }
 
-// resolveDuplicateTeamDomain dynamically determines personal or institution team domain
-func (s *eventService) resolveDuplicateTeamDomain(original *domain.Event, cmd DuplicateEventCommand) string {
-	targetTeamID := original.TeamID
-	if cmd.TeamID != "" {
-		targetTeamID = cmd.TeamID
-	}
-
-	if cmd.TeamType == "personal" {
-		return domain.PersonalTeamDomain(targetTeamID)
-	}
-
-	if cmd.TeamType == "institution" {
-		return domain.InstitutionTeamDomain(targetTeamID)
-	}
-
-	// Heuristic fallback: if team ID matches the creator's user ID
-	if cmd.CreatedBy != "" && cmd.CreatedBy == targetTeamID {
-		return domain.PersonalTeamDomain(cmd.CreatedBy)
-	}
-
-	return domain.InstitutionTeamDomain(targetTeamID)
-}
-
-// checkDuplicatePermission performs 2-tier domain permission check for duplication
+// checkDuplicatePermission performs an account-domain permission check
+// for event duplication.
+//
+// POST-REVAMP: single Casbin check against the target account domain.
+// Teams are not authorization domains.
 func (s *eventService) checkDuplicatePermission(ctx context.Context, original *domain.Event, cmd DuplicateEventCommand) error {
 	userID := cmd.CreatedBy
 	if userID == "" {
 		return errors.New("user ID is required")
 	}
 
-	// Resolve Team domain
-	teamDomain := s.resolveDuplicateTeamDomain(original, cmd)
-
-	log.Printf("🔍 Tier 1: Checking manage permission for user=%s on team domain=%s", userID, teamDomain)
-
-	// Tier 1: Check Team Domain
-	allowed, err := s.permChecker.CanManageEvent(ctx, userID, teamDomain)
-	if err != nil {
-		return fmt.Errorf("permission check failed: %w", err)
-	}
-
-	// Tier 2: Account Domain Fallback
 	accountID := cmd.AccountID
 	if accountID == "" {
 		accountID = original.AccountID
 	}
-
-	if !allowed && accountID != "" {
-		accountDomain := domain.AccountDomain(accountID)
-		log.Printf("🔍 Tier 2: Team check failed. Falling back to Account domain=%s", accountDomain)
-
-		allowed, err = s.permChecker.CanManageEvent(ctx, userID, accountDomain)
-		if err != nil {
-			return fmt.Errorf("account permission check failed: %w", err)
-		}
+	if accountID == "" {
+		return errors.New("cannot resolve account ID for duplicate operation")
 	}
 
+	accountDomain := domain.AccountDomain(accountID)
+	if accountDomain == "" {
+		return errors.New("cannot resolve account domain")
+	}
+
+	log.Printf("🔍 AUTHZ: checking event:manage for user=%s on domain=%s",
+		userID, accountDomain)
+
+	allowed, err := s.permChecker.CanManageEvent(ctx, userID, accountDomain)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
 	if !allowed {
-		log.Printf("❌ Permission denied: user %s cannot duplicate event %s", userID, original.ID)
+		log.Printf("❌ Permission denied: user %s cannot duplicate event %s in account %s",
+			userID, original.ID, accountID)
 		return domain.ErrForbidden
 	}
 
 	return nil
 }
 
-// prepareDuplicateData prepares the new name and date for the duplicated event
+// prepareDuplicateData prepares the new name and date for the duplicated event.
 func (s *eventService) prepareDuplicateData(original *domain.Event, cmd DuplicateEventCommand) (string, string) {
 	newName := cmd.Name
 	if newName == "" {
@@ -195,7 +188,7 @@ func (s *eventService) prepareDuplicateData(original *domain.Event, cmd Duplicat
 	return newName, newDate
 }
 
-// buildDuplicateDraftCommand builds a CreateDraftCommand from the original event
+// buildDuplicateDraftCommand builds a CreateDraftCommand from the original event.
 func (s *eventService) buildDuplicateDraftCommand(
 	original *domain.Event,
 	newName, newDate, createdBy string,
@@ -212,13 +205,11 @@ func (s *eventService) buildDuplicateDraftCommand(
 		TeamID:           original.TeamID,
 		AccountID:        original.AccountID,
 
-		// Schedule - use the new date
 		IsMultiDay:  original.IsMultiDay,
 		IsRecurring: original.IsRecurring,
 		Schedules:   s.convertSchedulesToInputWithDate(original.Schedules, newDate),
 		Recurrence:  s.convertRecurrenceToInput(original),
 
-		// Venue
 		IsVirtual:          original.IsVirtual,
 		IsHybrid:           original.IsHybrid,
 		InPersonLocation:   original.InPersonLocation,
@@ -231,35 +222,27 @@ func (s *eventService) buildDuplicateDraftCommand(
 		VenueCity:          original.VenueCity,
 		VenueCountry:       original.VenueCountry,
 
-		// Tickets
 		IsFree:   original.IsFreeEvent,
 		Capacity: original.Capacity,
 		Tickets:  s.convertTicketsToInput(original.Tickets),
 
-		// Access & Privacy
 		Visibility:    original.Visibility,
 		Password:      original.Password,
 		InviteOnly:    original.InviteOnly,
 		InvitedEmails: original.InvitedEmails,
 
-		// Monetization
 		IsFeatured:            original.IsFeatured,
 		CertificateEnabled:    original.CertificateEnabled,
 		CertificatePrice:      original.CertificatePrice,
 		CertificateTemplateID: original.CertificateTemplateID,
 
-		// Speakers
-		Speakers: s.convertSpeakersToInput(original.Speakers),
-
-		// Materials
+		Speakers:  s.convertSpeakersToInput(original.Speakers),
 		Materials: s.convertMaterialsToInput(original.Materials),
-
-		// SEO
-		SEO: s.convertSEOToInput(original),
+		SEO:       s.convertSEOToInput(original),
 	}
 }
 
-// buildDuplicateCommandForBulk builds a DuplicateEventCommand for bulk operations
+// buildDuplicateCommandForBulk builds a DuplicateEventCommand for bulk operations.
 func (s *eventService) buildDuplicateCommandForBulk(ctx context.Context, id string, cmd BulkDuplicateCommand) *DuplicateEventCommand {
 	dupCmd := &DuplicateEventCommand{
 		Name:      cmd.NamePrefix,
@@ -287,7 +270,7 @@ func (s *eventService) buildDuplicateCommandForBulk(ctx context.Context, id stri
 // CONVERTER HELPERS FOR DUPLICATE
 // ============================================================
 
-// convertSchedulesToInputWithDate converts schedules with a new date
+// convertSchedulesToInputWithDate converts schedules with a new date.
 func (s *eventService) convertSchedulesToInputWithDate(schedules []domain.EventSchedule, newDate string) []ScheduleInput {
 	if len(schedules) == 0 {
 		return nil
@@ -319,7 +302,7 @@ func (s *eventService) convertSchedulesToInputWithDate(schedules []domain.EventS
 	return inputs
 }
 
-// convertSchedulesToInput converts schedules without changing dates
+// convertSchedulesToInput converts schedules without changing dates.
 func (s *eventService) convertSchedulesToInput(schedules []domain.EventSchedule) []ScheduleInput {
 	if len(schedules) == 0 {
 		return nil
@@ -351,7 +334,7 @@ func (s *eventService) convertSchedulesToInput(schedules []domain.EventSchedule)
 	return inputs
 }
 
-// convertRecurrenceToInput converts recurrence from domain to input
+// convertRecurrenceToInput converts recurrence from domain to input.
 func (s *eventService) convertRecurrenceToInput(event *domain.Event) *RecurrenceInput {
 	if !event.IsRecurring {
 		return nil
@@ -379,7 +362,7 @@ func (s *eventService) convertRecurrenceToInput(event *domain.Event) *Recurrence
 	}
 }
 
-// convertTicketsToInput converts tickets from domain to input
+// convertTicketsToInput converts tickets from domain to input.
 func (s *eventService) convertTicketsToInput(tickets []domain.EventTicket) []TicketInput {
 	if len(tickets) == 0 {
 		return nil
@@ -408,7 +391,7 @@ func (s *eventService) convertTicketsToInput(tickets []domain.EventTicket) []Tic
 	return inputs
 }
 
-// convertSpeakersToInput converts speakers from domain to input
+// convertSpeakersToInput converts speakers from domain to input.
 func (s *eventService) convertSpeakersToInput(speakers []domain.EventSpeaker) []SpeakerInput {
 	if len(speakers) == 0 {
 		return nil
@@ -429,7 +412,7 @@ func (s *eventService) convertSpeakersToInput(speakers []domain.EventSpeaker) []
 	return inputs
 }
 
-// convertMaterialsToInput converts materials from domain to input
+// convertMaterialsToInput converts materials from domain to input.
 func (s *eventService) convertMaterialsToInput(materials []domain.EventMaterial) []MaterialInput {
 	if len(materials) == 0 {
 		return nil
@@ -449,7 +432,7 @@ func (s *eventService) convertMaterialsToInput(materials []domain.EventMaterial)
 	return inputs
 }
 
-// convertSEOToInput converts SEO from domain to input
+// convertSEOToInput converts SEO from domain to input.
 func (s *eventService) convertSEOToInput(event *domain.Event) *SEOInput {
 	return &SEOInput{
 		MetaTitle:          event.SEO.Title,

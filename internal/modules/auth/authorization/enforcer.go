@@ -133,10 +133,14 @@ func (e *Enforcer) Enforce(userID string, domain string, resource string, action
 	defer e.mu.RUnlock()
 
 	if e.IsSuperAdmin(userID) {
+		log.Printf("🔍 ENFORCE: super_admin bypass for %s", userID)
 		return true, nil
 	}
 
-	return e.Enforcer.Enforce(userID, domain, resource, action)
+	result, err := e.Enforcer.Enforce(userID, domain, resource, action)
+	log.Printf("🔍 ENFORCE: sub=%q dom=%q obj=%q act=%q → %v (err=%v)",
+		userID, domain, resource, action, result, err)
+	return result, err
 }
 
 func (e *Enforcer) BatchEnforce(requests [][]interface{}) ([]bool, error) {
@@ -497,19 +501,3 @@ func (e *Enforcer) AddUserToAccount(userID, accountID, role string) error {
 	}
 	return nil
 }
-
-// ============================================================
-// DEPRECATED - REMOVED
-// ============================================================
-
-// The following methods have been removed because roles are at account level, not team level:
-// - AddPersonalTeamRole, RemovePersonalTeamRole, GetUserPersonalTeamRoles
-// - AddInstitutionTeamRole, RemoveInstitutionTeamRole, GetUserInstitutionTeamRoles
-// - SetupPersonalTeam, SetupInstitutionTeam
-// - GetUserTeamIDs, GetUserTeamDomains
-// - GetUserPersonalTeamIDs, GetUserInstitutionTeamIDs
-//
-// Use account-level methods instead:
-// - AddAccountRole, RemoveAccountRole, GetUserAccountRoles
-// - SetupAccount, AddUserToAccount
-// - GetUserAccountIDs, GetUserAccountDomains

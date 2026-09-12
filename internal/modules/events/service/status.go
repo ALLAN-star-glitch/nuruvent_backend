@@ -9,7 +9,6 @@ import (
 	"log"
 	"strings"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
 
@@ -17,29 +16,25 @@ import (
 // STATUS - Single
 // ============================================================
 
-// PublishEvent publishes a single event
+// PublishEvent publishes a single event.
 func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
 	log.Printf("📤 Publishing event: %s", id)
 
-	// 1. Get event and check permissions using team domain
 	event, err := s.getEventAndCheckPublishPermission(ctx, id, publishedBy)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Get published status
 	status, err := s.getEventStatusBySlug(ctx, domain.EventStatusPublished.GetSlug())
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. Validate event for publishing
 	if err := event.ValidateForPublish(); err != nil {
 		log.Printf("❌ Publish validation failed: %v", err)
 		return nil, fmt.Errorf("cannot publish event: %w", err)
 	}
 
-	// 4. Set status and save
 	event.EventStatusID = status.ID
 	if err := s.repo.UpdateEvent(ctx, event); err != nil {
 		log.Printf("❌ Failed to update event: %v", err)
@@ -50,24 +45,21 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 	return event, nil
 }
 
-// CancelEvent cancels a single event
+// CancelEvent cancels a single event.
 func (s *eventService) CancelEvent(ctx context.Context, id, cancelledBy string) (*domain.Event, error) {
 	if cancelledBy == "" {
 		return nil, errors.New("cancelled by is required")
 	}
 
-	// 1. Get event and check permissions using team domain
 	event, err := s.getEventAndCheckUpdatePermission(ctx, id, cancelledBy)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Cancel event
 	if err := event.Cancel(); err != nil {
 		return nil, err
 	}
 
-	// 3. Save
 	if err := s.repo.UpdateEvent(ctx, event); err != nil {
 		return nil, fmt.Errorf("failed to cancel event: %w", err)
 	}
@@ -76,9 +68,11 @@ func (s *eventService) CancelEvent(ctx context.Context, id, cancelledBy string) 
 	return event, nil
 }
 
-// CompleteEvent marks a single event as completed
+// CompleteEvent marks a single event as completed.
+//
+// No permission check — completion is a scheduled/system action, not a
+// user-initiated one.
 func (s *eventService) CompleteEvent(ctx context.Context, id string) (*domain.Event, error) {
-	// 1. Get event (no permission check needed - completion is automatic)
 	event, err := s.repo.GetEventByID(ctx, id)
 	if err != nil {
 		return nil, err
@@ -87,12 +81,10 @@ func (s *eventService) CompleteEvent(ctx context.Context, id string) (*domain.Ev
 		return nil, domain.ErrEventNotFound
 	}
 
-	// 2. Complete event
 	if err := event.Complete(); err != nil {
 		return nil, err
 	}
 
-	// 3. Save
 	if err := s.repo.UpdateEvent(ctx, event); err != nil {
 		return nil, fmt.Errorf("failed to complete event: %w", err)
 	}
@@ -105,7 +97,7 @@ func (s *eventService) CompleteEvent(ctx context.Context, id string) (*domain.Ev
 // STATUS - Bulk
 // ============================================================
 
-// BulkPublishEvents publishes multiple events
+// BulkPublishEvents publishes multiple events.
 func (s *eventService) BulkPublishEvents(ctx context.Context, ids []string, publishedBy string) (*BulkStatusResult, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
@@ -124,7 +116,7 @@ func (s *eventService) BulkPublishEvents(ctx context.Context, ids []string, publ
 		if _, err := s.PublishEvent(ctx, id, publishedBy); err != nil {
 			result.FailedIDs = append(result.FailedIDs, id)
 			errMsg := err.Error()
-			if after, ok :=strings.CutPrefix(errMsg, "validation failed: "); ok  {
+			if after, ok := strings.CutPrefix(errMsg, "validation failed: "); ok {
 				errMsg = after
 			}
 			result.Errors = append(result.Errors, errMsg)
@@ -137,7 +129,7 @@ func (s *eventService) BulkPublishEvents(ctx context.Context, ids []string, publ
 	return result, nil
 }
 
-// BulkCancelEvents cancels multiple events
+// BulkCancelEvents cancels multiple events.
 func (s *eventService) BulkCancelEvents(ctx context.Context, ids []string, cancelledBy string) (*BulkStatusResult, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
@@ -165,7 +157,7 @@ func (s *eventService) BulkCancelEvents(ctx context.Context, ids []string, cance
 	return result, nil
 }
 
-// BulkCompleteEvents completes multiple events
+// BulkCompleteEvents completes multiple events.
 func (s *eventService) BulkCompleteEvents(ctx context.Context, ids []string) (*BulkStatusResult, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
@@ -194,11 +186,11 @@ func (s *eventService) BulkCompleteEvents(ctx context.Context, ids []string) (*B
 // PRIVATE HELPER FUNCTIONS
 // ============================================================
 
-// getEventAndCheckPublishPermission gets event and checks publish permission using team domain.
+// getEventAndCheckPublishPermission loads the event and verifies the user
+// may publish it.
 //
-// Uses the 2-tier domain resolution:
-//   Tier 1: institution:team:{team_id} or personal:team:{team_id}
-//   Tier 2: account:{account_id}  (fallback if Tier 1 denied)
+// POST-REVAMP: single Casbin check against the event's parent account
+// domain. Teams are not authorization domains.
 func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
 	if publishedBy == "" {
 		return nil, errors.New("published by is required")
@@ -212,38 +204,27 @@ func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id
 		return nil, domain.ErrEventNotFound
 	}
 
-	// ✅ Build domain from event's team_type + team_id (both populated by repository)
-	teamDomain := authdomain.BuildTeamDomain(event.TeamType, event.TeamID)
+	if event.AccountID == "" {
+		return nil, errors.New("event has no account ID; cannot authorize publish")
+	}
 
-	log.Printf("🔍 PUBLISH CHECK: user=%s teamID=%s teamType=%s domain=%s",
-		publishedBy, event.TeamID, event.TeamType, teamDomain)
+	accountDomain := domain.AccountDomain(event.AccountID)
+	log.Printf("🔍 PUBLISH CHECK: user=%s accountID=%s domain=%s",
+		publishedBy, event.AccountID, accountDomain)
 
-	// Tier 1: check team domain
-	allowed, err := s.permChecker.CanPublishEvent(ctx, publishedBy, teamDomain)
+	allowed, err := s.permChecker.CanPublishAllEvents(ctx, publishedBy, accountDomain)
 	if err != nil {
 		return nil, fmt.Errorf("permission check failed: %w", err)
 	}
-
-	// Tier 2: fallback to account domain if Tier 1 denied
-	if !allowed && event.AccountID != "" {
-		accountDomain := authdomain.AccountDomain(event.AccountID)
-		log.Printf("🔍 Tier 2: Team permission failed. Falling back to account domain=%s", accountDomain)
-
-		allowed, err = s.permChecker.CanPublishEvent(ctx, publishedBy, accountDomain)
-		if err != nil {
-			return nil, fmt.Errorf("account permission check failed: %w", err)
-		}
-	}
-
 	if !allowed {
-		log.Printf("❌ Publish permission denied: user=%s teamDomain=%s", publishedBy, teamDomain)
+		log.Printf("❌ Publish permission denied: user=%s accountDomain=%s", publishedBy, accountDomain)
 		return nil, errors.New("insufficient permissions to publish this event")
 	}
 
 	return event, nil
 }
 
-// getEventStatusBySlug retrieves an event status by slug
+// getEventStatusBySlug retrieves an event status by slug.
 func (s *eventService) getEventStatusBySlug(ctx context.Context, slug string) (*domain.EventStatus, error) {
 	status, err := s.repo.GetEventStatusBySlug(ctx, slug)
 	if err != nil {

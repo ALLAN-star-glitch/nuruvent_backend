@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/infrastructure/postgres"
 )
 
 // SeedCertificateTemplates seeds the certificate templates from domain constants

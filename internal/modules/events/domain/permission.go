@@ -96,9 +96,6 @@ type PermissionChecker interface {
 	// USER INFORMATION METHODS
 	// ============================================================
 
-	// GetUserTeamDomains returns all team domains where a user has membership
-	// Returns domains in format: "personal:team:{user_id}" and "institution:team:{account_id}"
-	GetUserTeamDomains(ctx context.Context, userID string) ([]string, error)
 
 	// GetUserAccountIDs returns all account IDs where a user has membership
 	GetUserAccountIDs(ctx context.Context, userID string) ([]string, error)
