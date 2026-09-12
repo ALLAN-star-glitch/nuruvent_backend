@@ -38,6 +38,9 @@ func (h *EventHandler) RegisterRoutes(
 		protected.Get("/me/search", h.SearchEvents)   // ⬅️ authenticated, permission-scoped search
 		protected.Post("/", h.CreateEvent)
 		protected.Post("/draft", h.CreateEventDraft)
+		
+		// AI-assisted draft generation
+		protected.Post("/ai/generate-draft", h.GenerateEventDraft)
 
 		bulk := protected.Group("/bulk")
 		{

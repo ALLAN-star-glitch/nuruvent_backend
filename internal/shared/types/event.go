@@ -19,6 +19,7 @@ const (
 )
 
 
+
 // Name constants (with underscores) - Used for internal database lookups
 const (
 	EventTypeUncategorizedName = "event_type_uncategorized"

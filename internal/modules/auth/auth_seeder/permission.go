@@ -18,7 +18,7 @@ import (
 // CONSTANTS
 // ============================================================
 
-const CURRENT_POLICY_VERSION = "v13"
+const CURRENT_POLICY_VERSION = "v14"
 
 // ============================================================
 // POLICY VERSION TRACKING

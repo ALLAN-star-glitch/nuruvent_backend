@@ -36,6 +36,8 @@ const (
 	defaultModel          = "meta-llama/llama-3.1-8b-instruct:free"
 	defaultTimeoutSeconds = 30
 	defaultEndpoint       = "https://openrouter.ai/api/v1/chat/completions"
+	defaultMaxTokens      = 1500
+	defaultTemperature    = 0.7
 )
 
 // ErrDisabled is returned when the client was constructed without an API key.
@@ -93,13 +95,61 @@ func (c *Client) Model() string {
 	return c.model
 }
 
+// ============================================================
+// CHAT OPTIONS
+// ============================================================
+
+// ChatOption customizes a single Chat call.
+type ChatOption func(*Request)
+
+// WithMaxTokens overrides the default max_tokens for one call.
+func WithMaxTokens(n int) ChatOption {
+	return func(r *Request) {
+		if n > 0 {
+			r.MaxTokens = n
+		}
+	}
+}
+
+// WithTemperature overrides the default temperature for one call.
+func WithTemperature(t float64) ChatOption {
+	return func(r *Request) {
+		if t >= 0 {
+			r.Temperature = t
+		}
+	}
+}
+
+// WithJSONMode forces response_format=json_object. This is the
+// default; expose it for callers that globally default to plain text.
+func WithJSONMode() ChatOption {
+	return func(r *Request) {
+		r.ResponseFormat = map[string]string{"type": "json_object"}
+	}
+}
+
+// WithPlainText disables JSON mode so the model can return freeform text.
+func WithPlainText() ChatOption {
+	return func(r *Request) {
+		r.ResponseFormat = nil
+	}
+}
+
+// ============================================================
+// CHAT
+// ============================================================
+
 // Chat sends a two-message conversation (system + user) and returns the
 // assistant's response content.
 //
 // Returns ErrDisabled if the client is disabled.
 // Returns an error if the provider responds with a non-200 status or if the
 // response cannot be parsed.
-func (c *Client) Chat(ctx context.Context, system, user string) (string, error) {
+func (c *Client) Chat(
+	ctx context.Context,
+	system, user string,
+	opts ...ChatOption,
+) (string, error) {
 	if !c.Enabled() {
 		return "", ErrDisabled
 	}
@@ -116,9 +166,12 @@ func (c *Client) Chat(ctx context.Context, system, user string) (string, error) 
 	reqBody := Request{
 		Model:          c.model,
 		Messages:       messages,
-		Temperature:    0.7,
-		MaxTokens:      1500,
+		Temperature:    defaultTemperature,
+		MaxTokens:      defaultMaxTokens,
 		ResponseFormat: map[string]string{"type": "json_object"},
+	}
+	for _, opt := range opts {
+		opt(&reqBody)
 	}
 
 	jsonBody, err := json.Marshal(reqBody)

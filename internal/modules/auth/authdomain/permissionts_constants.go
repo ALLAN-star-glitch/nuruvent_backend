@@ -101,6 +101,8 @@ const (
 	ActionMemberRemove  Action = "member_remove"
 	ActionBillingRead   Action = "billing_read"
 	ActionBillingUpdate Action = "billing_update"
+	// Membership / self-service actions
+	ActionLeave Action = "leave" // member self-removal from an account/team
 
 	// OWN vs ALL Actions
 	ActionReadAll    Action = "read_all"

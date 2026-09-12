@@ -18,17 +18,25 @@ import (
 // CORE AUTHORIZATION MIDDLEWARE
 // ============================================================
 
-// AuthorizationMiddleware enforces permissions using Casbin
+// AuthorizationMiddleware enforces permissions using Casbin.
+//
+// Resolution pipeline per request:
+//
+//	1. Extract caller identity (userID) — required.
+//	2. Resolve the domain the caller is acting in.
+//	3. Resolve resource + action from the path/method.
+//	4. Short-circuit self-service routes.
+//	5. Short-circuit deferred routes (slug lookups) — service authorizes.
+//	6. Casbin check with fallback chain.
 func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		// Get user ID
+		// ---- 1. Identity ----
 		userID := c.Locals(authdomain.ContextKeyUserID)
 		if userID == nil {
 			return response.Unauthorized(c, "User not authenticated", fiber.Map{
 				"reason": "user_id not found in context",
 			})
 		}
-
 		userIDStr, ok := userID.(string)
 		if !ok || userIDStr == "" {
 			return response.Unauthorized(c, "Invalid user ID", fiber.Map{
@@ -36,56 +44,66 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 			})
 		}
 
-		// Determine domain from request
+		// ---- 2. Resolve domain, resource, action ----
 		domain := getDomainFromRequest(c)
-
-		// Determine resource and action
 		resource := getResourceFromRequest(c)
 		action := getActionFromRequest(c)
 
 		log.Printf("🔍 AUTHZ: user=%s, domain=%s, resource=%s, action=%s",
 			userIDStr, domain, resource, action)
 
-		// ============================================================
-		// SELF-SERVICE BYPASSES
-		// ============================================================
+		// ---- 3. Self-service bypasses ----
 		//
 		// These endpoints operate on the caller's own data. The service
 		// scopes the query by the authenticated user, so a domain-scoped
 		// Casbin check is neither necessary nor meaningful. The resolver
 		// would otherwise fall back to the token's team context and gate
 		// the operation on the wrong domain.
-
-		if isOwnProfileRequest(c) {
-			log.Printf("✅ AUTHZ BYPASS: /users/me/profile")
-			c.Locals(authdomain.ContextKeyDomain, domain)
-			return c.Next()
-		}
-		if isOwnAvatarRequest(c) {
-			log.Printf("✅ AUTHZ BYPASS: /users/me/avatar")
-			c.Locals(authdomain.ContextKeyDomain, domain)
-			return c.Next()
-		}
-		if isInstitutionLogoRequest(c) {
-			log.Printf("✅ AUTHZ BYPASS: institution logo request")
-			c.Locals(authdomain.ContextKeyDomain, domain)
-			return c.Next()
-		}
-		if isSelfServiceListAccounts(c) {
-			log.Printf("✅ AUTHZ BYPASS: self-service account listing")
-			c.Locals(authdomain.ContextKeyDomain, domain)
-			return c.Next()
-		}
-		if isSelfServiceCreateAccount(c) {
-			log.Printf("✅ AUTHZ BYPASS: self-service account creation")
+		if isOwnProfileRequest(c) ||
+			isOwnAvatarRequest(c) ||
+			isInstitutionLogoRequest(c) ||
+			isSelfServiceListAccounts(c) ||
+			isSelfServiceCreateAccount(c) {
+			log.Printf("✅ AUTHZ BYPASS: %s %s", c.Method(), c.Path())
 			c.Locals(authdomain.ContextKeyDomain, domain)
 			return c.Next()
 		}
 
-		// Store resolved domain for downstream consumers
+		// ---- 4. Deferred domain (slug-based lookups) ----
+		//
+		// The resolver returns DomainDeferred when the target cannot be
+		// identified from the URL alone (e.g. /accounts/slug/acme-corp).
+		// Passing the sentinel to Casbin would either always-deny or
+		// always-allow. Instead we let the service layer perform the
+		// lookup and then authorize against the resolved ID.
+		if domain == authdomain.DomainDeferred {
+			log.Printf("⏸  AUTHZ DEFERRED: %s %s (service must authorize)", c.Method(), c.Path())
+			c.Locals(authdomain.ContextKeyDomain, domain)
+			return c.Next()
+		}
+
+		// ---- 5. Sanity: missing resource / action ----
+		//
+		// If a route isn't mapped, silently passing "" to Casbin would
+		// produce surprising results. Fail closed with a clear error.
+		if resource == "" {
+			return response.InternalError(c, "Authorization misconfigured", fiber.Map{
+				"reason": "could not resolve resource from path",
+				"path":   c.Path(),
+			})
+		}
+		if action == "" {
+			return response.InternalError(c, "Authorization misconfigured", fiber.Map{
+				"reason": "could not resolve action from method",
+				"path":   c.Path(),
+				"method": c.Method(),
+			})
+		}
+
+		// Store resolved domain for downstream consumers.
 		c.Locals(authdomain.ContextKeyDomain, domain)
 
-		// Check permission with fallback chain
+		// ---- 6. Casbin check ----
 		allowed, err := checkPermissionWithFallback(c, checker, userIDStr, domain, resource, action)
 		if err != nil {
 			return response.InternalError(c, "Authorization error", fiber.Map{
@@ -209,7 +227,7 @@ func checkPermissionWithFallback(
 		)
 	}
 
-	// Exact match for create, manage, and any other action
+	// Exact match for create, manage, leave, and any other action.
 	return checker.HasPermission(ctx, userID, domain, resource, action)
 }
 
@@ -239,93 +257,115 @@ func checkAny(
 
 // getDomainFromRequest resolves the Casbin domain for a request.
 //
-// Priority order:
-//  1. Explicit override via c.Locals(ContextKeyDomain) — set by upstream middleware
-//  2. Query param override — ?team_id=X&team_type=Y (admin cross-team)
-//  3. Query param override — ?account_id=X
-//  4. Token team context (team_id + team_type from JWT) — default for auth'd users
-//  5. Profile-specific paths (/users/me/profile, /users/me/avatar)
-//  6. Path params (:institutionId, :userId, :teamId, :accountId, :id)
-//  7. /teams/... path heuristic
-//  8. /me and /my endpoints (personal scope)
-//  9. Platform routes (/admin, /platform, /system)
-// 10. Fallback: personal team of the authenticated user
+// Precedence (highest → lowest):
+//
+//  1. Explicit override via c.Locals(ContextKeyDomain)
+//     — set by upstream middleware (e.g. after loading a resource)
+//
+//  2. Query param overrides (admin / cross-team tooling)
+//       ?team_id=X&team_type=Y  → team:X (typed)
+//       ?account_id=X           → account:X
+//       ?scope=type:id          → type:X
+//
+//  3. Token team context (team_id + team_type from JWT)
+//     — the default for authenticated requests
+//
+//  4. Slug routes → DomainDeferred (service authorizes)
+//
+//  5. Path-param resolution for RESOURCE-SCOPED routes
+//     — institution → institution:team:<id>
+//     — account     → account:<id>
+//     — team        → team:<id> (typed)
+//     — user        → personal:team:<id>
+//
+//  6. /teams/... path heuristic (UUID extraction)
+//
+//  7. Personal-scope routes (/me, /my, /profile, /avatar)
+//
+//  8. Platform routes (/admin, /platform, /system)
+//
+//  9. Fallback: caller's personal team
+//
+// NOTE: This function deliberately does NOT use AccountDomain(target) as
+// both the domain and the resource context. The domain reflects the
+// CALLER's scope; the resource is the thing being acted on. Mixing them
+// collapses "which tenant am I acting in?" with "which object am I
+// touching?" and produces self-referential Casbin checks that only pass
+// when the caller is already inside the target — the opposite of what
+// membership enforcement needs.
 func getDomainFromRequest(c fiber.Ctx) string {
 	path := c.Path()
 
-	// 1. Explicit override
+	// ---- 1. Explicit override ----
 	if domain := c.Locals(authdomain.ContextKeyDomain); domain != nil {
 		if s, ok := domain.(string); ok && s != "" {
 			return s
 		}
 	}
 
-	// 2. Team override via query
-	if teamID, teamType := c.Query("team_id"), c.Query("team_type"); teamID != "" {
-		return authdomain.BuildTeamDomain(teamType, teamID)
+	// ---- 2. Query overrides ----
+	if domain := domainFromQuery(c); domain != "" {
+		return domain
 	}
 
-	// 3. Account override via query
-	if accountID := c.Query("account_id"); accountID != "" {
-		return authdomain.AccountDomain(accountID)
-	}
-
-	// 4. Token team context — default for authenticated requests
+	// ---- 3. Token team context ----
 	if domain := domainFromToken(c); domain != "" {
 		return domain
 	}
 
-	// 5. Profile paths
-	if strings.Contains(path, "/users/me/profile") || strings.Contains(path, "/users/me/avatar") {
-		if domain := personalDomainForCurrentUser(c); domain != "" {
-			return domain
-		}
-	}
-	if strings.Contains(path, "/profile/organizer") {
-		if domain := domainFromScopeQuery(c); domain != "" {
-			return domain
-		}
+	// ---- 4. Slug routes → defer ----
+	if isSlugRoute(path) {
+		return authdomain.DomainDeferred
 	}
 
-	// 6. Institution logo path
-	if strings.Contains(path, "/institutions/") && strings.Contains(path, "/logo") {
-		if domain := institutionDomainFromPath(path); domain != "" {
-			return domain
-		}
-	}
-
-	// 7. Path params
+	// ---- 5. Path-param resolution ----
 	if domain := domainFromPathParams(c, path); domain != "" {
 		return domain
 	}
 
-	// 8. /teams/... path heuristic
+	// ---- 6. /teams/... heuristic ----
 	if strings.Contains(path, "/teams/") {
 		if domain := domainFromTeamsPath(c, path); domain != "" {
 			return domain
 		}
 	}
 
-	// 9. /me and /my endpoints (personal scope)
-	if strings.Contains(path, "/me") || strings.Contains(path, "/my") {
+	// ---- 7. Personal-scope routes ----
+	if isPersonalScopePath(path) {
 		if domain := personalDomainForCurrentUser(c); domain != "" {
 			return domain
 		}
 	}
 
-	// 10. Platform routes
-	if strings.HasPrefix(path, "/api/v1/admin") ||
-		strings.HasPrefix(path, "/api/v1/platform") ||
-		strings.HasPrefix(path, "/api/v1/system") {
+	// ---- 8. Platform routes ----
+	if isPlatformPath(path) {
 		return authdomain.DomainPlatform
 	}
 
-	// 11. Fallback: personal team of the authenticated user
+	// ---- 9. Fallback ----
 	if domain := personalDomainForCurrentUser(c); domain != "" {
 		return domain
 	}
 
 	return authdomain.DomainPlatform
+}
+
+// domainFromQuery honours ?team_id / ?team_type / ?account_id / ?scope.
+func domainFromQuery(c fiber.Ctx) string {
+	if teamID := c.Query("team_id"); teamID != "" {
+		teamType := c.Query("team_type")
+		if teamType == "" {
+			teamType = authdomain.TeamTypePersonal
+		}
+		return authdomain.BuildTeamDomain(teamType, teamID)
+	}
+	if accountID := c.Query("account_id"); accountID != "" {
+		return authdomain.AccountDomain(accountID)
+	}
+	if scope := c.Query("scope"); scope != "" {
+		return domainFromScopeQuery(scope)
+	}
+	return ""
 }
 
 // domainFromToken reads team_id + team_type from Locals and returns the domain.
@@ -364,11 +404,7 @@ func personalDomainForCurrentUser(c fiber.Ctx) string {
 }
 
 // domainFromScopeQuery parses ?scope=<type>:<id> (used by /profile/organizer).
-func domainFromScopeQuery(c fiber.Ctx) string {
-	scope := c.Query("scope")
-	if scope == "" {
-		return ""
-	}
+func domainFromScopeQuery(scope string) string {
 	parts := strings.SplitN(scope, ":", 2)
 	if len(parts) != 2 {
 		return ""
@@ -396,12 +432,16 @@ func institutionDomainFromPath(path string) string {
 }
 
 // domainFromPathParams resolves the domain from route params, in priority order.
+//
+// IMPORTANT: for account-scoped routes (e.g. /accounts/:id/members), this
+// returns the ACCOUNT domain. The subsequent Casbin check therefore asks
+// "does the caller have member:read *in account X's scope*?". For that to
+// pass, the caller must have a role assignment in account X — which is
+// exactly the membership model we want.
 func domainFromPathParams(c fiber.Ctx, path string) string {
+	// Explicit named params take precedence.
 	if id := c.Params("institutionId"); id != "" {
 		return authdomain.InstitutionTeamDomain(id)
-	}
-	if id := c.Params("userId"); id != "" {
-		return authdomain.PersonalTeamDomain(id)
 	}
 	if id := c.Params("teamId"); id != "" {
 		return teamDomainWithType(c, id)
@@ -409,6 +449,11 @@ func domainFromPathParams(c fiber.Ctx, path string) string {
 	if id := c.Params("accountId"); id != "" {
 		return authdomain.AccountDomain(id)
 	}
+	if id := c.Params("userId"); id != "" {
+		return authdomain.PersonalTeamDomain(id)
+	}
+
+	// Generic :id — disambiguate by path family.
 	if id := c.Params("id"); id != "" {
 		switch {
 		case strings.Contains(path, "/institutions/"):
@@ -421,6 +466,7 @@ func domainFromPathParams(c fiber.Ctx, path string) string {
 			return authdomain.PersonalTeamDomain(id)
 		}
 	}
+
 	return ""
 }
 
@@ -461,20 +507,63 @@ func tokenTeamType(c fiber.Ctx) string {
 func extractTeamIDFromPath(path string) string {
 	parts := strings.Split(path, "/")
 	for i, p := range parts {
-		if p == "teams" && i+1 < len(parts) {
-			next := parts[i+1]
-			if strings.Contains(next, "-") && len(next) > 30 {
-				return next
-			}
-			if i+2 < len(parts) {
-				nextNext := parts[i+2]
-				if strings.Contains(nextNext, "-") && len(nextNext) > 30 {
-					return nextNext
-				}
-			}
+		if p != "teams" {
+			continue
+		}
+		if i+1 < len(parts) && looksLikeUUID(parts[i+1]) {
+			return parts[i+1]
+		}
+		if i+2 < len(parts) && looksLikeUUID(parts[i+2]) {
+			return parts[i+2]
 		}
 	}
 	return ""
+}
+
+// isSlugRoute reports whether the path contains a slug-based identifier
+// that cannot be resolved to a domain without a DB lookup.
+//
+// Examples:
+//
+//	GET /accounts/slug/acme-corp
+//	GET /account-types/slug/premium
+//	GET /users/slug/jane-doe/profile
+func isSlugRoute(path string) bool {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for i, p := range parts {
+		if p == "slug" && i+1 < len(parts) && parts[i+1] != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// isPersonalScopePath reports whether the path is explicitly personal-scoped.
+//
+// We use segment-based matching, NOT substring matching: a substring check
+// for "/me" would falsely match any path containing "me" — e.g. a UUID
+// segment, "/members", or "/media".
+func isPersonalScopePath(path string) bool {
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	for _, p := range parts {
+		switch p {
+		case "me", "my", "profile", "avatar":
+			return true
+		}
+	}
+	return false
+}
+
+// isPlatformPath reports whether the path is a platform-admin route.
+func isPlatformPath(path string) bool {
+	return strings.HasPrefix(path, "/api/v1/admin") ||
+		strings.HasPrefix(path, "/api/v1/platform") ||
+		strings.HasPrefix(path, "/api/v1/system")
+}
+
+// looksLikeUUID is a cheap UUID heuristic (dash + length).
+func looksLikeUUID(s string) bool {
+	return strings.Contains(s, "-") && len(s) >= 32
 }
 
 // ============================================================
@@ -521,6 +610,8 @@ func getResourceFromRequest(c fiber.Ctx) string {
 		case "avatar":
 			return authdomain.ResourceProfile.String()
 		case "logo":
+			// Fallback if the segment appears without an obvious owner.
+			// account/institution sub-resolvers handle the common cases.
 			return authdomain.ResourceProfile.String()
 		case "members", "member":
 			return authdomain.ResourceMember.String()
@@ -576,9 +667,27 @@ func userSubResource(segments []string, i int) string {
 	return ""
 }
 
+// accountSubResource inspects the segments immediately after "accounts".
+//
+// Path families handled:
+//
+//	/accounts/:id/members           → ResourceMember
+//	/accounts/:id/members/:userId   → ResourceMember
+//	/accounts/:id/logo              → ResourceAccount (explicit)
+//	/accounts/:id/events            → ResourceEvent
+//	/accounts/:id/profile           → ResourceProfile
 func accountSubResource(segments []string, i int) string {
-	if i+1 < len(segments) && segments[i+1] == "members" {
+	if i+1 >= len(segments) {
+		return ""
+	}
+	switch segments[i+1] {
+	case "members":
 		return authdomain.ResourceMember.String()
+	case "logo":
+		// Account logo is an account attribute, not a profile.
+		// Returning ResourceAccount here avoids the accidental
+		// dependency on loop ordering in the caller.
+		return authdomain.ResourceAccount.String()
 	}
 	if i+2 < len(segments) {
 		switch segments[i+2] {
@@ -586,14 +695,19 @@ func accountSubResource(segments []string, i int) string {
 			return authdomain.ResourceEvent.String()
 		case "profile":
 			return authdomain.ResourceProfile.String()
+		case "logo":
+			return authdomain.ResourceAccount.String()
 		}
 	}
 	return ""
 }
 
 func institutionSubResource(segments []string, i int) string {
+	if i+1 >= len(segments) && i+2 >= len(segments) {
+		return ""
+	}
 	if i+1 < len(segments) && segments[i+1] == "logo" {
-		return authdomain.ResourceProfile.String()
+		return authdomain.ResourceInstitution.String()
 	}
 	if i+2 < len(segments) {
 		switch segments[i+2] {
@@ -601,6 +715,8 @@ func institutionSubResource(segments []string, i int) string {
 			return authdomain.ResourceEvent.String()
 		case "profile":
 			return authdomain.ResourceProfile.String()
+		case "logo":
+			return authdomain.ResourceInstitution.String()
 		}
 	}
 	return ""
@@ -623,26 +739,51 @@ func teamSubResource(segments []string, i int) string {
 // ACTION RESOLUTION
 // ============================================================
 
-// getActionFromRequest maps HTTP method to Casbin action.
+// getActionFromRequest maps HTTP method + path suffix to a Casbin action.
+//
+// Verb overrides (in precedence order):
+//
+//	POST   .../leave             → leave
+//	PUT    .../role              → update
+//	POST   .../invitations       → invite
+//	POST   .../avatar | /logo    → update
+//	DELETE .../avatar | /logo    → delete
+//
+// Fallback: method-based mapping.
 func getActionFromRequest(c fiber.Ctx) string {
 	path := c.Path()
+	method := c.Method()
 
-	// POST /invitations → invite (not create)
-	if strings.Contains(path, "/invitations") && c.Method() == http.MethodPost {
+	// ---- Verb-based overrides (path suffix) ----
+
+	// POST /accounts/:id/leave → leave (membership self-removal).
+	if method == http.MethodPost && strings.HasSuffix(path, "/leave") {
+		return authdomain.ActionLeave.String()
+	}
+
+	// PUT/PATCH /accounts/:id/members/:userId/role → update.
+	if (method == http.MethodPut || method == http.MethodPatch) &&
+		strings.HasSuffix(path, "/role") {
+		return authdomain.ActionUpdate.String()
+	}
+
+	// POST /invitations → invite.
+	if method == http.MethodPost && strings.Contains(path, "/invitations") {
 		return authdomain.ActionInvite.String()
 	}
 
-	// POST/DELETE on avatar or logo → update/delete (not create)
+	// ---- Avatar / logo → update/delete, not create ----
 	if strings.Contains(path, "/avatar") || strings.Contains(path, "/logo") {
-		switch c.Method() {
-		case http.MethodPost:
+		switch method {
+		case http.MethodPost, http.MethodPut:
 			return authdomain.ActionUpdate.String()
 		case http.MethodDelete:
 			return authdomain.ActionDelete.String()
 		}
 	}
 
-	switch c.Method() {
+	// ---- Method-based default ----
+	switch method {
 	case http.MethodGet:
 		return authdomain.ActionRead.String()
 	case http.MethodPost:

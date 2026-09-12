@@ -127,6 +127,15 @@ type Service interface {
 	GetTicketTypes(ctx context.Context) ([]*domain.TicketTypeRow, error)
 
 	GetCategories(ctx context.Context) ([]*domain.Category, error)
+
+
+	// ============================================================
+	// AI-ASSISTED DRAFTING
+	// ============================================================
+
+	// GenerateEventDraft returns a publishable event draft generated
+	// from a natural-language prompt. The draft is not persisted.
+	GenerateEventDraft(ctx context.Context, req GenerateEventDraftRequest) (*GenerateEventDraftResult, error)
 }
 
 // ============================================================

@@ -108,6 +108,7 @@ func provideAppDependencies(
 	eventsHndlr *eventsHandler.EventHandler,
 	// ✅ Added AI Service
 	aiSvc teamService.AIService,
+	eventsAIService  eventsService.AIService,
 	organizerProvider eventsDomain.OrganizerProvider,
 	accountsPermissionChecker accountDomain.PermissionChecker,
 
@@ -137,6 +138,7 @@ func provideAppDependencies(
 		OrganizerProvider:	organizerProvider,
 		AccountsPermissionChecker: accountsPermissionChecker,
 		AIClient:	aiClient,
+		EventsAIService: eventsAIService,
 	
 	}
 }

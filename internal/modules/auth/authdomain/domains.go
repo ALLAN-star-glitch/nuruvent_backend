@@ -25,6 +25,10 @@ const (
 	TeamDomainPrefixAccount     = domains.TeamDomainPrefixAccount
 	TeamTypePersonal            = domains.TeamTypePersonal
 	TeamTypeInstitution         = domains.TeamTypeInstitution
+	// DomainDeferred signals that the domain cannot be resolved from the
+    // request alone (e.g. slug-based lookups). The service layer MUST
+    // perform the authorization check after loading the resource.
+    DomainDeferred = "deferred"
 )
 
 // ---- Builders ----

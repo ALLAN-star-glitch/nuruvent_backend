@@ -19,6 +19,7 @@ import (
 	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
+	infrastructure2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/infrastructure"
 	postgres5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
 	service6 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 	postgres4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
@@ -93,12 +94,13 @@ func InitializeApp() (*AppDependencies, error) {
 	userInfoProvider := NewEventsUserInfoAdapter(service9)
 	domainMediaService := NewEventsMediaAdapter(service8)
 	organizerProvider := provideOrganizerProvider(service9)
-	service10 := service6.NewService(repository2, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider)
+	serviceAIService := infrastructure2.NewEventAIAdapter(aiClient)
+	service10 := service6.NewService(repository2, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider, serviceAIService)
 	authHandler := authhandler.NewAuthHandler(service7, configConfig)
 	accountHandler := handler.NewAccountHandler(service9)
 	teamHandler := handler2.NewTeamHandler(serviceService)
 	eventHandler := eventhandler.NewEventHandler(service10)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service7, tokenService, service9, serviceService, service10, service8, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, organizerProvider, accountdomainPermissionChecker)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service7, tokenService, service9, serviceService, service10, service8, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker)
 	return appDependencies, nil
 }
 
@@ -126,6 +128,7 @@ type AppDependencies struct {
 	TeamHandler               *handler2.TeamHandler
 	EventsHandler             *eventhandler.EventHandler
 	AIService                 service2.AIService
+	EventsAIService           service6.AIService
 	OrganizerProvider         domain.OrganizerProvider
 	AccountsPermissionChecker accountdomain.PermissionChecker
 	AIClient                  *ai.Client

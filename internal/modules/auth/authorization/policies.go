@@ -51,6 +51,7 @@ func GetPersonalTeamPolicies(domain string) [][]string {
 		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionUpdate.String()},
 		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionDelete.String()},
 		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionInvite.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionLeave.String()},   // ← added
 
 		// Institution permissions (limited for personal)
 		{accountAdmin, domain, authdomain.ResourceInstitution.String(), authdomain.ActionRead.String()},
@@ -154,6 +155,7 @@ func GetInstitutionTeamPolicies(domain string) [][]string {
 		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionUpdate.String()},
 		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionDelete.String()},
 		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionInvite.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionLeave.String()},   // ← added
 
 		// Institution permissions (full for institution)
 		{accountAdmin, domain, authdomain.ResourceInstitution.String(), authdomain.ActionRead.String()},
@@ -207,6 +209,10 @@ func GetInstitutionTeamPolicies(domain string) [][]string {
 
 		// Team - Read only
 		{trainer, domain, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
+
+		// Member — view roster and leave
+		{trainer, domain, authdomain.ResourceMember.String(), authdomain.ActionRead.String()},   // ← added
+		{trainer, domain, authdomain.ResourceMember.String(), authdomain.ActionLeave.String()},  // ← added
 	}
 	policies = append(policies, trainerPolicies...)
 
@@ -219,6 +225,16 @@ func GetInstitutionTeamPolicies(domain string) [][]string {
 
 // GetAccountPolicies returns all policies for an account domain
 // domain should be "account:{account_id}"
+// ============================================================
+// ACCOUNT POLICIES
+// ============================================================
+
+// GetAccountPolicies returns all policies for an account domain.
+// Domain format: "account:{account_id}".
+//
+// NOTE: This is the domain used by /accounts/:id/members routes.
+// The member:* grants below are what actually authorize those
+// endpoints — the team policy functions do NOT cover them.
 func GetAccountPolicies(domain string) [][]string {
 	accountAdmin := authdomain.RoleAccountAdmin.String()
 	trainer := authdomain.RoleTrainer.String()
@@ -226,32 +242,52 @@ func GetAccountPolicies(domain string) [][]string {
 	var policies [][]string
 
 	// ============================================================
-	// ACCOUNT ADMIN - Full account management
+	// ACCOUNT ADMIN — Full account management
 	// ============================================================
 	accountAdminPolicies := [][]string{
-		// Account management
+		// ---- Account ----
 		{accountAdmin, domain, authdomain.ResourceAccount.String(), authdomain.ActionRead.String()},
 		{accountAdmin, domain, authdomain.ResourceAccount.String(), authdomain.ActionUpdate.String()},
 		{accountAdmin, domain, authdomain.ResourceAccount.String(), authdomain.ActionDelete.String()},
 		{accountAdmin, domain, authdomain.ResourceAccount.String(), authdomain.ActionMemberAdd.String()},
 		{accountAdmin, domain, authdomain.ResourceAccount.String(), authdomain.ActionMemberRemove.String()},
 
-		// Billing
+		// ---- Members ----
+		// Members resolve to domain=account:<id>, resource=member.
+		// Without these grants, /accounts/:id/members returns 403.
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionCreate.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionRead.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionUpdate.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionDelete.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionInvite.String()},
+		{accountAdmin, domain, authdomain.ResourceMember.String(), authdomain.ActionLeave.String()},
+
+		// ---- Billing ----
 		{accountAdmin, domain, authdomain.ResourceBilling.String(), authdomain.ActionRead.String()},
 		{accountAdmin, domain, authdomain.ResourceBilling.String(), authdomain.ActionUpdate.String()},
 
-		// Settings
+		// ---- Settings ----
 		{accountAdmin, domain, authdomain.ResourceSetting.String(), authdomain.ActionRead.String()},
 		{accountAdmin, domain, authdomain.ResourceSetting.String(), authdomain.ActionUpdate.String()},
 	}
 	policies = append(policies, accountAdminPolicies...)
 
 	// ============================================================
-	// TRAINER - Limited account access
+	// TRAINER — Limited account access
 	// ============================================================
 	trainerPolicies := [][]string{
-		// Account - Read only
+		// Account — Read only
 		{trainer, domain, authdomain.ResourceAccount.String(), authdomain.ActionRead.String()},
+
+		// Members — Can view the roster and leave, but not manage it.
+		//
+		// Leaving is a self-service action: every member must be able
+		// to remove themselves. It is deliberately NOT ActionDelete,
+		// because "leave" (self) and "delete" (someone else) are
+		// distinct privileges — an admin can do both, a trainer only
+		// the former.
+		{trainer, domain, authdomain.ResourceMember.String(), authdomain.ActionRead.String()},
+		{trainer, domain, authdomain.ResourceMember.String(), authdomain.ActionLeave.String()},
 	}
 	policies = append(policies, trainerPolicies...)
 

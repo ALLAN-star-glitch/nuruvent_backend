@@ -370,3 +370,61 @@ func (s *eventService) logBulkStatusResult(operation string, result *BulkStatusR
 func (s *eventService) isEmptyTeam(team domain.TeamFilter) bool {
 	return team.ID == "" || team.Type == ""
 }
+
+
+
+// checkEventCreatePermission is the shared authorization check used by
+// CreateDraft, CreateEvent, and GenerateEventDraft.
+//
+// It runs a two-tier Casbin check:
+//   Tier 1: event:create against the resolved team domain
+//   Tier 2: event:create against the account domain (fallback)
+func (s *eventService) checkEventCreatePermission(
+	ctx context.Context,
+	userID, teamID, teamType, accountID string,
+) error {
+	if userID == "" {
+		return fmt.Errorf("user ID is required")
+	}
+	if teamID == "" {
+		return fmt.Errorf("team ID is required")
+	}
+
+	teamDomain := s.resolveTeamDomainFromParts(teamID, teamType, userID)
+	log.Printf("🔍 Tier 1: event:create check user=%s domain=%s", userID, teamDomain)
+
+	allowed, err := s.permChecker.CanCreateEvent(ctx, userID, teamDomain)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+
+	if !allowed && accountID != "" {
+		accountDomain := domain.AccountDomain(accountID)
+		log.Printf("🔍 Tier 2: event:create check user=%s domain=%s", userID, accountDomain)
+
+		allowed, err = s.permChecker.CanCreateEvent(ctx, userID, accountDomain)
+		if err != nil {
+			return fmt.Errorf("account permission check failed: %w", err)
+		}
+	}
+
+	if !allowed {
+		return domain.ErrForbidden
+	}
+	return nil
+}
+
+// resolveTeamDomainFromParts is the primitive form of resolveTeamDomain.
+// Handy when callers don't have a CreateDraftCommand.
+func (s *eventService) resolveTeamDomainFromParts(teamID, teamType, userID string) string {
+	if teamType == "personal" {
+		return domain.PersonalTeamDomain(teamID)
+	}
+	if teamType == "institution" {
+		return domain.InstitutionTeamDomain(teamID)
+	}
+	if userID != "" && userID == teamID {
+		return domain.PersonalTeamDomain(userID)
+	}
+	return domain.InstitutionTeamDomain(teamID)
+}

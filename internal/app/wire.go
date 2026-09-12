@@ -83,6 +83,7 @@ type AppDependencies struct {
 	TeamHandler        *teamHandler.TeamHandler
 	EventsHandler      *eventsHandler.EventHandler
 	AIService          teamService.AIService
+	EventsAIService		eventsService.AIService
 	OrganizerProvider	eventsDomain.OrganizerProvider
 	AccountsPermissionChecker		accountDomain.PermissionChecker
 	AIClient					*ai.Client

@@ -1971,3 +1971,158 @@ func (h *EventHandler) GetTicketTypes(c fiber.Ctx) error {
 
 	return response.Success(c, "Ticket types retrieved successfully", dtos)
 }
+
+// ============================================================
+// AI-ASSISTED DRAFT GENERATION
+// ============================================================
+
+// GenerateEventDraft godoc
+// @Summary Generate a complete event draft from a natural-language prompt
+// @Description Calls the AI provider to generate a fully-formed event draft
+//              (name, description, schedule, tickets, venue). The draft is
+//              not persisted — the client submits it to POST /events/draft
+//              or POST /events when ready.
+// @Tags Events
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param request body service.GenerateEventDraftRequest true "Prompt and AI inputs"
+// @Success 200 {object} response.BaseResponse{data=service.GenerateEventDraftResult}
+// @Failure 400 {object} response.BaseResponse "Invalid input or unknown lookup ID"
+// @Failure 401 {object} response.BaseResponse "Not authenticated"
+// @Failure 403 {object} response.BaseResponse "Insufficient permissions"
+// @Failure 422 {object} response.BaseResponse "AI output could not be made publishable"
+// @Failure 429 {object} response.BaseResponse "Rate limit exceeded"
+// @Failure 502 {object} response.BaseResponse "AI provider error"
+// @Failure 503 {object} response.BaseResponse "AI service disabled"
+// @Router /api/v1/events/ai/generate-draft [post]
+func (h *EventHandler) GenerateEventDraft(c fiber.Ctx) error {
+	// 1. Authn — user must be identified
+	userID, err := handlerhelper.GetUserID(c)
+	if err != nil || userID == "" {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
+	// 2. Bind request body — only the AI-safe fields are exposed as JSON.
+	//    Scope fields (team/account) are json:"-" on the struct, so even
+	//    a malicious payload can't spoof them.
+	var req service.GenerateEventDraftRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request body", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	// 3. Inject scope from the authenticated context (token-first).
+	//    This mirrors CreateEventDraft / CreateEvent.
+	teamID := resolveTeamIDForUnified(c, userID)
+	teamType := resolveTeamType(c)
+	accountID := resolveAccountID(c)
+
+	// Personal-team heuristic — same as CreateEventDraft
+	if teamID == userID && handlerhelper.GetTeamID(c) == "" && handlerhelper.GetQueryString(c, "team_type", "") == "" {
+		teamType = "personal"
+	}
+
+	req.CreatedBy = userID
+	req.TeamID = teamID
+	req.TeamType = teamType
+	req.AccountID = accountID
+
+	// 4. Call service
+	ctx := handlerhelper.EnrichUserContext(c)
+
+	result, err := h.svc.GenerateEventDraft(ctx, req)
+	if err != nil {
+		return mapGenerateEventDraftError(c, err)
+	}
+
+	return response.Success(c, "Draft generated successfully", result)
+}
+
+// ============================================================
+// ERROR MAPPING
+// ============================================================
+//
+// Maps the service-layer sentinels to HTTP status codes per the
+// design doc (§5.1). The order matters: check the most specific
+// error types first.
+
+func mapGenerateEventDraftError(c fiber.Ctx, err error) error {
+	// --- AI infrastructure ---
+	if errors.Is(err, service.ErrAIDisabled) {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"success": false,
+			"message": "AI service not configured",
+			"errors": fiber.Map{
+				"reason": "openrouter.api_key is empty",
+			},
+		})
+	}
+	if errors.Is(err, service.ErrAIProvider) {
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+			"success": false,
+			"message": "AI service unavailable",
+			"errors": fiber.Map{
+				"reason": err.Error(),
+			},
+		})
+	}
+	if errors.Is(err, service.ErrAIParseFailure) {
+		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
+			"success": false,
+			"message": "AI returned an unparseable response",
+			"errors": fiber.Map{
+				"reason": err.Error(),
+			},
+		})
+	}
+
+	// --- AI output could not be made publishable (after retry) ---
+	var unpublishable *service.DraftUnpublishableError
+	if errors.As(err, &unpublishable) {
+		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
+			"success": false,
+			"message": "AI-generated draft could not be made publishable",
+			"errors": fiber.Map{
+				"reason":            unpublishable.Reason,
+				"validation_errors": unpublishable.ValidationErrors,
+				"raw_draft":         unpublishable.RawDraft,
+			},
+		})
+	}
+
+	// --- Input / lookup errors (400) ---
+	if errors.Is(err, service.ErrEventTypeNotFound) {
+		return response.BadRequest(c, "Invalid request", fiber.Map{
+			"field":  "event_type_id",
+			"reason": "event type not found",
+		})
+	}
+	if errors.Is(err, service.ErrCategoryNotFound) {
+		return response.BadRequest(c, "Invalid request", fiber.Map{
+			"field":  "category_id",
+			"reason": "category not found",
+		})
+	}
+	if errors.Is(err, service.ErrTicketTypeNotFound) {
+		return response.BadRequest(c, "Invalid request", fiber.Map{
+			"field":  "ticket_type_ids",
+			"reason": err.Error(),
+		})
+	}
+
+	// --- Authorization (from checkEventCreatePermission) ---
+	//    The domain package owns ErrForbidden. If the AI service returns
+	//    it, map to 403. Otherwise fall through to 500.
+	//    (We check by string to avoid importing the domain package here;
+	//    if you prefer, import domain and use errors.Is(err, domain.ErrForbidden).)
+	if err.Error() == "forbidden" {
+		return response.Forbidden(c, "You do not have permission to create events for this team", nil)
+	}
+
+	// --- Anything else: 500 ---
+	return response.InternalError(c, "Failed to generate draft", fiber.Map{
+		"error": err.Error(),
+	})
+}
