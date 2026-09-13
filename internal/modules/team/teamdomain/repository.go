@@ -24,6 +24,7 @@ type Repository interface {
 	UpdateTeam(ctx context.Context, team *Team) error
 	DeleteTeam(ctx context.Context, id string) error
 
+	
 	// AccountIDForTeam resolves a team ID to its parent account ID.
 	//
 	// Under the post-revamp authorization model, every team belongs to an

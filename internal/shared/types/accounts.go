@@ -13,42 +13,49 @@ type AccountType string
 const (
 	AccountTypePersonalSlug    = "account-type-personal"
 	AccountTypeInstitutionSlug = "account-type-institution"
+	AccountTypeInvitedSlug     = "account-type-invited"
 )
 
 // Name constants (with underscores) - Used for internal database lookups
 const (
 	AccountTypePersonalName    = "account_type_personal"
 	AccountTypeInstitutionName = "account_type_institution"
+	AccountTypeInvitedName     = "account_type_invited"
 )
 
 // Display name constants - Used for UI display
 const (
 	AccountTypePersonalDisplayName    = "Personal Account"
 	AccountTypeInstitutionDisplayName = "Institution Account"
+	AccountTypeInvitedDisplayName     = "Invited Member"
 )
 
 // Description constants
 const (
 	AccountTypePersonalDescription    = "Individual person (trainer, coach, consultant, freelancer)"
 	AccountTypeInstitutionDescription = "Organization, company, institute, or association"
+	AccountTypeInvitedDescription     = "User who joined via a team invitation"
 )
 
 // Icon constants
 const (
 	AccountTypePersonalIcon    = "user"
 	AccountTypeInstitutionIcon = "building"
+	AccountTypeInvitedIcon     = "mail"
 )
 
 // Color constants
 const (
 	AccountTypePersonalColor    = "#4F46E5" // Indigo
 	AccountTypeInstitutionColor = "#7C3AED" // Purple
+	AccountTypeInvitedColor     = "#6366F1" // Indigo (lighter)
 )
 
 // Sort order constants
 const (
 	AccountTypePersonalSortOrder    = 1
 	AccountTypeInstitutionSortOrder = 2
+	AccountTypeInvitedSortOrder     = 3
 )
 
 // ============================================================
@@ -59,10 +66,21 @@ const (
 const (
 	AccountTypePersonal    AccountType = AccountTypePersonalName    // "account_type_personal"
 	AccountTypeInstitution AccountType = AccountTypeInstitutionName // "account_type_institution"
+	AccountTypeInvited     AccountType = AccountTypeInvitedName     // "account_type_invited"
 )
 
 // AllAccountTypes lists all valid account types for validation
 var AllAccountTypes = []AccountType{
+	AccountTypePersonal,
+	AccountTypeInstitution,
+	AccountTypeInvited,
+}
+
+// SelfServiceAccountTypes lists the account types a client may choose
+// during self-service signup. Invited users are assigned their type by
+// the server (see RegisterWithInvitation) and must not be able to select
+// it, so AccountTypeInvited is intentionally excluded here.
+var SelfServiceAccountTypes = []AccountType{
 	AccountTypePersonal,
 	AccountTypeInstitution,
 }
@@ -96,6 +114,23 @@ func (a AccountType) IsInstitution() bool {
 	return a == AccountTypeInstitution
 }
 
+// IsInvited checks if the account type is invited
+func (a AccountType) IsInvited() bool {
+	return a == AccountTypeInvited
+}
+
+// IsSelfService reports whether a client may choose this type during
+// self-service signup. Invited users are created server-side and cannot
+// pick their type via the public registration endpoint.
+func (a AccountType) IsSelfService() bool {
+	for _, t := range SelfServiceAccountTypes {
+		if t == a {
+			return true
+		}
+	}
+	return false
+}
+
 // ============================================================
 // GETTER METHODS - On AccountType
 // ============================================================
@@ -112,6 +147,8 @@ func (a AccountType) GetSlug() string {
 		return AccountTypePersonalSlug
 	case AccountTypeInstitution:
 		return AccountTypeInstitutionSlug
+	case AccountTypeInvited:
+		return AccountTypeInvitedSlug
 	default:
 		return string(a)
 	}
@@ -124,6 +161,8 @@ func (a AccountType) GetDisplayName() string {
 		return AccountTypePersonalDisplayName
 	case AccountTypeInstitution:
 		return AccountTypeInstitutionDisplayName
+	case AccountTypeInvited:
+		return AccountTypeInvitedDisplayName
 	default:
 		return string(a)
 	}
@@ -136,6 +175,8 @@ func (a AccountType) GetDescription() string {
 		return AccountTypePersonalDescription
 	case AccountTypeInstitution:
 		return AccountTypeInstitutionDescription
+	case AccountTypeInvited:
+		return AccountTypeInvitedDescription
 	default:
 		return ""
 	}
@@ -148,6 +189,8 @@ func (a AccountType) GetIcon() string {
 		return AccountTypePersonalIcon
 	case AccountTypeInstitution:
 		return AccountTypeInstitutionIcon
+	case AccountTypeInvited:
+		return AccountTypeInvitedIcon
 	default:
 		return "user"
 	}
@@ -160,6 +203,8 @@ func (a AccountType) GetColor() string {
 		return AccountTypePersonalColor
 	case AccountTypeInstitution:
 		return AccountTypeInstitutionColor
+	case AccountTypeInvited:
+		return AccountTypeInvitedColor
 	default:
 		return "#6B7280"
 	}
@@ -172,6 +217,8 @@ func (a AccountType) GetSortOrder() int {
 		return AccountTypePersonalSortOrder
 	case AccountTypeInstitution:
 		return AccountTypeInstitutionSortOrder
+	case AccountTypeInvited:
+		return AccountTypeInvitedSortOrder
 	default:
 		return 999
 	}
@@ -236,6 +283,16 @@ func AllAccountTypeDisplayNames() []string {
 	names := make([]string, 0, len(AllAccountTypes))
 	for _, t := range AllAccountTypes {
 		names = append(names, t.GetDisplayName())
+	}
+	return names
+}
+
+// SelfServiceAccountTypeNames returns the names of account types a client
+// may select during self-service signup. Invited is excluded.
+func SelfServiceAccountTypeNames() []string {
+	names := make([]string, 0, len(SelfServiceAccountTypes))
+	for _, t := range SelfServiceAccountTypes {
+		names = append(names, t.GetName())
 	}
 	return names
 }

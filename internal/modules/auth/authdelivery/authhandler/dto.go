@@ -12,7 +12,13 @@ import (
 // REQUEST DTOS
 // ============================================================
 
-// RegisterRequest represents the registration request
+// RegisterRequest represents the OTP-based self-service registration
+// request (personal or institution).
+//
+// This flow sends an OTP to `Email` and completes via /auth/verify-otp.
+// It does NOT handle invitation-token signups — use
+// RegisterWithInvitationRequest with /auth/register-with-invitation
+// instead.
 type RegisterRequest struct {
 	Email       string `json:"email"`
 	Password    string `json:"password"`
@@ -20,10 +26,6 @@ type RegisterRequest struct {
 	Phone       string `json:"phone"`
 	AccountType string `json:"account_type"`
 
-	// Optional: Pre-assigned team invitation
-	InviteToken string `json:"invite_token,omitempty"`
-
-	
 	// Professional type (for personal accounts)
 	ProfessionalType string `json:"professional_type,omitempty"`
 
@@ -32,6 +34,22 @@ type RegisterRequest struct {
 	InstitutionEmail string `json:"institution_email,omitempty"`
 	InstitutionPhone string `json:"institution_phone,omitempty"`
 	InstitutionType  string `json:"institution_type,omitempty"`
+}
+
+// RegisterWithInvitationRequest is the body for token-only signup.
+//
+// The invitee's email is NOT part of the request — it is read from the
+// invitation record. The token was delivered to that email, so it is the
+// proof of ownership (equivalent to OTP verification).
+//
+// No account_type, professional_type, or institution fields are accepted:
+// invited users join the inviter's existing account. They do not create a
+// personal account or personal team.
+type RegisterWithInvitationRequest struct {
+	Token    string `json:"token"`
+	Name     string `json:"name"`
+	Password string `json:"password"`
+	Phone    string `json:"phone,omitempty"` // optional
 }
 
 // VerifyOTPRequest represents the OTP verification request
@@ -74,7 +92,6 @@ type ForgotPasswordRequest struct {
 	NewPassword string `json:"new_password"`
 }
 
-
 // VerifyResetOTPRequest represents the reset OTP verification request
 type VerifyResetOTPRequest struct {
 	Email string `json:"email"`
@@ -115,22 +132,22 @@ type PasswordResetResponse struct {
 
 // UserResponse represents the user response
 type UserResponse struct {
-	ID                 string     `json:"id"`
-	Slug               string     `json:"slug"`
-	Name               string     `json:"name"`
-	DisplayName        string     `json:"display_name,omitempty"`
-	Email              string     `json:"email"`
-	Phone              string     `json:"phone"`
-	AccountType        string     `json:"account_type"`
-	AccountTypeID      string     `json:"account_type_id"`
-	ProfessionalTypeID *string    `json:"professional_type_id,omitempty"`
-	ProfessionalType   string     `json:"professional_type,omitempty"`
-	EmailVerified      bool       `json:"email_verified"`
-	IdentityVerified   bool       `json:"identity_verified"`
-	IsActive           bool       `json:"is_active"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
-	InstitutionID      *string    `json:"institution_id,omitempty"`
+	ID                 string    `json:"id"`
+	Slug               string    `json:"slug"`
+	Name               string    `json:"name"`
+	DisplayName        string    `json:"display_name,omitempty"`
+	Email              string    `json:"email"`
+	Phone              string    `json:"phone"`
+	AccountType        string    `json:"account_type"`
+	AccountTypeID      string    `json:"account_type_id"`
+	ProfessionalTypeID *string   `json:"professional_type_id,omitempty"`
+	ProfessionalType   string    `json:"professional_type,omitempty"`
+	EmailVerified      bool      `json:"email_verified"`
+	IdentityVerified   bool      `json:"identity_verified"`
+	IsActive           bool      `json:"is_active"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	InstitutionID      *string   `json:"institution_id,omitempty"`
 }
 
 // InstitutionResponse represents the institution response
@@ -158,8 +175,8 @@ type AuthResponse struct {
 // RESPONSE BUILDERS (Mappers)
 // ============================================================
 
-// NewUserResponse converts authdomain.User to UserResponse
-// Fetches account type and professional type names from database
+// NewUserResponse converts authdomain.User to UserResponse.
+// Fetches account type and professional type names from the database.
 func NewUserResponse(user *authdomain.User, svc service.Service, ctx context.Context) UserResponse {
 	if user == nil {
 		return UserResponse{}

@@ -361,3 +361,4 @@ func (s *teamService) GetUserInstitutionTeamIDs(ctx context.Context, userID stri
 	}
 	return teamIDs, nil
 }
+

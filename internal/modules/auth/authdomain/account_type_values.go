@@ -1,5 +1,3 @@
-
-
 package authdomain
 
 import (
@@ -17,10 +15,16 @@ type AccountTypeValue = types.AccountType
 const (
 	AccountTypePersonal    = types.AccountTypePersonal
 	AccountTypeInstitution = types.AccountTypeInstitution
+	AccountTypeInvited     = types.AccountTypeInvited
 )
 
 // AllAccountTypes re-exported from shared types
 var AllAccountTypes = types.AllAccountTypes
+
+// SelfServiceAccountTypes re-exported from shared types.
+// These are the types a client may choose during signup; AccountTypeInvited
+// is intentionally excluded because it is server-assigned only.
+var SelfServiceAccountTypes = types.SelfServiceAccountTypes
 
 // AccountTypeInfo holds metadata for each account type
 type AccountTypeInfo struct {
@@ -59,6 +63,16 @@ var accountTypeRegistry = map[types.AccountType]AccountTypeInfo{
 		SortOrder:   types.AccountTypeInstitutionSortOrder,
 		IsActive:    true,
 	},
+	types.AccountTypeInvited: {
+		Slug:        types.AccountTypeInvitedSlug,
+		Name:        types.AccountTypeInvitedName,
+		DisplayName: types.AccountTypeInvitedDisplayName,
+		Description: types.AccountTypeInvitedDescription,
+		Icon:        types.AccountTypeInvitedIcon,
+		Color:       types.AccountTypeInvitedColor,
+		SortOrder:   types.AccountTypeInvitedSortOrder,
+		IsActive:    true,
+	},
 }
 
 // ============================================================
@@ -80,6 +94,18 @@ func AllAccountTypeInfos() []AccountTypeInfo {
 	infos := make([]AccountTypeInfo, 0, len(accountTypeRegistry))
 	for _, info := range accountTypeRegistry {
 		infos = append(infos, info)
+	}
+	return infos
+}
+
+// SelfServiceAccountTypeInfos returns only the type infos a client may
+// select during self-service signup. Invited is excluded.
+func SelfServiceAccountTypeInfos() []AccountTypeInfo {
+	infos := make([]AccountTypeInfo, 0, len(types.SelfServiceAccountTypes))
+	for _, t := range types.SelfServiceAccountTypes {
+		if info, ok := accountTypeRegistry[t]; ok {
+			infos = append(infos, info)
+		}
 	}
 	return infos
 }
@@ -142,4 +168,10 @@ func GetAccountTypeByDisplayName(displayName string) (AccountTypeInfo, bool) {
 // IsAccountTypeValid checks if the account type is valid
 func IsAccountTypeValid(accountType AccountTypeValue) bool {
 	return accountType.IsValid()
+}
+
+// IsSelfServiceAccountType reports whether a client may select this type
+// during self-service signup.
+func IsSelfServiceAccountType(accountType AccountTypeValue) bool {
+	return accountType.IsSelfService()
 }

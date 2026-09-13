@@ -28,6 +28,14 @@
     {
       "key": "invitation_id",
       "value": ""
+    },
+    {
+      "key": "invitee_email",
+      "value": "newuser@example.com"
+    },
+    {
+      "key": "invitee_role",
+      "value": "trainer"
     }
   ],
   "item": [
@@ -244,7 +252,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n    \"email\": \"newuser@example.com\"\n}"
+              "raw": "{\n    \"email\": \"{{invitee_email}}\",\n    \"role\": \"{{invitee_role}}\"\n}"
             }
           }
         },
@@ -284,6 +292,40 @@
               "mode": "raw",
               "raw": "{\n    \"invitation_id\": \"{{invitation_id}}\"\n}"
             }
+          }
+        },
+        {
+          "name": "4. Accept Invitation",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/teams/invitations/accept?token={{invitation_token}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          }
+        },
+        {
+          "name": "5. Decline Invitation",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/api/v1/teams/invitations/decline?token={{invitation_token}}",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{access_token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ]
           }
         }
       ]

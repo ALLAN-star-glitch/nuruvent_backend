@@ -1,4 +1,4 @@
- // internal/modules/auth/service/registration.go
+// internal/modules/auth/service/registration.go
 
 package service
 
@@ -27,6 +27,9 @@ func getString(m map[string]string, key string) string {
 // REGISTRATION METHODS
 // ============================================================
 
+// RegisterUser begins the OTP-based registration flow for self-service
+// signups (personal or institution). It does NOT handle invitation-token
+// signups — those go through RegisterWithInvitation instead.
 func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 	log.Printf("[RegisterUser] Starting registration for email: %s, account_type: %s", req.Email, req.AccountType)
 
@@ -85,7 +88,11 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 		return fmt.Errorf("failed to store OTP: %w", err)
 	}
 
-	// Store user data in Redis for verification step
+	// Store user data in Redis for verification step.
+	//
+	// NOTE: invitation tokens are intentionally NOT accepted here. Invited
+	// users must go through RegisterWithInvitation, which skips OTP and
+	// does not create a personal account.
 	userData := map[string]any{
 		"email":             req.Email,
 		"password":          req.Password,
@@ -93,7 +100,6 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 		"phone":             req.Phone,
 		"account_type":      req.AccountType,
 		"professional_type": req.ProfessionalType,
-		"invite_token":      req.InviteToken,
 	}
 
 	if req.AccountType == types.AccountTypeInstitutionName {
@@ -122,7 +128,143 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 	return nil
 }
 
-// VerifyOTPAndCreateUser verifies OTP and creates user, accounts, and workspace teams.
+// ============================================================
+// INVITATION-BASED REGISTRATION (NO OTP)
+// ============================================================
+
+// RegisterWithInvitation creates a user from a valid invitation token,
+// accepts the invitation, and issues auth tokens — all in one call.
+//
+// The invitation token is the proof of email ownership: it was delivered
+// to the invitee's email address, and the invitation's `email` field is
+// the user's email. This is equivalent to OTP verification, so no OTP is
+// generated or required.
+//
+// The invited user joins ONLY the inviter's account. No personal account
+// or personal team is created — those belong to the self-service signup
+// journey, not the invited-user journey.
+func (s *service) RegisterWithInvitation(
+	ctx context.Context,
+	token, name, password string,
+) (*authdomain.User, map[string]any, error) {
+	log.Printf("[RegisterWithInvitation] Starting invitation-based registration")
+
+	// 1. Validate the invitation token.
+	invitation, err := s.teamSvc.ValidateInvitationToken(ctx, token)
+	if err != nil {
+		log.Printf("[RegisterWithInvitation] Invalid invitation token: %v", err)
+		return nil, nil, fmt.Errorf("invalid or expired invitation: %w", err)
+	}
+	if invitation == nil {
+		return nil, nil, fmt.Errorf("invitation not found")
+	}
+	log.Printf("[RegisterWithInvitation] Invitation validated for email: %s, team: %s",
+		invitation.Email, invitation.TeamID)
+
+	// 2. Reject if the email is already registered — the client should
+	//    route the user to /login instead.
+	exists, err := s.repo.UserExistsByEmail(ctx, invitation.Email)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to check existing user: %w", err)
+	}
+	if exists {
+		return nil, nil, authdomain.ErrUserExists
+	}
+
+	// 3. Validate name + password using the same rules as normal signup.
+	sanitizer := validation.Sanitize{}
+	cleanName := sanitizer.DisplayName(name)
+	if cleanName == "" {
+		return nil, nil, fmt.Errorf("name is required")
+	}
+	if len(password) < 8 {
+		return nil, nil, fmt.Errorf("password must be at least 8 characters")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// 4. Resolve the invited account type. Invited users are neither
+//    self-service personal nor institution signups — they arrived via
+//    a team invitation. Using a dedicated type makes the signup path
+//    explicit in the DB and prevents accidental classification as a
+//    personal signup.
+	accountTypeID, err := s.getAccountTypeID(ctx, types.AccountTypeInvitedName)
+	if err != nil || accountTypeID == "" {
+		return nil, nil, fmt.Errorf("failed to resolve invited account type ID: %w", err)
+	}
+
+	// 5. Build the user entity. Email is marked verified because the
+	//    invitation token was delivered to it.
+	user, err := authdomain.NewUser(
+		invitation.Email,
+		string(hashedPassword),
+		cleanName,
+		"",
+		accountTypeID,
+	)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to construct user entity: %w", err)
+	}
+	user.DisplayName = cleanName
+	user.EmailVerified = true
+
+	// 6. Persist the user (no account, no personal team).
+	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+		if err := s.repo.CreateUser(txCtx, user); err != nil {
+			return fmt.Errorf("failed to save user: %w", err)
+		}
+		log.Printf("[RegisterWithInvitation] User created: %s", user.ID)
+		return nil
+	})
+	if err != nil {
+		log.Printf("[RegisterWithInvitation] Transaction failed: %v", err)
+		return nil, nil, fmt.Errorf("registration transaction failed: %w", err)
+	}
+
+	// 7. Accept the invitation. This creates the account membership, the
+	//    team membership, and the Casbin role — the only membership the
+	//    invited user should have.
+	if _, err := s.teamSvc.AcceptInvitation(ctx, token, user.ID); err != nil {
+		log.Printf("[RegisterWithInvitation] Failed to accept invitation: %v", err)
+		return nil, nil, fmt.Errorf("failed to accept invitation: %w", err)
+	}
+	log.Printf("[RegisterWithInvitation] Invitation accepted for user: %s", user.ID)
+
+	// 8. Issue auth tokens.
+	accessToken, refreshToken, err := s.GenerateTokens(ctx, user)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to generate tokens: %w", err)
+	}
+
+	additionalData := map[string]any{
+		"user_id":       user.ID,
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+		"account_id":    invitation.AccountID, // if your Invitation exposes it
+		"team_id":       invitation.TeamID,
+		"account_type":  types.AccountTypePersonalName,
+	}
+
+	log.Printf("[RegisterWithInvitation] ✅ Registration completed for user: %s, email: %s",
+		user.ID, user.Email)
+
+	return user, additionalData, nil
+}
+
+// ============================================================
+// OTP-BASED VERIFICATION (self-service signups only)
+// ============================================================
+
+// VerifyOTPAndCreateUser verifies OTP and creates user, accounts, and
+// workspace teams for self-service signups.
+//
+// This path is NOT used for invitation-token signups — those go through
+// RegisterWithInvitation. If an invite token ever appears in the cached
+// payload, it is ignored here to avoid creating a personal account for a
+// user who was invited into an institution.
 func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string) (*authdomain.User, map[string]any, error) {
 	log.Printf("[VerifyOTPAndCreateUser] Starting verification for email: %s", email)
 
@@ -172,7 +314,6 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	reqInstitutionName := getString(userData, "institution_name")
 	reqInstitutionEmail := getString(userData, "institution_email")
 	reqInstitutionPhone := getString(userData, "institution_phone")
-	reqInviteToken := getString(userData, "invite_token")
 
 	log.Printf("[VerifyOTPAndCreateUser] Account type: %s, Professional type: %s", reqAccountType, reqProfessionalType)
 
@@ -318,13 +459,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	}
 	log.Printf("[VerifyOTPAndCreateUser] Database transaction completed successfully")
 
-	// Force the Casbin enforcer to reload its in-memory model so the
-	// just-written g rule is visible to permission checks in this same
-	// request (e.g. team creation).
-	//
-	// Without this, the enforcer's in-memory state can lag behind the DB
-	// until the next auto-load cycle (10s), causing spurious permission
-	// denials during bootstrap.
+	// Force the Casbin enforcer to reload its in-memory model.
 	if err := s.roleManager.ReloadPolicies(ctx); err != nil {
 		log.Printf("[VerifyOTPAndCreateUser] ⚠️ failed to reload casbin policies: %v", err)
 	} else {
@@ -332,22 +467,10 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	}
 
 	// ============================================================
-	// WORKSPACE & INVITATION INTEGRATION
+	// WORKSPACE CREATION (self-service signups only)
 	// ============================================================
 
-	// 1. Handle Invitation if token exists
-	if reqInviteToken != "" {
-		log.Printf("[VerifyOTPAndCreateUser] Processing invite token: %s", reqInviteToken)
-		if _, err := s.teamSvc.AcceptInvitation(ctx, reqInviteToken, user.ID); err != nil {
-			log.Printf("[VerifyOTPAndCreateUser] Warning: Failed to process invite token '%s': %v", reqInviteToken, err)
-		} else {
-			log.Printf("[VerifyOTPAndCreateUser] Invitation accepted successfully")
-		}
-	}
-
-	// ============================================================
-	// Create Personal Team ONLY for Personal Accounts
-	// ============================================================
+	// Personal Team — only for personal accounts.
 	if reqAccountType == types.AccountTypePersonalName {
 		log.Printf("[VerifyOTPAndCreateUser] Creating personal team for user: %s (Personal Account)", user.ID)
 		if err := s.createAndAddToPersonalTeam(ctx, user.ID, cleanName); err != nil {
@@ -359,9 +482,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 		log.Printf("[VerifyOTPAndCreateUser] Skipping personal team creation for institution account: %s", reqAccountType)
 	}
 
-	// ============================================================
-	// Create Institution Team Workspace ONLY for Institution Accounts
-	// ============================================================
+	// Institution Team — only for institution accounts.
 	if reqAccountType == types.AccountTypeInstitutionName && account != nil {
 		log.Printf("[VerifyOTPAndCreateUser] Creating institution team for user: %s (Institution Account)", user.ID)
 		if err := s.createAndAddToInstitutionTeam(ctx, user.ID, account.ID, reqInstitutionName); err != nil {

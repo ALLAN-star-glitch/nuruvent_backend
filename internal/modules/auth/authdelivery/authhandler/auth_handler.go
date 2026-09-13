@@ -132,7 +132,7 @@ func (h *AuthHandler) getRefreshTokenFromCookie(c fiber.Ctx) (string, error) {
 }
 
 // ============================================================
-// REGISTER HANDLER
+// REGISTER HANDLER (OTP-BASED — self-service signups)
 // ============================================================
 
 // Register handles user registration
@@ -164,7 +164,6 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 		Phone:            req.Phone,
 		AccountType:      req.AccountType,
 		ProfessionalType: req.ProfessionalType,
-		InviteToken:      req.InviteToken, 
 	}
 
 	if req.AccountType == types.AccountTypeInstitutionName {
@@ -183,6 +182,103 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 		Message:   "OTP sent to your email. Verify to complete registration.",
 	})
+}
+
+// ============================================================
+// REGISTER WITH INVITATION HANDLER (NO OTP)
+// ============================================================
+
+// RegisterWithInvitation creates a user from a valid invitation token,
+// accepts the invitation, and issues auth tokens — all in one request.
+// No OTP is generated or required.
+//
+// The invited user joins ONLY the inviter's account. No personal account
+// or personal team is created.
+//
+// @Summary Register via invitation token
+// @Description Create an account from an invitation link and join the inviter's team. No OTP required.
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body RegisterWithInvitationRequest true "Invitation token, name, password"
+// @Success 201 {object} response.BaseResponse{data=AuthResponse}
+// @Failure 400 {object} response.BaseResponse
+// @Failure 409 {object} response.BaseResponse
+// @Failure 500 {object} response.BaseResponse
+// @Router /api/v1/auth/register-with-invitation [post]
+func (h *AuthHandler) RegisterWithInvitation(c fiber.Ctx) error {
+	var req RegisterWithInvitationRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request", fiber.Map{"error": err.Error()})
+	}
+
+	if req.Token == "" {
+		return response.BadRequest(c, "token is required", nil)
+	}
+	if req.Name == "" {
+		return response.BadRequest(c, "name is required", nil)
+	}
+	if valid, msg := validator.Password.Validate(req.Password); !valid {
+		return response.BadRequest(c, "Weak password", fiber.Map{
+			"field":    "password",
+			"error":    msg,
+			"strength": validator.Password.StrengthLabel(validator.Password.Score(req.Password)),
+		})
+	}
+	if req.Phone != "" {
+		if !validator.Phone.Validate(req.Phone) {
+			return response.BadRequest(c, "invalid Kenyan phone number", nil)
+		}
+		req.Phone = validator.Phone.Normalize(req.Phone)
+	}
+
+	user, result, err := h.service.RegisterWithInvitation(
+		c.Context(),
+		req.Token,
+		req.Name,
+		req.Password,
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, authdomain.ErrUserExists):
+			return response.Conflict(c,
+				"This email is already registered. Please log in to accept the invitation.", nil)
+		case errors.Is(err, authdomain.ErrInvitationNotFound),
+			errors.Is(err, authdomain.ErrInvitationExpired),
+			errors.Is(err, authdomain.ErrInvitationAlreadyUsed):
+			return response.BadRequest(c, err.Error(), nil)
+		default:
+			log.Printf("[RegisterWithInvitation] failed: %v", err)
+			return response.BadRequest(c, err.Error(), nil)
+		}
+	}
+
+	var accessToken, refreshToken string
+	if val, ok := result["access_token"].(string); ok {
+		accessToken = val
+	}
+	if val, ok := result["refresh_token"].(string); ok {
+		refreshToken = val
+	}
+
+	if accessToken != "" {
+		h.setAccessTokenCookie(c, accessToken)
+	}
+	if refreshToken != "" {
+		h.setRefreshTokenCookie(c, refreshToken)
+	}
+
+	authResp := AuthResponse{
+		TokenResponse: TokenResponse{
+			AccessToken:  accessToken,
+			RefreshToken: refreshToken,
+			TokenType:    "Bearer",
+			ExpiresIn:    int64(h.config.JWT.AccessExpiration.Seconds()),
+		},
+		User: NewUserResponse(user, h.service, c.Context()),
+	}
+
+	return response.Created(c, "Account created successfully. Welcome to the team!", authResp)
 }
 
 func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {

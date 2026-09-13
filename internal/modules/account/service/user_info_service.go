@@ -372,6 +372,7 @@ func (s *accountService) GetPublicProfileBySlug(ctx context.Context, slug string
 	return toPublicProfile(user), nil
 }
 
+
 // toPublicProfile maps a user entity to the public projection.
 func toPublicProfile(u *accountdomain.User) *accountdomain.PublicProfile {
 	if u == nil {

@@ -47,8 +47,6 @@ func requestContext(c fiber.Ctx) context.Context {
 	return ctx
 }
 
-
-
 // ============================================================
 // PUBLIC HANDLERS
 // ============================================================
@@ -516,4 +514,80 @@ func (h *TeamHandler) ResendInvitation(c fiber.Ctx) error {
 	return response.Success(c, "Invitation resent successfully", fiber.Map{
 		"invitation": invitation,
 	})
+}
+
+// AcceptInvitation accepts an invitation for the authenticated user.
+//
+// The invitation's email must match the authenticated user's email — the
+// service enforces this. On success the user is added to the inviter's
+// account (if not already a member) and to the team.
+//
+// The token is read from the query string (?token=...), matching the URL
+// shape the frontend receives in the invitation email.
+func (h *TeamHandler) AcceptInvitation(c fiber.Ctx) error {
+	userID := authenticatedUserID(c)
+	if userID == "" {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
+	token := c.Query("token")
+	if token == "" {
+		return response.BadRequest(c, "token is required", nil)
+	}
+
+	member, err := h.service.AcceptInvitation(c.Context(), token, userID)
+	if err != nil {
+		switch err {
+		case teamdomain.ErrInvitationNotFound:
+			return response.NotFound(c, "Invitation not found", nil)
+		case teamdomain.ErrInvitationExpired:
+			return response.BadRequest(c, "Invitation has expired", nil)
+		case teamdomain.ErrInvitationAlreadyAccepted:
+			return response.BadRequest(c, "Invitation already accepted", nil)
+		case teamdomain.ErrInvitationEmailMismatch:
+			return response.Forbidden(c, "This invitation is for a different email address", nil)
+		case teamdomain.ErrTeamNotFound:
+			return response.NotFound(c, "Team not found", nil)
+		}
+		return response.InternalError(c, "Failed to accept invitation", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return response.Success(c, "Invitation accepted successfully", fiber.Map{
+		"member": member,
+	})
+}
+
+// DeclineInvitation declines an invitation for the authenticated user.
+//
+// The token is read from the query string (?token=...).
+func (h *TeamHandler) DeclineInvitation(c fiber.Ctx) error {
+	userID := authenticatedUserID(c)
+	if userID == "" {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
+	token := c.Query("token")
+	if token == "" {
+		return response.BadRequest(c, "token is required", nil)
+	}
+
+	if err := h.service.DeclineInvitation(c.Context(), token, userID); err != nil {
+		switch err {
+		case teamdomain.ErrInvitationNotFound:
+			return response.NotFound(c, "Invitation not found", nil)
+		case teamdomain.ErrInvitationExpired:
+			return response.BadRequest(c, "Invitation has expired", nil)
+		case teamdomain.ErrInvitationAlreadyAccepted:
+			return response.BadRequest(c, "Invitation already accepted", nil)
+		case teamdomain.ErrInvitationEmailMismatch:
+			return response.Forbidden(c, "This invitation is for a different email address", nil)
+		}
+		return response.InternalError(c, "Failed to decline invitation", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	return response.Success(c, "Invitation declined successfully", nil)
 }

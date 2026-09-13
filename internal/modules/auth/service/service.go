@@ -21,8 +21,35 @@ type Service interface {
 	// REGISTRATION
 	// ============================================================
 
+	// RegisterUser begins the OTP-based registration flow for
+	// self-service signups (personal or institution). It sends an OTP
+	// to the given email and stores the pending registration in Redis.
+	//
+	// Invitation-token signups do NOT go through this method — use
+	// RegisterWithInvitation instead.
 	RegisterUser(ctx context.Context, req RegisterRequest) error
+
+	// VerifyOTPAndCreateUser verifies the OTP from RegisterUser and
+	// completes the self-service signup: creates the user, the personal
+	// or institution account, the account membership, and the workspace
+	// team.
 	VerifyOTPAndCreateUser(ctx context.Context, email, otp string) (*authdomain.User, map[string]interface{}, error)
+
+	// RegisterWithInvitation creates a user from a valid invitation
+	// token, accepts the invitation, and issues auth tokens — all in one
+	// call. No OTP is generated or required.
+	//
+	// The invitee's email is read from the invitation record, NOT from
+	// the request. The invited user joins ONLY the inviter's account:
+	// no personal account or personal team is created.
+	//
+	// Returns the created user and a data map containing at least
+	// "access_token", "refresh_token", "account_id", "team_id", and
+	// "role".
+	RegisterWithInvitation(
+		ctx context.Context,
+		token, name, password string,
+	) (*authdomain.User, map[string]interface{}, error)
 
 	// ============================================================
 	// LOGIN
@@ -97,15 +124,15 @@ type Service interface {
 	UserExists(ctx context.Context, email string) (bool, error)
 	GetTokenContext(ctx context.Context, user *authdomain.User) (*authdomain.TokenContext, error)
 
-	// ✅ GetUserByIDWithAccount retrieves a user by ID with their account ID
-	// Returns: user, accountID, error
+	// GetUserByIDWithAccount retrieves a user by ID with their account ID.
+	// Returns: user, accountID, error.
 	GetUserByIDWithAccount(ctx context.Context, userID string) (*authdomain.User, string, error)
 
-	// ✅ GetUserByEmailWithAccount retrieves a user by email with their account ID
-	// Returns: user, accountID, error
+	// GetUserByEmailWithAccount retrieves a user by email with their account ID.
+	// Returns: user, accountID, error.
 	GetUserByEmailWithAccount(ctx context.Context, email string) (*authdomain.User, string, error)
 
-	// ✅ GetAccountIDByUserID gets the account ID for a user
+	// GetAccountIDByUserID gets the account ID for a user.
 	GetAccountIDByUserID(ctx context.Context, userID string) (string, error)
 
 	AddAccountMember(ctx context.Context, accountID, userID, role string) error
@@ -115,14 +142,19 @@ type Service interface {
 // COMMANDS
 // ============================================================
 
+// RegisterRequest carries a self-service signup (personal or institution).
+//
+// This flow is OTP-based: RegisterUser stores the payload in Redis and
+// sends an OTP; VerifyOTPAndCreateUser completes the signup.
+//
+// Invitation-token signups do NOT use this struct. They go through
+// Service.RegisterWithInvitation with {token, name, password} only.
 type RegisterRequest struct {
 	Email       string
 	Password    string
 	Name        string
 	Phone       string
 	AccountType string
-
-	InviteToken string
 
 	// Professional Type (for personal accounts)
 	ProfessionalType string
