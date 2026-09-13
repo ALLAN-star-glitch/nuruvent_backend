@@ -41,12 +41,6 @@ func NewEventHandler(svc service.Service) *EventHandler {
 // INTERNAL SCOPE RESOLUTION (token-first, body ignored)
 // ============================================================
 
-// resolveTeamType returns the team type in priority order:
-//   1. Authenticated token context (authoritative — from JWT/session)
-//   2. Explicit query param (admin override)
-//   3. "institution" default
-//
-// NOTE: request body is intentionally NOT consulted — body is untrusted.
 func resolveTeamType(c fiber.Ctx) string {
 	if tt := handlerhelper.GetTeamType(c); tt != "" {
 		return tt
@@ -57,11 +51,6 @@ func resolveTeamType(c fiber.Ctx) string {
 	return "institution"
 }
 
-// resolveAccountID returns the account ID in priority order:
-//   1. Authenticated token context (authoritative)
-//   2. Explicit query param (admin override)
-//
-// NOTE: request body is intentionally NOT consulted.
 func resolveAccountID(c fiber.Ctx) string {
 	if acc := handlerhelper.GetAccountID(c); acc != "" {
 		return acc
@@ -69,10 +58,6 @@ func resolveAccountID(c fiber.Ctx) string {
 	return handlerhelper.GetQueryString(c, "account_id", "")
 }
 
-// resolveTeamIDForUnified returns the target team ID for unified create/list ops:
-//   1. Query param (explicit admin target)
-//   2. Authenticated token context
-//   3. Falls back to the user's personal scope (userID)
 func resolveTeamIDForUnified(c fiber.Ctx, userID string) string {
 	if tid := handlerhelper.GetQueryString(c, "team_id", ""); tid != "" {
 		return tid
@@ -83,7 +68,6 @@ func resolveTeamIDForUnified(c fiber.Ctx, userID string) string {
 	return userID
 }
 
-// buildEventResponses builds EventResponse slices with appropriate creator info
 func (h *EventHandler) buildEventResponses(c fiber.Ctx, events []*domain.Event) []EventResponse {
 	if len(events) == 0 {
 		return []EventResponse{}
@@ -101,20 +85,9 @@ func (h *EventHandler) buildEventResponses(c fiber.Ctx, events []*domain.Event) 
 }
 
 // ============================================================
-// PUBLIC HANDLERS (No Auth Required)
+// PUBLIC HANDLERS
 // ============================================================
 
-// GetEvent godoc
-// @Summary Get event by ID
-// @Description Get event details by ID (public)
-// @Tags Events
-// @Produce json
-// @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id} [get]
 func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -125,14 +98,8 @@ func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 
 	event, err := h.svc.GetEventByID(ctx, id)
 	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		return response.InternalError(c, "Failed to get event", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "get event", err)
 	}
-
 	if event == nil {
 		return response.NotFound(c, "Event not found", nil)
 	}
@@ -140,17 +107,6 @@ func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
 }
 
-// GetEventBySlug godoc
-// @Summary Get event by slug
-// @Description Get event details by slug (public)
-// @Tags Events
-// @Produce json
-// @Param slug path string true "Event Slug"
-// @Success 200 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/slug/{slug} [get]
 func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 	slug := c.Params("slug")
 	if slug == "" {
@@ -161,14 +117,8 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 
 	event, err := h.svc.GetEventBySlug(ctx, slug)
 	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		return response.InternalError(c, "Failed to get event", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "get event", err)
 	}
-
 	if event == nil {
 		return response.NotFound(c, "Event not found", nil)
 	}
@@ -176,15 +126,6 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
 }
 
-// GetUpcomingEvents godoc
-// @Summary Get upcoming events
-// @Description Get all upcoming published events
-// @Tags Events
-// @Produce json
-// @Param limit query int false "Number of events to return" default(10)
-// @Success 200 {object} response.BaseResponse{data=[]EventResponse}
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/upcoming [get]
 func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 	limit := handlerhelper.GetQueryInt(c, "limit", 10)
 	if limit > 50 {
@@ -195,9 +136,7 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 
 	events, err := h.svc.GetUpcomingEvents(ctx, "", limit)
 	if err != nil {
-		return response.InternalError(c, "Failed to get upcoming events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "get upcoming events", err)
 	}
 
 	responses := h.buildEventResponses(c, events)
@@ -205,15 +144,6 @@ func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
 	return response.Success(c, "Upcoming events retrieved successfully", responses)
 }
 
-// GetPastEvents godoc
-// @Summary Get past events
-// @Description Get all past published events
-// @Tags Events
-// @Produce json
-// @Param limit query int false "Number of events to return" default(10)
-// @Success 200 {object} response.BaseResponse{data=[]EventResponse}
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/past [get]
 func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
 	limit := handlerhelper.GetQueryInt(c, "limit", 10)
 	if limit > 50 {
@@ -224,9 +154,7 @@ func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
 
 	events, err := h.svc.GetPastEvents(ctx, "", limit)
 	if err != nil {
-		return response.InternalError(c, "Failed to get past events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "get past events", err)
 	}
 
 	responses := h.buildEventResponses(c, events)
@@ -234,29 +162,6 @@ func (h *EventHandler) GetPastEvents(c fiber.Ctx) error {
 	return response.Success(c, "Past events retrieved successfully", responses)
 }
 
-// ListEvents godoc
-// @Summary List events (public feed)
-// @Description List events with filters
-// @Tags Events
-// @Produce json
-// @Param team_id query string false "Team ID"
-// @Param team_type query string false "Team Type (personal or institution)"
-// @Param user_id query string false "User ID (creator)"
-// @Param event_type_id query string false "Event Type ID"
-// @Param event_status_id query string false "Event Status ID"
-// @Param category_id query string false "Category ID"
-// @Param include_deleted query bool false "Include soft-deleted events"
-// @Param only_deleted query bool false "Show ONLY soft-deleted events"
-// @Param include_creator query bool false "Include creator details"
-// @Param limit query int false "Limit" default(20)
-// @Param offset query int false "Offset" default(0)
-// @Param sort_by query string false "Sort by field (created_at, start_date, name)" default(created_at)
-// @Param sort_order query string false "Sort order (asc, desc)" default(desc)
-// @Param visibility query string false "Visibility (public, private, unlisted)"
-// @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events [get]
 func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 	ctx := handlerhelper.EnrichUserContext(c)
 
@@ -280,10 +185,7 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 
 	team := domain.TeamFilter{}
 	if req.TeamID != "" && req.TeamType != "" {
-		team = domain.TeamFilter{
-			ID:   req.TeamID,
-			Type: req.TeamType,
-		}
+		team = domain.TeamFilter{ID: req.TeamID, Type: req.TeamType}
 	}
 
 	filters := service.ListEventsFilters{
@@ -305,9 +207,7 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 
 	events, total, err := h.svc.ListEvents(ctx, filters)
 	if err != nil {
-		return response.InternalError(c, "Failed to list events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "list events", err)
 	}
 
 	responses := h.buildEventResponses(c, events)
@@ -322,18 +222,6 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 	})
 }
 
-// GetEventsByType godoc
-// @Summary Get events by type
-// @Description Get all events of a specific type
-// @Tags Events
-// @Produce json
-// @Param type path string true "Event Type Slug"
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/type/{type} [get]
 func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 	eventTypeSlug := c.Params("type")
 	if eventTypeSlug == "" {
@@ -359,9 +247,7 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 			events, total, err = h.svc.GetEventsByType(ctx, eventTypeSlug, page, pageSize)
 		}
 		if err != nil {
-			return response.InternalError(c, "Failed to get events", fiber.Map{
-				"error": err.Error(),
-			})
+			return respondClassifiedError(c, "get events by type", err)
 		}
 	}
 
@@ -376,106 +262,60 @@ func (h *EventHandler) GetEventsByType(c fiber.Ctx) error {
 	})
 }
 
-// GetEventTypes godoc
-// @Summary Get all event types
-// @Description Get list of all event types
-// @Tags Events
-// @Produce json
-// @Success 200 {object} response.BaseResponse{data=[]domain.EventType}
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/types [get]
 func (h *EventHandler) GetEventTypes(c fiber.Ctx) error {
 	ctx := handlerhelper.EnrichUserContext(c)
 
 	types, err := h.svc.GetEventTypes(ctx)
 	if err != nil {
-		return response.InternalError(c, "Failed to get event types", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "get event types", err)
 	}
 
-	return response.Success(c, "Event types retrieved successfully", types)
+	dtos := make([]EventTypeDTO, 0, len(types))
+	for _, t := range types {
+		if built := buildEventTypeDTO(t); built != nil {
+			dtos = append(dtos, *built)
+		}
+	}
+
+	return response.Success(c, "Event types retrieved successfully", dtos)
 }
 
-// GetEventStatuses godoc
-// @Summary Get all event statuses
-// @Description Get list of all event statuses
-// @Tags Events
-// @Produce json
-// @Success 200 {object} response.BaseResponse{data=[]domain.EventStatus}
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/statuses [get]
 func (h *EventHandler) GetEventStatuses(c fiber.Ctx) error {
 	ctx := handlerhelper.EnrichUserContext(c)
 
 	statuses, err := h.svc.GetEventStatuses(ctx)
 	if err != nil {
-		return response.InternalError(c, "Failed to get event statuses", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "get event statuses", err)
 	}
 
-	return response.Success(c, "Event statuses retrieved successfully", statuses)
+	dtos := make([]EventStatusDTO, 0, len(statuses))
+	for _, s := range statuses {
+		if built := buildEventStatusDTO(s); built != nil {
+			dtos = append(dtos, *built)
+		}
+	}
+
+	return response.Success(c, "Event statuses retrieved successfully", dtos)
 }
 
-// GetCategories godoc
-// @Summary Get all event categories
-// @Description Get list of all event categories (public)
-// @Tags Events
-// @Produce json
-// @Success 200 {object} response.BaseResponse{data=[]CategoryDTO}
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/categories [get]
 func (h *EventHandler) GetCategories(c fiber.Ctx) error {
 	ctx := handlerhelper.EnrichUserContext(c)
 
 	categories, err := h.svc.GetCategories(ctx)
 	if err != nil {
-		return response.InternalError(c, "Failed to get categories", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "get categories", err)
 	}
 
-	categoryDTOs := make([]CategoryDTO, len(categories))
-	for i, cat := range categories {
-		categoryDTOs[i] = CategoryDTO{
-			ID:          cat.ID,
-			Slug:        cat.Slug,
-			Name:        cat.Name,
-			DisplayName: cat.DisplayName,
-			Description: cat.Description,
-			Icon:        cat.Icon,
-			Color:       cat.Color,
+	dtos := make([]CategoryDTO, 0, len(categories))
+	for _, cat := range categories {
+		if built := buildCategoryDTO(cat); built != nil {
+			dtos = append(dtos, *built)
 		}
 	}
 
-	return response.Success(c, "Categories retrieved successfully", categoryDTOs)
+	return response.Success(c, "Categories retrieved successfully", dtos)
 }
 
-// SearchEvents godoc
-// @Summary Search events
-// @Description Search events. Public route (/events/search) returns only public
-//              events with no creator info. Authenticated route (/events/me/search)
-//              scopes results based on the caller's permissions (read_all vs read_own).
-// @Tags Events
-// @Produce json
-// @Param q query string true "Search query"
-// @Param team_id query string false "Team ID override (authenticated only)"
-// @Param team_type query string false "Team type override: personal | institution"
-// @Param event_type_id query string false "Event Type ID"
-// @Param category_id query string false "Category ID"
-// @Param include_deleted query bool false "Include soft-deleted events (authenticated only)"
-// @Param only_deleted query bool false "Show ONLY soft-deleted events (authenticated only)"
-// @Param include_creator query bool false "Include creator details (authenticated only)"
-// @Param visibility query string false "Visibility filter (authenticated only)"
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/search [get]
-// @Router /api/v1/events/me/search [get]
 func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 	query := handlerhelper.GetQueryString(c, "q", "")
 	if query == "" {
@@ -488,13 +328,11 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 		pageSize = 100
 	}
 
-	// ─── Auth context ────────────────────────────────────────────
 	userID := handlerhelper.GetUserIDOptional(c)
 	tokenTeamID := handlerhelper.GetTeamID(c)
 	tokenTeamType := handlerhelper.GetTeamType(c)
 	isAuthenticated := userID != ""
 
-	// ─── Team scope resolution ───────────────────────────────────
 	teamID := handlerhelper.GetQueryString(c, "team_id", "")
 	teamType := handlerhelper.GetQueryString(c, "team_type", "")
 
@@ -511,7 +349,6 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 		team = domain.TeamFilter{ID: teamID, Type: teamType}
 	}
 
-	// ─── Auth-only filters ───────────────────────────────────────
 	includeDeleted := false
 	onlyDeleted := false
 	includeCreator := false
@@ -525,7 +362,6 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 		visibility = "public"
 	}
 
-	// ─── Build filters ───────────────────────────────────────────
 	filters := service.SearchFilters{
 		Team:           team,
 		TeamID:         teamID,
@@ -543,12 +379,7 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 
 	events, total, err := h.svc.SearchEvents(ctx, query, filters)
 	if err != nil {
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to search events", nil)
-		}
-		return response.InternalError(c, "Failed to search events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "search events", err)
 	}
 
 	responses := h.buildEventResponses(c, events)
@@ -563,31 +394,9 @@ func (h *EventHandler) SearchEvents(c fiber.Ctx) error {
 }
 
 // ============================================================
-// PROTECTED HANDLERS (Auth Required)
+// PROTECTED HANDLERS
 // ============================================================
 
-// ListUserEvents godoc
-// @Summary List my events (unified)
-// @Description List events scoped to the authenticated user. Uses token scope; ?scope=team or ?team_id= overrides.
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param scope query string false "Scope: personal or team"
-// @Param team_id query string false "Team ID (optional; explicit override)"
-// @Param event_type_id query string false "Event Type ID"
-// @Param event_status_id query string false "Event Status ID"
-// @Param category_id query string false "Category ID"
-// @Param include_deleted query bool false "Include soft-deleted events"
-// @Param only_deleted query bool false "Show ONLY soft-deleted events"
-// @Param include_creator query bool false "Include creator details"
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Success 200 {object} response.BaseResponse{data=map[string]interface{}}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events [get]
 func (h *EventHandler) ListUserEvents(c fiber.Ctx) error {
 	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
@@ -651,12 +460,7 @@ func (h *EventHandler) ListUserEvents(c fiber.Ctx) error {
 
 	events, total, err := h.svc.ListEvents(ctx, filters)
 	if err != nil {
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to view these events", nil)
-		}
-		return response.InternalError(c, "Failed to list events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "view these events", err)
 	}
 
 	responses := h.buildEventResponses(c, events)
@@ -671,23 +475,9 @@ func (h *EventHandler) ListUserEvents(c fiber.Ctx) error {
 }
 
 // ============================================================
-// CREATE - Draft (Unified)
+// CREATE - Draft
 // ============================================================
 
-// CreateEventDraft godoc
-// @Summary Create a draft event (unified)
-// @Description Create a draft event. Team scope resolved from token, then query, then personal fallback.
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body CreateDraftRequest true "Draft event details"
-// @Success 201 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/draft [post]
 func (h *EventHandler) CreateEventDraft(c fiber.Ctx) error {
 	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
@@ -717,41 +507,16 @@ func (h *EventHandler) CreateEventDraft(c fiber.Ctx) error {
 
 	event, err := h.svc.CreateDraft(ctx, cmd)
 	if err != nil {
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to create an event for this team", nil)
-		}
-		if errors.Is(err, domain.ErrEventStatusNotFound) {
-			return response.BadRequest(c, "Invalid event status", nil)
-		}
-		if errors.Is(err, domain.ErrEventTypeNotFound) {
-			return response.BadRequest(c, "Invalid event type", nil)
-		}
-		return response.InternalError(c, "Failed to create draft", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "create this draft", err)
 	}
 
 	return response.Created(c, "Draft created successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // ============================================================
-// CREATE - Published (Unified)
+// CREATE - Published
 // ============================================================
 
-// CreateEvent godoc
-// @Summary Create a published event (unified)
-// @Description Create a published event. Team scope resolved from token, then query, then personal fallback.
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body CreateEventRequest true "Event details"
-// @Success 201 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events [post]
 func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
@@ -765,23 +530,36 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 		})
 	}
 
+	// Handler-level shape validation (fast path).
 	if req.Name == "" {
-		return response.BadRequest(c, "Event name is required", nil)
+		return response.BadRequest(c, "Event name is required", fiber.Map{
+			"field": "name",
+		})
 	}
 	if req.EventTypeID == "" {
-		return response.BadRequest(c, "Event type is required", nil)
+		return response.BadRequest(c, "Event type is required", fiber.Map{
+			"field": "event_type_id",
+		})
 	}
 	if req.Description == "" {
-		return response.BadRequest(c, "Description is required for published events", nil)
+		return response.BadRequest(c, "Description is required for published events", fiber.Map{
+			"field": "description",
+		})
 	}
 	if len(req.Schedules) == 0 {
-		return response.BadRequest(c, "At least one schedule is required", nil)
+		return response.BadRequest(c, "At least one schedule is required", fiber.Map{
+			"field": "schedules",
+		})
 	}
 	if len(req.Tickets) == 0 {
-		return response.BadRequest(c, "At least one ticket is required", nil)
+		return response.BadRequest(c, "At least one ticket is required", fiber.Map{
+			"field": "tickets",
+		})
 	}
 	if req.Visibility == "" {
-		return response.BadRequest(c, "Visibility is required (public, private, unlisted)", nil)
+		return response.BadRequest(c, "Visibility is required (public, private, unlisted)", fiber.Map{
+			"field": "visibility",
+		})
 	}
 
 	teamID := resolveTeamIDForUnified(c, userID)
@@ -800,43 +578,16 @@ func (h *EventHandler) CreateEvent(c fiber.Ctx) error {
 
 	event, err := h.svc.CreateEvent(ctx, cmd)
 	if err != nil {
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to create an event for this team", nil)
-		}
-		if errors.Is(err, domain.ErrEventStatusNotFound) {
-			return response.BadRequest(c, "Invalid event status", nil)
-		}
-		if errors.Is(err, domain.ErrEventTypeNotFound) {
-			return response.BadRequest(c, "Invalid event type", nil)
-		}
-		return response.InternalError(c, "Failed to create event", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "create this event", err)
 	}
 
 	return response.Created(c, "Event created successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // ============================================================
-// UPDATE EVENT
+// UPDATE
 // ============================================================
 
-// UpdateEvent godoc
-// @Summary Update an event
-// @Description Update event details
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Param request body UpdateEventRequest true "Event update details"
-// @Success 200 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id} [put]
 func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -863,38 +614,16 @@ func (h *EventHandler) UpdateEvent(c fiber.Ctx) error {
 
 	event, err := h.svc.UpdateEvent(ctx, cmd)
 	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to update this event", nil)
-		}
-		return response.InternalError(c, "Failed to update event", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "update this event", err)
 	}
 
 	return response.Success(c, "Event updated successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // ============================================================
-// DELETE - Single Event
+// DELETE - Single
 // ============================================================
 
-// DeleteEvent godoc
-// @Summary Soft delete an event
-// @Description Soft delete an event (sets deleted_at timestamp)
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id} [delete]
 func (h *EventHandler) DeleteEvent(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -912,34 +641,12 @@ func (h *EventHandler) DeleteEvent(c fiber.Ctx) error {
 	ctx := handlerhelper.EnrichUserContext(c)
 
 	if err := h.svc.DeleteEvent(ctx, id, userID, accountID, teamType); err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to delete this event", nil)
-		}
-		return response.InternalError(c, "Failed to delete event", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "delete this event", err)
 	}
 
 	return response.Success(c, "Event deleted successfully", nil)
 }
 
-// PermanentlyDeleteEvent godoc
-// @Summary Permanently delete an event
-// @Description Permanently delete an event (hard delete - removes from database)
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/permanent [delete]
 func (h *EventHandler) PermanentlyDeleteEvent(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -957,34 +664,12 @@ func (h *EventHandler) PermanentlyDeleteEvent(c fiber.Ctx) error {
 	ctx := handlerhelper.EnrichUserContext(c)
 
 	if err := h.svc.PermanentlyDeleteEvent(ctx, id, userID, accountID, teamType); err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to permanently delete this event", nil)
-		}
-		return response.InternalError(c, "Failed to permanently delete event", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "permanently delete this event", err)
 	}
 
 	return response.Success(c, "Event permanently deleted successfully", nil)
 }
 
-// RestoreEvent godoc
-// @Summary Restore a soft-deleted event
-// @Description Restore an event that was soft-deleted
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/restore [post]
 func (h *EventHandler) RestoreEvent(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -1003,38 +688,16 @@ func (h *EventHandler) RestoreEvent(c fiber.Ctx) error {
 
 	event, err := h.svc.RestoreEvent(ctx, id, userID, accountID, teamType)
 	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to restore this event", nil)
-		}
-		return response.InternalError(c, "Failed to restore event", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "restore this event", err)
 	}
 
 	return response.Success(c, "Event restored successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // ============================================================
-// DELETE - Bulk Events
+// DELETE - Bulk
 // ============================================================
 
-// BulkDeleteEvents godoc
-// @Summary Soft delete multiple events
-// @Description Soft delete multiple events by IDs
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body BulkIDsRequest true "Event IDs to delete"
-// @Success 200 {object} response.BaseResponse{data=service.BulkDeleteResult}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/bulk [delete]
 func (h *EventHandler) BulkDeleteEvents(c fiber.Ctx) error {
 	var req BulkIDsRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -1062,28 +725,12 @@ func (h *EventHandler) BulkDeleteEvents(c fiber.Ctx) error {
 
 	result, err := h.svc.DeleteEvents(ctx, req.IDs, userID, accountID, teamType)
 	if err != nil {
-		return response.InternalError(c, "Failed to delete events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "delete these events", err)
 	}
 
 	return response.Success(c, "Events deleted successfully", result)
 }
 
-// BulkPermanentlyDeleteEvents godoc
-// @Summary Permanently delete multiple events
-// @Description Hard delete multiple events by IDs
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body BulkIDsRequest true "Event IDs to permanently delete"
-// @Success 200 {object} response.BaseResponse{data=service.BulkDeleteResult}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/bulk/permanent [delete]
 func (h *EventHandler) BulkPermanentlyDeleteEvents(c fiber.Ctx) error {
 	var req BulkIDsRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -1111,28 +758,12 @@ func (h *EventHandler) BulkPermanentlyDeleteEvents(c fiber.Ctx) error {
 
 	result, err := h.svc.PermanentlyDeleteEvents(ctx, req.IDs, userID, accountID, teamType)
 	if err != nil {
-		return response.InternalError(c, "Failed to permanently delete events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "permanently delete these events", err)
 	}
 
 	return response.Success(c, "Events permanently deleted successfully", result)
 }
 
-// BulkRestoreEvents godoc
-// @Summary Restore multiple soft-deleted events
-// @Description Restore multiple events by IDs
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body BulkIDsRequest true "Event IDs to restore"
-// @Success 200 {object} response.BaseResponse{data=service.BulkRestoreResult}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/bulk/restore [post]
 func (h *EventHandler) BulkRestoreEvents(c fiber.Ctx) error {
 	var req BulkIDsRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -1160,9 +791,7 @@ func (h *EventHandler) BulkRestoreEvents(c fiber.Ctx) error {
 
 	result, err := h.svc.RestoreEvents(ctx, req.IDs, userID, accountID, teamType)
 	if err != nil {
-		return response.InternalError(c, "Failed to restore events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "restore these events", err)
 	}
 
 	return response.Success(c, "Events restored successfully", result)
@@ -1172,20 +801,6 @@ func (h *EventHandler) BulkRestoreEvents(c fiber.Ctx) error {
 // STATUS - Single
 // ============================================================
 
-// PublishEvent godoc
-// @Summary Publish an event
-// @Description Publish an event to make it public
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/publish [post]
 func (h *EventHandler) PublishEvent(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -1201,49 +816,12 @@ func (h *EventHandler) PublishEvent(c fiber.Ctx) error {
 
 	event, err := h.svc.PublishEvent(ctx, id, userID)
 	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to publish this event", nil)
-		}
-		if errors.Is(err, domain.ErrEventScheduleRequired) {
-			return response.BadRequest(c, "Cannot publish: event must have at least one schedule", nil)
-		}
-		if errors.Is(err, domain.ErrEventTicketRequired) {
-			return response.BadRequest(c, "Cannot publish: event must have at least one ticket", nil)
-		}
-		if errors.Is(err, domain.ErrInvalidEventName) {
-			return response.BadRequest(c, "Cannot publish: event name is required", nil)
-		}
-		if errors.Is(err, domain.ErrInvalidEventDescription) {
-			return response.BadRequest(c, "Cannot publish: event description is required", nil)
-		}
-		if errors.Is(err, domain.ErrInvalidEventType) {
-			return response.BadRequest(c, "Cannot publish: event type is required", nil)
-		}
-		return response.InternalError(c, "Failed to publish event", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "publish this event", err)
 	}
 
 	return response.Success(c, "Event published successfully", NewEventResponseFromEventWithCreator(event))
 }
 
-// CancelEvent godoc
-// @Summary Cancel an event
-// @Description Cancel an event
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/cancel [post]
 func (h *EventHandler) CancelEvent(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -1259,34 +837,12 @@ func (h *EventHandler) CancelEvent(c fiber.Ctx) error {
 
 	event, err := h.svc.CancelEvent(ctx, id, userID)
 	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to cancel this event", nil)
-		}
-		return response.InternalError(c, "Failed to cancel event", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "cancel this event", err)
 	}
 
 	return response.Success(c, "Event cancelled successfully", NewEventResponseFromEventWithCreator(event))
 }
 
-// CompleteEvent godoc
-// @Summary Complete an event
-// @Description Mark an event as completed
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/complete [post]
 func (h *EventHandler) CompleteEvent(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -1297,12 +853,7 @@ func (h *EventHandler) CompleteEvent(c fiber.Ctx) error {
 
 	event, err := h.svc.CompleteEvent(ctx, id)
 	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		return response.InternalError(c, "Failed to complete event", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "complete this event", err)
 	}
 
 	return response.Success(c, "Event completed successfully", NewEventResponseFromEventWithCreator(event))
@@ -1312,20 +863,6 @@ func (h *EventHandler) CompleteEvent(c fiber.Ctx) error {
 // STATUS - Bulk
 // ============================================================
 
-// BulkPublishEvents godoc
-// @Summary Publish multiple events
-// @Description Publish multiple events by IDs
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body BulkIDsRequest true "Event IDs to publish"
-// @Success 200 {object} response.BaseResponse{data=service.BulkStatusResult}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/bulk/publish [post]
 func (h *EventHandler) BulkPublishEvents(c fiber.Ctx) error {
 	var req BulkIDsRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -1350,28 +887,12 @@ func (h *EventHandler) BulkPublishEvents(c fiber.Ctx) error {
 
 	result, err := h.svc.BulkPublishEvents(ctx, req.IDs, userID)
 	if err != nil {
-		return response.InternalError(c, "Failed to publish events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "publish these events", err)
 	}
 
 	return response.Success(c, "Events published successfully", result)
 }
 
-// BulkCancelEvents godoc
-// @Summary Cancel multiple events
-// @Description Cancel multiple events by IDs
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body BulkIDsRequest true "Event IDs to cancel"
-// @Success 200 {object} response.BaseResponse{data=service.BulkStatusResult}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/bulk/cancel [post]
 func (h *EventHandler) BulkCancelEvents(c fiber.Ctx) error {
 	var req BulkIDsRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -1396,28 +917,12 @@ func (h *EventHandler) BulkCancelEvents(c fiber.Ctx) error {
 
 	result, err := h.svc.BulkCancelEvents(ctx, req.IDs, userID)
 	if err != nil {
-		return response.InternalError(c, "Failed to cancel events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "cancel these events", err)
 	}
 
 	return response.Success(c, "Events cancelled successfully", result)
 }
 
-// BulkCompleteEvents godoc
-// @Summary Complete multiple events
-// @Description Complete multiple events by IDs
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body BulkIDsRequest true "Event IDs to complete"
-// @Success 200 {object} response.BaseResponse{data=service.BulkStatusResult}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/bulk/complete [post]
 func (h *EventHandler) BulkCompleteEvents(c fiber.Ctx) error {
 	var req BulkIDsRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -1437,34 +942,16 @@ func (h *EventHandler) BulkCompleteEvents(c fiber.Ctx) error {
 
 	result, err := h.svc.BulkCompleteEvents(ctx, req.IDs)
 	if err != nil {
-		return response.InternalError(c, "Failed to complete events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "complete these events", err)
 	}
 
 	return response.Success(c, "Events completed successfully", result)
 }
 
 // ============================================================
-// DUPLICATE - Single Event
+// DUPLICATE - Single
 // ============================================================
 
-// DuplicateEvent godoc
-// @Summary Duplicate an event
-// @Description Create a copy of an existing event (always creates as draft)
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Param request body DuplicateEventRequest false "Duplicate options"
-// @Success 200 {object} response.BaseResponse{data=EventResponse}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/duplicate [post]
 func (h *EventHandler) DuplicateEvent(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -1502,38 +989,16 @@ func (h *EventHandler) DuplicateEvent(c fiber.Ctx) error {
 
 	event, err := h.svc.DuplicateEvent(ctx, id, cmd)
 	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to duplicate this event", nil)
-		}
-		return response.InternalError(c, "Failed to duplicate event", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "duplicate this event", err)
 	}
 
 	return response.Success(c, "Event duplicated successfully", NewEventResponseFromEventWithCreator(event))
 }
 
 // ============================================================
-// DUPLICATE - Bulk Events
+// DUPLICATE - Bulk
 // ============================================================
 
-// BulkDuplicateEvents godoc
-// @Summary Duplicate multiple events
-// @Description Create copies of multiple existing events
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body BulkDuplicateRequest true "Events to duplicate"
-// @Success 200 {object} response.BaseResponse{data=service.BulkDuplicateResult}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/bulk/duplicate [post]
 func (h *EventHandler) BulkDuplicateEvents(c fiber.Ctx) error {
 	var req BulkDuplicateRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -1566,34 +1031,16 @@ func (h *EventHandler) BulkDuplicateEvents(c fiber.Ctx) error {
 
 	result, err := h.svc.BulkDuplicateEvents(ctx, req.IDs, cmd)
 	if err != nil {
-		return response.InternalError(c, "Failed to duplicate events", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "duplicate these events", err)
 	}
 
 	return response.Success(c, "Events duplicated successfully", result)
 }
 
 // ============================================================
-// MEDIA - UPLOAD
+// MEDIA - Upload
 // ============================================================
 
-// UploadEventImage godoc
-// @Summary Upload event image
-// @Description Upload an image for an event
-// @Tags Events
-// @Accept multipart/form-data
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Param image formData file true "Event image"
-// @Success 200 {object} response.BaseResponse{data=service.MediaInfo}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/image [post]
 func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 	eventID := c.Params("id")
 	if eventID == "" {
@@ -1638,73 +1085,12 @@ func (h *EventHandler) UploadEventImage(c fiber.Ctx) error {
 
 	media, err := h.svc.UploadEventImage(ctx, cmd)
 	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to upload an image for this event", nil)
-		}
-		return response.InternalError(c, "Failed to upload image", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "upload an image for this event", err)
 	}
 
 	return response.Success(c, "Image uploaded successfully", media)
 }
 
-// detectMimeType detects MIME type from filename and file data
-func detectMimeType(filename string, data []byte) string {
-	ext := strings.ToLower(filepath.Ext(filename))
-	switch ext {
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".png":
-		return "image/png"
-	case ".gif":
-		return "image/gif"
-	case ".webp":
-		return "image/webp"
-	case ".svg":
-		return "image/svg+xml"
-	case ".bmp":
-		return "image/bmp"
-	}
-
-	if len(data) >= 4 {
-		if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
-			return "image/png"
-		}
-		if data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
-			return "image/jpeg"
-		}
-		if data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 {
-			return "image/gif"
-		}
-		if len(data) >= 12 && data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
-			data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50 {
-			return "image/webp"
-		}
-	}
-
-	return "application/octet-stream"
-}
-
-// UploadCertificateTemplate godoc
-// @Summary Upload certificate template
-// @Description Upload a certificate template for an event
-// @Tags Events
-// @Accept multipart/form-data
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Param certificate formData file true "Certificate template (PDF or image)"
-// @Success 200 {object} response.BaseResponse{data=service.MediaInfo}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/certificate [post]
 func (h *EventHandler) UploadCertificateTemplate(c fiber.Ctx) error {
 	eventID := c.Params("id")
 	if eventID == "" {
@@ -1744,38 +1130,53 @@ func (h *EventHandler) UploadCertificateTemplate(c fiber.Ctx) error {
 
 	media, err := h.svc.UploadCertificateTemplate(ctx, cmd)
 	if err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to upload a certificate for this event", nil)
-		}
-		return response.InternalError(c, "Failed to upload certificate template", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "upload a certificate for this event", err)
 	}
 
 	return response.Success(c, "Certificate template uploaded successfully", media)
 }
 
+// detectMimeType detects MIME type from filename and file data.
+func detectMimeType(filename string, data []byte) string {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	case ".svg":
+		return "image/svg+xml"
+	case ".bmp":
+		return "image/bmp"
+	}
+
+	if len(data) >= 4 {
+		if data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47 {
+			return "image/png"
+		}
+		if data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF {
+			return "image/jpeg"
+		}
+		if data[0] == 0x47 && data[1] == 0x49 && data[2] == 0x46 {
+			return "image/gif"
+		}
+		if len(data) >= 12 && data[0] == 0x52 && data[1] == 0x49 && data[2] == 0x46 && data[3] == 0x46 &&
+			data[8] == 0x57 && data[9] == 0x45 && data[10] == 0x42 && data[11] == 0x50 {
+			return "image/webp"
+		}
+	}
+
+	return "application/octet-stream"
+}
+
 // ============================================================
-// MEDIA - DELETE Single
+// MEDIA - Delete Single
 // ============================================================
 
-// DeleteEventImage godoc
-// @Summary Delete event image
-// @Description Delete the image for an event
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/image [delete]
 func (h *EventHandler) DeleteEventImage(c fiber.Ctx) error {
 	eventID := c.Params("id")
 	if eventID == "" {
@@ -1790,34 +1191,12 @@ func (h *EventHandler) DeleteEventImage(c fiber.Ctx) error {
 	ctx := handlerhelper.EnrichUserContext(c)
 
 	if err := h.svc.DeleteEventImage(ctx, eventID, userID); err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to delete this event's image", nil)
-		}
-		return response.InternalError(c, "Failed to delete event image", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "delete this event's image", err)
 	}
 
 	return response.Success(c, "Event image deleted successfully", nil)
 }
 
-// DeleteEventCertificate godoc
-// @Summary Delete certificate template
-// @Description Delete the certificate template for an event
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/certificate [delete]
 func (h *EventHandler) DeleteEventCertificate(c fiber.Ctx) error {
 	eventID := c.Params("id")
 	if eventID == "" {
@@ -1832,34 +1211,12 @@ func (h *EventHandler) DeleteEventCertificate(c fiber.Ctx) error {
 	ctx := handlerhelper.EnrichUserContext(c)
 
 	if err := h.svc.DeleteEventCertificate(ctx, eventID, userID); err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to delete this event's certificate", nil)
-		}
-		return response.InternalError(c, "Failed to delete certificate template", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "delete this event's certificate", err)
 	}
 
 	return response.Success(c, "Certificate template deleted successfully", nil)
 }
 
-// DeleteAllEventMedia godoc
-// @Summary Delete all media for an event
-// @Description Delete all media (images, certificates) for an event
-// @Tags Events
-// @Produce json
-// @Security BearerAuth
-// @Param id path string true "Event ID"
-// @Success 200 {object} response.BaseResponse
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 404 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/{id}/media [delete]
 func (h *EventHandler) DeleteAllEventMedia(c fiber.Ctx) error {
 	eventID := c.Params("id")
 	if eventID == "" {
@@ -1874,38 +1231,16 @@ func (h *EventHandler) DeleteAllEventMedia(c fiber.Ctx) error {
 	ctx := handlerhelper.EnrichUserContext(c)
 
 	if err := h.svc.DeleteAllEventMedia(ctx, eventID, userID); err != nil {
-		if errors.Is(err, domain.ErrEventNotFound) {
-			return response.NotFound(c, "Event not found", nil)
-		}
-		if errors.Is(err, domain.ErrForbidden) {
-			return response.Forbidden(c, "You do not have permission to delete this event's media", nil)
-		}
-		return response.InternalError(c, "Failed to delete all media", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "delete this event's media", err)
 	}
 
 	return response.Success(c, "All media deleted successfully", nil)
 }
 
 // ============================================================
-// MEDIA - DELETE Bulk
+// MEDIA - Delete Bulk
 // ============================================================
 
-// BulkDeleteEventMedia godoc
-// @Summary Delete media for multiple events
-// @Description Delete all media for multiple events
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body BulkIDsRequest true "Event IDs to delete media for"
-// @Success 200 {object} response.BaseResponse{data=service.BulkDeleteResult}
-// @Failure 400 {object} response.BaseResponse
-// @Failure 401 {object} response.BaseResponse
-// @Failure 403 {object} response.BaseResponse
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/bulk/media [delete]
 func (h *EventHandler) BulkDeleteEventMedia(c fiber.Ctx) error {
 	var req BulkIDsRequest
 	if err := c.Bind().Body(&req); err != nil {
@@ -1930,30 +1265,22 @@ func (h *EventHandler) BulkDeleteEventMedia(c fiber.Ctx) error {
 
 	result, err := h.svc.BulkDeleteEventMedia(ctx, req.IDs, userID)
 	if err != nil {
-		return response.InternalError(c, "Failed to delete media", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "delete media for these events", err)
 	}
 
 	return response.Success(c, "Media deleted successfully", result)
 }
 
-// GetTicketTypes godoc
-// @Summary Get all ticket types
-// @Description Get list of all active ticket types (public)
-// @Tags Events
-// @Produce json
-// @Success 200 {object} response.BaseResponse{data=[]TicketTypeDTO}
-// @Failure 500 {object} response.BaseResponse
-// @Router /api/v1/events/ticket-types [get]
+// ============================================================
+// Ticket types (public reference)
+// ============================================================
+
 func (h *EventHandler) GetTicketTypes(c fiber.Ctx) error {
 	ctx := handlerhelper.EnrichUserContext(c)
 
 	ticketTypes, err := h.svc.GetTicketTypes(ctx)
 	if err != nil {
-		return response.InternalError(c, "Failed to get ticket types", fiber.Map{
-			"error": err.Error(),
-		})
+		return respondClassifiedError(c, "get ticket types", err)
 	}
 
 	dtos := make([]TicketTypeDTO, len(ticketTypes))
@@ -1973,39 +1300,15 @@ func (h *EventHandler) GetTicketTypes(c fiber.Ctx) error {
 }
 
 // ============================================================
-// AI-ASSISTED DRAFT GENERATION
+// AI-assisted draft generation
 // ============================================================
 
-// GenerateEventDraft godoc
-// @Summary Generate a complete event draft from a natural-language prompt
-// @Description Calls the AI provider to generate a fully-formed event draft
-//              (name, description, schedule, tickets, venue). The draft is
-//              not persisted — the client submits it to POST /events/draft
-//              or POST /events when ready.
-// @Tags Events
-// @Accept json
-// @Produce json
-// @Security BearerAuth
-// @Param request body service.GenerateEventDraftRequest true "Prompt and AI inputs"
-// @Success 200 {object} response.BaseResponse{data=service.GenerateEventDraftResult}
-// @Failure 400 {object} response.BaseResponse "Invalid input or unknown lookup ID"
-// @Failure 401 {object} response.BaseResponse "Not authenticated"
-// @Failure 403 {object} response.BaseResponse "Insufficient permissions"
-// @Failure 422 {object} response.BaseResponse "AI output could not be made publishable"
-// @Failure 429 {object} response.BaseResponse "Rate limit exceeded"
-// @Failure 502 {object} response.BaseResponse "AI provider error"
-// @Failure 503 {object} response.BaseResponse "AI service disabled"
-// @Router /api/v1/events/ai/generate-draft [post]
 func (h *EventHandler) GenerateEventDraft(c fiber.Ctx) error {
-	// 1. Authn — user must be identified
 	userID, err := handlerhelper.GetUserID(c)
 	if err != nil || userID == "" {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	// 2. Bind request body — only the AI-safe fields are exposed as JSON.
-	//    Scope fields (team/account) are json:"-" on the struct, so even
-	//    a malicious payload can't spoof them.
 	var req service.GenerateEventDraftRequest
 	if err := c.Bind().Body(&req); err != nil {
 		return response.BadRequest(c, "Invalid request body", fiber.Map{
@@ -2013,13 +1316,10 @@ func (h *EventHandler) GenerateEventDraft(c fiber.Ctx) error {
 		})
 	}
 
-	// 3. Inject scope from the authenticated context (token-first).
-	//    This mirrors CreateEventDraft / CreateEvent.
 	teamID := resolveTeamIDForUnified(c, userID)
 	teamType := resolveTeamType(c)
 	accountID := resolveAccountID(c)
 
-	// Personal-team heuristic — same as CreateEventDraft
 	if teamID == userID && handlerhelper.GetTeamID(c) == "" && handlerhelper.GetQueryString(c, "team_type", "") == "" {
 		teamType = "personal"
 	}
@@ -2029,7 +1329,6 @@ func (h *EventHandler) GenerateEventDraft(c fiber.Ctx) error {
 	req.TeamType = teamType
 	req.AccountID = accountID
 
-	// 4. Call service
 	ctx := handlerhelper.EnrichUserContext(c)
 
 	result, err := h.svc.GenerateEventDraft(ctx, req)
@@ -2041,19 +1340,19 @@ func (h *EventHandler) GenerateEventDraft(c fiber.Ctx) error {
 }
 
 // ============================================================
-// ERROR MAPPING
+// AI draft error mapping
 // ============================================================
 //
-// Maps the service-layer sentinels to HTTP status codes per the
-// design doc (§5.1). The order matters: check the most specific
-// error types first.
+// The AI endpoint has its own error surface because it produces
+// different failure modes (provider failure, parse failure,
+// unpublishable output) that don't map cleanly to the general
+// classifier. Kept local to this file.
 
 func mapGenerateEventDraftError(c fiber.Ctx, err error) error {
-	// --- AI infrastructure ---
 	if errors.Is(err, service.ErrAIDisabled) {
 		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
 			"success": false,
-			"message": "AI service not configured",
+			"message": "AI service is not configured",
 			"errors": fiber.Map{
 				"reason": "openrouter.api_key is empty",
 			},
@@ -2062,7 +1361,7 @@ func mapGenerateEventDraftError(c fiber.Ctx, err error) error {
 	if errors.Is(err, service.ErrAIProvider) {
 		return c.Status(fiber.StatusBadGateway).JSON(fiber.Map{
 			"success": false,
-			"message": "AI service unavailable",
+			"message": "AI service is unavailable",
 			"errors": fiber.Map{
 				"reason": err.Error(),
 			},
@@ -2078,7 +1377,6 @@ func mapGenerateEventDraftError(c fiber.Ctx, err error) error {
 		})
 	}
 
-	// --- AI output could not be made publishable (after retry) ---
 	var unpublishable *service.DraftUnpublishableError
 	if errors.As(err, &unpublishable) {
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
@@ -2092,37 +1390,7 @@ func mapGenerateEventDraftError(c fiber.Ctx, err error) error {
 		})
 	}
 
-	// --- Input / lookup errors (400) ---
-	if errors.Is(err, service.ErrEventTypeNotFound) {
-		return response.BadRequest(c, "Invalid request", fiber.Map{
-			"field":  "event_type_id",
-			"reason": "event type not found",
-		})
-	}
-	if errors.Is(err, service.ErrCategoryNotFound) {
-		return response.BadRequest(c, "Invalid request", fiber.Map{
-			"field":  "category_id",
-			"reason": "category not found",
-		})
-	}
-	if errors.Is(err, service.ErrTicketTypeNotFound) {
-		return response.BadRequest(c, "Invalid request", fiber.Map{
-			"field":  "ticket_type_ids",
-			"reason": err.Error(),
-		})
-	}
-
-	// --- Authorization (from checkEventCreatePermission) ---
-	//    The domain package owns ErrForbidden. If the AI service returns
-	//    it, map to 403. Otherwise fall through to 500.
-	//    (We check by string to avoid importing the domain package here;
-	//    if you prefer, import domain and use errors.Is(err, domain.ErrForbidden).)
-	if err.Error() == "forbidden" {
-		return response.Forbidden(c, "You do not have permission to create events for this team", nil)
-	}
-
-	// --- Anything else: 500 ---
-	return response.InternalError(c, "Failed to generate draft", fiber.Map{
-		"error": err.Error(),
-	})
+	// Everything else (invalid lookups, permissions, etc.) goes
+	// through the shared classifier.
+	return respondClassifiedError(c, "generate a draft", err)
 }

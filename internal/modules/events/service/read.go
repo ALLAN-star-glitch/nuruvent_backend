@@ -430,57 +430,63 @@ func (s *eventService) accountIDFromFilters(ctx context.Context, filters ListEve
 // event:read on the event's parent account domain, which is granted to
 // account members with the appropriate role.
 func (s *eventService) canViewEvent(ctx context.Context, userID string, event *domain.Event) bool {
-	if event.IsPublic() {
-		return true
-	}
+    if event.IsPublic() {
+        return true
+    }
 
-	if event.IsUnlisted() {
-		return true
-	}
+    if event.IsUnlisted() {
+        return true
+    }
 
-	if event.IsPrivate() {
-		if userID == "" {
-			return false
-		}
-		if event.AccountID == "" {
-			log.Printf("⚠️ event %s has no AccountID; denying view", event.ID)
-			return false
-		}
+    if event.IsPrivate() {
+        if userID == "" {
+            return false
+        }
 
-		accountDomain := domain.AccountDomain(event.AccountID)
-		allowed, err := s.permChecker.CanViewEvent(ctx, userID, accountDomain)
-		if err != nil {
-			log.Printf("⚠️ Permission check failed (domain=%s): %v", accountDomain, err)
-			return false
-		}
-		return allowed
-	}
+        accountID, err := s.resolveEventAccountID(ctx, event)
+        if err != nil {
+            log.Printf("⚠️ cannot resolve account for event %s: %v", event.ID, err)
+            return false
+        }
 
-	return false
+        accountDomain := domain.AccountDomain(accountID)
+        allowed, err := s.permChecker.CanViewEvent(ctx, userID, accountDomain)
+        if err != nil {
+            log.Printf("⚠️ Permission check failed (domain=%s): %v", accountDomain, err)
+            return false
+        }
+        return allowed
+    }
+	
+
+    return false
 }
 
 // canViewDeletedEvent checks if a user can view a soft-deleted event.
 func (s *eventService) canViewDeletedEvent(ctx context.Context, userID string, event *domain.Event) bool {
-	if event.CreatedBy == userID {
-		return true
-	}
-	if event.AccountID == "" {
-		return false
-	}
+    if event.CreatedBy == userID {
+        return true
+    }
 
-	accountDomain := domain.AccountDomain(event.AccountID)
+    accountID, err := s.resolveEventAccountID(ctx, event)
+    if err != nil {
+        log.Printf("⚠️ cannot resolve account for deleted event %s: %v", event.ID, err)
+        return false
+    }
 
-	canReadAll, err := s.permChecker.CanReadAllEvents(ctx, userID, accountDomain)
-	if err == nil && canReadAll {
-		return true
-	}
+    accountDomain := domain.AccountDomain(accountID)
 
-	canReadOwn, err := s.permChecker.CanReadOwnEvents(ctx, userID, accountDomain)
-	if err == nil && canReadOwn {
-		return event.CreatedBy == userID
-	}
+    canReadAll, err := s.permChecker.CanReadAllEvents(ctx, userID, accountDomain)
+    if err == nil && canReadAll {
+        return true
+    }
 
-	return false
+    canReadOwn, err := s.permChecker.CanReadOwnEvents(ctx, userID, accountDomain)
+    if err == nil && canReadOwn {
+        return event.CreatedBy == userID
+    }
+
+    return false
 }
 
 // filterEventsByVisibility filters events based on visibility permissions.

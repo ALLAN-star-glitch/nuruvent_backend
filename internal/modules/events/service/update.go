@@ -17,34 +17,40 @@ import (
 // UPDATE EVENT
 // ============================================================
 
-// UpdateEvent updates an existing event
+// UpdateEvent updates an existing event.
 func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) (*domain.Event, error) {
 	if cmd.ID == "" {
 		return nil, errors.New("event ID is required")
 	}
 
-	// 1. Get event and check permissions
-	// ✅ Reuses getEventAndCheckUpdatePermission from media.go
+	// 1. Get event and check permissions.
+	//    Delegates to getEventAndCheckUpdatePermission, which resolves the
+	//    account via resolveEventAccountID when the event doesn't carry one.
 	event, err := s.getEventAndCheckUpdatePermission(ctx, cmd.ID, cmd.UpdatedBy)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. Process name update if needed
+	// 2. Process name update if needed.
 	nameData, err := s.processNameUpdate(ctx, event, cmd)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. Validate based on status
+	// 3. Validate based on status.
 	if err := s.validateUpdateFields(ctx, event, cmd, nameData); err != nil {
 		return nil, err
 	}
 
-	// 4. Apply all updates
-	s.applyAllUpdates(ctx, event, cmd, nameData)
+	// 4. Apply all updates. Any conversion failure (bad date, bad ticket
+	//    shape, bad speaker record) is surfaced here rather than being
+	//    silently dropped.
+	if err := s.applyAllUpdates(ctx, event, cmd, nameData); err != nil {
+		return nil, err
+	}
+	applyScheduleDates(event)
 
-	// 5. Save to database
+	// 5. Save to database.
 	if err := s.saveUpdatedEvent(ctx, event); err != nil {
 		return nil, err
 	}
@@ -53,11 +59,12 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
 	return event, nil
 }
 
+
 // ============================================================
 // PRIVATE HELPER FUNCTIONS
 // ============================================================
 
-// NameUpdateData holds name update information
+// NameUpdateData holds name update information.
 type NameUpdateData struct {
 	NewName        string
 	NewDisplayName string
@@ -65,13 +72,13 @@ type NameUpdateData struct {
 	NameChanged    bool
 }
 
-// processNameUpdate processes name updates and generates new slug if needed
+// processNameUpdate processes name updates and generates new slug if needed.
 func (s *eventService) processNameUpdate(ctx context.Context, event *domain.Event, cmd UpdateEventCommand) (*NameUpdateData, error) {
 	data := &NameUpdateData{
 		NameChanged: false,
 	}
 
-	// Handle Name update
+	// Handle Name update.
 	if cmd.Name != nil {
 		rawName := *cmd.Name
 		if rawName == "" {
@@ -107,13 +114,9 @@ func (s *eventService) processNameUpdate(ctx context.Context, event *domain.Even
 			data.NewDisplayName, data.NewName, data.NewSlug)
 	}
 
-	// Handle DisplayName update
+	// Handle DisplayName update.
 	if cmd.DisplayName != nil && *cmd.DisplayName != "" {
-		if !data.NameChanged {
-			data.NewDisplayName = *cmd.DisplayName
-		} else {
-			data.NewDisplayName = *cmd.DisplayName
-		}
+		data.NewDisplayName = *cmd.DisplayName
 		data.NameChanged = true
 		log.Printf("📝 Display name explicitly updated: '%s'", data.NewDisplayName)
 	}
@@ -121,15 +124,13 @@ func (s *eventService) processNameUpdate(ctx context.Context, event *domain.Even
 	return data, nil
 }
 
-// validateUpdateFields validates fields based on event status
+// validateUpdateFields validates fields based on event status.
 func (s *eventService) validateUpdateFields(ctx context.Context, event *domain.Event, cmd UpdateEventCommand, nameData *NameUpdateData) error {
-	// Build updated values for validation
 	name, displayName, slug, eventTypeID := s.buildUpdatedFields(event, cmd, nameData)
 
-	// Check if event is a draft
 	isDraft := s.isDraftStatus(ctx, event.EventStatusID)
 
-	// Strict validation for published events
+	// Strict validation for published events.
 	if !isDraft {
 		if name == "" {
 			return errors.New("event name is required")
@@ -148,7 +149,7 @@ func (s *eventService) validateUpdateFields(ctx context.Context, event *domain.E
 	return nil
 }
 
-// buildUpdatedFields builds the updated field values for validation
+// buildUpdatedFields builds the updated field values for validation.
 func (s *eventService) buildUpdatedFields(event *domain.Event, cmd UpdateEventCommand, nameData *NameUpdateData) (string, string, string, string) {
 	var name, displayName, slug, eventTypeID string
 
@@ -180,9 +181,12 @@ func (s *eventService) buildUpdatedFields(event *domain.Event, cmd UpdateEventCo
 	return name, displayName, slug, eventTypeID
 }
 
-// applyAllUpdates applies all updates to the event
-func (s *eventService) applyAllUpdates(ctx context.Context, event *domain.Event, cmd UpdateEventCommand, nameData *NameUpdateData) {
-	// Apply name updates
+// applyAllUpdates applies all updates to the event.
+//
+// Any conversion failure is returned so the caller can surface a real
+// error instead of silently keeping the old value.
+func (s *eventService) applyAllUpdates(ctx context.Context, event *domain.Event, cmd UpdateEventCommand, nameData *NameUpdateData) error {
+	// Apply name updates.
 	if nameData.NameChanged {
 		event.Name = nameData.NewName
 		event.DisplayName = nameData.NewDisplayName
@@ -192,32 +196,39 @@ func (s *eventService) applyAllUpdates(ctx context.Context, event *domain.Event,
 		event.DisplayName = *cmd.DisplayName
 	}
 
-	// Apply basic field updates
+	// Apply basic field updates.
 	s.applyBasicUpdates(event, cmd)
 
-	// Apply schedule updates
-	s.applyScheduleUpdates(ctx, event, cmd)
+	// Apply schedule updates.
+	if err := s.applyScheduleUpdates(ctx, event, cmd); err != nil {
+		return fmt.Errorf("schedule update failed: %w", err)
+	}
 
-	// Apply venue updates
+	// Apply venue updates.
 	s.applyVenueUpdates(event, cmd)
 
-	// Apply ticket updates
-	s.applyTicketUpdates(ctx, event, cmd)
+	// Apply ticket updates.
+	if err := s.applyTicketUpdates(ctx, event, cmd); err != nil {
+		return fmt.Errorf("ticket update failed: %w", err)
+	}
 
-	// Apply access & privacy updates
+	// Apply access & privacy updates.
 	s.applyAccessUpdates(event, cmd)
 
-	// Apply monetization updates
+	// Apply monetization updates.
 	s.applyMonetizationUpdates(event, cmd)
 
-	// Apply speakers, materials, SEO
-	s.applySpeakersMaterialsSEO(ctx, event, cmd)
+	// Apply speakers, materials, SEO.
+	if err := s.applySpeakersMaterialsSEO(ctx, event, cmd); err != nil {
+		return fmt.Errorf("speakers/materials/SEO update failed: %w", err)
+	}
 
-	// Update timestamp
+	// Update timestamp.
 	event.UpdatedAt = time.Now()
+	return nil
 }
 
-// applyBasicUpdates applies basic field updates
+// applyBasicUpdates applies basic field updates.
 func (s *eventService) applyBasicUpdates(event *domain.Event, cmd UpdateEventCommand) {
 	if cmd.Description != nil {
 		event.Description = *cmd.Description
@@ -239,25 +250,38 @@ func (s *eventService) applyBasicUpdates(event *domain.Event, cmd UpdateEventCom
 	}
 }
 
-// applyScheduleUpdates applies schedule-related updates
-func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.Event, cmd UpdateEventCommand) {
+// applyScheduleUpdates applies schedule-related updates.
+//
+// convertSchedules parses date/time strings. If any of them is malformed,
+// the update fails loudly instead of silently keeping the previous
+// schedules — which would leave the event in an inconsistent state
+// between what the client submitted and what's stored.
+func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.Event, cmd UpdateEventCommand) error {
 	if cmd.IsMultiDay != nil {
 		event.IsMultiDay = *cmd.IsMultiDay
 	}
 	if cmd.IsRecurring != nil {
 		event.IsRecurring = *cmd.IsRecurring
 	}
+
 	if cmd.Schedules != nil {
-		if schedules, err := s.convertSchedules(cmd.Schedules); err == nil {
-			event.Schedules = schedules
+		schedules, err := s.convertSchedules(cmd.Schedules)
+		if err != nil {
+			return fmt.Errorf("invalid schedules: %w", err)
+		}
+		event.Schedules = schedules
+	}
+
+	if cmd.Recurrence != nil {
+		if err := s.applyRecurrence(ctx, event, cmd.Recurrence); err != nil {
+			return fmt.Errorf("invalid recurrence: %w", err)
 		}
 	}
-	if cmd.Recurrence != nil {
-		s.applyRecurrence(ctx, event, cmd.Recurrence)
-	}
+
+	return nil
 }
 
-// applyVenueUpdates applies venue-related updates
+// applyVenueUpdates applies venue-related updates.
 func (s *eventService) applyVenueUpdates(event *domain.Event, cmd UpdateEventCommand) {
 	if cmd.IsVirtual != nil {
 		event.IsVirtual = *cmd.IsVirtual
@@ -294,8 +318,8 @@ func (s *eventService) applyVenueUpdates(event *domain.Event, cmd UpdateEventCom
 	}
 }
 
-// applyTicketUpdates applies ticket-related updates
-func (s *eventService) applyTicketUpdates(ctx context.Context, event *domain.Event, cmd UpdateEventCommand) {
+// applyTicketUpdates applies ticket-related updates.
+func (s *eventService) applyTicketUpdates(ctx context.Context, event *domain.Event, cmd UpdateEventCommand) error {
 	if cmd.IsFree != nil {
 		event.IsFreeEvent = *cmd.IsFree
 	}
@@ -305,14 +329,19 @@ func (s *eventService) applyTicketUpdates(ctx context.Context, event *domain.Eve
 	if cmd.Waitlist != nil {
 		event.WaitlistEnabled = *cmd.Waitlist
 	}
+
 	if cmd.Tickets != nil {
-		if tickets, err := s.convertTickets(cmd.Tickets); err == nil {
-			event.Tickets = tickets
+		tickets, err := s.convertTickets(cmd.Tickets)
+		if err != nil {
+			return fmt.Errorf("invalid tickets: %w", err)
 		}
+		event.Tickets = tickets
 	}
+
+	return nil
 }
 
-// applyAccessUpdates applies access & privacy updates
+// applyAccessUpdates applies access & privacy updates.
 func (s *eventService) applyAccessUpdates(event *domain.Event, cmd UpdateEventCommand) {
 	if cmd.Visibility != nil {
 		event.Visibility = *cmd.Visibility
@@ -328,7 +357,7 @@ func (s *eventService) applyAccessUpdates(event *domain.Event, cmd UpdateEventCo
 	}
 }
 
-// applyMonetizationUpdates applies monetization updates
+// applyMonetizationUpdates applies monetization updates.
 func (s *eventService) applyMonetizationUpdates(event *domain.Event, cmd UpdateEventCommand) {
 	if cmd.IsFeatured != nil {
 		event.IsFeatured = *cmd.IsFeatured
@@ -344,24 +373,32 @@ func (s *eventService) applyMonetizationUpdates(event *domain.Event, cmd UpdateE
 	}
 }
 
-// applySpeakersMaterialsSEO applies speakers, materials, and SEO updates
-func (s *eventService) applySpeakersMaterialsSEO(ctx context.Context, event *domain.Event, cmd UpdateEventCommand) {
+// applySpeakersMaterialsSEO applies speakers, materials, and SEO updates.
+func (s *eventService) applySpeakersMaterialsSEO(ctx context.Context, event *domain.Event, cmd UpdateEventCommand) error {
 	if cmd.Speakers != nil {
-		if speakers, err := s.convertSpeakers(cmd.Speakers); err == nil {
-			event.Speakers = speakers
+		speakers, err := s.convertSpeakers(cmd.Speakers)
+		if err != nil {
+			return fmt.Errorf("invalid speakers: %w", err)
 		}
+		event.Speakers = speakers
 	}
+
 	if cmd.Materials != nil {
-		if materials, err := s.convertMaterials(cmd.Materials); err == nil {
-			event.Materials = materials
+		materials, err := s.convertMaterials(cmd.Materials)
+		if err != nil {
+			return fmt.Errorf("invalid materials: %w", err)
 		}
+		event.Materials = materials
 	}
+
 	if cmd.SEO != nil {
 		s.applySEO(event, cmd.SEO)
 	}
+
+	return nil
 }
 
-// saveUpdatedEvent saves the updated event to the database
+// saveUpdatedEvent saves the updated event to the database.
 func (s *eventService) saveUpdatedEvent(ctx context.Context, event *domain.Event) error {
 	if err := s.repo.UpdateEvent(ctx, event); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "23505") {
@@ -373,7 +410,7 @@ func (s *eventService) saveUpdatedEvent(ctx context.Context, event *domain.Event
 	return nil
 }
 
-// isDraftStatus checks if the event status is DRAFT
+// isDraftStatus checks if the event status is DRAFT.
 func (s *eventService) isDraftStatus(ctx context.Context, statusID string) bool {
 	status, err := s.repo.GetEventStatusByID(ctx, statusID)
 	if err != nil || status == nil {

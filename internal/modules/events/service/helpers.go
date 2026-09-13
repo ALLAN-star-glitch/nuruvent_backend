@@ -212,9 +212,9 @@ func (s *eventService) validateUpdatePermission(ctx context.Context, event *doma
 		return errors.New("event is nil")
 	}
 
-	accountID := event.AccountID
-	if accountID == "" {
-		return errors.New("event has no account ID; cannot authorize update")
+	accountID, err := s.resolveEventAccountID(ctx, event)
+	if err != nil {
+		return fmt.Errorf("cannot authorize update: %w", err)
 	}
 
 	accountDomain := domain.AccountDomain(accountID)
@@ -231,6 +231,37 @@ func (s *eventService) validateUpdatePermission(ctx context.Context, event *doma
 	}
 
 	return nil
+}
+
+
+// resolveEventAccountID returns the account ID that owns the event.
+//
+// The events table has no account_id column today, so the account is
+// resolved through the event's team. If the schema later gains a direct
+// account_id on events (and the repository populates it on load), that
+// value is used directly and no team lookup happens.
+func (s *eventService) resolveEventAccountID(ctx context.Context, event *domain.Event) (string, error) {
+	if event == nil {
+		return "", errors.New("event is nil")
+	}
+
+	if event.AccountID != "" {
+		return event.AccountID, nil
+	}
+
+	if event.TeamID == "" {
+		return "", errors.New("event has no team; cannot resolve account")
+	}
+
+	accountID, err := s.repo.AccountIDForTeam(ctx, event.TeamID)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve account for team %s: %w", event.TeamID, err)
+	}
+	if accountID == "" {
+		return "", fmt.Errorf("team %s has no account", event.TeamID)
+	}
+
+	return accountID, nil
 }
 
 // validateViewCreatorPermission checks whether the user may see the
@@ -386,4 +417,33 @@ type TeamInfo struct {
 	ID        string
 	Type      string // "personal" or "institution"
 	AccountID string
+}
+
+// applyScheduleDates copies the first schedule's start date (and the
+// last schedule's end date) up to the event-level fields. The
+// ValidateForPublish check reads event.StartDate, which nothing was
+// setting after schedules were attached.
+func applyScheduleDates(event *domain.Event) {
+    if event == nil || len(event.Schedules) == 0 {
+        return
+    }
+
+    first := event.Schedules[0]
+    if !first.StartDate.IsZero() {
+        event.StartDate = first.StartDate
+    }
+
+    last := event.Schedules[len(event.Schedules)-1]
+    if last.EndDate != nil && !last.EndDate.IsZero() {
+        event.EndDate = last.EndDate
+    } else if !last.StartDate.IsZero() {
+        endCopy := last.StartDate
+        event.EndDate = &endCopy
+    }
+
+    if len(event.Schedules) > 1 {
+        event.IsMultiDay = true
+    } else if event.EndDate != nil && !event.EndDate.Equal(event.StartDate) {
+        event.IsMultiDay = true
+    }
 }

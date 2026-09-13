@@ -6,6 +6,7 @@ package eventhandler
 // REQUEST DTOS
 // ============================================================
 
+
 // CreateDraftRequest - All fields optional for drafts (application/json)
 // NOTE: team_id is NOT in the request body - it's derived from the URL by the handler
 type CreateDraftRequest struct {
@@ -18,6 +19,7 @@ type CreateDraftRequest struct {
 	CategoryID       string   `json:"category_id"`
 	Tags             []string `json:"tags"`
 	Language         string   `json:"language"`
+
 
 	// ❌ REMOVED: OwnerType     string `json:"owner_type"`
 	// ❌ REMOVED: InstitutionID string `json:"institution_id"`
@@ -348,6 +350,7 @@ type EventTypeDTO struct {
 	MinDuration         int    `json:"min_duration"`
 	MaxDuration         int    `json:"max_duration"`
 }
+
 
 // EventStatusDTO - Event status information
 type EventStatusDTO struct {

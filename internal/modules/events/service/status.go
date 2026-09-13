@@ -191,6 +191,10 @@ func (s *eventService) BulkCompleteEvents(ctx context.Context, ids []string) (*B
 //
 // POST-REVAMP: single Casbin check against the event's parent account
 // domain. Teams are not authorization domains.
+//
+// The account is resolved through `resolveEventAccountID`, which walks
+// events.team_id → teams.account_id when the event doesn't carry its own
+// account reference. See helpers.go for details.
 func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
 	if publishedBy == "" {
 		return nil, errors.New("published by is required")
@@ -204,13 +208,14 @@ func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id
 		return nil, domain.ErrEventNotFound
 	}
 
-	if event.AccountID == "" {
-		return nil, errors.New("event has no account ID; cannot authorize publish")
+	accountID, err := s.resolveEventAccountID(ctx, event)
+	if err != nil {
+		return nil, fmt.Errorf("cannot authorize publish: %w", err)
 	}
 
-	accountDomain := domain.AccountDomain(event.AccountID)
+	accountDomain := domain.AccountDomain(accountID)
 	log.Printf("🔍 PUBLISH CHECK: user=%s accountID=%s domain=%s",
-		publishedBy, event.AccountID, accountDomain)
+		publishedBy, accountID, accountDomain)
 
 	allowed, err := s.permChecker.CanPublishAllEvents(ctx, publishedBy, accountDomain)
 	if err != nil {
