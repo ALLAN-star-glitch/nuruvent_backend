@@ -474,6 +474,7 @@ func (s *teamService) AcceptInvitation(ctx context.Context, token, userID string
 			adminName = inviter.Email
 		}
 
+		
 		if err := s.notifSvc.SendTeamInviteAccepted(bgCtx, SendTeamInviteAcceptedRequest{
 			To:        inviter.Email,   // ✅ real email
 			AdminName: adminName,       // ✅ real name

@@ -72,6 +72,7 @@ func (s *accountService) GetUsersByIDs(ctx context.Context, userIDs []string) ([
 }
 
 // toUserInfo maps a domain user to the read-only projection.
+// toUserInfo maps a domain user to the read-only projection.
 func toUserInfo(u *accountdomain.User) *accountdomain.UserInfo {
 	if u == nil {
 		return nil
@@ -83,6 +84,10 @@ func toUserInfo(u *accountdomain.User) *accountdomain.UserInfo {
 		Email:       u.Email,
 		Phone:       u.Phone,
 		AvatarURL:   u.AvatarURL,
+		Bio:         u.Bio,          // ✅ added
+		Location:    u.Location,     // ✅ added
+		Website:     u.Website,      // ✅ added
+		SocialLinks: u.SocialLinks,  // ✅ added
 	}
 }
 

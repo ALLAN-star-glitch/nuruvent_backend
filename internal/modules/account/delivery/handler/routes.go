@@ -6,7 +6,14 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-// RegisterRoutes registers all account routes
+// RegisterRoutes registers all account routes.
+//
+// IMPORTANT — Route ordering rule:
+//   Fiber matches routes in the order they are registered. Any route with a
+//   literal segment that could also be captured by a parametrised sibling
+//   (e.g. "/users/me/profile" vs "/users/:id/profile") MUST be registered
+//   first, otherwise the parametrised route wins and the literal segment is
+//   treated as an ID (which then fails UUID validation downstream).
 func (h *AccountHandler) RegisterRoutes(
 	router fiber.Router,
 	authMiddleware fiber.Handler,
@@ -18,8 +25,10 @@ func (h *AccountHandler) RegisterRoutes(
 	public := router.Group("/account-types")
 	{
 		public.Get("/", h.GetAccountTypes)
-		public.Get("/:id", h.GetAccountTypeByID)
+		// Static segment "slug" before parametrised ":id" so "/slug/:slug"
+		// is not shadowed by "/:id" (which would capture "slug" as the id).
 		public.Get("/slug/:slug", h.GetAccountTypeBySlug)
+		public.Get("/:id", h.GetAccountTypeByID)
 	}
 
 	// ============================================================
@@ -35,8 +44,9 @@ func (h *AccountHandler) RegisterRoutes(
 
 		// ---- READ ----
 		account.Get("/", h.GetMyAccounts)
-		account.Get("/:id", h.GetAccountByID)
+		// Static "slug" segment before parametrised ":id".
 		account.Get("/slug/:slug", h.GetAccountBySlug)
+		account.Get("/:id", h.GetAccountByID)
 
 		// ---- UPDATE ----
 		account.Put("/:id", h.UpdateAccount)
@@ -94,16 +104,13 @@ func (h *AccountHandler) RegisterRoutes(
 	}
 
 	// ============================================================
-	// 6. PUBLIC USER PROFILE ROUTES (No auth)
-	// ============================================================
-	profilePublic := router.Group("/users")
-	{
-		profilePublic.Get("/slug/:slug/profile", h.GetPublicProfileBySlug)
-		profilePublic.Get("/:id/profile", h.GetPublicProfile)
-	}
-
-	// ============================================================
-	// 7. USER'S OWN PROFILE ROUTES (Auth required)
+	// 6. USER'S OWN PROFILE ROUTES (Auth required)
+	//
+	// ⚠️ MUST be registered BEFORE the public "/users/:id/profile"
+	//    route below. Fiber matches in registration order, so if the
+	//    parametrised route comes first, "me" is captured as :id and
+	//    passed to the repository, producing:
+	//    "invalid input syntax for type uuid: \"me\"".
 	// ============================================================
 	profile := router.Group("/users/me/profile")
 	profile.Use(authMiddleware)
@@ -111,5 +118,15 @@ func (h *AccountHandler) RegisterRoutes(
 	{
 		profile.Get("/", h.GetMyProfile)
 		profile.Put("/", h.UpdateMyProfile)
+	}
+
+	
+	// ============================================================
+	// 7. PUBLIC USER PROFILE ROUTES (No auth)
+	// ============================================================
+	profilePublic := router.Group("/users")
+	{
+		profilePublic.Get("/slug/:slug/profile", h.GetPublicProfileBySlug)
+		profilePublic.Get("/:id/profile", h.GetPublicProfile)
 	}
 }
