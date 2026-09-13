@@ -1,5 +1,3 @@
-# .dockerignore
-
 # Git
 .git/
 .gitignore
@@ -45,3 +43,87 @@ node_modules/
 # Documentation
 docs/
 *.md
+
+# ============================================================
+# API Testing & Development Files
+# ============================================================
+
+# Postman collections and environments
+*.postman_collection.json
+*.postman_environment.json
+postman/
+!postman/example/
+
+# REST Client (VS Code extension)
+*.http
+!*-example.http
+*.rest
+
+# Insomnia
+insomnia.json
+insomnia-*.json
+insomnia/
+!insomnia/example/
+
+# Bruno collections
+*.bru
+bruno/
+!bruno/example/
+
+# HTTPie
+.httpie/
+.session
+.cookie-jar
+
+# API test results
+test-results/
+api-test-reports/
+coverage/
+
+# API request history
+.history/
+api-requests/
+requests/
+
+# Swagger/OpenAPI generated files
+swagger/
+openapi/
+!openapi/example/
+
+# Testing temporary files
+*.tmp
+tmp/
+temp/
+*.temp
+
+# cURL history
+.curlrc
+curl_history.txt
+.curl_history
+
+# Alternative API testing tools
+/hurl/
+/hurl files/
+*.hurl
+!*-example.hurl
+
+# API client session files
+.session.json
+.token.json
+.credentials.json
+
+# Secret/private keys (never in Docker)
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.jwk
+*.jwt
+*.token
+
+# Database dumps (if any)
+*.sql
+*.dump
+*.backup
+backups/

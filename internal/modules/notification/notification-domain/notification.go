@@ -96,9 +96,18 @@ const (
 	TypePasswordResetConfirm NotificationType = "password_reset_confirm"
 	TypeTwoFactor            NotificationType = "two_factor"
 	TypeLoginNotification    NotificationType = "login_notification"
+	TypeWelcomeInstitution   NotificationType = "welcome_institution" // For Admin of institution
 	TypeWelcomeInstitutionKYC NotificationType = "welcome_institution_kyc"
 	TypeNewInstitutionAccountRegistration		NotificationType = "new_account_institution_registration_notice"
 	TypeNewPersonalAccountRegistration			NotificationType = "new_account_personal_registration_notice"
+	
+	// ============================================================
+	// ✅ TEAM INVITATION NOTIFICATION TYPES (UPDATED)
+	// ============================================================
+	TypeTeamInviteExistingUser  NotificationType = "team_invite_existing_user"  // ✅ Renamed - for existing users
+	TypeTeamInviteRegistration  NotificationType = "team_invite_registration"   // ✅ New users (no OTP)
+	TypeTeamInviteAccepted      NotificationType = "team_invite_accepted"       // ✅ Admin notification
+	TypeTeamInviteDeclined      NotificationType = "team_invite_declined"       // ✅ Admin notification
 )
 
 func (t NotificationType) String() string {

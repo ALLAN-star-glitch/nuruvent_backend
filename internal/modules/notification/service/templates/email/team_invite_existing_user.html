@@ -1,0 +1,92 @@
+{{define "team-invite-existing-user"}}
+<div class="title">
+    {{if .ai_subject}}{{.ai_subject}}{{else}}You've Been Invited to Join!{{end}}
+</div>
+<div class="subtitle">Join {{.team_name}} on Nuruvent</div>
+
+<div class="greeting">
+    {{if .ai_greeting}}{{.ai_greeting}}{{else}}Hello{{if .user_name}} {{.user_name}}{{end}},{{end}}
+</div>
+
+{{if .ai_intro}}
+<p class="body-text">{{.ai_intro}}</p>
+{{end}}
+
+<p class="body-text">
+    {{if .ai_body}}{{.ai_body}}{{else}}<strong>{{.invited_by}}</strong> has invited you to join the team <strong>{{.team_name}}</strong> on Nuruvent.{{end}}
+</p>
+
+{{$benefits := split "|" .ai_benefits}}
+{{if and .ai_benefits (ne (trim .ai_benefits) "") (ne (trim .ai_benefits) "|")}}
+<div class="details-box" style="background: #F8F9FA; padding: 16px 20px; border-radius: 12px; margin: 16px 0; border: 1px solid #E8EAED;">
+    <div style="font-weight: 600; margin-bottom: 8px; color: #202124;">What you'll gain:</div>
+    {{range $benefit := $benefits}}
+        {{$clean := trim $benefit}}
+        {{if ne $clean ""}}
+        <div style="padding: 4px 0; color: #3C4043; font-size: 14px;">• {{$clean}}</div>
+        {{end}}
+    {{end}}
+</div>
+{{end}}
+
+<div class="alert-success">
+    <div class="message">You've been invited!</div>
+</div>
+
+<div class="otp-box" style="padding: 20px;">
+    <a href="{{.accept_link}}" style="display: inline-block; background: #1A73E8; color: #FFFFFF; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px;">
+        {{if .ai_call_to_action}}{{.ai_call_to_action}}{{else}}Accept Invitation{{end}}
+    </a>
+</div>
+
+<p style="text-align: center; color: #5F6368; font-size: 13px; margin-top: 12px;">
+    This invitation will expire in <strong>{{.expires_in}}</strong>
+</p>
+
+<div class="details-box">
+    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F0F2F5;">
+        <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Team</span>
+        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.team_name}}</span>
+    </div>
+    {{if .role}}
+    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F0F2F5;">
+        <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Your Role</span>
+        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{role_display .role}}</span>
+    </div>
+    {{end}}
+    <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #F0F2F5;">
+        <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Invited By</span>
+        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.invited_by}}</span>
+    </div>
+    <div style="display: flex; justify-content: space-between; padding: 8px 0;">
+        <span style="color: #5F6368; font-size: 13px; font-weight: 500;">Expires In</span>
+        <span style="color: #202124; font-size: 13px; font-weight: 500;">{{.expires_in}}</span>
+    </div>
+</div>
+
+{{if .ai_closing}}
+<div style="margin-top: 20px; color: #202124; font-size: 14px; line-height: 1.6;">
+    {{.ai_closing}}
+</div>
+{{end}}
+
+{{if .ai_pss}}
+<div style="margin-top: 12px; padding: 12px 16px; background: #F8F9FA; border-radius: 8px; color: #5F6368; font-size: 13px; border-left: 3px solid #1A73E8;">
+    {{.ai_pss}}
+</div>
+{{end}}
+
+<div class="alert-info" style="background: #EEF2FF; padding: 14px 18px; border-radius: 10px; margin: 14px 0; border-left: 4px solid #1A73E8;">
+    <p style="margin: 0; color: #1A3A6B; font-size: 14px;">
+        <strong>Already have a Nuruvent account?</strong><br>
+        Simply click the button above to log in and accept the invitation instantly.
+    </p>
+</div>
+
+<div class="alert-warning" style="background: #FEF3C7; padding: 14px 18px; border-radius: 10px; margin: 14px 0; border-left: 4px solid #FBBC04;">
+    <p style="margin: 0; color: #92400E; font-size: 14px;">
+        <strong>Didn't expect this invitation?</strong><br>
+        If you were not expecting an invitation from <strong>{{.team_name}}</strong>, please ignore this email.
+    </p>
+</div>
+{{end}}

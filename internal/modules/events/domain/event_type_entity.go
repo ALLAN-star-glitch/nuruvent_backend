@@ -1,3 +1,4 @@
+// event_type_entity.go
 package domain
 
 import (

@@ -1,19 +1,16 @@
 {{define "welcome-institution"}}
-<h1 class="title">Welcome <span class="highlight">{{.institution_name}}</span></h1>
-<p class="subtitle">Your institution is now on Nuruvent</p>
-
 <p class="greeting">Hello <span class="name">{{.admin_name}}</span>,</p>
+
 <p class="body-text">
-    Congratulations! Your institution <span class="highlight">{{.institution_name}}</span> has been successfully registered on <span class="highlight">Nuruvent</span>.
-    Your account has been created with <strong>Host privileges</strong>, allowing you to manage events for your institution.
+    Welcome to <span class="highlight">Nuruvent</span>! Your institution <span class="highlight">{{.institution_name}}</span> has been successfully registered.
 </p>
 
 <div class="alert-success">
-    <div class="message">Institution Account is Ready</div>
-    <div class="sub">Start hosting events and building your institution's brand</div>
+    <div class="message">Your role: <strong>Account Admin</strong></div>
+    <div class="sub">You have full control to manage events, members, and settings for your institution</div>
 </div>
 
-<p class="body-text" style="font-weight:600;margin-top:16px;">As an Institution Host, you can:</p>
+<p class="body-text" style="font-weight:600;margin-top:16px;">What you can do:</p>
 
 <div class="feature-item">
     <span class="feature-icon">◆</span>
@@ -21,38 +18,30 @@
 </div>
 <div class="feature-item">
     <span class="feature-icon">◆</span>
-    <span class="feature-text">Accept payments instantly with M-Pesa</span>
+    <span class="feature-text">Invite team members to manage events with you</span>
+</div>
+<div class="feature-item">
+    <span class="feature-icon">◆</span>
+    <span class="feature-text">Accept M-Pesa payments — 3.5% commission</span>
 </div>
 <div class="feature-item">
     <span class="feature-icon">◆</span>
     <span class="feature-text">Issue QR-verified certificates to attendees</span>
 </div>
-<div class="feature-item">
-    <span class="feature-icon">◆</span>
-    <span class="feature-text">Track attendance automatically via Zoom or Google Meet</span>
-</div>
-<div class="feature-item">
-    <span class="feature-icon">◆</span>
-    <span class="feature-text">Get paid every Monday — We take only 3.5% commission</span>
-</div>
-<div class="feature-item">
-    <span class="feature-icon">◆</span>
-    <span class="feature-text">Invite team members to manage events</span>
-</div>
-<div class="feature-item">
-    <span class="feature-icon">◆</span>
-    <span class="feature-text">Build your institution's professional brand</span>
+
+<div class="alert-warning" style="margin-top:12px;">
+    <p><strong>⚠️ KYC Required:</strong> To receive payouts, please complete your KYC verification.</p>
+    <p style="font-size:0.9rem;margin-top:4px;">
+        We've sent detailed KYC instructions to <strong>{{.institution_email}}</strong>. 
+        Please check your institution's email for more details.
+    </p>
 </div>
 
-<div class="alert-info">
-    <p>Ready to host your first event? Log in to your dashboard and start creating.</p>
+<div class="alert-info" style="margin-top:12px;">
+    <p><strong>Ready to start?</strong> Log in to your dashboard and create your first event.</p>
 </div>
 
-<div class="alert-warning">
-    <p><strong>Important:</strong> Complete your KYC verification to start receiving payouts. Check your dashboard for details.</p>
-</div>
-
-<p class="body-text text-muted text-center" style="margin-top:20px;">
+<p class="body-text text-muted text-center" style="margin-top:16px;">
     <em>Light Your Events. Illuminate Your Growth.</em>
 </p>
 {{end}}

@@ -27,21 +27,23 @@ func NewTokenService(cfg *config.Config) authdomain.TokenService {
 func (s *TokenService) GenerateAccessToken(ctx *authdomain.TokenContext) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"sub":               ctx.UserID,
-		"type":              "access",
-		"iat":               now.Unix(),
-		"exp":               now.Add(s.config.JWT.AccessExpiration).Unix(),
-		"jti":               uuid.New().String(),
-		"email":             ctx.Email,
-		"role":              ctx.Role,
-		"account_type_id":   ctx.AccountTypeID,
-		"account_type_slug": ctx.AccountTypeSlug,
-		"account_id":        ctx.AccountID,
+		"sub":           ctx.UserID,
+		"type":          "access",
+		"iat":           now.Unix(),
+		"exp":           now.Add(s.config.JWT.AccessExpiration).Unix(),
+		"jti":           uuid.New().String(),
+		"email":         ctx.Email,
+		"role":          ctx.Role,
+		"is_verified":   ctx.IsVerified,
+		"is_active":     ctx.IsActive,
+		"account_id":    ctx.AccountID,
+		"account_type":  ctx.AccountTypeSlug,
+		"team_id":       ctx.TeamID,
+		"team_type":     ctx.TeamTypeSlug,
 	}
 
-	// Add institution_id if present
-	if ctx.InstitutionID != "" {
-		claims["institution_id"] = ctx.InstitutionID
+	if ctx.DisplayName != "" {
+		claims["display_name"] = ctx.DisplayName
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -82,16 +84,17 @@ func (s *TokenService) ValidateToken(tokenString string) (*authdomain.TokenConte
 		return nil, fmt.Errorf("invalid token claims")
 	}
 
-	// Extract claims
 	userID, _ := claims["sub"].(string)
 	email, _ := claims["email"].(string)
+	displayName, _ := claims["display_name"].(string)
 	role, _ := claims["role"].(string)
-	accountTypeID, _ := claims["account_type_id"].(string)
-	accountTypeSlug, _ := claims["account_type_slug"].(string)
 	accountID, _ := claims["account_id"].(string)
-	institutionID, _ := claims["institution_id"].(string)
+	accountType, _ := claims["account_type"].(string)
+	teamID, _ := claims["team_id"].(string)
+	teamType, _ := claims["team_type"].(string)
+	isVerified, _ := claims["is_verified"].(bool)
+	isActive, _ := claims["is_active"].(bool)
 
-	// Validate required fields
 	if userID == "" {
 		return nil, fmt.Errorf("user ID not found in token")
 	}
@@ -99,10 +102,13 @@ func (s *TokenService) ValidateToken(tokenString string) (*authdomain.TokenConte
 	return &authdomain.TokenContext{
 		UserID:          userID,
 		Email:           email,
+		DisplayName:     displayName,
 		Role:            role,
-		AccountTypeID:   accountTypeID,
-		AccountTypeSlug: accountTypeSlug,
 		AccountID:       accountID,
-		InstitutionID:   institutionID,
+		AccountTypeSlug: accountType,
+		TeamID:          teamID,
+		TeamTypeSlug:    teamType,
+		IsVerified:      isVerified,
+		IsActive:        isActive,
 	}, nil
 }

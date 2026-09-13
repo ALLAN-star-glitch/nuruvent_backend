@@ -5,9 +5,10 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/acchandler"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler" // ✅ Add account handler
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
+	teamHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 )
@@ -19,8 +20,9 @@ func SetupRoutes(
 	authMiddleware fiber.Handler,
 	authzMiddleware fiber.Handler,
 	authHandler *authhandler.AuthHandler,
-	accountHandler *acchandler.AccountHandler,
 	eventsHandler *eventhandler.EventHandler,
+	teamHandler *teamHandler.TeamHandler,
+	accountHandler *handler.AccountHandler,
 ) {
 	// ================================================
 	// 1. SWAGGER - Must be FIRST to avoid 404
@@ -45,11 +47,14 @@ func SetupRoutes(
 	// Auth routes (public + protected)
 	authHandler.RegisterRoutes(api, authMiddleware)
 
-	// Account routes
-	accountHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
-
 	// Events routes
 	eventsHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
+
+	// Team routes
+	teamHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
+
+	// ✅ Account routes
+	accountHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
 
 	// ================================================
 	// 4. 404 Handler - Must be LAST

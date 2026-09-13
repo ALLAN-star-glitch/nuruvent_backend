@@ -427,7 +427,7 @@ db-reset: db-drop
 	docker exec -it $(DB_CONTAINER) psql -U $(DB_USER) -d postgres -c "CREATE DATABASE $(DB_NAME);"
 	@echo "✅ Database $(DB_NAME) recreated"
 	@echo "Running migrations..."
-	@make migrate-up
+	@make migrate-up-local
 	@echo "Running seeders..."
 	@make seed
 	@echo "✅ Database reset complete!"

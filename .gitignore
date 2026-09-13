@@ -1,5 +1,3 @@
-# .gitignore
-
 # Environment files
 .env
 .env.local
@@ -48,3 +46,42 @@ coverage.html
 
 # Docker
 .dockerignore
+
+# ============================================================
+# API Testing & Documentation
+# ============================================================
+
+# Postman collections (if they contain sensitive data)
+*.postman_collection.json
+*.postman_environment.json
+!*-example.postman_collection.json
+!*-example.postman_environment.json
+
+# REST Client files (VS Code extension)
+*.http
+!*-example.http
+
+# Insomnia
+insomnia.json
+insomnia-*.json
+!insomnia-example.json
+
+# Bruno collections
+*.bru
+!*-example.bru
+
+# HTTPie session files
+.session
+.cookie-jar
+
+# Swagger/OpenAPI generated files
+docs/
+!docs/example/
+
+# API test results
+test-results/
+api-test-reports/
+
+# API request history
+.history/
+api-requests/

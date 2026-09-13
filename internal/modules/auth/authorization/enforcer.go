@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,10 +19,9 @@ import (
 )
 
 // ============================================================
-// ENFORCER - Internal implementation detail
+// ENFORCER
 // ============================================================
 
-// Enforcer wraps the Casbin enforcer with additional functionality
 type Enforcer struct {
 	*casbin.Enforcer
 	mu      sync.RWMutex
@@ -32,27 +32,31 @@ type Enforcer struct {
 	stopped bool
 }
 
-// NewEnforcer creates a new Casbin enforcer (for Wire DI)
 func NewEnforcer(db *gorm.DB, cfg *config.Config) (*Enforcer, error) {
-	// Create GORM adapter
 	adapter, err := gormadapter.NewAdapterByDB(db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Casbin adapter: %w", err)
 	}
 
-	// Create enforcer with model and adapter
 	e, err := casbin.NewEnforcer(cfg.Casbin.ModelPath, adapter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Casbin enforcer: %w", err)
 	}
 
-	// Enable auto-save for policy changes
 	e.EnableAutoSave(true)
 
-	// Load policies from database
 	err = e.LoadPolicy()
 	if err != nil {
-		return nil, fmt.Errorf("failed to load policies: %w", err)
+		log.Printf("⚠️ Error loading policies: %v", err)
+		log.Printf("ℹ️ Attempting to clean up invalid policies...")
+
+		if cleanErr := cleanInvalidPolicies(db); cleanErr != nil {
+			return nil, fmt.Errorf("failed to clean invalid policies: %w", cleanErr)
+		}
+
+		if err := e.LoadPolicy(); err != nil {
+			return nil, fmt.Errorf("failed to load policies after cleanup: %w", err)
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -66,15 +70,29 @@ func NewEnforcer(db *gorm.DB, cfg *config.Config) (*Enforcer, error) {
 
 	log.Println("Casbin enforcer initialized successfully")
 
-	// Start auto-reload if enabled
 	if cfg.Casbin.AutoLoad {
+		log.Printf("🚀 Auto-load enabled (interval: %v)", cfg.Casbin.AutoLoadInterval)
 		go enforcer.autoLoadPolicies()
+	} else {
+		log.Println("ℹ️ Auto-load is disabled")
 	}
 
 	return enforcer, nil
 }
 
-// Close stops the enforcer and cleans up resources
+func cleanInvalidPolicies(db *gorm.DB) error {
+	result := db.Exec(`
+		DELETE FROM casbin_rule 
+		WHERE ptype = 'p' 
+		AND (v3 IS NULL OR v3 = '')
+	`)
+	if result.Error != nil {
+		return result.Error
+	}
+	log.Printf("✅ Removed %d invalid policy rules", result.RowsAffected)
+	return nil
+}
+
 func (e *Enforcer) Close() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -84,7 +102,6 @@ func (e *Enforcer) Close() {
 	}
 }
 
-// autoLoadPolicies periodically reloads policies from the database
 func (e *Enforcer) autoLoadPolicies() {
 	ticker := time.NewTicker(e.cfg.AutoLoadInterval)
 	defer ticker.Stop()
@@ -107,152 +124,141 @@ func (e *Enforcer) autoLoadPolicies() {
 	}
 }
 
-// ================================================
+// ============================================================
 // PERMISSION CHECK METHODS
-// ================================================
+// ============================================================
 
-// Enforce checks if a user has permission in a domain
 func (e *Enforcer) Enforce(userID string, domain string, resource string, action string) (bool, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return e.Enforcer.Enforce(userID, domain, resource, action)
+
+	if e.IsSuperAdmin(userID) {
+		log.Printf("🔍 ENFORCE: super_admin bypass for %s", userID)
+		return true, nil
+	}
+
+	result, err := e.Enforcer.Enforce(userID, domain, resource, action)
+	log.Printf("🔍 ENFORCE: sub=%q dom=%q obj=%q act=%q → %v (err=%v)",
+		userID, domain, resource, action, result, err)
+	return result, err
 }
 
-// BatchEnforce checks multiple permissions in one call
 func (e *Enforcer) BatchEnforce(requests [][]interface{}) ([]bool, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Enforcer.BatchEnforce(requests)
 }
 
-// ================================================
+// ============================================================
 // POLICY MANAGEMENT METHODS
-// ================================================
+// ============================================================
 
-// AddPolicy adds a new policy rule
 func (e *Enforcer) AddPolicy(sub, dom, obj, act string) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.Enforcer.AddPolicy(sub, dom, obj, act)
 }
 
-// RemovePolicy removes a policy rule
 func (e *Enforcer) RemovePolicy(sub, dom, obj, act string) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.Enforcer.RemovePolicy(sub, dom, obj, act)
 }
 
-// AddPolicies adds multiple policy rules
 func (e *Enforcer) AddPolicies(rules [][]string) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.Enforcer.AddPolicies(rules)
 }
 
-// RemovePolicies removes multiple policy rules
 func (e *Enforcer) RemovePolicies(rules [][]string) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.Enforcer.RemovePolicies(rules)
 }
 
-// AddGroupingPolicies adds multiple grouping policies (role assignments)
 func (e *Enforcer) AddGroupingPolicies(rules [][]string) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.Enforcer.AddGroupingPolicies(rules)
 }
 
-// RemoveGroupingPolicies removes multiple grouping policies
 func (e *Enforcer) RemoveGroupingPolicies(rules [][]string) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.Enforcer.RemoveGroupingPolicies(rules)
 }
 
-// HasPolicy checks if a policy exists
 func (e *Enforcer) HasPolicy(sub, dom, obj, act string) (bool, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Enforcer.HasPolicy(sub, dom, obj, act)
 }
 
-// HasGroupingPolicy checks if a grouping policy exists (role assignment)
 func (e *Enforcer) HasGroupingPolicy(user, role, domain string) (bool, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Enforcer.HasGroupingPolicy(user, role, domain)
 }
 
-// GetPolicy returns all policies
 func (e *Enforcer) GetPolicy() ([][]string, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Enforcer.GetPolicy()
 }
 
-// GetGroupingPolicy returns all grouping policies (role assignments)
 func (e *Enforcer) GetGroupingPolicy() ([][]string, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Enforcer.GetGroupingPolicy()
 }
 
-// GetFilteredPolicy gets policies filtered by field values
 func (e *Enforcer) GetFilteredPolicy(fieldIndex int, fieldValues ...string) ([][]string, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Enforcer.GetFilteredPolicy(fieldIndex, fieldValues...)
 }
 
-// GetFilteredGroupingPolicy gets grouping policies filtered by field values
 func (e *Enforcer) GetFilteredGroupingPolicy(fieldIndex int, fieldValues ...string) ([][]string, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Enforcer.GetFilteredGroupingPolicy(fieldIndex, fieldValues...)
 }
 
-// ================================================
+// ============================================================
 // ROLE MANAGEMENT METHODS
-// ================================================
+// ============================================================
 
-// AddRoleForUserInDomain adds a role for a user in a specific domain
 func (e *Enforcer) AddRoleForUserInDomain(userID, role, domain string) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.Enforcer.AddGroupingPolicy(userID, role, domain)
 }
 
-// RemoveRoleForUserInDomain removes a role for a user in a specific domain
 func (e *Enforcer) RemoveRoleForUserInDomain(userID, role, domain string) (bool, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.Enforcer.RemoveGroupingPolicy(userID, role, domain)
 }
 
-// GetRolesForUserInDomain returns all roles for a user in a domain
 func (e *Enforcer) GetRolesForUserInDomain(userID, domain string) []string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Enforcer.GetRolesForUserInDomain(userID, domain)
 }
 
-// GetImplicitRolesForUser returns all roles for a user including inherited ones
 func (e *Enforcer) GetImplicitRolesForUser(userID string, domain string) ([]string, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Enforcer.GetImplicitRolesForUser(userID, domain)
 }
 
-// GetImplicitPermissionsForUser returns all permissions for a user including inherited ones
 func (e *Enforcer) GetImplicitPermissionsForUser(userID string, domain string) ([][]string, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.Enforcer.GetImplicitPermissionsForUser(userID, domain)
 }
 
-// HasRoleForUserInDomain checks if a user has a specific role in a domain
 func (e *Enforcer) HasRoleForUserInDomain(userID, role, domain string) bool {
 	roles := e.GetRolesForUserInDomain(userID, domain)
 	for _, r := range roles {
@@ -263,7 +269,6 @@ func (e *Enforcer) HasRoleForUserInDomain(userID, role, domain string) bool {
 	return false
 }
 
-// HasImplicitRoleForUserInDomain checks if a user has a role (including inherited) in a domain
 func (e *Enforcer) HasImplicitRoleForUserInDomain(userID, role, domain string) (bool, error) {
 	roles, err := e.GetImplicitRolesForUser(userID, domain)
 	if err != nil {
@@ -277,139 +282,127 @@ func (e *Enforcer) HasImplicitRoleForUserInDomain(userID, role, domain string) (
 	return false, nil
 }
 
-// ================================================
+// ============================================================
 // PLATFORM ROLE METHODS
-// ================================================
+// ============================================================
 
-// AddPlatformRole adds a platform-level role for a user
 func (e *Enforcer) AddPlatformRole(userID string, role authdomain.Role) (bool, error) {
 	return e.AddRoleForUserInDomain(userID, role.String(), authdomain.DomainPlatform)
 }
 
-// RemovePlatformRole removes a platform-level role from a user
 func (e *Enforcer) RemovePlatformRole(userID string, role authdomain.Role) (bool, error) {
 	return e.RemoveRoleForUserInDomain(userID, role.String(), authdomain.DomainPlatform)
 }
 
-// GetUserPlatformRoles returns all platform-level roles for a user
 func (e *Enforcer) GetUserPlatformRoles(userID string) []string {
 	return e.GetRolesForUserInDomain(userID, authdomain.DomainPlatform)
 }
 
-// HasPlatformRole checks if a user has a specific platform role
 func (e *Enforcer) HasPlatformRole(userID, role string) bool {
 	return e.HasRoleForUserInDomain(userID, role, authdomain.DomainPlatform)
 }
 
-// IsSuperAdmin checks if a user is a super admin
 func (e *Enforcer) IsSuperAdmin(userID string) bool {
 	return e.HasRoleForUserInDomain(userID, authdomain.RoleSuperAdmin.String(), authdomain.DomainPlatform)
 }
 
-// IsAdmin checks if a user is a platform admin
 func (e *Enforcer) IsAdmin(userID string) bool {
 	return e.HasRoleForUserInDomain(userID, authdomain.RoleAdmin.String(), authdomain.DomainPlatform)
 }
 
-// ================================================
-// ACCOUNT ACCESS METHODS
-// ================================================
+// ============================================================
+// ACCOUNT ROLE METHODS (ROLES ARE AT ACCOUNT LEVEL)
+// Domain: account:{account_id}
+// ============================================================
 
-// AddAccountRole adds a role for a user in an account domain
-func (e *Enforcer) AddAccountRole(accountID, userID, role string) (bool, error) {
+// AddAccountRole adds a role for a user in an account
+// Roles: "account_admin" or "trainer"
+func (e *Enforcer) AddAccountRole(userID, accountID, role string) (bool, error) {
 	domain := authdomain.AccountDomain(accountID)
 	return e.AddRoleForUserInDomain(userID, role, domain)
 }
 
-// RemoveAccountRole removes a role for a user in an account domain
-func (e *Enforcer) RemoveAccountRole(accountID, userID, role string) (bool, error) {
+// RemoveAccountRole removes a role from a user in an account
+func (e *Enforcer) RemoveAccountRole(userID, accountID, role string) (bool, error) {
 	domain := authdomain.AccountDomain(accountID)
 	return e.RemoveRoleForUserInDomain(userID, role, domain)
 }
 
-// RemoveAllAccountRoles removes all roles for a user in an account domain
-func (e *Enforcer) RemoveAllAccountRoles(accountID, userID string) (bool, error) {
+// RemoveAllAccountRoles removes all roles from a user in an account
+func (e *Enforcer) RemoveAllAccountRoles(userID, accountID string) (bool, error) {
 	domain := authdomain.AccountDomain(accountID)
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.Enforcer.RemoveFilteredGroupingPolicy(0, userID, "", domain)
 }
 
-// GetUserAccountRoles returns all roles for a user in an account domain
-func (e *Enforcer) GetUserAccountRoles(accountID, userID string) []string {
+// GetUserAccountRoles returns all roles for a user in an account
+func (e *Enforcer) GetUserAccountRoles(userID, accountID string) []string {
 	domain := authdomain.AccountDomain(accountID)
 	return e.GetRolesForUserInDomain(userID, domain)
 }
 
-// HasAccountRole checks if a user has a specific role in an account domain
-func (e *Enforcer) HasAccountRole(accountID, userID, role string) bool {
+// HasAccountRole checks if a user has a specific role in an account
+func (e *Enforcer) HasAccountRole(userID, accountID, role string) bool {
 	domain := authdomain.AccountDomain(accountID)
 	return e.HasRoleForUserInDomain(userID, role, domain)
 }
 
-// IsAccountAdmin checks if a user is an account admin
-func (e *Enforcer) IsAccountAdmin(accountID, userID string) bool {
-	return e.HasAccountRole(accountID, userID, authdomain.RoleAccountAdmin.String())
+// IsAccountAdmin checks if a user is an account admin in an account
+func (e *Enforcer) IsAccountAdmin(userID, accountID string) bool {
+	return e.HasAccountRole(userID, accountID, authdomain.RoleAccountAdmin.String())
 }
 
-// IsEventManagerForAccount checks if a user is an event manager for an account
-func (e *Enforcer) IsEventManagerForAccount(accountID, userID string) bool {
-	return e.HasAccountRole(accountID, userID, authdomain.RoleEventManager.String())
+// IsAccountTrainer checks if a user is a trainer in an account
+func (e *Enforcer) IsAccountTrainer(userID, accountID string) bool {
+	return e.HasAccountRole(userID, accountID, authdomain.RoleTrainer.String())
 }
 
-// IsTeamMemberForAccount checks if a user is a team member for an account
-func (e *Enforcer) IsTeamMemberForAccount(accountID, userID string) bool {
-	return e.HasAccountRole(accountID, userID, authdomain.RoleTeamMember.String())
-}
-
-// ================================================
-// USER INFORMATION METHODS
-// ================================================
-
-// HasAnyAccountRole checks if a user has any account-related role in any domain
-func (e *Enforcer) HasAnyAccountRole(userID string) bool {
-	domains := e.GetDomainsForUser(userID)
-
-	for _, domain := range domains {
-		if authdomain.IsAccountDomain(domain) {
-			roles := e.GetRolesForUserInDomain(userID, domain)
-			if len(roles) > 0 {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// HasAnyAccountRoleInAccount checks if a user has any account role in a specific account
-func (e *Enforcer) HasAnyAccountRoleInAccount(accountID, userID string) bool {
+// GetUserRoleInAccount returns the user's role in a specific account
+// Returns: "account_admin", "trainer", or empty string if not a member
+func (e *Enforcer) GetUserRoleInAccount(userID, accountID string) string {
 	domain := authdomain.AccountDomain(accountID)
 	roles := e.GetRolesForUserInDomain(userID, domain)
-	return len(roles) > 0
+
+	if len(roles) > 0 {
+		return roles[0] // User has exactly one role per account
+	}
+	return ""
 }
 
-// GetUserAccountIDsWithRole returns account IDs where a user has a specific role
-func (e *Enforcer) GetUserAccountIDsWithRole(userID string, role string) []string {
+// IsAccountMember checks if user is a member (any role) of the account
+func (e *Enforcer) IsAccountMember(userID, accountID string) bool {
+	role := e.GetUserRoleInAccount(userID, accountID)
+	return role != ""
+}
+
+// GetUserAccountRolesMap returns all roles for a user across all accounts
+// Returns map[accountID]role
+func (e *Enforcer) GetUserAccountRolesMap(userID string) map[string]string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
 	domains := e.GetDomainsForUser(userID)
-	accounts := []string{}
+	result := make(map[string]string)
 
 	for _, domain := range domains {
-		if authdomain.IsAccountDomain(domain) && e.HasRoleForUserInDomain(userID, role, domain) {
-			accountID := authdomain.ExtractAccountID(domain)
+		if strings.HasPrefix(domain, "account:") {
+			accountID := strings.TrimPrefix(domain, "account:")
 			if accountID != "" {
-				accounts = append(accounts, accountID)
+				roles := e.GetRolesForUserInDomain(userID, domain)
+				if len(roles) > 0 {
+					result[accountID] = roles[0]
+				}
 			}
 		}
 	}
-	return accounts
+	return result
 }
 
-// GetUserAccountIDsWithAdminRole returns account IDs where a user has account_admin role
-func (e *Enforcer) GetUserAccountIDsWithAdminRole(userID string) []string {
-	return e.GetUserAccountIDsWithRole(userID, authdomain.RoleAccountAdmin.String())
-}
+// ============================================================
+// USER INFORMATION METHODS
+// ============================================================
 
-// GetDomainsForUser returns all domains where a user has roles
 func (e *Enforcer) GetDomainsForUser(userID string) []string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -435,63 +428,76 @@ func (e *Enforcer) GetDomainsForUser(userID string) []string {
 	return result
 }
 
-// GetUserAccountIDs returns all account IDs where a user has roles
-func (e *Enforcer) GetUserAccountIDs(userID string) []string {
+// GetUserAccountDomains returns all account domains where a user has membership
+// Returns domains in format: "account:{account_id}"
+func (e *Enforcer) GetUserAccountDomains(userID string) []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
 	domains := e.GetDomainsForUser(userID)
-	accounts := []string{}
+	var accountDomains []string
 
 	for _, domain := range domains {
-		if authdomain.IsAccountDomain(domain) {
-			accountID := authdomain.ExtractAccountID(domain)
+		if strings.HasPrefix(domain, "account:") {
+			accountDomains = append(accountDomains, domain)
+		}
+	}
+	return accountDomains
+}
+
+// GetUserAccountIDs returns all account IDs where a user has membership
+func (e *Enforcer) GetUserAccountIDs(userID string) []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	domains := e.GetDomainsForUser(userID)
+	accountIDs := []string{}
+
+	for _, domain := range domains {
+		if strings.HasPrefix(domain, "account:") {
+			accountID := strings.TrimPrefix(domain, "account:")
 			if accountID != "" {
-				accounts = append(accounts, accountID)
+				accountIDs = append(accountIDs, accountID)
 			}
 		}
 	}
-	return accounts
+	return accountIDs
 }
 
-// ================================================
-// RESOURCE-SPECIFIC PERMISSION HELPERS
-// ================================================
+func (e *Enforcer) HasAnyAccountRole(userID string) bool {
+	domains := e.GetDomainsForUser(userID)
 
-// CanManageAccount checks if user can manage an account
-func (e *Enforcer) CanManageAccount(userID, accountID string) bool {
-	allowed, err := e.Enforce(userID, authdomain.AccountDomain(accountID), authdomain.ResourceAccount.String(), authdomain.ActionManage.String())
-	if err != nil {
-		return false
+	for _, domain := range domains {
+		if strings.HasPrefix(domain, "account:") {
+			roles := e.GetRolesForUserInDomain(userID, domain)
+			if len(roles) > 0 {
+				return true
+			}
+		}
 	}
-	return allowed
+	return false
 }
 
-// CanManageEvent checks if user can manage events in an account
-func (e *Enforcer) CanManageEvent(userID, accountID string) bool {
-	allowed, err := e.Enforce(userID, authdomain.AccountDomain(accountID), authdomain.ResourceEvent.String(), authdomain.ActionManage.String())
+// ============================================================
+// ONBOARDING HELPERS
+// ============================================================
+
+func (e *Enforcer) SetupAccount(adminUserID, accountID string) error {
+	_, err := e.AddAccountRole(adminUserID, accountID, authdomain.RoleAccountAdmin.String())
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to setup account %s for admin %s: %w", accountID, adminUserID, err)
 	}
-	return allowed
+	log.Printf("✅ Account setup for admin: %s in account: %s", adminUserID, accountID)
+	return nil
 }
 
-// CanIssueCertificate checks if user can issue certificates in an account
-func (e *Enforcer) CanIssueCertificate(userID, accountID string) bool {
-	allowed, err := e.Enforce(userID, authdomain.AccountDomain(accountID), authdomain.ResourceCertificate.String(), authdomain.ActionIssue.String())
+func (e *Enforcer) AddUserToAccount(userID, accountID, role string) error {
+	if !authdomain.IsAccountRole(role) {
+		return fmt.Errorf("invalid role: %s", role)
+	}
+	_, err := e.AddAccountRole(userID, accountID, role)
 	if err != nil {
-		return false
+		return fmt.Errorf("failed to add user %s to account %s with role %s: %w", userID, accountID, role, err)
 	}
-	return allowed
-}
-
-// HasPermission checks if user has a specific permission in an account
-func (e *Enforcer) HasPermission(userID, accountID string, resource authdomain.Resource, action authdomain.Action) bool {
-	allowed, err := e.Enforce(userID, authdomain.AccountDomain(accountID), resource.String(), action.String())
-	if err != nil {
-		return false
-	}
-	return allowed
-}
-
-// GetRolesForUser gets all roles for a user (used by service)
-func (e *Enforcer) GetRolesForUser(userID string, domain string) ([]string, error) {
-	return e.GetRolesForUserInDomain(userID, domain), nil
+	return nil
 }

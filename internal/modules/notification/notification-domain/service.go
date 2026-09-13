@@ -1,8 +1,12 @@
-// internal/modules/notification/notification-domain/service.go
+// internal/modules/notification/notification-domain/notification.go
 
 package notificationdomain
 
-import "context"
+import (
+	"context"
+
+	types "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/types/emails"
+)
 
 // ============================================================
 // VERIFICATION PURPOSE
@@ -16,6 +20,7 @@ const (
 	PurposePhoneChange   VerificationPurpose = "phone_change"
 	PurposePasswordReset VerificationPurpose = "password_reset"
 	PurposeTwoFactor     VerificationPurpose = "two_factor"
+	PurposeTeamInvite    VerificationPurpose = "team_invite"
 )
 
 func (p VerificationPurpose) String() string {
@@ -24,7 +29,7 @@ func (p VerificationPurpose) String() string {
 
 func (p VerificationPurpose) IsValid() bool {
 	switch p {
-	case PurposeRegistration, PurposeEmailChange, PurposePhoneChange, PurposePasswordReset, PurposeTwoFactor:
+	case PurposeRegistration, PurposeEmailChange, PurposePhoneChange, PurposePasswordReset, PurposeTwoFactor, PurposeTeamInvite:
 		return true
 	default:
 		return false
@@ -79,6 +84,13 @@ var OTPConfigs = map[VerificationPurpose]OTPConfig{
 		RateLimitMax:    3,
 		RateLimitWindow: 600, // 10 minutes
 	},
+	PurposeTeamInvite: {
+		Length:          6,
+		ExpirySeconds:   86400, // 24 hours
+		MaxAttempts:     5,
+		RateLimitMax:    5,
+		RateLimitWindow: 300, // 5 minutes
+	},
 }
 
 // ============================================================
@@ -114,6 +126,30 @@ type NotificationService interface {
 	
 	SendLoginNotification(ctx context.Context, req SendLoginNotificationRequest) error
 	SendPasswordResetConfirm(ctx context.Context, req SendPasswordResetConfirmRequest) error
+
+	// ============================================================
+	// ✅ TEAM INVITATIONS (UPDATED - NO ROLE, NO OTP, AI-READY)
+	// ============================================================
+	
+	// SendTeamInviteExistingUser sends a team invitation to an existing user
+	// Sent when: User already has a Nuruvent account
+	// ✅ NO ROLE - Roles are inherited from account level
+	// ✅ NO OTP - User clicks accept link to join
+	// ✅ AI-READY - PersonalizedContent field for future AI integration
+	SendTeamInviteExistingUser(ctx context.Context, req SendTeamInviteExistingUserRequest) error
+	
+	// SendTeamInviteRegistration sends an invitation to a new user with registration link
+	// Sent when: User does NOT have a Nuruvent account
+	// ✅ NO ROLE - Roles are inherited from account level
+	// ✅ NO OTP - User clicks registration link with token embedded
+	// ✅ AI-READY - PersonalizedContent field for future AI integration
+	SendTeamInviteRegistration(ctx context.Context, req SendTeamInviteRegistrationRequest) error
+	
+	// SendTeamInviteAccepted sends notification to admin when user accepts invitation
+	SendTeamInviteAccepted(ctx context.Context, req SendTeamInviteAcceptedRequest) error
+	
+	// SendTeamInviteDeclined sends notification to admin when user declines invitation
+	SendTeamInviteDeclined(ctx context.Context, req SendTeamInviteDeclinedRequest) error
 }
 
 // ============================================================
@@ -138,6 +174,10 @@ type VerifyOTPRequest struct {
 	Meta    map[string]string   // additional context
 }
 
+// ============================================================
+// WELCOME EMAIL COMMANDS
+// ============================================================
+
 // SendWelcomeRequest - Welcome email for individual users
 type SendWelcomeRequest struct {
 	To   string
@@ -146,12 +186,13 @@ type SendWelcomeRequest struct {
 
 // SendInstitutionWelcomeRequest - Welcome email for institution admins
 type SendInstitutionWelcomeRequest struct {
-	To              string
-	AdminName       string
-	InstitutionName string
+	To               string
+	AdminName        string
+	InstitutionName  string
+	InstitutionEmail string
 }
 
-// ✅ NEW: SendInstitutionKYCWelcomeRequest - Welcome email with KYC requirements
+// SendInstitutionKYCWelcomeRequest - Welcome email with KYC requirements
 type SendInstitutionKYCWelcomeRequest struct {
 	To              string
 	AdminName       string
@@ -159,17 +200,23 @@ type SendInstitutionKYCWelcomeRequest struct {
 	InstitutionType string
 }
 
+// SendNewInstitutionAccountRegistrationRequest - Notification to internal admin about new institution account
 type SendNewInstitutionAccountRegistrationRequest struct {
-	TO string
+	To                  string
 	NewAccountAdminName string
-	InstitutionName  string
-	InstitutionType string
+	InstitutionName     string
+	InstitutionType     string
 }
 
+// SendNewPersonalAccountRegistrationRequest - Notification to internal admin about new personal account
 type SendNewPersonalAccountRegistrationRequest struct {
-	To string
+	To                  string
 	NewAccountAdminName string
 }
+
+// ============================================================
+// SECURITY NOTIFICATION COMMANDS
+// ============================================================
 
 // SendPasswordResetConfirmRequest - Password reset confirmation email
 type SendPasswordResetConfirmRequest struct {
@@ -184,4 +231,80 @@ type SendLoginNotificationRequest struct {
 	Time      string
 	IPAddress string
 	UserAgent string
+}
+
+// ============================================================
+// ✅ TEAM INVITATION COMMANDS (UPDATED - NO ROLE, NO OTP, AI-READY)
+// ============================================================
+
+// SendTeamInviteExistingUserRequest - Team invitation for existing users
+// Sent when: User already has a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks accept link to join
+// ✅ AI-READY - PersonalizedContent field for future AI integration
+type SendTeamInviteExistingUserRequest struct {
+	To         string // User's email
+	UserName   string // User's name
+	InvitedBy  string // Name of person who invited them
+	TeamName   string // Name of the team
+	TeamID     string // ID of the team
+	Role	   string
+	AcceptLink string // One-click accept link: https://nuruvent.com/invitations/accept?token=xxx
+	ExpiresIn  string // Human-readable expiry (e.g., "7 days")
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	// Defined in tasks.go
+	PersonalizedContent *types.PersonalizedInvitationContent 
+}
+
+// SendTeamInviteRegistrationRequest - Team invitation for new users (with registration link)
+// Sent when: User does NOT have a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks registration link with token embedded
+// ✅ AI-READY - PersonalizedContent field for future AI integration
+type SendTeamInviteRegistrationRequest struct {
+	To               string // User's email
+	Name             string // User's name (optional, will be set during registration)
+	InvitedBy        string // Name of person who invited them
+	TeamName         string // Name of the team
+	TeamID           string // ID of the team
+	Role			string
+	RegistrationLink string // Registration link with token: https://nuruvent.com/register?token=xxx
+	ExpiresIn        string // Human-readable expiry (e.g., "7 days")
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	// Defined in tasks.go
+	PersonalizedContent *types.PersonalizedInvitationContent 
+}
+
+// SendTeamInviteAcceptedRequest - Notification to admin when user accepts invitation
+// ✅ AI-READY - PersonalizedContent field for future AI integration
+type SendTeamInviteAcceptedRequest struct {
+	To         string // Admin's email
+	AdminName  string // Admin's name
+	UserName   string // Name of user who accepted
+	UserEmail  string // Email of user who accepted
+	TeamName   string // Name of the team
+	TeamID     string // ID of the team
+	Role	   string
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	// Defined in tasks.go
+	PersonalizedContent *types.PersonalizedInvitationContent 
+}
+
+// SendTeamInviteDeclinedRequest - Notification to admin when user declines invitation
+// ✅ AI-READY - PersonalizedContent field for future AI integration
+type SendTeamInviteDeclinedRequest struct {
+	To         string // Admin's email
+	AdminName  string // Admin's name
+	UserName   string // Name of user who declined
+	UserEmail  string // Email of user who declined
+	TeamName   string // Name of the team
+	TeamID     string // ID of the team
+	Role		string
+	
+	// ✅ AI-Ready: Personalized content (optional, for future use)
+	// Defined in tasks.go
+	PersonalizedContent *types.PersonalizedInvitationContent 
 }

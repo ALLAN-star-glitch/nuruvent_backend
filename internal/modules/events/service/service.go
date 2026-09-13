@@ -1,5 +1,3 @@
-// internal/modules/events/service/service.go
-
 package service
 
 import (
@@ -17,10 +15,7 @@ type Service interface {
 	// CREATE
 	// ============================================================
 
-	// Create draft event (with optional image data)
 	CreateDraft(ctx context.Context, cmd CreateDraftCommand) (*domain.Event, error)
-	
-	// Create published event (with optional image data)
 	CreateEvent(ctx context.Context, cmd CreateEventCommand) (*domain.Event, error)
 
 	// ============================================================
@@ -31,33 +26,16 @@ type Service interface {
 	BulkDuplicateEvents(ctx context.Context, ids []string, cmd BulkDuplicateCommand) (*BulkDuplicateResult, error)
 
 	// ============================================================
-	// READ - Basic (No Creator Info)
+	// READ
 	// ============================================================
 
 	GetEventByID(ctx context.Context, id string) (*domain.Event, error)
 	GetEventBySlug(ctx context.Context, slug string) (*domain.Event, error)
 	ListEvents(ctx context.Context, filters ListEventsFilters) ([]*domain.Event, int64, error)
 	GetEventsByType(ctx context.Context, eventTypeSlug string, page, pageSize int) ([]*domain.Event, int64, error)
-	GetEventsByAccount(ctx context.Context, accountID string, page, pageSize int) ([]*domain.Event, int64, error)
-	GetUpcomingEvents(ctx context.Context, limit int) ([]*domain.Event, error)
-	GetPastEvents(ctx context.Context, limit int) ([]*domain.Event, error)
+	GetUpcomingEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error)
+	GetPastEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error)
 	SearchEvents(ctx context.Context, query string, filters SearchFilters) ([]*domain.Event, int64, error)
-
-	// ============================================================
-	// READ - With Creator Info
-	// ============================================================
-
-	// GetUpcomingEventsWithCreator returns upcoming events with creator info populated
-	GetUpcomingEventsWithCreator(ctx context.Context, limit int) ([]*domain.Event, error)
-
-	// GetEventBySlugWithCreator returns an event by slug with creator info populated
-	GetEventBySlugWithCreator(ctx context.Context, slug string) (*domain.Event, error)
-
-	// GetEventByIDWithCreator returns an event by ID with creator info populated
-	GetEventByIDWithCreator(ctx context.Context, id string) (*domain.Event, error)
-
-	// GetEventsByAccountWithCreator returns events for an account with creator info populated
-	GetEventsByAccountWithCreator(ctx context.Context, accountID string, page, pageSize int) ([]*domain.Event, int64, error)
 
 	// ============================================================
 	// UPDATE
@@ -69,19 +47,20 @@ type Service interface {
 	// DELETE - Single
 	// ============================================================
 
-	DeleteEvent(ctx context.Context, id, deletedBy string) error
-	PermanentlyDeleteEvent(ctx context.Context, id, deletedBy string) error
-	RestoreEvent(ctx context.Context, id, restoredBy string) (*domain.Event, error)
+	// The accountID and teamType parameters are retained for backward
+	// compatibility. teamType is ignored — authorization is checked against
+	// the event's parent account domain.
+	DeleteEvent(ctx context.Context, id, deletedBy, accountID, teamType string) error
+	PermanentlyDeleteEvent(ctx context.Context, id, deletedBy, accountID, teamType string) error
+	RestoreEvent(ctx context.Context, id, restoredBy, accountID, teamType string) (*domain.Event, error)
 
 	// ============================================================
 	// DELETE - Bulk
 	// ============================================================
 
-	DeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error)
-	PermanentlyDeleteEvents(ctx context.Context, ids []string, deletedBy string) (*BulkDeleteResult, error)
-	RestoreEvents(ctx context.Context, ids []string, restoredBy string) (*BulkRestoreResult, error)
-	DeleteEventsByAccount(ctx context.Context, accountID string, deletedBy string) (*BulkDeleteResult, error)
-	PermanentlyDeleteEventsByAccount(ctx context.Context, accountID string, deletedBy string) (*BulkDeleteResult, error)
+	DeleteEvents(ctx context.Context, ids []string, deletedBy, accountID, teamType string) (*BulkDeleteResult, error)
+	PermanentlyDeleteEvents(ctx context.Context, ids []string, deletedBy, accountID, teamType string) (*BulkDeleteResult, error)
+	RestoreEvents(ctx context.Context, ids []string, restoredBy, accountID, teamType string) (*BulkRestoreResult, error)
 
 	// ============================================================
 	// STATUS - Single
@@ -100,23 +79,15 @@ type Service interface {
 	BulkCompleteEvents(ctx context.Context, ids []string) (*BulkStatusResult, error)
 
 	// ============================================================
-	// MEDIA - Upload
+	// MEDIA
 	// ============================================================
 
-	UploadEventImage(ctx context.Context, cmd UploadEventImageCommand) (*domain.MediaInfo, error)
-	UploadCertificateTemplate(ctx context.Context, cmd UploadCertificateCommand) (*domain.MediaInfo, error)
-
-	// ============================================================
-	// MEDIA - Delete Single
-	// ============================================================
+	UploadEventImage(ctx context.Context, cmd UploadEventImageCommand) (*MediaInfo, error)
+	UploadCertificateTemplate(ctx context.Context, cmd UploadCertificateCommand) (*MediaInfo, error)
 
 	DeleteEventImage(ctx context.Context, eventID string, deletedBy string) error
 	DeleteEventCertificate(ctx context.Context, eventID string, deletedBy string) error
 	DeleteAllEventMedia(ctx context.Context, eventID string, deletedBy string) error
-
-	// ============================================================
-	// MEDIA - Delete Bulk
-	// ============================================================
 
 	BulkDeleteEventMedia(ctx context.Context, eventIDs []string, deletedBy string) (*BulkDeleteResult, error)
 
@@ -126,118 +97,213 @@ type Service interface {
 
 	GetEventTypes(ctx context.Context) ([]*domain.EventType, error)
 	GetEventStatuses(ctx context.Context) ([]*domain.EventStatus, error)
+	GetTicketTypes(ctx context.Context) ([]*domain.TicketTypeRow, error)
+	GetCategories(ctx context.Context) ([]*domain.Category, error)
+
+	// ============================================================
+	// AI-ASSISTED DRAFTING
+	// ============================================================
+
+	GenerateEventDraft(ctx context.Context, req GenerateEventDraftRequest) (*GenerateEventDraftResult, error)
 }
 
 // ============================================================
-// COMMANDS - CREATE DRAFT (Pure Domain Types - NO JSON TAGS)
+// COMMANDS - CREATE DRAFT
 // ============================================================
 
 type CreateDraftCommand struct {
-	// Required
-	AccountID string
-	CreatedBy string
-
-	// User input - what they type in the form
-	Name string // ✅ This is the ONLY field from user
-
-	// Optional
+	Name             string
+	DisplayName      string
 	Description      string
+	ShortDescription string
 	EventTypeID      string
-	Date             string
-	Time             string
-	Duration         int
-	Price            float64
-	CertificatePrice float64
-	Location         string
-	IsVirtual        bool
-	ZoomLink         string
-	MeetLink         string
-	MaxAttendees     int
-	IsFeatured       bool
-	IsPrivate        bool
+	CategoryID       *string
+	Tags             []string
+	Language         string
 
-	ImageData   []byte
-	ImageName   string
-	ContentType string
+	CreatedBy  string
+	TeamID     string
+	TeamType   string // legacy; ignored for authz
+	TeamDomain string // legacy; ignored for authz
+	AccountID  string // resolved from TeamID if empty
+
+	Schedules   []ScheduleInput
+	IsMultiDay  bool
+	IsRecurring bool
+	Recurrence  *RecurrenceInput
+
+	IsVirtual          bool
+	IsHybrid           bool
+	InPersonLocation   string
+	VirtualPlatform    string
+	VirtualPlatformURL string
+	ZoomLink           string
+	MeetLink           string
+	VenueName          string
+	VenueAddress       string
+	VenueCity          string
+	VenueCountry       string
+
+	IsFree   bool
+	Capacity *int
+	Tickets  []TicketInput
+
+	Visibility    string
+	Password      *string
+	InviteOnly    bool
+	InvitedEmails []string
+
+	IsFeatured            bool
+	CertificateEnabled    bool
+	CertificatePrice      float64
+	CertificateTemplateID *string
+
+	Speakers  []SpeakerInput
+	Materials []MaterialInput
+	SEO       *SEOInput
 }
 
 // ============================================================
-// COMMANDS - CREATE PUBLISHED EVENT (Pure Domain Types - NO JSON TAGS)
+// COMMANDS - CREATE PUBLISHED EVENT
 // ============================================================
 
 type CreateEventCommand struct {
-	// Required
-	Name        string // ✅ User input - what they type
-	AccountID   string
-	CreatedBy   string
-	Date        string
-	Time        string
-	Duration    int
-
-	// Optional
+	Name             string
+	DisplayName      string
 	Description      string
+	ShortDescription string
 	EventTypeID      string
-	Price            float64
-	CertificatePrice float64
-	Location         string
-	IsVirtual        bool
-	ZoomLink         string
-	MeetLink         string
-	MaxAttendees     int
-	IsFeatured       bool
-	IsPrivate        bool
+	CategoryID       *string
+	Tags             []string
+	Language         string
 
-	ImageData   []byte
-	ImageName   string
-	ContentType string
+	CreatedBy  string
+	TeamID     string
+	TeamType   string // legacy; ignored for authz
+	TeamDomain string // legacy; ignored for authz
+	AccountID  string // resolved from TeamID if empty
+
+	Schedules   []ScheduleInput
+	IsMultiDay  bool
+	IsRecurring bool
+	Recurrence  *RecurrenceInput
+
+	IsFree   bool
+	Capacity *int
+	Waitlist bool
+	Tickets  []TicketInput
+
+	IsVirtual          bool
+	IsHybrid           bool
+	InPersonLocation   string
+	VirtualPlatform    string
+	VirtualPlatformURL string
+	ZoomLink           string
+	MeetLink           string
+	VenueName          string
+	VenueAddress       string
+	VenueCity          string
+	VenueCountry       string
+
+	Visibility    string
+	Password      *string
+	InviteOnly    bool
+	InvitedEmails []string
+
+	IsFeatured            bool
+	CertificateEnabled    bool
+	CertificatePrice      float64
+	CertificateTemplateID *string
+
+	Speakers  []SpeakerInput
+	Materials []MaterialInput
+	SEO       *SEOInput
 }
 
 // ============================================================
-// COMMANDS - UPDATE EVENT (Pure Domain Types - NO JSON TAGS)
+// COMMANDS - UPDATE EVENT
 // ============================================================
 
 type UpdateEventCommand struct {
-	ID       string
+	ID        string
 	UpdatedBy string
 
-	// ✅ Use pointers for optional fields
-	Name             *string // ✅ User input (optional)
-	DisplayName      *string 
+	AccountID string
+	TeamType  string // legacy; ignored for authz
+
+	Name             *string
+	DisplayName      *string
 	Description      *string
+	ShortDescription *string
 	EventTypeID      *string
-	EventStatusID    *string
-	Date             *string
-	Time             *string
-	Duration         *int
-	Price            *float64
-	CertificatePrice *float64
-	Location         *string
-	IsVirtual        *bool
-	ZoomLink         *string
-	MeetLink         *string
-	MaxAttendees     *int
-	IsFeatured       *bool
-	IsPrivate        *bool
+	CategoryID       *string
+	Tags             []string
+	Language         *string
+
+	TeamID *string
+
+	Schedules   []ScheduleInput
+	IsMultiDay  *bool
+	IsRecurring *bool
+	Recurrence  *RecurrenceInput
+
+	IsVirtual          *bool
+	IsHybrid           *bool
+	InPersonLocation   *string
+	VirtualPlatform    *string
+	VirtualPlatformURL *string
+	ZoomLink           *string
+	MeetLink           *string
+	VenueName          *string
+	VenueAddress       *string
+	VenueCity          *string
+	VenueCountry       *string
+
+	IsFree   *bool
+	Capacity *int
+	Waitlist *bool
+	Tickets  []TicketInput
+
+	Visibility    *string
+	Password      *string
+	InviteOnly    *bool
+	InvitedEmails []string
+
+	IsFeatured            *bool
+	CertificateEnabled    *bool
+	CertificatePrice      *float64
+	CertificateTemplateID *string
+
+	Speakers  []SpeakerInput
+	Materials []MaterialInput
+	SEO       *SEOInput
 }
 
 // ============================================================
-// COMMANDS - DUPLICATE (Pure Domain Types - NO JSON TAGS)
+// COMMANDS - DUPLICATE
 // ============================================================
 
 type DuplicateEventCommand struct {
 	Name    string
 	Date    string
 	IsDraft bool
+
+	CreatedBy string
+	TeamID    string // optional target team
+	TeamType  string // legacy; ignored for authz
+	AccountID string // target account; resolved from original if empty
 }
 
 type BulkDuplicateCommand struct {
+	CreatedBy      string
+	AccountID      string
 	NamePrefix     string
 	DateOffsetDays int
 	IsDraft        bool
 }
 
 // ============================================================
-// COMMANDS - MEDIA (Pure Domain Types - NO JSON TAGS)
+// COMMANDS - MEDIA
 // ============================================================
 
 type UploadEventImageCommand struct {
@@ -257,30 +323,180 @@ type UploadCertificateCommand struct {
 }
 
 // ============================================================
-// FILTERS (Pure Domain Types - NO JSON TAGS)
+// FILTERS
 // ============================================================
 
+// ListEventsFilters provides comprehensive filtering for ListEvents.
 type ListEventsFilters struct {
-	AccountID      string
-	EventTypeID    string
-	EventStatusID  string
+	// Team filters events by team (data filter, not authz boundary).
+	Team domain.TeamFilter
+
+	// Account filters events by account. Used as the authorization scope
+	// when no team is specified.
+	Account domain.AccountFilter
+
+	// TeamID filters events by a specific team ID.
+	TeamID string
+
+	// UserID filters events by the creator (created_by).
+	UserID string
+
+	// EventTypeID filters events by their type.
+	EventTypeID string
+
+	// EventStatusID filters events by their status.
+	EventStatusID string
+
+	// CategoryID filters events by their category.
+	CategoryID string
+
+	// IncludeDeleted controls whether soft-deleted events are included.
 	IncludeDeleted bool
-	OnlyDeleted    bool
-	Limit          int
-	Offset         int
+
+	// OnlyDeleted controls whether ONLY soft-deleted events are returned.
+	OnlyDeleted bool
+
+	// IncludeCreator controls whether creator user info is populated.
+	IncludeCreator bool
+
+	// Limit controls the maximum number of events returned.
+	Limit int
+
+	// Offset controls pagination offset.
+	Offset int
+
+	// SortBy specifies the field to sort by.
+	SortBy string
+
+	// SortOrder specifies the sort direction.
+	SortOrder string
+
+	// Visibility filters events by their visibility level.
+	Visibility string
 }
 
+// SearchFilters provides filtering for the SearchEvents method.
 type SearchFilters struct {
-	AccountID      string
-	EventTypeID    string
+	// Team filters search results by team (data filter).
+	Team domain.TeamFilter
+
+	// Account filters search results by account.
+	Account domain.AccountFilter
+
+	// TeamID filters search results by a specific team ID.
+	TeamID string
+
+	// UserID filters search results by creator.
+	UserID string
+
+	// EventTypeID filters search results by event type.
+	EventTypeID string
+
+	// CategoryID filters search results by category.
+	CategoryID string
+
+	// IncludeDeleted controls whether soft-deleted events are included in search.
 	IncludeDeleted bool
-	OnlyDeleted    bool
-	Limit          int
-	Offset         int
+
+	// OnlyDeleted controls whether ONLY soft-deleted events are returned in search.
+	OnlyDeleted bool
+
+	// Limit controls the maximum number of search results.
+	Limit int
+
+	// Offset controls pagination offset for search results.
+	Offset int
+
+	// Visibility filters search results by visibility level.
+	Visibility string
+
+	// IncludeCreator controls whether creator user info is populated.
+	IncludeCreator bool
 }
 
 // ============================================================
-// BULK RESULT TYPES (NO JSON TAGS - These are for internal use)
+// INPUT TYPES (Shared across commands)
+// ============================================================
+
+type ScheduleInput struct {
+	ID            *string
+	StartDate     string
+	EndDate       *string
+	StartTime     string
+	EndTime       string
+	Timezone      string
+	SessionName   string
+	SessionNumber int
+	Location      string
+	IsVirtual     bool
+	ZoomLink      string
+	MeetLink      string
+	MaxAttendees  *int
+}
+
+type RecurrenceInput struct {
+	Pattern     string
+	Interval    int
+	DaysOfWeek  []string
+	DayOfMonth  *int
+	WeekOfMonth *string
+	EndsOn      *string
+	Occurrences *int
+}
+
+type TicketInput struct {
+	ID                *string
+	TicketTypeID      string
+	Name              string
+	Description       string
+	Price             float64
+	Quantity          int
+	MaxPerPerson      *int
+	EarlyBirdDeadline *string
+	GroupMinAttendees *int
+	GroupDiscount     *float64
+}
+
+type SpeakerInput struct {
+	ID          *string
+	Name        string
+	Title       string
+	Bio         string
+	PhotoURL    string
+	SocialLinks map[string]string
+	IsKeynote   bool
+	SortOrder   int
+}
+
+type MaterialInput struct {
+	ID             *string
+	Title          string
+	MaterialTypeID string
+	URL            string
+	Description    string
+	IsPreEvent     bool
+	SortOrder      int
+}
+
+type SEOInput struct {
+	MetaTitle          string
+	MetaDescription    string
+	MetaKeywords       []string
+	CanonicalURL       string
+	Robots             string
+	NoIndex            bool
+	OGTitle            string
+	OGDescription      string
+	OGImageURL         string
+	OGType             string
+	TwitterCard        string
+	TwitterTitle       string
+	TwitterDescription string
+	TwitterImageURL    string
+}
+
+// ============================================================
+// BULK RESULT TYPES
 // ============================================================
 
 type BulkDeleteResult struct {
@@ -312,4 +528,17 @@ type DuplicatedEvent struct {
 	ID   string
 	Name string
 	Slug string
+}
+
+// ============================================================
+// MEDIA INFO (Response Type)
+// ============================================================
+
+type MediaInfo struct {
+	ID          string
+	URL         string
+	Filename    string
+	Size        int64
+	ContentType string
+	UploadedAt  string
 }

@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
@@ -17,8 +18,6 @@ type notificationService struct {
 	taskEnqueuer notificationdomain.TaskEnqueuer
 	async        bool
 }
-
-
 
 // NewNotificationService creates a new notification service (synchronous)
 func NewNotificationService(channels ...notificationdomain.Channel) notificationdomain.NotificationService {
@@ -203,7 +202,6 @@ func (s *notificationService) getVerificationContent(req notificationdomain.Send
 
 // Deprecated: Use SendOTP with PurposeRegistration instead
 func (s *notificationService) SendVerificationOTP(ctx context.Context, req notificationdomain.SendOTPRequest) error {
-	// If purpose is not set, default to registration for backward compatibility
 	if req.Purpose == "" {
 		req.Purpose = notificationdomain.PurposeRegistration
 	}
@@ -211,8 +209,6 @@ func (s *notificationService) SendVerificationOTP(ctx context.Context, req notif
 }
 
 // Deprecated: Use SendOTP with PurposeTwoFactor instead
-// SendTwoFactorOTP has been removed. Use SendOTP with PurposeTwoFactor.
-// This method is kept for backward compatibility but will be removed in future.
 func (s *notificationService) SendTwoFactorOTP(ctx context.Context, req notificationdomain.SendOTPRequest) error {
 	req.Purpose = notificationdomain.PurposeTwoFactor
 	return s.SendOTP(ctx, req)
@@ -275,9 +271,10 @@ func (s *notificationService) SendInstitutionWelcome(ctx context.Context, req no
 
 	if s.async && s.taskEnqueuer != nil {
 		task := notificationdomain.WelcomeInstitutionTask{
-			To:              req.To,
-			AdminName:       req.AdminName,
-			InstitutionName: req.InstitutionName,
+			To:               req.To,
+			AdminName:        req.AdminName,
+			InstitutionName:  req.InstitutionName,
+			InstitutionEmail: req.InstitutionEmail,
 		}
 		if err := s.taskEnqueuer.EnqueueWelcomeInstitution(ctx, task); err != nil {
 			log.Printf("[NotificationService] Failed to enqueue institution welcome task: %v, falling back to sync", err)
@@ -297,7 +294,7 @@ func (s *notificationService) sendInstitutionWelcomeSync(ctx context.Context, re
 	channelReq := notificationdomain.ChannelRequest{
 		To:      req.To,
 		Subject: "Welcome to Nuruvent - Your Institution is Live!",
-		Type:    notificationdomain.TypeWelcome,
+		Type:    notificationdomain.TypeWelcomeInstitution,
 		Meta: map[string]string{
 			"admin_name":       req.AdminName,
 			"institution_name": req.InstitutionName,
@@ -406,7 +403,10 @@ func (s *notificationService) sendLoginNotificationSync(ctx context.Context, req
 	return ch.Send(ctx, channelReq)
 }
 
-// ✅ NEW: SendInstitutionKYCWelcome sends KYC welcome email for institutions
+// ============================================================
+// INSTITUTION KYC WELCOME
+// ============================================================
+
 func (s *notificationService) SendInstitutionKYCWelcome(ctx context.Context, req notificationdomain.SendInstitutionKYCWelcomeRequest) error {
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
@@ -451,16 +451,19 @@ func (s *notificationService) sendInstitutionKYCWelcomeSync(ctx context.Context,
 	return ch.Send(ctx, channelReq)
 }
 
+// ============================================================
+// NEW ACCOUNT NOTIFICATIONS
+// ============================================================
+
 func (s *notificationService) SendNewInstitutionAccountNotification(ctx context.Context, req notificationdomain.SendNewInstitutionAccountRegistrationRequest) error {
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
 		return err
-
 	}
 
 	if s.async && s.taskEnqueuer != nil {
 		task := notificationdomain.NewInstitutionAccountRegistrationNotice{
-			To:                  req.TO,
+			To:                  req.To,
 			NewAccountAdminName: req.NewAccountAdminName,
 			InstitutionName:     req.InstitutionName,
 			InstitutionType:     req.InstitutionType,
@@ -481,9 +484,9 @@ func (s *notificationService) SendNewInstitutionAccountNotificationSync(ctx cont
 	}
 
 	channelReq := notificationdomain.ChannelRequest{
-		To:      req.TO,
+		To:      req.To,
 		Subject: "New Organization Account - Please Follow Up",
-		Type:    notificationdomain.TypeWelcomeInstitutionKYC,
+		Type:    notificationdomain.TypeNewInstitutionAccountRegistration,
 		Meta: map[string]string{
 			"admin_name":       req.NewAccountAdminName,
 			"institution_name": req.InstitutionName,
@@ -495,7 +498,6 @@ func (s *notificationService) SendNewInstitutionAccountNotificationSync(ctx cont
 	return ch.Send(ctx, channelReq)
 }
 
-
 func (s *notificationService) SendNewPersonalAccountNotification(ctx context.Context, req notificationdomain.SendNewPersonalAccountRegistrationRequest) error {
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
@@ -506,7 +508,6 @@ func (s *notificationService) SendNewPersonalAccountNotification(ctx context.Con
 		task := notificationdomain.NewPersonalAccountRegistrationTask{
 			To:                  req.To,
 			NewAccountAdminName: req.NewAccountAdminName,
-			
 		}
 		if err := s.taskEnqueuer.EnqueueNewPersonalAccountRegistration(ctx, task); err != nil {
 			log.Printf("[NotificationService] Failed to enqueue task: %v, falling back to sync", err)
@@ -526,10 +527,262 @@ func (s *notificationService) SendNewPersonalAccountNotificationSync(ctx context
 	channelReq := notificationdomain.ChannelRequest{
 		To:      req.To,
 		Subject: "New Personal Account - Please Follow Up",
-		Type:    notificationdomain.TaskNewPersonalAccountRegistration,
+		Type:    notificationdomain.TypeNewPersonalAccountRegistration,
 		Meta: map[string]string{
-			"admin_name": req.NewAccountAdminName,
+			"name": req.NewAccountAdminName,
 		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// ============================================================
+// ✅ TEAM INVITATION METHODS (UPDATED - NO ROLE, AI-READY)
+// ============================================================
+
+// SendTeamInviteExistingUser sends a team invitation to an existing user
+// Sent when: User already has a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks accept link to join
+// ✅ AI-READY - PersonalizedContent field for future AI integration
+func (s *notificationService) SendTeamInviteExistingUser(ctx context.Context, req notificationdomain.SendTeamInviteExistingUserRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.TeamInviteExistingUserTask{
+			To:                  req.To,
+			UserName:            req.UserName,
+			InvitedBy:           req.InvitedBy,
+			TeamName:            req.TeamName,
+			TeamID:              req.TeamID,
+			AcceptLink:          req.AcceptLink,
+			ExpiresIn:           req.ExpiresIn,
+			PersonalizedContent: req.PersonalizedContent,
+		}
+		if err := s.taskEnqueuer.EnqueueTeamInviteExistingUser(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue team invite existing user task: %v, falling back to sync", err)
+			return s.sendTeamInviteExistingUserSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendTeamInviteExistingUserSync(ctx, req)
+}
+
+func (s *notificationService) sendTeamInviteExistingUserSync(ctx context.Context, req notificationdomain.SendTeamInviteExistingUserRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "You've Been Invited to Join " + req.TeamName + " on Nuruvent",
+		Type:    notificationdomain.TypeTeamInviteExistingUser,
+		Meta: map[string]string{
+			"user_name":   req.UserName,
+			"invited_by":  req.InvitedBy,
+			"team_name":   req.TeamName,
+			"team_id":     req.TeamID,
+			"accept_link": req.AcceptLink,
+			"expires_in":  req.ExpiresIn,
+		},
+	}
+
+	// ✅ AI-Ready: If personalized content exists, add it to the channel request
+	if req.PersonalizedContent != nil {
+		channelReq.Meta["ai_subject"] = req.PersonalizedContent.Subject
+		channelReq.Meta["ai_greeting"] = req.PersonalizedContent.Greeting
+		channelReq.Meta["ai_intro"] = req.PersonalizedContent.Intro
+		channelReq.Meta["ai_body"] = req.PersonalizedContent.Body
+		channelReq.Meta["ai_benefits"] = strings.Join(req.PersonalizedContent.Benefits, "|")
+		channelReq.Meta["ai_call_to_action"] = req.PersonalizedContent.CallToAction
+		channelReq.Meta["ai_closing"] = req.PersonalizedContent.Closing
+		channelReq.Meta["ai_pss"] = req.PersonalizedContent.PSS
+		log.Printf("[NotificationService] ✅ AI content included for existing user %s", req.To)
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// SendTeamInviteRegistration sends an invitation to a new user with registration link
+// Sent when: User does NOT have a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks registration link with token embedded
+// ✅ AI-READY - PersonalizedContent field for future AI integration
+func (s *notificationService) SendTeamInviteRegistration(ctx context.Context, req notificationdomain.SendTeamInviteRegistrationRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.TeamInviteRegistrationTask{
+			To:                  req.To,
+			Name:                req.Name,
+			InvitedBy:           req.InvitedBy,
+			TeamName:            req.TeamName,
+			TeamID:              req.TeamID,
+			RegistrationLink:    req.RegistrationLink,
+			ExpiresIn:           req.ExpiresIn,
+			PersonalizedContent: req.PersonalizedContent,
+		}
+		if err := s.taskEnqueuer.EnqueueTeamInviteRegistration(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue team invite registration task: %v, falling back to sync", err)
+			return s.sendTeamInviteRegistrationSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendTeamInviteRegistrationSync(ctx, req)
+}
+
+func (s *notificationService) sendTeamInviteRegistrationSync(ctx context.Context, req notificationdomain.SendTeamInviteRegistrationRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "You're Invited to Join " + req.TeamName + " on Nuruvent",
+		Type:    notificationdomain.TypeTeamInviteRegistration,
+		Meta: map[string]string{
+			"name":              req.Name,
+			"invited_by":        req.InvitedBy,
+			"team_name":         req.TeamName,
+			"team_id":           req.TeamID,
+			"registration_link": req.RegistrationLink,
+			"expires_in":        req.ExpiresIn,
+		},
+	}
+
+	// ✅ AI-Ready: If personalized content exists, add it to the channel request
+	if req.PersonalizedContent != nil {
+		channelReq.Meta["ai_subject"] = req.PersonalizedContent.Subject
+		channelReq.Meta["ai_greeting"] = req.PersonalizedContent.Greeting
+		channelReq.Meta["ai_intro"] = req.PersonalizedContent.Intro
+		channelReq.Meta["ai_body"] = req.PersonalizedContent.Body
+		channelReq.Meta["ai_benefits"] = strings.Join(req.PersonalizedContent.Benefits, "|")
+		channelReq.Meta["ai_call_to_action"] = req.PersonalizedContent.CallToAction
+		channelReq.Meta["ai_closing"] = req.PersonalizedContent.Closing
+		channelReq.Meta["ai_pss"] = req.PersonalizedContent.PSS
+		log.Printf("[NotificationService] ✅ AI content included for new user %s", req.To)
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// SendTeamInviteAccepted sends notification to admin when user accepts invitation
+func (s *notificationService) SendTeamInviteAccepted(ctx context.Context, req notificationdomain.SendTeamInviteAcceptedRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.TeamInviteAcceptedTask{
+			To:                  req.To,
+			AdminName:           req.AdminName,
+			UserName:            req.UserName,
+			UserEmail:           req.UserEmail,
+			TeamName:            req.TeamName,
+			TeamID:              req.TeamID,
+			PersonalizedContent: req.PersonalizedContent,
+		}
+		if err := s.taskEnqueuer.EnqueueTeamInviteAccepted(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue team invite accepted task: %v, falling back to sync", err)
+			return s.sendTeamInviteAcceptedSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendTeamInviteAcceptedSync(ctx, req)
+}
+
+func (s *notificationService) sendTeamInviteAcceptedSync(ctx context.Context, req notificationdomain.SendTeamInviteAcceptedRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Team Invitation Accepted - " + req.UserName + " joined " + req.TeamName,
+		Type:    notificationdomain.TypeTeamInviteAccepted,
+		Meta: map[string]string{
+			"admin_name": req.AdminName,
+			"user_name":  req.UserName,
+			"user_email": req.UserEmail,
+			"team_name":  req.TeamName,
+			"team_id":    req.TeamID,
+		},
+	}
+
+	// ✅ AI-Ready: If personalized content exists, add it to the channel request
+	if req.PersonalizedContent != nil {
+		channelReq.Meta["ai_subject"] = req.PersonalizedContent.Subject
+		channelReq.Meta["ai_greeting"] = req.PersonalizedContent.Greeting
+		channelReq.Meta["ai_body"] = req.PersonalizedContent.Body
+		channelReq.Meta["ai_closing"] = req.PersonalizedContent.Closing
+		log.Printf("[NotificationService] ✅ AI content included for admin notification")
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// SendTeamInviteDeclined sends notification to admin when user declines invitation
+func (s *notificationService) SendTeamInviteDeclined(ctx context.Context, req notificationdomain.SendTeamInviteDeclinedRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.TeamInviteDeclinedTask{
+			To:                  req.To,
+			AdminName:           req.AdminName,
+			UserName:            req.UserName,
+			UserEmail:           req.UserEmail,
+			TeamName:            req.TeamName,
+			TeamID:              req.TeamID,
+			PersonalizedContent: req.PersonalizedContent,
+		}
+		if err := s.taskEnqueuer.EnqueueTeamInviteDeclined(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue team invite declined task: %v, falling back to sync", err)
+			return s.sendTeamInviteDeclinedSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendTeamInviteDeclinedSync(ctx, req)
+}
+
+func (s *notificationService) sendTeamInviteDeclinedSync(ctx context.Context, req notificationdomain.SendTeamInviteDeclinedRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Team Invitation Declined - " + req.UserName + " declined " + req.TeamName,
+		Type:    notificationdomain.TypeTeamInviteDeclined,
+		Meta: map[string]string{
+			"admin_name": req.AdminName,
+			"user_name":  req.UserName,
+			"user_email": req.UserEmail,
+			"team_name":  req.TeamName,
+			"team_id":    req.TeamID,
+		},
+	}
+
+	// ✅ AI-Ready: If personalized content exists, add it to the channel request
+	if req.PersonalizedContent != nil {
+		channelReq.Meta["ai_subject"] = req.PersonalizedContent.Subject
+		channelReq.Meta["ai_greeting"] = req.PersonalizedContent.Greeting
+		channelReq.Meta["ai_body"] = req.PersonalizedContent.Body
+		channelReq.Meta["ai_closing"] = req.PersonalizedContent.Closing
+		log.Printf("[NotificationService] ✅ AI content included for admin notification")
 	}
 
 	return ch.Send(ctx, channelReq)

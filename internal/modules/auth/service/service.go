@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	authdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
@@ -19,66 +20,80 @@ type Service interface {
 	// ============================================================
 	// REGISTRATION
 	// ============================================================
-	
-	RegisterAccount(ctx context.Context, req RegisterRequest) error
-	VerifyOTPAndCreateAccount(ctx context.Context, email, otp string) (*authdomain.Account, map[string]interface{}, error)
+
+	// RegisterUser begins the OTP-based registration flow for
+	// self-service signups (personal or institution). It sends an OTP
+	// to the given email and stores the pending registration in Redis.
+	//
+	// Invitation-token signups do NOT go through this method — use
+	// RegisterWithInvitation instead.
+	RegisterUser(ctx context.Context, req RegisterRequest) error
+
+	// VerifyOTPAndCreateUser verifies the OTP from RegisterUser and
+	// completes the self-service signup: creates the user, the personal
+	// or institution account, the account membership, and the workspace
+	// team.
+	VerifyOTPAndCreateUser(ctx context.Context, email, otp string) (*authdomain.User, map[string]interface{}, error)
+
+	// RegisterWithInvitation creates a user from a valid invitation
+	// token, accepts the invitation, and issues auth tokens — all in one
+	// call. No OTP is generated or required.
+	//
+	// The invitee's email is read from the invitation record, NOT from
+	// the request. The invited user joins ONLY the inviter's account:
+	// no personal account or personal team is created.
+	//
+	// Returns the created user and a data map containing at least
+	// "access_token", "refresh_token", "account_id", "team_id", and
+	// "role".
+	RegisterWithInvitation(
+		ctx context.Context,
+		token, name, password string,
+	) (*authdomain.User, map[string]interface{}, error)
 
 	// ============================================================
 	// LOGIN
 	// ============================================================
-	
-	LoginAccount(ctx context.Context, email, password, ipAddress, userAgent string) (*authdomain.Account, string, error)
-	VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAddress, userAgent string) (*authdomain.Account, string, string, error)
+
+	LoginUser(ctx context.Context, email, password, ipAddress, userAgent string) (*authdomain.User, string, error)
+	VerifyTwoFactorAndLogin(ctx context.Context, email, otp, ipAddress, userAgent string) (*authdomain.User, string, string, error)
 
 	// ============================================================
 	// TOKEN MANAGEMENT
 	// ============================================================
-	
-	GenerateTokens(ctx context.Context, account *authdomain.Account) (string, string, error)
+
+	GenerateTokens(ctx context.Context, user *authdomain.User) (string, string, error)
 	RefreshTokens(ctx context.Context, refreshToken, userAgent, ip string) (string, string, error)
 	RevokeToken(ctx context.Context, refreshToken string) error
 
 	// ============================================================
 	// PASSWORD RESET
 	// ============================================================
-	
+
 	InitiatePasswordReset(ctx context.Context, email, newPassword string) error
 	VerifyResetOTPAndResetPassword(ctx context.Context, email, otp string) error
 
 	// ============================================================
 	// UNIFIED OTP METHODS
 	// ============================================================
-	
-	// GenerateOTP generates a 6-digit OTP
+
 	GenerateOTP() string
-	
-	// StoreOTP stores an OTP with purpose
 	StoreOTP(ctx context.Context, email, otp, purpose string) error
-	
-	// GetOTP retrieves an OTP by email and purpose
 	GetOTP(ctx context.Context, email, purpose string) (string, error)
-	
-	// DeleteOTP deletes an OTP by email and purpose
 	DeleteOTP(ctx context.Context, email, purpose string) error
-	
-	// VerifyOTP verifies an OTP for a specific purpose
 	VerifyOTP(ctx context.Context, email, otp, purpose string) error
 
 	// ============================================================
 	// CONVENIENCE OTP METHOD
 	// ============================================================
-	
-	// SendOTPEmail is a convenience method that generates, stores, and sends an OTP
-	// Purpose can be: "registration", "two_factor", "password_reset", "email_change", "phone_change"
+
 	SendOTPEmail(ctx context.Context, to, name, purpose string, meta map[string]string) error
-
-
 	ResendOTP(ctx context.Context, email, name, purpose string) error
 
 	// ============================================================
 	// USER DATA (Registration flow)
 	// ============================================================
-	
+
 	StoreUserData(ctx context.Context, email string, data map[string]interface{}) error
 	GetUserData(ctx context.Context, email string) (map[string]string, error)
 	DeleteUserData(ctx context.Context, email string) error
@@ -86,16 +101,54 @@ type Service interface {
 	// ============================================================
 	// PASSWORD RESET DATA
 	// ============================================================
-	
+
 	StoreResetData(ctx context.Context, email, otp, newPassword string) error
 	GetResetData(ctx context.Context, email string) (map[string]string, error)
 	DeleteResetData(ctx context.Context, email string) error
+
+	// ============================================================
+	// PROFESSIONAL TYPE
+	// ============================================================
+
+	GetProfessionalTypeBySlug(ctx context.Context, slug string) (*authdomain.ProfessionalType, error)
+	ListProfessionalTypes(ctx context.Context) ([]*authdomain.ProfessionalType, error)
+	GetAccountTypeByID(ctx context.Context, id string) (*authdomain.AccountType, error)
+	GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error)
+
+	// ============================================================
+	// USER QUERIES (For Team Module)
+	// ============================================================
+
+	GetUserByID(ctx context.Context, userID string) (*authdomain.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*authdomain.User, error)
+	UserExists(ctx context.Context, email string) (bool, error)
+	GetTokenContext(ctx context.Context, user *authdomain.User) (*authdomain.TokenContext, error)
+
+	// GetUserByIDWithAccount retrieves a user by ID with their account ID.
+	// Returns: user, accountID, error.
+	GetUserByIDWithAccount(ctx context.Context, userID string) (*authdomain.User, string, error)
+
+	// GetUserByEmailWithAccount retrieves a user by email with their account ID.
+	// Returns: user, accountID, error.
+	GetUserByEmailWithAccount(ctx context.Context, email string) (*authdomain.User, string, error)
+
+	// GetAccountIDByUserID gets the account ID for a user.
+	GetAccountIDByUserID(ctx context.Context, userID string) (string, error)
+
+	AddAccountMember(ctx context.Context, accountID, userID, role string) error
 }
 
 // ============================================================
 // COMMANDS
 // ============================================================
 
+// RegisterRequest carries a self-service signup (personal or institution).
+//
+// This flow is OTP-based: RegisterUser stores the payload in Redis and
+// sends an OTP; VerifyOTPAndCreateUser completes the signup.
+//
+// Invitation-token signups do NOT use this struct. They go through
+// Service.RegisterWithInvitation with {token, name, password} only.
 type RegisterRequest struct {
 	Email       string
 	Password    string
@@ -103,6 +156,10 @@ type RegisterRequest struct {
 	Phone       string
 	AccountType string
 
+	// Professional Type (for personal accounts)
+	ProfessionalType string
+
+	// Institution fields (for institution accounts)
 	InstitutionName  string
 	InstitutionEmail string
 	InstitutionPhone string
@@ -114,14 +171,17 @@ type RegisterRequest struct {
 // ============================================================
 
 type service struct {
-	repo        authdomain.Repository
-	config      *config.Config
-	redisClient *sharedRedis.Client
-	queue       authdomain.QueueService
-	permService authdomain.PermissionService
-	tokenSvc    authdomain.TokenService
-	notifSvc    authdomain.NotificationService
-	enforcer    *authorization.Enforcer
+	repo          authdomain.Repository
+	config        *config.Config
+	redisClient   *sharedRedis.Client
+	queue         authdomain.QueueService
+	permChecker   authdomain.PermissionChecker
+	roleManager   authdomain.RoleManager
+	policyManager authdomain.PolicyManager
+	tokenSvc      authdomain.TokenService
+	notifSvc      authdomain.NotificationService
+	enforcer      *authorization.Enforcer
+	teamSvc       TeamService
 }
 
 func NewService(
@@ -129,19 +189,59 @@ func NewService(
 	cfg *config.Config,
 	redisClient *sharedRedis.Client,
 	queueClient authdomain.QueueService,
-	permService authdomain.PermissionService,
+	permChecker authdomain.PermissionChecker,
+	roleManager authdomain.RoleManager,
+	policyManager authdomain.PolicyManager,
 	tokenSvc authdomain.TokenService,
 	notifSvc authdomain.NotificationService,
 	enforcer *authorization.Enforcer,
+	teamSvc TeamService,
 ) Service {
 	return &service{
-		repo:        repo,
-		config:      cfg,
-		redisClient: redisClient,
-		queue:       queueClient,
-		permService: permService,
-		tokenSvc:    tokenSvc,
-		notifSvc:    notifSvc,
-		enforcer:    enforcer,
+		repo:          repo,
+		config:        cfg,
+		redisClient:   redisClient,
+		queue:         queueClient,
+		permChecker:   permChecker,
+		roleManager:   roleManager,
+		policyManager: policyManager,
+		tokenSvc:      tokenSvc,
+		notifSvc:      notifSvc,
+		enforcer:      enforcer,
+		teamSvc:       teamSvc,
 	}
+}
+
+// ============================================================
+// PROFESSIONAL TYPE METHODS
+// ============================================================
+
+func (s *service) GetProfessionalTypeBySlug(ctx context.Context, slug string) (*authdomain.ProfessionalType, error) {
+	return s.repo.GetProfessionalTypeBySlug(ctx, slug)
+}
+
+func (s *service) ListProfessionalTypes(ctx context.Context) ([]*authdomain.ProfessionalType, error) {
+	return s.repo.ListProfessionalTypes(ctx)
+}
+
+func (s *service) GetAccountTypeByID(ctx context.Context, id string) (*authdomain.AccountType, error) {
+	return s.repo.GetAccountTypeByID(ctx, id)
+}
+
+func (s *service) GetProfessionalTypeByID(ctx context.Context, id string) (*authdomain.ProfessionalType, error) {
+	return s.repo.GetProfessionalTypeByID(ctx, id)
+}
+
+func (s *service) AddAccountMember(ctx context.Context, accountID, userID, role string) error {
+	if accountID == "" || userID == "" || role == "" {
+		return fmt.Errorf("accountID, userID, and role are required")
+	}
+	if !authdomain.IsAccountRole(role) {
+		return fmt.Errorf("invalid role: %q", role)
+	}
+	member, err := authdomain.NewAccountMember(accountID, userID, role, userID)
+	if err != nil {
+		return err
+	}
+	return s.repo.CreateAccountMember(ctx, member)
 }

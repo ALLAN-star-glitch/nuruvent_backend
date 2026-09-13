@@ -1,0 +1,14 @@
+-- +goose Up
+-- No-op migration.
+--
+-- The original contents of this file were a stray debugging query:
+--   SELECT * FROM casbin_rule WHERE v0='...' AND ...;
+-- That line was never a valid migration. It was committed by accident
+-- and causes Goose to fail parsing the file.
+--
+-- The team_types table is created and modified by other migrations in
+-- this directory (see 20260827075558_054 and later files). This file is
+-- retained purely to preserve the version sequence.
+
+-- +goose Down
+-- No-op.

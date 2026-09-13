@@ -68,11 +68,12 @@ type SendWelcomeRequest struct {
 	Name string
 }
 
-// SendInstitutionWelcomeRequest - Institution welcome
+// SendInstitutionWelcomeRequest - Institution welcome ---- Send to institution admin with Brief KYC notice ... 
 type SendInstitutionWelcomeRequest struct {
 	To              string
 	AdminName       string
 	InstitutionName string
+	InstitutionEmail string
 }
 
 // ✅ NEW: SendInstitutionKYCWelcomeRequest - Institution KYC welcome

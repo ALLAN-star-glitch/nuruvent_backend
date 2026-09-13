@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 
 	"github.com/hibiken/asynq"
 
@@ -182,7 +183,7 @@ func (w *NotificationWorker) ProcessWelcomeInstitution(ctx context.Context, data
 	channelReq := notificationdomain.ChannelRequest{
 		To:      data.To,
 		Subject: "Welcome to Nuruvent - Your Institution is Live!",
-		Type:    notificationdomain.TypeWelcome,
+		Type:    notificationdomain.TypeWelcomeInstitution,
 		Meta: map[string]string{
 			"admin_name":       data.AdminName,
 			"institution_name": data.InstitutionName,
@@ -398,6 +399,214 @@ func (w *NotificationWorker) HandleNewPersonalAccountRegistration(ctx context.Co
 		return err
 	}
 	return w.ProcessNewPersonalAccountRegistration(ctx, data)
+}
+
+// ============================================================
+// ✅ TEAM INVITATION HANDLERS (UPDATED - NO ROLE, NO OTP, AI-READY)
+// ============================================================
+
+// ProcessTeamInviteExistingUser implements notificationdomain.TaskProcessor
+// Sent when: User already has a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks accept link to join
+// ✅ AI-READY - PersonalizedContent field is available for future AI integration
+func (w *NotificationWorker) ProcessTeamInviteExistingUser(ctx context.Context, data notificationdomain.TeamInviteExistingUserTask) error {
+	log.Printf("[NotificationWorker] Processing team invite for existing user %s to join %s", data.To, data.TeamName)
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "You've Been Invited to Join " + data.TeamName + " on Nuruvent",
+		Type:    notificationdomain.TypeTeamInviteExistingUser,
+		Meta: map[string]string{
+			"user_name":   data.UserName,
+			"invited_by":  data.InvitedBy,
+			"team_name":   data.TeamName,
+			"team_id":     data.TeamID,
+			"accept_link": data.AcceptLink,
+			"expires_in":  data.ExpiresIn,
+		},
+	}
+
+	// ✅ AI-Ready: If personalized content exists, add it to the channel request
+	if data.PersonalizedContent != nil {
+		channelReq.Meta["ai_subject"] = data.PersonalizedContent.Subject
+		channelReq.Meta["ai_greeting"] = data.PersonalizedContent.Greeting
+		channelReq.Meta["ai_intro"] = data.PersonalizedContent.Intro
+		channelReq.Meta["ai_body"] = data.PersonalizedContent.Body
+		channelReq.Meta["ai_benefits"] = strings.Join(data.PersonalizedContent.Benefits, "|")
+		channelReq.Meta["ai_call_to_action"] = data.PersonalizedContent.CallToAction
+		channelReq.Meta["ai_closing"] = data.PersonalizedContent.Closing
+		channelReq.Meta["ai_pss"] = data.PersonalizedContent.PSS
+		log.Printf("[NotificationWorker] ✅ AI content included for %s", data.To)
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send team invite to existing user %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Team invite sent to existing user %s", data.To)
+	return nil
+}
+
+// HandleTeamInviteExistingUser is the asynq task handler
+func (w *NotificationWorker) HandleTeamInviteExistingUser(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.TeamInviteExistingUserTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse team invite existing user task: %v", err)
+		return err
+	}
+	return w.ProcessTeamInviteExistingUser(ctx, data)
+}
+
+// ProcessTeamInviteRegistration implements notificationdomain.TaskProcessor
+// Sent when: User does NOT have a Nuruvent account
+// ✅ NO ROLE - Roles are inherited from account level
+// ✅ NO OTP - User clicks registration link with token embedded
+// ✅ AI-READY - PersonalizedContent field is available for future AI integration
+func (w *NotificationWorker) ProcessTeamInviteRegistration(ctx context.Context, data notificationdomain.TeamInviteRegistrationTask) error {
+	log.Printf("[NotificationWorker] Processing team invite registration for new user %s to join %s", data.To, data.TeamName)
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "You're Invited to Join " + data.TeamName + " on Nuruvent",
+		Type:    notificationdomain.TypeTeamInviteRegistration,
+		Meta: map[string]string{
+			"name":              data.Name,
+			"invited_by":        data.InvitedBy,
+			"team_name":         data.TeamName,
+			"team_id":           data.TeamID,
+			"registration_link": data.RegistrationLink,
+			"expires_in":        data.ExpiresIn,
+		},
+	}
+
+	// ✅ AI-Ready: If personalized content exists, add it to the channel request
+	if data.PersonalizedContent != nil {
+		channelReq.Meta["ai_subject"] = data.PersonalizedContent.Subject
+		channelReq.Meta["ai_greeting"] = data.PersonalizedContent.Greeting
+		channelReq.Meta["ai_intro"] = data.PersonalizedContent.Intro
+		channelReq.Meta["ai_body"] = data.PersonalizedContent.Body
+	    channelReq.Meta["ai_benefits"] = strings.Join(data.PersonalizedContent.Benefits, "|")
+		channelReq.Meta["ai_call_to_action"] = data.PersonalizedContent.CallToAction
+		channelReq.Meta["ai_closing"] = data.PersonalizedContent.Closing
+		channelReq.Meta["ai_pss"] = data.PersonalizedContent.PSS
+		log.Printf("[NotificationWorker] ✅ AI content included for new user %s", data.To)
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send team invite registration to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Team invite registration sent to %s", data.To)
+	return nil
+}
+
+// HandleTeamInviteRegistration is the asynq task handler
+func (w *NotificationWorker) HandleTeamInviteRegistration(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.TeamInviteRegistrationTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse team invite registration task: %v", err)
+		return err
+	}
+	return w.ProcessTeamInviteRegistration(ctx, data)
+}
+
+// ProcessTeamInviteAccepted implements notificationdomain.TaskProcessor
+// Sent to: Admin who sent the invitation
+// ✅ AI-READY - PersonalizedContent field is available for future AI integration
+func (w *NotificationWorker) ProcessTeamInviteAccepted(ctx context.Context, data notificationdomain.TeamInviteAcceptedTask) error {
+	log.Printf("[NotificationWorker] Processing team invite accepted notification for admin: %s, user: %s joined %s", 
+		data.AdminName, data.UserName, data.TeamName)
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Team Invitation Accepted - " + data.UserName + " joined " + data.TeamName,
+		Type:    notificationdomain.TypeTeamInviteAccepted,
+		Meta: map[string]string{
+			"admin_name": data.AdminName,
+			"user_name":  data.UserName,
+			"user_email": data.UserEmail,
+			"team_name":  data.TeamName,
+			"team_id":    data.TeamID,
+		},
+	}
+
+	// ✅ AI-Ready: If personalized content exists, add it to the channel request
+	if data.PersonalizedContent != nil {
+		channelReq.Meta["ai_subject"] = data.PersonalizedContent.Subject
+		channelReq.Meta["ai_greeting"] = data.PersonalizedContent.Greeting
+		channelReq.Meta["ai_body"] = data.PersonalizedContent.Body
+		channelReq.Meta["ai_closing"] = data.PersonalizedContent.Closing
+		log.Printf("[NotificationWorker] ✅ AI content included for admin notification")
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send team invite accepted notification to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Team invite accepted notification sent to %s", data.To)
+	return nil
+}
+
+// HandleTeamInviteAccepted is the asynq task handler
+func (w *NotificationWorker) HandleTeamInviteAccepted(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.TeamInviteAcceptedTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse team invite accepted task: %v", err)
+		return err
+	}
+	return w.ProcessTeamInviteAccepted(ctx, data)
+}
+
+// ProcessTeamInviteDeclined implements notificationdomain.TaskProcessor
+// Sent to: Admin who sent the invitation
+// ✅ AI-READY - PersonalizedContent field is available for future AI integration
+func (w *NotificationWorker) ProcessTeamInviteDeclined(ctx context.Context, data notificationdomain.TeamInviteDeclinedTask) error {
+	log.Printf("[NotificationWorker] Processing team invite declined notification for admin: %s, user: %s declined %s", 
+		data.AdminName, data.UserName, data.TeamName)
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Team Invitation Declined - " + data.UserName + " declined " + data.TeamName,
+		Type:    notificationdomain.TypeTeamInviteDeclined,
+		Meta: map[string]string{
+			"admin_name": data.AdminName,
+			"user_name":  data.UserName,
+			"user_email": data.UserEmail,
+			"team_name":  data.TeamName,
+			"team_id":    data.TeamID,
+		},
+	}
+
+	// ✅ AI-Ready: If personalized content exists, add it to the channel request
+	if data.PersonalizedContent != nil {
+		channelReq.Meta["ai_subject"] = data.PersonalizedContent.Subject
+		channelReq.Meta["ai_greeting"] = data.PersonalizedContent.Greeting
+		channelReq.Meta["ai_body"] = data.PersonalizedContent.Body
+		channelReq.Meta["ai_closing"] = data.PersonalizedContent.Closing
+		log.Printf("[NotificationWorker] ✅ AI content included for admin notification")
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send team invite declined notification to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Team invite declined notification sent to %s", data.To)
+	return nil
+}
+
+// HandleTeamInviteDeclined is the asynq task handler
+func (w *NotificationWorker) HandleTeamInviteDeclined(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.TeamInviteDeclinedTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse team invite declined task: %v", err)
+		return err
+	}
+	return w.ProcessTeamInviteDeclined(ctx, data)
 }
 
 // Ensure NotificationWorker implements notificationdomain.TaskProcessor

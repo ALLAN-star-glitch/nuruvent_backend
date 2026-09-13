@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/postgres"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/infrastructure/postgres"
 )
 
 // SeedEventTypes seeds the event types from domain constants
