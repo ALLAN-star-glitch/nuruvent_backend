@@ -7,10 +7,10 @@ import (
 )
 
 type BaseResponse struct {
-	Success bool        `json:"success"`
-	Message string      `json:"message"`
-	Data    any `json:"data,omitempty"`
-	Errors  any `json:"errors,omitempty"`
+	Success bool `json:"success"`
+	Message string `json:"message"`
+	Data    any  `json:"data,omitempty"`
+	Errors  any  `json:"errors,omitempty"`
 }
 
 func Success(c fiber.Ctx, message string, data any) error {
@@ -27,6 +27,10 @@ func Created(c fiber.Ctx, message string, data any) error {
 		Message: message,
 		Data:    data,
 	})
+}
+
+func NoContent(c fiber.Ctx) error {
+	return c.SendStatus(fiber.StatusNoContent)
 }
 
 func BadRequest(c fiber.Ctx, message string, errors any) error {
@@ -63,6 +67,22 @@ func NotFound(c fiber.Ctx, message string, errors any) error {
 
 func Conflict(c fiber.Ctx, message string, errors any) error {
 	return c.Status(fiber.StatusConflict).JSON(BaseResponse{
+		Success: false,
+		Message: message,
+		Errors:  errors,
+	})
+}
+
+func UnprocessableEntity(c fiber.Ctx, message string, errors any) error {
+	return c.Status(fiber.StatusUnprocessableEntity).JSON(BaseResponse{
+		Success: false,
+		Message: message,
+		Errors:  errors,
+	})
+}
+
+func TooManyRequests(c fiber.Ctx, message string, errors any) error {
+	return c.Status(fiber.StatusTooManyRequests).JSON(BaseResponse{
 		Success: false,
 		Message: message,
 		Errors:  errors,

@@ -15,6 +15,7 @@ import (
 	authseeder "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/auth_seeder"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/eventseeder"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/mediaseeder"
+	registrationseeder "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/infrastructure/seeder"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
 	"gorm.io/gorm"
@@ -166,21 +167,27 @@ func main() {
 			Deps:        []string{},
 		},
 
+				// ============================================================
+		// REGISTRATION SEEDERS
 		// ============================================================
-		// FUTURE SEEDERS (Commented out for now)
-		// ============================================================
-		// {
-		//     Name:        "attendance_statuses",
-		//     Fn:          eventseeder.SeedAttendanceStatuses,
-		//     Description: "Seed attendance statuses (registered, joined, partial, full, confirmed, no_show)",
-		//     Deps:        []string{},
-		// },
-		// {
-		//     Name:        "super_admin",
-		//     Fn:          coreseeder.SeedSuperAdmin,
-		//     Description: "Seed super admin user",
-		//     Deps:        []string{"permissions"},
-		// },
+		{
+			Name:        "registration_statuses",
+			Fn:          registrationseeder.SeedRegistrationStatuses,
+			Description: "Seed registration statuses (pending, confirmed, cancelled, refunded, expired, attended)",
+			Deps:        []string{},
+		},
+		{
+			Name:        "attendance_statuses",
+			Fn:          registrationseeder.SeedAttendanceStatuses,
+			Description: "Seed attendance statuses (registered, joined, partial, full, confirmed, no_show)",
+			Deps:        []string{"registration_statuses"},
+		},
+		{
+			Name:        "waitlist_statuses",
+			Fn:          registrationseeder.SeedWaitlistStatuses,
+			Description: "Seed waitlist statuses (waiting, offered, converted, expired, cancelled)",
+			Deps:        []string{"registration_statuses"},
+		},
 	}
 
 	// Always validate dependencies
@@ -430,6 +437,7 @@ func printHelp() {
 	fmt.Println("")
 	fmt.Println("  # Force re-seed in production")
 	fmt.Println("  go run cmd/seed/main.go -env=production -force")
+	
 }
 
 func printAvailableSeeders(seeders []SeederInfo) {
