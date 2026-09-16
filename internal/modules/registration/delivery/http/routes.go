@@ -11,14 +11,19 @@ import "github.com/gofiber/fiber/v3"
 //     to keep the flow self-contained. If the events module later needs to
 //     own all /events/... routes, this can be moved.
 //   - User-scoped and registration-scoped routes are registered here as well.
-func RegisterRoutes(r fiber.Router, h *Handler, authMiddleware fiber.Handler) {
+func RegisterRoutes(
+	r fiber.Router,
+	h *Handler,
+	authMiddleware fiber.Handler,
+	optionalAuth fiber.Handler,
+) {
 	// ------------------------------------------------------------
 	// Event-scoped routes (registration flow)
 	// ------------------------------------------------------------
 	// POST /events/:id/register — register for an event
 	// Auth is optional; the handler accepts either an authenticated user
 	// or guest details in the body.
-	r.Post("/events/:id/register", h.RegisterForEvent)
+	r.Post("/events/:id/register", optionalAuth, h.RegisterForEvent)
 
 	// GET /events/:id/registrations — list registrations for an event
 	// Auth required; only the event organizer should see this.
@@ -26,7 +31,7 @@ func RegisterRoutes(r fiber.Router, h *Handler, authMiddleware fiber.Handler) {
 
 	// POST /events/:id/waitlist — join the event waitlist
 	// Auth optional; guest details allowed.
-	r.Post("/events/:id/waitlist", h.JoinWaitlist)
+	r.Post("/events/:id/waitlist", optionalAuth, h.JoinWaitlist)
 
 	// POST /events/:id/waitlist/promote — promote the next waitlisted user
 	// Auth required; typically organizer-only.

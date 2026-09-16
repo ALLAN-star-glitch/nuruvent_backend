@@ -20,6 +20,7 @@ func SetupRoutes(
 	cfg *config.Config,
 	authMiddleware fiber.Handler,
 	authzMiddleware fiber.Handler,
+	optionalAuth fiber.Handler,
 	authHandler *authhandler.AuthHandler,
 	eventsHandler *eventhandler.EventHandler,
 	teamHandler *teamHandler.TeamHandler,
@@ -59,7 +60,7 @@ func SetupRoutes(
 	accountHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
 
 	// Registration routes
-	registrationhttp.RegisterRoutes(api, regHandler, authMiddleware)
+	registrationhttp.RegisterRoutes(api, regHandler, authMiddleware, optionalAuth)
 
 	// ================================================
 	// 4. 404 Handler - Must be LAST

@@ -70,12 +70,15 @@ func (app *App) SetupRoutes() {
 		app.PermissionChecker,
 	)
 
+	optionalAuth := authmiddleware.OptionalAuthMiddleware(tokenSvc) 
+
 	
 	server.SetupRoutes(
 		app.App,
 		app.Config,
 		authMiddleware,
 		authzMiddleware,
+		optionalAuth,
 		app.AuthHandler,
 		app.EventsHandler,
 		app.TeamHandler,
