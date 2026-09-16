@@ -12,10 +12,9 @@ import (
 
 	// Account Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account"
+	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
-	accountDomain  "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
-	
 
 	// Auth Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth"
@@ -24,13 +23,11 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 
-
 	// Events Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events"
 	eventsHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
+	eventsDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	eventsService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
-	eventsDomain  "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
-
 
 	// Media Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media"
@@ -40,53 +37,61 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
 	notificationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 
-
 	// Team Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team"
 	teamHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
 
+	// Registration Module
+	registration "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration"
+	regHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
+	regService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
+
 	// Shared
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
+
 
 )
-
 
 // ============================================================
 // APP DEPENDENCIES
 // ============================================================
 
 type AppDependencies struct {
-	Config             *config.Config
-	DB                 *gorm.DB
-	App                *fiber.App
-	StorageClient      *storage.Client
-	RedisClient        *redis.Client
-	Enforcer           *authorization.Enforcer
-	PermissionChecker  authDomain.PermissionChecker
-	RoleManager        authDomain.RoleManager
-	PolicyManager      authDomain.PolicyManager
-	AuthTokenService   authDomain.TokenService
-	AuthService        authService.Service
-	AccountService     accountService.Service
-	TeamService        teamService.Service
-	EventsService      eventsService.Service
-	MediaService       mediaService.Service
-	NotificationSvc    notificationDomain.NotificationService
-	AuthHandler        *authHandler.AuthHandler
-	AccountHandler     *accountHandler.AccountHandler
-	TeamHandler        *teamHandler.TeamHandler
-	EventsHandler      *eventsHandler.EventHandler
-	AIService          teamService.AIService
-	EventsAIService		eventsService.AIService
-	OrganizerProvider	eventsDomain.OrganizerProvider
-	AccountsPermissionChecker		accountDomain.PermissionChecker
-	AIClient					*ai.Client
+	Config            *config.Config
+	DB                *gorm.DB
+	App               *fiber.App
+	StorageClient     *storage.Client
+	RedisClient       *redis.Client
+	Enforcer          *authorization.Enforcer
+	PermissionChecker authDomain.PermissionChecker
+	RoleManager       authDomain.RoleManager
+	PolicyManager     authDomain.PolicyManager
+	AuthTokenService  authDomain.TokenService
+	AuthService       authService.Service
+	AccountService    accountService.Service
+	TeamService       teamService.Service
+	EventsService     eventsService.Service
+	MediaService      mediaService.Service
+	NotificationSvc   notificationDomain.NotificationService
+	AuthHandler       *authHandler.AuthHandler
+	AccountHandler    *accountHandler.AccountHandler
+	TeamHandler       *teamHandler.TeamHandler
+	EventsHandler     *eventsHandler.EventHandler
+	AIService         teamService.AIService
+	EventsAIService   eventsService.AIService
+	OrganizerProvider eventsDomain.OrganizerProvider
+	AccountsPermissionChecker accountDomain.PermissionChecker
+	AIClient          *ai.Client
+
+	// Registration Module
+	RegHandler *regHandler.Handler
+	RegService regService.Service
 }
 
 // ============================================================
@@ -103,7 +108,7 @@ func InitializeApp() (*AppDependencies, error) {
 		queue.ProviderSet,
 		redis.ProviderSet,
 		storage.ProviderSet,
-		ai.ProviderSet,  
+		ai.ProviderSet,
 
 		// ============================================================
 		// APP-SPECIFIC
@@ -119,6 +124,7 @@ func InitializeApp() (*AppDependencies, error) {
 		media.ProviderSet,
 		notification.ProviderSet,
 		team.ProviderSet,
+		registration.ProviderSet,
 
 		// ============================================================
 		// CROSS-MODULE ADAPTERS - AUTH
@@ -149,10 +155,12 @@ func InitializeApp() (*AppDependencies, error) {
 		NewTeamNotificationAdapter,
 		NewAccountNotificationAdapter,
 
+		// ============================================================
+		// CROSS-MODULE ADAPTERS - REGISTRATION
+		// ============================================================
+		NewRegistrableResolver,
 
-		
 		provideOrganizerProvider,
-
 
 		// ============================================================
 		// FINAL APP DEPENDENCIES

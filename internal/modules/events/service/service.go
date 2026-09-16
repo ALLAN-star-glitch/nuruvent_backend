@@ -105,6 +105,11 @@ type Service interface {
 	// ============================================================
 
 	GenerateEventDraft(ctx context.Context, req GenerateEventDraftRequest) (*GenerateEventDraftResult, error)
+
+
+
+
+	AdjustAttendeeCount(ctx context.Context, eventID string, delta int) error
 }
 
 // ============================================================

@@ -15,7 +15,7 @@ import (
 // App wraps the application dependencies.
 type App struct {
 	*AppDependencies
-}
+} 
 
 // NewApp creates and initializes the application.
 func NewApp() (*App, error) {
@@ -80,6 +80,7 @@ func (app *App) SetupRoutes() {
 		app.EventsHandler,
 		app.TeamHandler,
 		app.AccountHandler,
+		app.RegHandler,
 	)
 	log.Println("Routes registered successfully")
 }

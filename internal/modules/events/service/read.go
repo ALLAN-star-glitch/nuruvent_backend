@@ -535,3 +535,12 @@ func (s *eventService) sanitizeLimit(limit, defaultLimit, maxLimit int) int {
 	}
 	return limit
 }
+
+// AdjustAttendeeCount atomically adjusts the event's attendee counter.
+// Positive delta = new registration; negative = cancellation.
+func (s *eventService) AdjustAttendeeCount(ctx context.Context, eventID string, delta int) error {
+	if delta == 0 {
+		return nil
+	}
+	return s.repo.AdjustAttendeeCount(ctx, eventID, delta)
+}

@@ -135,6 +135,17 @@ type Repository interface {
 	GetRecurrencePatternBySlug(ctx context.Context, slug string) (*RecurrencePattern, error)
 
 	AccountIDForTeam(ctx context.Context, teamID string) (string, error)
+
+
+
+	// AdjustAttendeeCount atomically adds delta to an event's
+	// current_attendees counter. delta may be negative (cancellation) or
+	// positive (new registration). Returns ErrEventNotFound if the event
+	// doesn't exist.
+	//
+	// The implementation must be safe for concurrent use — the counter is
+	// a hot field and registrations can arrive in parallel.
+	AdjustAttendeeCount(ctx context.Context, eventID string, delta int) error
 }
 
 // ============================================================

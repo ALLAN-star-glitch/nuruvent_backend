@@ -9,13 +9,22 @@ type ListFilter struct {
     PageSize int
 }
 
+
 // RegistrationRepository persists the base Registration entity.
 type RegistrationRepository interface {
     Create(ctx context.Context, r *Registration) error
     Update(ctx context.Context, r *Registration) error
     FindByID(ctx context.Context, id string) (*Registration, error)
     FindActiveByUserAndEvent(ctx context.Context, userID, eventID string) (*Registration, error)
-    WithTx(ctx context.Context, fn func(RegistrationRepository) error) error
+
+    WithTx(
+        ctx context.Context,
+        fn func(
+            RegistrationRepository,
+            EventRegistrationRepository,
+            WaitlistRepository,
+        ) error,
+    ) error
 }
 
 // EventRegistrationRepository persists event-specific registrations.

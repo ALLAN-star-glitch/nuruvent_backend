@@ -37,6 +37,10 @@ import (
 	teamHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
 
+	// Registration Module
+	regHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
+	regService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
+
 	// Shared
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
@@ -109,6 +113,8 @@ func provideAppDependencies(
 	eventsAIService eventsService.AIService,
 	organizerProvider eventsDomain.OrganizerProvider,
 	accountsPermissionChecker accountDomain.PermissionChecker,
+	regHandler	*regHandler.Handler,
+	regService		regService.Service,
 ) *AppDependencies {
 	return &AppDependencies{
 		Config:                    cfg,
@@ -136,5 +142,7 @@ func provideAppDependencies(
 		AccountsPermissionChecker: accountsPermissionChecker,
 		AIClient:                  aiClient,
 		EventsAIService:           eventsAIService,
+		RegHandler:				   regHandler,
+		RegService:				   regService,
 	}
 }

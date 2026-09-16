@@ -875,3 +875,21 @@ func (r *PostgresRepository) AccountIDForTeam(ctx context.Context, teamID string
     }
     return accountID, nil
 }
+
+
+// AdjustAttendeeCount atomically increments or decrements the event's
+// current_attendees counter.
+func (r *PostgresRepository) AdjustAttendeeCount(ctx context.Context, eventID string, delta int) error {
+	res := r.db.WithContext(ctx).
+		Model(&EventModel{}).
+		Where("id = ?", eventID).
+		UpdateColumn("current_attendees", gorm.Expr("current_attendees + ?", delta))
+
+	if res.Error != nil {
+		return fmt.Errorf("adjust attendee count: %w", res.Error)
+	}
+	if res.RowsAffected == 0 {
+		return domain.ErrEventNotFound
+	}
+	return nil
+}

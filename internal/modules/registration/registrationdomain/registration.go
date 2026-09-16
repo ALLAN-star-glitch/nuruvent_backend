@@ -1,3 +1,5 @@
+// internal/modules/registration/registrationdomain/registration.go
+
 package registrationdomain
 
 import (
@@ -16,6 +18,8 @@ type Registration struct {
 	GuestPhone         string
 	Status             Status
 	Currency           string
+	Subtotal           int64 // ← ADD: minor units
+	DiscountTotal      int64 // ← ADD: minor units
 	TotalAmount        int64
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
@@ -62,6 +66,8 @@ func NewRegistration(
 		GuestPhone:         guestPhone,
 		Status:             status,
 		Currency:           pricing.Currency,
+		Subtotal:           pricing.Subtotal,      // ← SET
+		DiscountTotal:      pricing.DiscountTotal, // ← SET
 		TotalAmount:        pricing.Total,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -81,7 +87,7 @@ func HydrateRegistration(
 	userID, guestEmail, guestName, guestPhone string,
 	status Status,
 	currency string,
-	totalAmount int64,
+	subtotal, discountTotal, totalAmount int64,
 	createdAt, updatedAt time.Time,
 	confirmedAt, cancelledAt *time.Time,
 	cancelledBy, cancellationReason string,
@@ -95,6 +101,8 @@ func HydrateRegistration(
 		GuestPhone:         guestPhone,
 		Status:             status,
 		Currency:           currency,
+		Subtotal:           subtotal,
+		DiscountTotal:      discountTotal,
 		TotalAmount:        totalAmount,
 		CreatedAt:          createdAt,
 		UpdatedAt:          updatedAt,
@@ -104,6 +112,7 @@ func HydrateRegistration(
 		CancellationReason: cancellationReason,
 	}
 }
+
 
 // Confirm transitions to confirmed. Idempotent when already confirmed.
 func (r *Registration) Confirm(now time.Time) error {

@@ -4,6 +4,7 @@ package http
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
@@ -29,6 +30,7 @@ func NewHandler(svc service.Service) *Handler {
 
 // RegisterForEvent handles POST /events/:id/register
 func (h *Handler) RegisterForEvent(c fiber.Ctx) error {
+	log.Println("[registration] ENTER RegisterForEvent") 
 	eventID := c.Params("id")
 	if eventID == "" {
 		return response.BadRequest(c, "Event ID is required", nil)

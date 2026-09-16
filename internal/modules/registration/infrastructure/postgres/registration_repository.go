@@ -19,10 +19,13 @@ func NewRegistrationRepository(db *gorm.DB) registrationdomain.RegistrationRepos
 }
 
 func (r *RegistrationRepository) Create(ctx context.Context, reg *registrationdomain.Registration) error {
-	model, err := toRegistrationModel(reg)
+	statusID, err := r.resolveStatusID(ctx, reg.Status)
 	if err != nil {
 		return err
 	}
+
+	model := toRegistrationModel(reg, statusID)
+
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
 		return fmt.Errorf("create registration: %w", err)
 	}
@@ -30,14 +33,33 @@ func (r *RegistrationRepository) Create(ctx context.Context, reg *registrationdo
 }
 
 func (r *RegistrationRepository) Update(ctx context.Context, reg *registrationdomain.Registration) error {
-	model, err := toRegistrationModel(reg)
+	statusID, err := r.resolveStatusID(ctx, reg.Status)
 	if err != nil {
 		return err
 	}
+
+	model := toRegistrationModel(reg, statusID)
+
 	res := r.db.WithContext(ctx).
 		Model(&RegistrationModel{}).
 		Where("id = ?", model.ID).
-		Updates(model)
+		Updates(map[string]any{
+			"user_id":             model.UserID,
+			"guest_email":         model.GuestEmail,
+			"guest_name":          model.GuestName,
+			"guest_phone":         model.GuestPhone,
+			"status_id":           model.StatusID,
+			"currency":            model.Currency,
+			"subtotal":            model.Subtotal,
+			"discount_total":      model.DiscountTotal,
+			"total_amount":        model.TotalAmount,
+			"updated_at":          model.UpdatedAt,
+			"confirmed_at":        model.ConfirmedAt,
+			"cancelled_at":        model.CancelledAt,
+			"cancelled_by":        model.CancelledBy,
+			"cancellation_reason": model.CancellationReason,
+		})
+
 	if res.Error != nil {
 		return fmt.Errorf("update registration: %w", res.Error)
 	}
@@ -84,8 +106,37 @@ func (r *RegistrationRepository) FindActiveByUserAndEvent(ctx context.Context, u
 	return toRegistrationDomain(&model)
 }
 
-func (r *RegistrationRepository) WithTx(ctx context.Context, fn func(registrationdomain.RegistrationRepository) error) error {
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		return fn(&RegistrationRepository{db: tx})
-	})
+
+func (r *RegistrationRepository) WithTx(
+    ctx context.Context,
+    fn func(
+        registrationdomain.RegistrationRepository,
+        registrationdomain.EventRegistrationRepository,
+        registrationdomain.WaitlistRepository,
+    ) error,
+) error {
+    return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+        return fn(
+            &RegistrationRepository{db: tx},
+            &EventRegistrationRepository{db: tx},
+            &WaitlistRepository{db: tx},
+        )
+    })
+}
+
+func (r *RegistrationRepository) resolveStatusID(
+	ctx context.Context,
+	status registrationdomain.Status,
+) (string, error) {
+	var row RegistrationStatusModel
+	err := r.db.WithContext(ctx).
+		Where("slug = ?", status.GetSlug()).
+		First(&row).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", fmt.Errorf("registration status %q not found", status.GetSlug())
+		}
+		return "", fmt.Errorf("resolve status %q: %w", status.GetSlug(), err)
+	}
+	return row.ID, nil
 }

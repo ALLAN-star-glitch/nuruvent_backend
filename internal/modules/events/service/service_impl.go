@@ -49,3 +49,6 @@ func NewService(
 func (s *eventService) GetCategories(ctx context.Context) ([]*domain.Category, error) {
 	return s.repo.GetAllCategories(ctx)
 }
+
+
+

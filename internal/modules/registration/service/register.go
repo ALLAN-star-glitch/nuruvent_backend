@@ -119,14 +119,18 @@ if err != nil {
     // ------------------------------------------------------------
     // 8. Persist in a transaction
     // ------------------------------------------------------------
-    err = s.deps.Registrations.WithTx(ctx, func(tx registrationdomain.RegistrationRepository) error {
-        if err := tx.Create(ctx, reg); err != nil {
+    err = s.deps.Registrations.WithTx(ctx,
+    func(
+        regRepo registrationdomain.RegistrationRepository,
+        eventRegRepo registrationdomain.EventRegistrationRepository,
+        waitlistRepo registrationdomain.WaitlistRepository,
+    ) error {
+        if err := regRepo.Create(ctx, reg); err != nil {
             return fmt.Errorf("create registration: %w", err)
         }
-        if err := s.deps.EventRegistrations.Create(ctx, eventReg); err != nil {
+        if err := eventRegRepo.Create(ctx, eventReg); err != nil {
             return fmt.Errorf("create event registration: %w", err)
         }
-        // Only adjust the counter when the registration is confirmed.
         if reg.Status == registrationdomain.StatusConfirmed {
             if err := registrable.AdjustCount(+totalQuantity); err != nil {
                 return fmt.Errorf("adjust count: %w", err)

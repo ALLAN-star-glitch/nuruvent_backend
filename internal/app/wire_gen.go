@@ -27,6 +27,11 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/infrastructure/notifier"
+	postgres6 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/infrastructure/postgres"
+	service7 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 	handler2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure"
 	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure/postgres"
@@ -34,6 +39,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/id"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
@@ -80,27 +86,38 @@ func InitializeApp() (*AppDependencies, error) {
 	aiService := infrastructure.NewTeamAIAdapter(aiClient)
 	serviceService := service2.NewTeamService(teamdomainRepository, authService, casbinService, serviceNotificationService, aiService)
 	teamService := NewAuthTeamAdapter(serviceService)
-	service7 := service3.NewService(repository, configConfig, redisClient, queueService, permissionChecker, roleManager, policyManager, tokenService, authdomainNotificationService, enforcer, teamService)
+	service8 := service3.NewService(repository, configConfig, redisClient, queueService, permissionChecker, roleManager, policyManager, tokenService, authdomainNotificationService, enforcer, teamService)
 	accountdomainRepository := postgres3.NewAccountRepository(db)
-	serviceAuthService := NewAccountAuthAdapter(service7)
+	serviceAuthService := NewAccountAuthAdapter(service8)
 	notificationService2 := NewAccountNotificationAdapter(notificationService)
 	accountdomainPermissionChecker := NewAccountPermissionAdapter(permissionChecker)
 	domainRepository := postgres4.NewPostgresRepository(db)
-	service8 := service4.NewService(domainRepository, client)
-	mediaService := NewAccountMediaAdapter(service8)
-	service9 := service5.NewAccountService(accountdomainRepository, serviceAuthService, notificationService2, accountdomainPermissionChecker, mediaService)
+	service9 := service4.NewService(domainRepository, client)
+	mediaService := NewAccountMediaAdapter(service9)
+	service10 := service5.NewAccountService(accountdomainRepository, serviceAuthService, notificationService2, accountdomainPermissionChecker, mediaService)
 	repository2 := postgres5.NewPostgresRepository(db)
 	domainPermissionChecker := NewEventsPermissionAdapter(permissionChecker)
-	userInfoProvider := NewEventsUserInfoAdapter(service9)
-	domainMediaService := NewEventsMediaAdapter(service8)
-	organizerProvider := provideOrganizerProvider(service9)
+	userInfoProvider := NewEventsUserInfoAdapter(service10)
+	domainMediaService := NewEventsMediaAdapter(service9)
+	organizerProvider := provideOrganizerProvider(service10)
 	serviceAIService := infrastructure2.NewEventAIAdapter(aiClient)
-	service10 := service6.NewService(repository2, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider, serviceAIService)
-	authHandler := authhandler.NewAuthHandler(service7, configConfig)
-	accountHandler := handler.NewAccountHandler(service9)
+	service11 := service6.NewService(repository2, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider, serviceAIService)
+	authHandler := authhandler.NewAuthHandler(service8, configConfig)
+	accountHandler := handler.NewAccountHandler(service10)
 	teamHandler := handler2.NewTeamHandler(serviceService)
-	eventHandler := eventhandler.NewEventHandler(service10)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service7, tokenService, service9, serviceService, service10, service8, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker)
+	eventHandler := eventhandler.NewEventHandler(service11)
+	registrationRepository := postgres6.NewRegistrationRepository(db)
+	eventRegistrationRepository := postgres6.NewEventRegistrationRepository(db)
+	waitlistRepository := postgres6.NewWaitlistRepository(db)
+	registrableResolver := NewRegistrableResolver(service11)
+	noop := notifier.NewNoop()
+	uuidGenerator := id.NewUUIDGenerator()
+	clock := registration.ProvideSystemClock()
+	registrationNumberGenerator := postgres6.NewRegistrationNumberGenerator(db)
+	dependencies := registration.ProvideServiceDependencies(registrationRepository, eventRegistrationRepository, waitlistRepository, registrableResolver, noop, uuidGenerator, clock, registrationNumberGenerator)
+	service12 := service7.New(dependencies)
+	httpHandler := http.NewHandler(service12)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service8, tokenService, service10, serviceService, service11, service9, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker, httpHandler, service12)
 	return appDependencies, nil
 }
 
@@ -132,4 +149,8 @@ type AppDependencies struct {
 	OrganizerProvider         domain.OrganizerProvider
 	AccountsPermissionChecker accountdomain.PermissionChecker
 	AIClient                  *ai.Client
+
+	// Registration Module
+	RegHandler *http.Handler
+	RegService service7.Service
 }

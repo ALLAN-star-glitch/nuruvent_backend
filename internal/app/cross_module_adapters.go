@@ -8,13 +8,16 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/events"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/team"
 
+	registrationadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/registration"
 	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	eventsDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
+	eventsService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 	mediaService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 	notificationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
 )
 
@@ -108,4 +111,15 @@ func NewTeamCasbinAdapter(
 // NewTeamNotificationAdapter creates a new team notification adapter
 func NewTeamNotificationAdapter(notifSvc notificationDomain.NotificationService) teamService.NotificationService {
 	return team.NewTeamNotificationAdapter(notifSvc)
+}
+
+
+// ---- REGISTRATION ADAPTERS ----
+
+// NewRegistrableResolver wires the registration module's Registrable
+// resolver to the events module. The resolver is the only place that
+// knows how to adapt an events domain Event to the registration
+// module's Registrable contract.
+func NewRegistrableResolver(eventsSvc eventsService.Service) registrationdomain.RegistrableResolver {
+	return registrationadapters.NewRegistrableResolver(eventsSvc)
 }
