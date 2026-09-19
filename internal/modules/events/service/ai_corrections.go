@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"log"
 	"strings"
 	"time"
 )
@@ -146,17 +145,6 @@ func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string,
 	warnings = append(warnings, correctSchedules(d.Schedules, cctx.Timezone)...)
 
 	// --- collapse over-expanded recurring schedules ---
-	//
-	// The AI frequently returns one schedule per occurrence (e.g. 6
-	// weekly webinars get 6 schedules dated 7 days apart) rather than
-	// one schedule that describes the typical session. The recurrence
-	// block already conveys the cadence, so multiple schedules are
-	// redundant and often inconsistent (dates don't fall on the
-	// declared weekdays).
-	//
-	// We collapse to a single schedule only when all schedules share
-	// the same start_time, end_time, and timezone — that's the pattern
-	// we can safely reduce. Non-uniform schedules are left alone.
 	if d.IsRecurring && len(d.Schedules) > 1 {
 		uniform := true
 		for i := 1; i < len(d.Schedules); i++ {
@@ -177,16 +165,6 @@ func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string,
 	}
 
 	// --- align schedule date with declared weekday ---
-	//
-	// If the event is weekly and the schedule's start_date doesn't
-	// fall on one of the declared weekdays, shift it forward to the
-	// next matching day. Prevents "runs on Monday" + "schedule is
-	// Saturday" contradictions.
-	//
-	// Because the shift can push the start_date past the existing
-	// end_date (e.g. start=Thu end=Thu, shifted to Mon), we clear the
-	// end_date afterward. A weekly session doesn't need an end_date —
-	// the session duration is start_time → end_time.
 	if d.IsRecurring && d.Recurrence != nil &&
 		d.Recurrence.Pattern == "weekly" &&
 		len(d.Recurrence.DaysOfWeek) > 0 &&
@@ -206,10 +184,6 @@ func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string,
 				oldDate := d.Schedules[0].StartDate
 				d.Schedules[0].StartDate = shifted.Format("2006-01-02")
 
-				// Clear a now-stale end_date. If it was equal to the old
-				// start (single-day session) or falls before the new
-				// start, drop it. The recurrence block defines the cadence
-				// anyway — no need for a per-session end_date.
 				if d.Schedules[0].EndDate != nil && *d.Schedules[0].EndDate != "" &&
 					*d.Schedules[0].EndDate <= d.Schedules[0].StartDate {
 					d.Schedules[0].EndDate = nil
@@ -345,11 +319,10 @@ func correctSchedules(schedules []GeneratedSchedule, fallbackTZ string) []string
 //
 // Otherwise, the function normalizes what the AI produced and can
 // INFER missing fields from the schedules array (weekdays from schedule
-// dates, ends_on from the last schedule date).
+// dates, ends_on from the last schedule date or a sensible default).
 func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string {
 	var warnings []string
 
-	log.Printf("[AI] correctRecurrence: req.Recurrence=%+v", cctx.Request.Recurrence)
 	// ---- Structured override path ----
 	if cctx.Request.Recurrence != nil {
 		src := cctx.Request.Recurrence
@@ -407,6 +380,19 @@ func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string 
 
 	if r.Interval < 1 {
 		r.Interval = 1
+	}
+
+	// --- Normalize custom + interval > 1 + weekdays into weekly ---
+	//
+	// The AI reaches for "custom" when it sees phrases like
+	// "every 3 days per week" and then stuffs weekdays in. That's
+	// really a weekly recurrence on those days, not a custom pattern.
+	// Correct it before the pattern-specific cleanup runs.
+	if r.Pattern == "custom" && r.Interval > 1 && len(r.DaysOfWeek) > 0 {
+		r.Pattern = "weekly"
+		r.Interval = 1
+		warnings = append(warnings,
+			"Normalized custom+interval to weekly recurrence.")
 	}
 
 	// Normalize weekday abbreviations to full names.
@@ -474,15 +460,36 @@ func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string 
 		}
 	}
 
-	// Derive ends_on from the last schedule's date — but ONLY when there
-	// is more than one schedule.
-	if r.EndsOn == nil && r.Occurrences == nil && len(d.Schedules) > 1 {
-		last := d.Schedules[len(d.Schedules)-1]
-		if last.StartDate != "" {
-			endsOn := last.StartDate
-			r.EndsOn = &endsOn
+	// --- Ensure the recurrence has an end condition ---
+	//
+	// Two fallbacks:
+	//   1. If the AI produced multiple schedules, use the last one's date.
+	//   2. Otherwise, apply a sensible default occurrence count.
+	if r.EndsOn == nil && r.Occurrences == nil {
+		if len(d.Schedules) > 1 {
+			last := d.Schedules[len(d.Schedules)-1]
+			if last.StartDate != "" {
+				endsOn := last.StartDate
+				r.EndsOn = &endsOn
+				warnings = append(warnings, fmt.Sprintf(
+					"Derived recurrence ends_on from last schedule date: %s",
+					last.StartDate))
+			}
+		} else {
+			defaults := map[string]int{
+				"daily":   10,
+				"weekly":  4,
+				"monthly": 3,
+				"custom":  4,
+			}
+			n := defaults[r.Pattern]
+			if n == 0 {
+				n = 4
+			}
+			r.Occurrences = &n
 			warnings = append(warnings, fmt.Sprintf(
-				"Derived recurrence ends_on from last schedule date: %s", last.StartDate))
+				"Applied default occurrences=%d for %s recurrence.",
+				n, r.Pattern))
 		}
 	}
 
