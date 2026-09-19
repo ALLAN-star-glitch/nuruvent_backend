@@ -11,14 +11,11 @@ import (
 // ============================================================
 // PROMPT VERSION
 // ============================================================
-//
-// Bump this whenever the system prompt or JSON schema changes.
-// It is logged on every AI call so production issues can be
-// correlated with prompt revisions.
-const PromptVersion = "v1"
+
+const PromptVersion = "v5"
 
 // ============================================================
-// SYSTEM PROMPT — v1
+// SYSTEM PROMPT — v5
 // ============================================================
 
 const systemPromptV1 = `You are an event generator for the Nuruvent events platform.
@@ -26,23 +23,25 @@ Return ONLY valid JSON. No markdown, no explanations, no commentary.
 
 Schema:
 {
-  "name":              string,   // the event's user-facing title (e.g. "Hands-on Kubernetes Workshop")
-  "description":       string,   // 200-500 words
-  "short_description": string,   // one sentence
-  "tags":              [string], // 3-6 lowercase tags
-  "language":          string,   // ISO 639-1
+  "name":              string,
+  "description":       string,
+  "short_description": string,
+  "tags":              [string],
+  "language":          string,
   "schedules":         [Schedule],
   "is_multi_day":      boolean,
+  "is_recurring":      boolean,
+  "recurrence":        Recurrence | null,
   "is_virtual":        boolean,
   "is_hybrid":         boolean,
-  "in_person_location": string,  // if in-person or hybrid
+  "in_person_location": string,
   "venue_name":        string,
   "venue_address":     string,
   "venue_city":        string,
   "venue_country":     string,
-  "virtual_platform":  string,   // if virtual or hybrid
+  "virtual_platform":  string,
   "virtual_platform_url": string,
-  "timezone":          string,   // IANA
+  "timezone":          string,
   "is_free":           boolean,
   "capacity":          number,
   "tickets":           [Ticket],
@@ -69,12 +68,23 @@ Schedule:
 
 Ticket:
 {
-  "ticket_type_id": "UUID",   // MUST be one of the provided ticket type IDs
+  "ticket_type_id": "UUID",
   "name":           string,
   "description":    string,
-  "price":          number,   // >= 0
-  "quantity":       number,   // >= 1
+  "price":          number,
+  "quantity":       number,
   "max_per_person": number | null
+}
+
+Recurrence:
+{
+  "pattern":      "daily" | "weekly" | "monthly" | "custom",
+  "interval":     number,
+  "days_of_week": [string],
+  "day_of_month": number | null,
+  "week_of_month": "first" | "second" | "third" | "fourth" | "last" | null,
+  "ends_on":      "YYYY-MM-DD" | null,
+  "occurrences":  number | null
 }
 
 Rules:
@@ -87,14 +97,22 @@ Rules:
 - If is_free is false, at least one ticket price MUST be > 0.
 - If is_virtual is false AND is_hybrid is false, in_person_location and venue_name MUST be set.
 - If is_virtual is true OR is_hybrid is true, virtual_platform_url OR a zoom_link/meet_link MUST be set.
-- ticket_type_id MUST be one of the UUIDs in the "Available ticket types" list.`
+- ticket_type_id MUST be one of the UUIDs in the "Available ticket types" list.
+- If the prompt implies repetition (e.g. "every Monday", "weekly series", "runs for 6 weeks"), set is_recurring = true and populate recurrence.
+- If is_recurring is true and pattern is "weekly" or "custom", days_of_week MUST contain at least one weekday.
+- Weekday values MUST be full lowercase names: "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday". Never "mon", "tue", "wed", etc.
+- If is_recurring is true and pattern is "monthly", set exactly one of day_of_month or week_of_month.
+- If is_recurring is true, at least one of ends_on or occurrences MUST be set.
+- If the event is a one-off, set is_recurring = false and recurrence = null.
+- description MUST be at least 100 characters (roughly 2-3 sentences). Describe the agenda, who should attend, and what attendees will take away.
+- short_description MUST be one sentence, max 160 characters.
+- When is_recurring is true, use exactly ONE schedule that describes the typical session (time of day, timezone, location, session duration). Do NOT expand the series into one schedule per occurrence. The recurrence block conveys the cadence; the schedule conveys the session shape.
+- The schedule's start_date MUST fall on one of the weekdays listed in recurrence.days_of_week when pattern is "weekly".`
 
 // ============================================================
 // REQUEST DTO
 // ============================================================
 
-// GenerateEventDraftRequest is the caller-supplied input for the
-// AI event-draft endpoint.
 type GenerateEventDraftRequest struct {
 	Prompt        string   `json:"prompt"`
 	EventTypeID   string   `json:"event_type_id"`
@@ -106,8 +124,11 @@ type GenerateEventDraftRequest struct {
 	MinCapacity   int      `json:"min_capacity,omitempty"`
 	MaxCapacity   int      `json:"max_capacity,omitempty"`
 
-	// Never bound from the request body — set by the handler from
-	// the authenticated context. Ignored by json.Unmarshal.
+	// Recurrence — when provided, the AI MUST use exactly this pattern
+	// and not invent its own. Nil means "the event doesn't repeat" (or
+	// the caller didn't specify; the AI may still infer from prompt).
+	Recurrence *RecurrenceInput `json:"recurrence,omitempty"`
+
 	CreatedBy string `json:"-"`
 	TeamID    string `json:"-"`
 	TeamType  string `json:"-"`
@@ -117,13 +138,10 @@ type GenerateEventDraftRequest struct {
 // ============================================================
 // PROMPT CONTEXT
 // ============================================================
-//
-// promptContext carries the resolved DB rows used to build the
-// user prompt. Populated by loadPromptContext in ai_generate_draft.go.
 
 type promptContext struct {
 	EventType   *domain.EventType
-	Category    *domain.Category // nil if not provided
+	Category    *domain.Category
 	TicketTypes []*domain.TicketTypeRow
 	Language    string
 	Timezone    string
@@ -136,13 +154,10 @@ type promptContext struct {
 // BUILDERS
 // ============================================================
 
-// buildSystemPrompt returns the versioned system prompt.
 func buildSystemPrompt() string {
 	return systemPromptV1
 }
 
-// buildUserPrompt assembles the dynamic user prompt from the request
-// and the resolved DB context.
 func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string {
 	var b strings.Builder
 
@@ -154,9 +169,46 @@ func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string 
 	b.WriteString("Generate an event based on this prompt:\n")
 	b.WriteString(fmt.Sprintf("%q\n\n", req.Prompt))
 
+	// If the caller supplied a structured recurrence, pin it as a
+	// hard constraint. The AI must echo these exact values — the
+	// corrector will force them onto the draft regardless, but this
+	// instruction keeps the model aligned so the retry path doesn't
+	// have to fire on a mismatch.
+	if req.Recurrence != nil {
+		b.WriteString("HARD CONSTRAINT — the recurrence below is FIXED.\n")
+		b.WriteString("Set is_recurring = true and echo these exact values in the `recurrence` object.\n")
+		b.WriteString("Do NOT change the pattern, interval, days_of_week, day_of_month, week_of_month, ends_on, or occurrences.\n")
+		b.WriteString("    pattern:       " + req.Recurrence.Pattern + "\n")
+		if req.Recurrence.Interval > 0 {
+			b.WriteString(fmt.Sprintf("    interval:      %d\n", req.Recurrence.Interval))
+		}
+		if len(req.Recurrence.DaysOfWeek) > 0 {
+			b.WriteString(fmt.Sprintf(
+				"    days_of_week:  [%s]\n",
+				strings.Join(req.Recurrence.DaysOfWeek, ", "),
+			))
+		}
+		if req.Recurrence.DayOfMonth != nil {
+			b.WriteString(fmt.Sprintf(
+				"    day_of_month:  %d\n", *req.Recurrence.DayOfMonth))
+		}
+		if req.Recurrence.WeekOfMonth != nil && *req.Recurrence.WeekOfMonth != "" {
+			b.WriteString(fmt.Sprintf(
+				"    week_of_month: %s\n", *req.Recurrence.WeekOfMonth))
+		}
+		if req.Recurrence.EndsOn != nil && *req.Recurrence.EndsOn != "" {
+			b.WriteString(fmt.Sprintf(
+				"    ends_on:       %s\n", *req.Recurrence.EndsOn))
+		}
+		if req.Recurrence.Occurrences != nil {
+			b.WriteString(fmt.Sprintf(
+				"    occurrences:   %d\n", *req.Recurrence.Occurrences))
+		}
+		b.WriteString("\n")
+	}
+
 	b.WriteString("Context:\n")
 
-	// Event type
 	if pctx.EventType != nil {
 		b.WriteString(fmt.Sprintf(
 			"- Event type: %s (id: %s, min_duration: %d, max_duration: %d)\n",
@@ -167,7 +219,6 @@ func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string 
 		))
 	}
 
-	// Category
 	if pctx.Category != nil {
 		b.WriteString(fmt.Sprintf(
 			"- Category: %s (id: %s)\n",
@@ -176,7 +227,6 @@ func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string 
 		))
 	}
 
-	// Ticket types — use Slug (stable, human-readable) + DisplayName
 	b.WriteString("- Available ticket types:\n")
 	for _, tt := range pctx.TicketTypes {
 		b.WriteString(fmt.Sprintf(
@@ -185,7 +235,6 @@ func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string 
 		))
 	}
 
-	// Environment defaults
 	b.WriteString(fmt.Sprintf("- Language: %s\n", pctx.Language))
 	b.WriteString(fmt.Sprintf("- Timezone: %s\n", pctx.Timezone))
 	b.WriteString(fmt.Sprintf("- Currency: %s\n", pctx.Currency))
@@ -195,8 +244,6 @@ func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string 
 	return b.String()
 }
 
-// buildFixPrompt wraps the original user prompt with a list of
-// validation errors for the single retry attempt.
 func buildFixPrompt(originalPrompt string, errors []string) string {
 	var b strings.Builder
 
@@ -205,8 +252,19 @@ func buildFixPrompt(originalPrompt string, errors []string) string {
 		b.WriteString(fmt.Sprintf("- %s\n", e))
 	}
 
-	// Anchor the model to the current date so it doesn't keep guessing
-	// from its training cutoff.
+	// If any error mentions the description, spell out the fix.
+	for _, e := range errors {
+		if strings.Contains(strings.ToLower(e), "description") {
+			b.WriteString("\nThe description is too short. Expand it to AT LEAST 100 characters")
+			b.WriteString(" (aim for 150–300). Cover these points in order:\n")
+			b.WriteString("  1. What the event is and who it's for.\n")
+			b.WriteString("  2. The agenda — what will be covered or taught.\n")
+			b.WriteString("  3. What attendees will walk away with.\n")
+			b.WriteString("Write it as flowing prose, not a bulleted list.\n")
+			break
+		}
+	}
+
 	b.WriteString(fmt.Sprintf(
 		"\nToday is %s. All dates MUST be on or after this date.\n\n",
 		time.Now().UTC().Format("2006-01-02"),

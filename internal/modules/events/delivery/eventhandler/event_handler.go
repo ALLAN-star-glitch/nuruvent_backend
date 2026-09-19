@@ -1309,8 +1309,8 @@ func (h *EventHandler) GenerateEventDraft(c fiber.Ctx) error {
 		return response.Unauthorized(c, "User not authenticated", nil)
 	}
 
-	var req service.GenerateEventDraftRequest
-	if err := c.Bind().Body(&req); err != nil {
+	var body GenerateEventDraftRequest
+	if err := c.Bind().Body(&body); err != nil {
 		return response.BadRequest(c, "Invalid request body", fiber.Map{
 			"error": err.Error(),
 		})
@@ -1324,14 +1324,13 @@ func (h *EventHandler) GenerateEventDraft(c fiber.Ctx) error {
 		teamType = "personal"
 	}
 
-	req.CreatedBy = userID
-	req.TeamID = teamID
-	req.TeamType = teamType
-	req.AccountID = accountID
+	svcReq := ConvertGenerateEventDraftRequestToService(
+		body, userID, teamID, teamType, accountID,
+	)
 
 	ctx := handlerhelper.EnrichUserContext(c)
 
-	result, err := h.svc.GenerateEventDraft(ctx, req)
+	result, err := h.svc.GenerateEventDraft(ctx, svcReq)
 	if err != nil {
 		return mapGenerateEventDraftError(c, err)
 	}

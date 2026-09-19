@@ -319,3 +319,29 @@ func intPtr(i int) *int {
 	}
 	return &i
 }
+
+
+// ConvertGenerateEventDraftRequestToService maps the HTTP DTO into the
+// service-layer request. Scope fields are passed in from the handler.
+func ConvertGenerateEventDraftRequestToService(
+	req GenerateEventDraftRequest,
+	createdBy, teamID, teamType, accountID string,
+) service.GenerateEventDraftRequest {
+	return service.GenerateEventDraftRequest{
+		Prompt:        req.Prompt,
+		EventTypeID:   req.EventTypeID,
+		CategoryID:    req.CategoryID,
+		TicketTypeIDs: req.TicketTypeIDs,
+		Language:      req.Language,
+		Timezone:      req.Timezone,
+		Currency:      req.Currency,
+		MinCapacity:   req.MinCapacity,
+		MaxCapacity:   req.MaxCapacity,
+		Recurrence:    convertRecurrenceRequestToInput(req.Recurrence),
+
+		CreatedBy: createdBy,
+		TeamID:    teamID,
+		TeamType:  teamType,
+		AccountID: accountID,
+	}
+}

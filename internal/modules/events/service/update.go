@@ -252,16 +252,18 @@ func (s *eventService) applyBasicUpdates(event *domain.Event, cmd UpdateEventCom
 
 // applyScheduleUpdates applies schedule-related updates.
 //
-// convertSchedules parses date/time strings. If any of them is malformed,
-// the update fails loudly instead of silently keeping the previous
-// schedules — which would leave the event in an inconsistent state
-// between what the client submitted and what's stored.
+// IsRecurring is treated as the master switch for the recurrence block:
+//
+//   - nil   → leave the existing recurrence untouched
+//   - true  → apply the incoming RecurrenceRequest
+//   - false → clear every recurrence column
+//
+// Go's encoding/json collapses "field absent" and "field null" to the
+// same nil for *RecurrenceRequest, so we can't rely on the Recurrence
+// pointer alone to detect a clear. IsRecurring is the unambiguous signal.
 func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.Event, cmd UpdateEventCommand) error {
 	if cmd.IsMultiDay != nil {
 		event.IsMultiDay = *cmd.IsMultiDay
-	}
-	if cmd.IsRecurring != nil {
-		event.IsRecurring = *cmd.IsRecurring
 	}
 
 	if cmd.Schedules != nil {
@@ -272,10 +274,40 @@ func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.E
 		event.Schedules = schedules
 	}
 
-	if cmd.Recurrence != nil {
+	// Recurrence: IsRecurring is the master switch.
+	switch {
+	case cmd.IsRecurring != nil && !*cmd.IsRecurring:
+		// Explicitly off — clear every recurrence field so nothing
+		// stale survives into the publish-readiness check.
+		event.IsRecurring = false
+		event.RecurrencePatternID = nil
+		event.RecurrencePatternSlug = ""
+		event.RecurrenceInterval = 0
+		event.RecurrenceDaysOfWeek = nil
+		event.RecurrenceDayOfMonth = nil
+		event.RecurrenceWeekOfMonth = nil
+		event.RecurrenceEndsOn = nil
+		event.RecurrenceOccurrences = nil
+	
+
+	case cmd.IsRecurring != nil && *cmd.IsRecurring:
+		// Explicitly on — the recurrence block must be present.
+		if cmd.Recurrence == nil {
+			return errors.New("is_recurring is true but no recurrence block was provided")
+		}
+		event.IsRecurring = true
 		if err := s.applyRecurrence(ctx, event, cmd.Recurrence); err != nil {
 			return fmt.Errorf("invalid recurrence: %w", err)
 		}
+
+	case cmd.Recurrence != nil:
+		// Recurrence block present but no explicit flag — treat as "on"
+		// so older clients that don't send is_recurring still work.
+		event.IsRecurring = true
+		if err := s.applyRecurrence(ctx, event, cmd.Recurrence); err != nil {
+			return fmt.Errorf("invalid recurrence: %w", err)
+		}
+		
 	}
 
 	return nil

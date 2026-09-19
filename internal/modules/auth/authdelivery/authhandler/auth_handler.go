@@ -20,11 +20,13 @@ import (
 
 var validator = validation.New()
 
+
 // AuthHandler handles HTTP requests for auth
 type AuthHandler struct {
 	service service.Service
 	config  *config.Config
 }
+
 
 // NewAuthHandler creates a new auth handler
 func NewAuthHandler(

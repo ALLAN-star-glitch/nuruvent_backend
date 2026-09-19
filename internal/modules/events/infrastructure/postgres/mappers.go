@@ -14,132 +14,60 @@ import (
 // JSONB HELPER FUNCTIONS
 // ============================================================
 
-// toJSONB converts any value to JSONB
 func toJSONB(v interface{}) JSONB {
-	if v == nil {
-		return nil
-	}
-
-	// If it's already JSONB, return it
-	if j, ok := v.(JSONB); ok {
-		return j
-	}
-
-	// Convert map[string]string to JSONB
-	if m, ok := v.(map[string]string); ok {
-		if len(m) == 0 {
-			return nil
-		}
-		jsonb := make(JSONB)
-		for k, val := range m {
-			jsonb[k] = val
-		}
-		return jsonb
-	}
-
-	// Convert map[string]float64 to JSONB
-	if m, ok := v.(map[string]float64); ok {
-		if len(m) == 0 {
-			return nil
-		}
-		jsonb := make(JSONB)
-		for k, val := range m {
-			jsonb[k] = val
-		}
-		return jsonb
-	}
-
-	// Convert map[string]interface{} to JSONB
-	if m, ok := v.(map[string]interface{}); ok {
-		if len(m) == 0 {
-			return nil
-		}
-		return JSONB(m)
-	}
-
-	// Convert []string to proper JSON array
-	if s, ok := v.([]string); ok {
-		if len(s) == 0 {
-			return nil
-		}
-		data, err := json.Marshal(s)
-		if err != nil {
-			return nil
-		}
-		var result JSONB
-		if err := json.Unmarshal(data, &result); err != nil {
-			return nil
-		}
-		return result
-	}
-
-	// Try marshaling to JSON
-	data, err := json.Marshal(v)
-	if err != nil {
-		return nil
-	}
-
-	var result JSONB
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil
-	}
-	return result
+    if v == nil {
+        return nil
+    }
+    data, err := json.Marshal(v)
+    if err != nil || len(data) == 0 || string(data) == "null" {
+        return nil
+    }
+    return JSONB(data)
 }
 
-// fromJSONBToStringArray converts JSONB to []string
+
 func fromJSONBToStringArray(j JSONB) []string {
-	if j == nil {
-		return nil
-	}
-
-	result := make([]string, 0, len(j))
-	for _, v := range j {
-		if s, ok := v.(string); ok {
-			result = append(result, s)
-		}
-	}
-	return result
+    if len(j) == 0 {
+        return nil
+    }
+    var out []string
+    if err := json.Unmarshal(j, &out); err != nil {
+        return nil
+    }
+    return out
 }
 
-// fromJSONBToMapString converts JSONB to map[string]string
 func fromJSONBToMapString(j JSONB) map[string]string {
-	if j == nil {
-		return nil
-	}
-
-	result := make(map[string]string)
-	for k, v := range j {
-		if s, ok := v.(string); ok {
-			result[k] = s
-		}
-	}
-	return result
+    if len(j) == 0 {
+        return nil
+    }
+    var out map[string]string
+    if err := json.Unmarshal(j, &out); err != nil {
+        return nil
+    }
+    return out
 }
 
 func fromJSONBToMapFloat64(j JSONB) map[string]float64 {
-	if j == nil {
-		return nil
-	}
-
-	result := make(map[string]float64)
-	for k, v := range j {
-		switch val := v.(type) {
-		case float64:
-			result[k] = val
-		case int:
-			result[k] = float64(val)
-		case int64:
-			result[k] = float64(val)
-		}
-	}
-	return result
+    if len(j) == 0 {
+        return nil
+    }
+    var out map[string]float64
+    if err := json.Unmarshal(j, &out); err != nil {
+        return nil
+    }
+    return out
 }
 
 func fromJSONBToMapInterface(j JSONB) map[string]interface{} {
-	if j == nil {
-		return nil
-	}
-	return map[string]interface{}(j)
+    if len(j) == 0 {
+        return nil
+    }
+    var out map[string]interface{}
+    if err := json.Unmarshal(j, &out); err != nil {
+        return nil
+    }
+    return out
 }
 
 // ============================================================

@@ -124,18 +124,6 @@ func (s *eventService) GenerateEventDraft(
 // ATTEMPT — one full AI + parse + correct + validate cycle
 // ============================================================
 
-// attemptGenerate runs one full pipeline cycle:
-//
-//	AI call → parse JSON → apply corrections → check publish-readiness
-//
-// Returns:
-//   - draft: the parsed and corrected draft (may be non-nil even on retry error)
-//   - warnings: human-readable corrections applied
-//   - validationErrs: fields that would trigger a retry
-//   - hardErr: a genuine parse/provider failure that should NOT be retried
-//
-// hardErr and validationErrs are mutually exclusive. If hardErr is nil,
-// validationErrs tells you whether to retry.
 func (s *eventService) attemptGenerate(
 	ctx context.Context,
 	systemPrompt, userPrompt string,
@@ -256,10 +244,11 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 		errs = append(errs, "name must be at least 3 characters")
 	}
 
-	// Description.
+	// Description — the retry prompt in ai_prompts.go detects this
+	// error string and injects explicit expansion guidance.
 	if len(strings.TrimSpace(d.Description)) < 100 {
 		errs = append(errs, fmt.Sprintf(
-			"description must be at least 100 characters (got %d)",
+			"description is %d characters — minimum is 100; expand with the agenda, target audience, and outcomes",
 			len(strings.TrimSpace(d.Description))))
 	}
 
@@ -281,6 +270,43 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 			if start.Before(now) {
 				errs = append(errs, fmt.Sprintf(
 					"schedule %d start_date is in the past", i+1))
+			}
+		}
+	}
+
+	// Recurrence — if the AI said the event repeats, the block must
+	// be structurally valid. Invalid recurrence triggers a retry.
+	if d.IsRecurring {
+		if d.Recurrence == nil {
+			errs = append(errs, "is_recurring is true but recurrence block is missing")
+		} else {
+			switch d.Recurrence.Pattern {
+			case "weekly", "custom":
+				if len(d.Recurrence.DaysOfWeek) == 0 {
+					errs = append(errs, "weekly/custom recurrence requires days_of_week")
+				}
+				for _, day := range d.Recurrence.DaysOfWeek {
+					if !isValidFullWeekday(day) {
+						errs = append(errs, fmt.Sprintf(
+							"invalid weekday %q — use full lowercase name (\"monday\", not \"mon\")",
+							day))
+					}
+				}
+			case "monthly":
+				hasDay := d.Recurrence.DayOfMonth != nil
+				hasWeek := d.Recurrence.WeekOfMonth != nil && *d.Recurrence.WeekOfMonth != ""
+				if !hasDay && !hasWeek {
+					errs = append(errs, "monthly recurrence requires day_of_month or week_of_month")
+				}
+			case "daily":
+				// no additional requirement
+			default:
+				errs = append(errs, fmt.Sprintf(
+					"invalid recurrence pattern %q", d.Recurrence.Pattern))
+			}
+
+			if d.Recurrence.EndsOn == nil && d.Recurrence.Occurrences == nil {
+				errs = append(errs, "recurrence requires ends_on or occurrences")
 			}
 		}
 	}

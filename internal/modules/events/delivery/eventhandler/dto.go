@@ -666,3 +666,20 @@ type MediaInfoResponse struct {
 	UploadedBy string `json:"uploaded_by"`
 	CreatedAt  string `json:"created_at"`
 }
+
+// GenerateEventDraftRequest - AI draft generation request body.
+// Scope fields (created_by, team_id, team_type, account_id) are set by
+// the handler from the auth context, never from the body.
+type GenerateEventDraftRequest struct {
+	Prompt        string   `json:"prompt" binding:"required"`
+	EventTypeID   string   `json:"event_type_id" binding:"required"`
+	CategoryID    *string  `json:"category_id,omitempty"`
+	TicketTypeIDs []string `json:"ticket_type_ids" binding:"required"`
+	Language      string   `json:"language,omitempty"`
+	Timezone      string   `json:"timezone,omitempty"`
+	Currency      string   `json:"currency,omitempty"`
+	MinCapacity   int      `json:"min_capacity,omitempty"`
+	MaxCapacity   int      `json:"max_capacity,omitempty"`
+
+	Recurrence *RecurrenceRequest `json:"recurrence,omitempty"`
+}

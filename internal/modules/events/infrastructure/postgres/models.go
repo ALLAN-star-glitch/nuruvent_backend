@@ -4,7 +4,6 @@ package postgres
 
 import (
 	"database/sql/driver"
-	"encoding/json"
 	"time"
 
 	"gorm.io/gorm"
@@ -13,32 +12,39 @@ import (
 // ============================================================
 // JSONB TYPE FOR GORM
 // ============================================================
+//
+// JSONB stores a raw JSON payload as a byte slice. It handles any
+// JSON shape — objects, arrays, primitives, null — because the
+// serializer doesn't try to coerce the data into a Go map.
+//
+// This replaces an earlier `map[string]any` implementation that
+// silently dropped arrays and non-object values. json.Unmarshal
+// of `["a","b"]` into `map[string]any` fails, so the previous
+// Value() returned nil for any list-shaped payload — the DB
+// stored NULL for RecurrenceDaysOfWeek, Tags, InvitedEmails, etc.
+type JSONB []byte
 
-// Defines JSONB as a map with string keys and any value type
-// Can store any JSON structure: objects, arrays, nested data
-type JSONB map[string]any
-
-// Value implements the driver.Valuer interface for JSONB
-// Purpose: Converts Go data → Database value (when INSERTING/UPDATEING)
+// Value implements driver.Valuer.
 func (j JSONB) Value() (driver.Value, error) {
-	if j == nil {
+	if len(j) == 0 {
 		return nil, nil
 	}
-	return json.Marshal(j)
+	return []byte(j), nil
 }
 
-// Scan implements the sql.Scanner interface for JSONB
-// Purpose: Converts Database value → Go data (when SELECTING)
+// Scan implements sql.Scanner.
 func (j *JSONB) Scan(value any) error {
 	if value == nil {
 		*j = nil
 		return nil
 	}
-	bytes, ok := value.([]byte)
-	if !ok {
-		return nil
+	switch v := value.(type) {
+	case []byte:
+		*j = v
+	case string:
+		*j = []byte(v)
 	}
-	return json.Unmarshal(bytes, j)
+	return nil
 }
 
 // ============================================================
@@ -55,22 +61,22 @@ type EventModel struct {
 	DisplayName      string
 	Description      string
 	ShortDescription string
-	Tags             JSONB `gorm:"type:jsonb;default:'[]'"`
-	Language         string   `gorm:"default:'en'"`
+	Tags             JSONB  `gorm:"type:jsonb;default:'[]'"`
+	Language         string `gorm:"default:'en'"`
 
 	// ============================================================
 	// Relations (Seeded Lookup Data)
 	// ============================================================
-	EventTypeID          string  `gorm:"index"`
-	EventStatusID        string  `gorm:"index"`
-	CategoryID           *string `gorm:"index"`
-	EventFormatID        *string `gorm:"index"`
+	EventTypeID           string  `gorm:"index"`
+	EventStatusID         string  `gorm:"index"`
+	CategoryID            *string `gorm:"index"`
+	EventFormatID         *string `gorm:"index"`
 	CertificateTemplateID *string `gorm:"index"`
 
 	// ============================================================
 	// Ownership
 	// ============================================================
-	TeamID    string `gorm:"index;not null"` // Team ID this event belongs to
+	TeamID    string `gorm:"index;not null"`
 	CreatedBy string `gorm:"index"`
 
 	// ============================================================
@@ -82,11 +88,11 @@ type EventModel struct {
 	IsRecurring bool `gorm:"index"`
 
 	// Recurrence
-	RecurrencePatternID   *string  `gorm:"index"`
-	RecurrenceInterval    int      `gorm:"default:1"`
+	RecurrencePatternID   *string `gorm:"index"`
+	RecurrenceInterval    int     `gorm:"default:1"`
 	RecurrenceEndsOn      *time.Time
 	RecurrenceOccurrences *int
-	RecurrenceDaysOfWeek  JSONB    `gorm:"type:jsonb;default:'[]'"`
+	RecurrenceDaysOfWeek  JSONB `gorm:"type:jsonb;default:'[]'"`
 	RecurrenceDayOfMonth  *int
 	RecurrenceWeekOfMonth *string
 
@@ -120,33 +126,33 @@ type EventModel struct {
 	// ============================================================
 	// Access & Privacy
 	// ============================================================
-	Visibility          string   `gorm:"default:'public';index"`
+	Visibility          string `gorm:"default:'public';index"`
 	Password            *string
-	InviteOnly          bool     `gorm:"index"`
-	InvitedEmails       JSONB    `gorm:"type:jsonb;default:'[]'"`
+	InviteOnly          bool  `gorm:"index"`
+	InvitedEmails       JSONB `gorm:"type:jsonb;default:'[]'"`
 	RequiresApproval    bool
-	ApprovalRequiredFor JSONB    `gorm:"type:jsonb;default:'[]'"`
+	ApprovalRequiredFor JSONB `gorm:"type:jsonb;default:'[]'"`
 
 	// ============================================================
 	// Monetization & Add-ons
 	// ============================================================
-	IsFeatured          bool       `gorm:"default:false;index"`
-	FeaturedUntil       *time.Time `gorm:"index"`
-	CertificateEnabled  bool       `gorm:"index"`
-	CertificatePrice    float64
+	IsFeatured                  bool       `gorm:"default:false;index"`
+	FeaturedUntil               *time.Time `gorm:"index"`
+	CertificateEnabled          bool       `gorm:"index"`
+	CertificatePrice            float64
 	EarlyBirdDiscountPercentage *int
-	GroupDiscountPercentage *int
-	GroupMinAttendees   *int
+	GroupDiscountPercentage     *int
+	GroupMinAttendees           *int
 
 	// ============================================================
 	// SEO & Marketing
 	// ============================================================
 	SEOTitle        string
 	SEODescription  string
-	SEOKeywords     JSONB    `gorm:"type:jsonb;default:'[]'"`
+	SEOKeywords     JSONB `gorm:"type:jsonb;default:'[]'"`
 	SEOCanonicalURL string
 	SEORobots       string
-	SEONoIndex      bool     `gorm:"index"`
+	SEONoIndex      bool `gorm:"index"`
 
 	OGTitle       string
 	OGDescription string
@@ -178,8 +184,8 @@ type EventModel struct {
 	// ============================================================
 	// Metadata & Versioning
 	// ============================================================
-	Metadata           JSONB `gorm:"type:jsonb;default:'{}'"`
-	Version            int   `gorm:"default:1;index"`
+	Metadata           JSONB      `gorm:"type:jsonb;default:'{}'"`
+	Version            int        `gorm:"default:1;index"`
 	PublishedAt        *time.Time `gorm:"index"`
 	ScheduledPublishAt *time.Time `gorm:"index"`
 	LastPublishedAt    *time.Time
@@ -187,7 +193,7 @@ type EventModel struct {
 	// ============================================================
 	// Audit Fields
 	// ============================================================
-	IsActive  bool      `gorm:"default:true;index"`
+	IsActive  bool           `gorm:"default:true;index"`
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
@@ -200,12 +206,12 @@ type EventModel struct {
 	// ============================================================
 	// Creator Info (populated via JOIN for display purposes only)
 	// ============================================================
-	CreatorName          string `gorm:"-"`
-	CreatorDisplayName   string `gorm:"-"`
-	CreatorEmail         string `gorm:"-"`
-	CreatorPhone         string `gorm:"-"`
-	CreatorAccountType   string `gorm:"-"`
-	CreatorAccountName   string `gorm:"-"`
+	CreatorName        string `gorm:"-"`
+	CreatorDisplayName string `gorm:"-"`
+	CreatorEmail       string `gorm:"-"`
+	CreatorPhone       string `gorm:"-"`
+	CreatorAccountType string `gorm:"-"`
+	CreatorAccountName string `gorm:"-"`
 }
 
 func (EventModel) TableName() string {
@@ -245,22 +251,22 @@ func (EventScheduleModel) TableName() string {
 // ============================================================
 
 type EventTicketModel struct {
-	ID                 string         `gorm:"primaryKey;default:gen_random_uuid()"`
-	EventID            string         `gorm:"index;not null"`
-	TicketTypeID       string         `gorm:"index;not null"`
-	Name               string         `gorm:"not null"`
-	Description        string
-	Price              float64        `gorm:"not null;default:0"`
-	Quantity           int            `gorm:"not null;default:0"`
-	MaxPerPerson       *int
-	EarlyBirdDeadline  *time.Time
-	GroupMinAttendees  *int
-	GroupDiscount      *float64
-	SortOrder          int            `gorm:"default:0"`
-	IsActive           bool           `gorm:"default:true"`
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	DeletedAt          gorm.DeletedAt `gorm:"index"`
+	ID                string         `gorm:"primaryKey;default:gen_random_uuid()"`
+	EventID           string         `gorm:"index;not null"`
+	TicketTypeID      string         `gorm:"index;not null"`
+	Name              string         `gorm:"not null"`
+	Description       string
+	Price             float64        `gorm:"not null;default:0"`
+	Quantity          int            `gorm:"not null;default:0"`
+	MaxPerPerson      *int
+	EarlyBirdDeadline *time.Time
+	GroupMinAttendees *int
+	GroupDiscount     *float64
+	SortOrder         int            `gorm:"default:0"`
+	IsActive          bool           `gorm:"default:true"`
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DeletedAt         gorm.DeletedAt `gorm:"index"`
 }
 
 func (EventTicketModel) TableName() string {
@@ -319,21 +325,21 @@ func (EventMaterialModel) TableName() string {
 // ============================================================
 
 type EventTypeModel struct {
-	ID          string `gorm:"primaryKey;default:gen_random_uuid()"`
-	Slug        string `gorm:"uniqueIndex;not null"`
-	Name        string `gorm:"not null"`
-	DisplayName string
-	Description string
-	Icon        string
-	Color       string
-	SortOrder   int `gorm:"default:0"`
+	ID                  string `gorm:"primaryKey;default:gen_random_uuid()"`
+	Slug                string `gorm:"uniqueIndex;not null"`
+	Name                string `gorm:"not null"`
+	DisplayName         string
+	Description         string
+	Icon                string
+	Color               string
+	SortOrder           int  `gorm:"default:0"`
 	SupportsCertificate bool `gorm:"default:true"`
-	MinDuration int `gorm:"default:60"`
-	MaxDuration int `gorm:"default:480"`
-	IsActive    bool `gorm:"default:true"`
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
+	MinDuration         int  `gorm:"default:60"`
+	MaxDuration         int  `gorm:"default:480"`
+	IsActive            bool `gorm:"default:true"`
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	DeletedAt           gorm.DeletedAt `gorm:"index"`
 }
 
 func (EventTypeModel) TableName() string {
@@ -352,7 +358,7 @@ type EventStatusModel struct {
 	Description string
 	Color       string
 	Icon        string
-	SortOrder   int `gorm:"default:0"`
+	SortOrder   int  `gorm:"default:0"`
 	IsFinal     bool `gorm:"default:false"`
 	IsActive    bool `gorm:"default:true"`
 	CreatedAt   time.Time
@@ -363,9 +369,6 @@ type EventStatusModel struct {
 func (EventStatusModel) TableName() string {
 	return "event_statuses"
 }
-
-
-
 
 // ============================================================
 // EVENT FORMAT MODEL
@@ -400,7 +403,7 @@ type CategoryModel struct {
 	Description string
 	Icon        string
 	Color       string
-	SortOrder   int `gorm:"default:0"`
+	SortOrder   int  `gorm:"default:0"`
 	IsActive    bool `gorm:"default:true"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -502,7 +505,7 @@ type TicketTypeModel struct {
 	Name        string `gorm:"not null"`
 	DisplayName string
 	Description string
-	SortOrder   int `gorm:"default:0"`
+	SortOrder   int  `gorm:"default:0"`
 	IsActive    bool `gorm:"default:true"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -518,15 +521,15 @@ func (TicketTypeModel) TableName() string {
 // ============================================================
 
 type UserModel struct {
-	ID            string         `gorm:"primaryKey"`
+	ID            string  `gorm:"primaryKey"`
 	Name          string
 	DisplayName   string
 	Email         string
 	Phone         string
-	AccountTypeID string         `gorm:"index"`
-	AccountID     *string        `gorm:"index"`
-	AccountName   string         `gorm:"-"`
-	IsActive      bool           `gorm:"default:true"`
+	AccountTypeID string  `gorm:"index"`
+	AccountID     *string `gorm:"index"`
+	AccountName   string  `gorm:"-"`
+	IsActive      bool    `gorm:"default:true"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	DeletedAt     gorm.DeletedAt `gorm:"index"`
@@ -541,14 +544,14 @@ func (UserModel) TableName() string {
 // ============================================================
 
 type AccountModel struct {
-	ID          string         `gorm:"primaryKey"`
+	ID          string `gorm:"primaryKey"`
 	Name        string
 	DisplayName string
 	Slug        string
-	Type        string         `gorm:"index"` // "personal" or "institution"
+	Type        string `gorm:"index"`
 	Email       string
 	Phone       string
-	IsActive    bool           `gorm:"default:true"`
+	IsActive    bool `gorm:"default:true"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
@@ -563,12 +566,12 @@ func (AccountModel) TableName() string {
 // ============================================================
 
 type AccountTypeModel struct {
-	ID          string         `gorm:"primaryKey"`
-	Slug        string         `gorm:"uniqueIndex;not null"`
-	Name        string         `gorm:"not null"`
+	ID          string `gorm:"primaryKey"`
+	Slug        string `gorm:"uniqueIndex;not null"`
+	Name        string `gorm:"not null"`
 	DisplayName string
 	Description string
-	IsActive    bool           `gorm:"default:true"`
+	IsActive    bool `gorm:"default:true"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
@@ -583,15 +586,15 @@ func (AccountTypeModel) TableName() string {
 // ============================================================
 
 type TeamModel struct {
-	ID          string         `gorm:"primaryKey"`
-	AccountID   string         `gorm:"index;not null"`
-	Name        string         `gorm:"not null"`
+	ID          string `gorm:"primaryKey"`
+	AccountID   string `gorm:"index;not null"`
+	Name        string `gorm:"not null"`
 	DisplayName string
-	Slug        string         `gorm:"uniqueIndex;not null"`
-	Type        string         `gorm:"index"` // "personal" or "institution"
+	Slug        string `gorm:"uniqueIndex;not null"`
+	Type        string `gorm:"index"`
 	Description string
 	LogoURL     string
-	IsActive    bool           `gorm:"default:true"`
+	IsActive    bool `gorm:"default:true"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   gorm.DeletedAt `gorm:"index"`

@@ -15,6 +15,7 @@ type AuthAdapter struct {
 	authSvc authService.Service
 }
 
+
 // NewAuthAdapter creates a new auth adapter for the account module
 func NewAuthAdapter(authSvc authService.Service) service.AuthService {
 	return &AuthAdapter{
