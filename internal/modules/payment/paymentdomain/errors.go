@@ -144,4 +144,8 @@ var (
 	// ErrNotAuthorized is returned when an actor lacks permission for
 	// an action regardless of ownership.
 	ErrNotAuthorized = errors.New("actor is not authorized for this action")
+
+
+
+	ErrPricingMismatch = errors.New("pricing mismatch")
 )
