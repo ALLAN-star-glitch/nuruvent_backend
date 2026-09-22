@@ -74,6 +74,7 @@ type PaymentProvider interface {
 // ============================================================
 
 // InitiateRequest is the input to Initiate.
+// InitiateRequest is the input to Initiate.
 type InitiateRequest struct {
 	// PaymentID is our internal ID. Some providers echo it back in
 	// webhooks, which helps reconciliation.
@@ -90,6 +91,11 @@ type InitiateRequest struct {
 	// currency ignore it; multi-currency providers require it.
 	Currency string
 
+	// Method is the payment method the user chose. Required when a
+	// provider serves more than one method (e.g. Flutterwave serves
+	// both M-Pesa and card).
+	Method PaymentMethod
+
 	// PayerPhone is required for M-Pesa. Format should be normalized
 	// before calling (e.g. 254712345678, no +).
 	PayerPhone string
@@ -97,9 +103,18 @@ type InitiateRequest struct {
 	// PayerEmail is required for card processors.
 	PayerEmail string
 
+	// Card carries card details when Method is PaymentMethodCard.
+	// Nil for M-Pesa and other non-card methods.
+	//
+	// SECURITY: the values in this struct must never be logged,
+	// persisted, or returned to clients. They exist only to be
+	// encrypted and forwarded to the provider.
+	Card *CardDetails
+
 	// IdempotencyKey is client-supplied. Providers that support
-	// idempotency (Stripe) use it directly. Providers that don't
-	// (M-Pesa) ignore it — our own deduplication handles retries.
+	// idempotency (Stripe, Flutterwave v4) use it directly. Providers
+	// that don't (M-Pesa) ignore it — our own deduplication handles
+	// retries.
 	IdempotencyKey string
 
 	// Description is a short string shown to the user in the
@@ -109,6 +124,29 @@ type InitiateRequest struct {
 	// ReturnURL is where the provider redirects after payment.
 	// Set for card providers; ignored by M-Pesa.
 	ReturnURL string
+}
+
+
+// CardDetails carries raw card information for card charges.
+//
+// SECURITY: this struct holds PCI-sensitive data. Handle it carefully:
+//   - Never log these values, even at debug level
+//   - Never persist them (no DB column, no file, no cache)
+//   - Never return them in an API response
+//   - Zero them out as soon as the request completes
+//
+// The provider is responsible for encrypting these values before
+// sending them to the payment gateway.
+type CardDetails struct {
+	// Number is the card PAN (Primary Account Number), digits only,
+	// no spaces or dashes.
+	Number string
+
+	// CVV is the 3- or 4-digit security code.
+	CVV string
+
+	// Expiry is the card expiry in "MM/YY" format.
+	Expiry string
 }
 
 // InitiateResult describes how the caller should complete the payment.
