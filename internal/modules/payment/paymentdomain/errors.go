@@ -115,6 +115,8 @@ var (
 	// parsed.
 	ErrMalformedWebhook = errors.New("malformed webhook payload")
 
+	ErrWebhookEventNotFound    = errors.New("webhook event not found") 
+
 	// ============================================================
 	// DOMAIN-LEVEL
 	// ============================================================
