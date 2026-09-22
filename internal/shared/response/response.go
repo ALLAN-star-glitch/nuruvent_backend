@@ -96,3 +96,16 @@ func InternalError(c fiber.Ctx, message string, errors any) error {
 		Errors:  errors,
 	})
 }
+
+// In pkg/response/response.go
+func BadGateway(c fiber.Ctx, message string, errors any) error {
+	return c.Status(fiber.StatusBadGateway).JSON(BaseResponse{
+		Success: false, Message: message, Errors: errors,
+	})
+}
+
+func ServiceUnavailable(c fiber.Ctx, message string, errors any) error {
+	return c.Status(fiber.StatusServiceUnavailable).JSON(BaseResponse{
+		Success: false, Message: message, Errors: errors,
+	})
+}

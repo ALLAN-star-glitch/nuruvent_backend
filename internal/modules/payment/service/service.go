@@ -18,6 +18,7 @@ import (
 type Service interface {
 	InitiatePayment(ctx context.Context, cmd InitiateCommand) (*paymentdomain.Payment, error)
 	ConfirmPayment(ctx context.Context, paymentID string) error
+	GetPayment(ctx context.Context, paymentID string) (*paymentdomain.Payment, error)
 	FailPayment(ctx context.Context, paymentID, reason string) error
 	Refund(ctx context.Context, cmd RefundCommand) error
 	HandleWebhook(
