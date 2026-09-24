@@ -17,6 +17,8 @@ type RegistrationRepository interface {
     FindByID(ctx context.Context, id string) (*Registration, error)
     FindActiveByUserAndEvent(ctx context.Context, userID, eventID string) (*Registration, error)
 
+     
+
     WithTx(
         ctx context.Context,
         fn func(
@@ -34,6 +36,7 @@ type EventRegistrationRepository interface {
     FindByID(ctx context.Context, id string) (*EventRegistration, error)
     ListByEvent(ctx context.Context, eventID string, f ListFilter) ([]*EventRegistration, int, error)
     ListByUser(ctx context.Context, userID string, f ListFilter) ([]*EventRegistration, int, error)
+    Deactivate(ctx context.Context, registrationID string) error
 }
 
 // WaitlistRepository persists waitlist entries.

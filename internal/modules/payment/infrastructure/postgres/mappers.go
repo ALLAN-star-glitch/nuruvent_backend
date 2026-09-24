@@ -133,6 +133,7 @@ func toPaymentDomain(m *PaymentModel) (*paymentdomain.Payment, error) {
 		status,
 		m.IdempotencyKey,
 		derefString(m.ProviderReference),
+		m.RedirectURL,
 		derefString(m.FailureReason),
 		m.InitiatedAt,
 		m.CompletedAt,
@@ -154,6 +155,7 @@ func toPaymentModel(p *paymentdomain.Payment) *PaymentModel {
 		Status:            string(p.Status),
 		IdempotencyKey:    p.IdempotencyKey,
 		ProviderReference: nullableString(p.ProviderReference),
+		RedirectURL: p.RedirectURL,
 		FailureReason:     nullableString(p.FailureReason),
 		InitiatedAt:       p.InitiatedAt,
 		ExpiresAt:         p.ExpiresAt,
@@ -161,6 +163,7 @@ func toPaymentModel(p *paymentdomain.Payment) *PaymentModel {
 		FailedAt:          p.FailedAt,
 		CreatedAt:         p.CreatedAt,
 		UpdatedAt:         p.UpdatedAt,
+
 	}
 }
 

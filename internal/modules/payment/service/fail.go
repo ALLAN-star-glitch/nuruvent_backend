@@ -28,6 +28,7 @@ func (s *service) FailPayment(ctx context.Context, paymentID, reason string) err
 		return nil
 	}
 
+	
 	if err := payment.MarkFailed(reason, now); err != nil {
 		return err
 	}

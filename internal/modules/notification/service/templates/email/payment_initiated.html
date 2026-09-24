@@ -1,0 +1,30 @@
+{{define "payment-initiated"}}
+<h1 class="title">Complete Your <span class="highlight">Payment</span></h1>
+<p class="subtitle">One step left to secure your spot</p>
+
+<p class="greeting">Hello <span class="name">{{.name}}</span>,</p>
+<p class="body-text">
+    Your payment of <span class="highlight">{{.amount}} {{.currency}}</span> has been initiated via <span class="highlight">{{.provider}}</span>.
+</p>
+
+<div class="alert-info">
+    <p>{{.customer_msg}}</p>
+</div>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">Amount</span>
+        <span class="value">{{.amount}} {{.currency}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Method</span>
+        <span class="value">{{.method}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Reference</span>
+        <span class="value">{{.payment_id}}</span>
+    </div>
+</div>
+
+<p class="body-text text-muted text-center">Once your payment is confirmed, we'll send you another email with your registration details.</p>
+{{end}}

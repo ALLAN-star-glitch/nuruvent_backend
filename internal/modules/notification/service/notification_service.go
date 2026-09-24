@@ -786,4 +786,293 @@ func (s *notificationService) sendTeamInviteDeclinedSync(ctx context.Context, re
 	}
 
 	return ch.Send(ctx, channelReq)
+
+
+
+	
+}
+
+// ============================================================
+// PAYMENT NOTIFICATION METHODS
+// ============================================================
+
+// SendPaymentInitiated notifies the payer that a payment has been
+// started and requires their action (e.g. "enter your M-Pesa PIN").
+func (s *notificationService) SendPaymentInitiated(ctx context.Context, req notificationdomain.SendPaymentInitiatedRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.PaymentInitiatedTask{
+			To:          req.To,
+			Name:        req.Name,
+			Amount:      req.Amount,
+			Currency:    req.Currency,
+			Provider:    req.Provider,
+			Method:      req.Method,
+			CustomerMsg: req.CustomerMsg,
+			PaymentID:   req.PaymentID,
+			OrderID:     req.OrderID,
+		}
+		if err := s.taskEnqueuer.EnqueuePaymentInitiated(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue payment initiated task: %v, falling back to sync", err)
+			return s.sendPaymentInitiatedSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendPaymentInitiatedSync(ctx, req)
+}
+
+func (s *notificationService) sendPaymentInitiatedSync(ctx context.Context, req notificationdomain.SendPaymentInitiatedRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Complete Your Payment - Nuruvent",
+		Type:    notificationdomain.TypePaymentInitiated,
+		Meta: map[string]string{
+			"name":         req.Name,
+			"amount":       formatAmount(req.Amount),
+			"currency":     req.Currency,
+			"provider":     req.Provider,
+			"method":       req.Method,
+			"customer_msg": req.CustomerMsg,
+			"payment_id":   req.PaymentID,
+			"order_id":     req.OrderID,
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// SendPaymentSucceeded notifies the payer that a payment completed.
+func (s *notificationService) SendPaymentSucceeded(ctx context.Context, req notificationdomain.SendPaymentSucceededRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.PaymentSucceededTask{
+			To:                req.To,
+			Name:              req.Name,
+			Amount:            req.Amount,
+			Currency:          req.Currency,
+			Provider:          req.Provider,
+			Method:            req.Method,
+			ProviderReference: req.ProviderReference,
+			PaymentID:         req.PaymentID,
+			OrderID:           req.OrderID,
+			RegistrationID:    req.RegistrationID,
+		}
+		if err := s.taskEnqueuer.EnqueuePaymentSucceeded(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue payment succeeded task: %v, falling back to sync", err)
+			return s.sendPaymentSucceededSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendPaymentSucceededSync(ctx, req)
+}
+
+func (s *notificationService) sendPaymentSucceededSync(ctx context.Context, req notificationdomain.SendPaymentSucceededRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Payment Received - Nuruvent",
+		Type:    notificationdomain.TypePaymentSucceeded,
+		Meta: map[string]string{
+			"name":               req.Name,
+			"amount":             formatAmount(req.Amount),
+			"currency":           req.Currency,
+			"provider":           req.Provider,
+			"method":             req.Method,
+			"provider_reference": req.ProviderReference,
+			"payment_id":         req.PaymentID,
+			"order_id":           req.OrderID,
+			"registration_id":    req.RegistrationID,
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// SendPaymentFailed notifies the payer that a payment attempt failed.
+func (s *notificationService) SendPaymentFailed(ctx context.Context, req notificationdomain.SendPaymentFailedRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.PaymentFailedTask{
+			To:            req.To,
+			Name:          req.Name,
+			Amount:        req.Amount,
+			Currency:      req.Currency,
+			Provider:      req.Provider,
+			Method:        req.Method,
+			FailureReason: req.FailureReason,
+			PaymentID:     req.PaymentID,
+			OrderID:       req.OrderID,
+		}
+		if err := s.taskEnqueuer.EnqueuePaymentFailed(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue payment failed task: %v, falling back to sync", err)
+			return s.sendPaymentFailedSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendPaymentFailedSync(ctx, req)
+}
+
+func (s *notificationService) sendPaymentFailedSync(ctx context.Context, req notificationdomain.SendPaymentFailedRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Payment Failed - Nuruvent",
+		Type:    notificationdomain.TypePaymentFailed,
+		Meta: map[string]string{
+			"name":           req.Name,
+			"amount":         formatAmount(req.Amount),
+			"currency":       req.Currency,
+			"provider":       req.Provider,
+			"method":         req.Method,
+			"failure_reason": req.FailureReason,
+			"payment_id":     req.PaymentID,
+			"order_id":       req.OrderID,
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// SendPaymentExpired notifies the payer that a pending payment window
+// elapsed without success.
+func (s *notificationService) SendPaymentExpired(ctx context.Context, req notificationdomain.SendPaymentExpiredRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.PaymentExpiredTask{
+			To:        req.To,
+			Name:      req.Name,
+			Amount:    req.Amount,
+			Currency:  req.Currency,
+			Provider:  req.Provider,
+			Method:    req.Method,
+			PaymentID: req.PaymentID,
+			OrderID:   req.OrderID,
+		}
+		if err := s.taskEnqueuer.EnqueuePaymentExpired(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue payment expired task: %v, falling back to sync", err)
+			return s.sendPaymentExpiredSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendPaymentExpiredSync(ctx, req)
+}
+
+func (s *notificationService) sendPaymentExpiredSync(ctx context.Context, req notificationdomain.SendPaymentExpiredRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Payment Window Expired - Nuruvent",
+		Type:    notificationdomain.TypePaymentExpired,
+		Meta: map[string]string{
+			"name":       req.Name,
+			"amount":     formatAmount(req.Amount),
+			"currency":   req.Currency,
+			"provider":   req.Provider,
+			"method":     req.Method,
+			"payment_id": req.PaymentID,
+			"order_id":   req.OrderID,
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// SendRefundIssued notifies the payer that a refund has been processed.
+func (s *notificationService) SendRefundIssued(ctx context.Context, req notificationdomain.SendRefundIssuedRequest) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.RefundIssuedTask{
+			To:                req.To,
+			Name:              req.Name,
+			Amount:            req.Amount,
+			Currency:          req.Currency,
+			OriginalAmount:    req.OriginalAmount,
+			ProviderReference: req.ProviderReference,
+			Reason:            req.Reason,
+			PaymentID:         req.PaymentID,
+			RefundID:          req.RefundID,
+			IsPartial:         req.IsPartial,
+		}
+		if err := s.taskEnqueuer.EnqueueRefundIssued(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue refund issued task: %v, falling back to sync", err)
+			return s.sendRefundIssuedSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendRefundIssuedSync(ctx, req)
+}
+
+func (s *notificationService) sendRefundIssuedSync(ctx context.Context, req notificationdomain.SendRefundIssuedRequest) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	isPartial := "false"
+	if req.IsPartial {
+		isPartial = "true"
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Refund Processed - Nuruvent",
+		Type:    notificationdomain.TypeRefundIssued,
+		Meta: map[string]string{
+			"name":               req.Name,
+			"amount":             formatAmount(req.Amount),
+			"currency":           req.Currency,
+			"original_amount":    formatAmount(req.OriginalAmount),
+			"provider_reference": req.ProviderReference,
+			"reason":             req.Reason,
+			"payment_id":         req.PaymentID,
+			"refund_id":          req.RefundID,
+			"is_partial":         isPartial,
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// formatAmount converts minor units (int64) to a display string.
+// Example: 150000 → "1,500.00"
+func formatAmount(minor int64) string {
+	major := float64(minor) / 100.0
+	return fmt.Sprintf("%.2f", major)
 }

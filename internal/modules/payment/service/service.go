@@ -16,17 +16,17 @@ import (
 
 // Service is the application-layer interface for the payment module.
 type Service interface {
+	// Order
+	CreateOrder(ctx context.Context, cmd CreateOrderCommand) (*paymentdomain.Order, error)
+	GetOrder(ctx context.Context, orderID string) (*paymentdomain.Order, error)
+
+	// Payment
 	InitiatePayment(ctx context.Context, cmd InitiateCommand) (*paymentdomain.Payment, error)
 	ConfirmPayment(ctx context.Context, paymentID string) error
 	GetPayment(ctx context.Context, paymentID string) (*paymentdomain.Payment, error)
 	FailPayment(ctx context.Context, paymentID, reason string) error
 	Refund(ctx context.Context, cmd RefundCommand) error
-	HandleWebhook(
-		ctx context.Context,
-		provider string,
-		payload []byte,
-		headers map[string]string,
-	) error
+	HandleWebhook(ctx context.Context, provider string, payload []byte, headers map[string]string) error
 }
 
 // ============================================================
@@ -47,11 +47,12 @@ type Dependencies struct {
 	UnitOfWork paymentdomain.UnitOfWork
 
 	// Cross-module
-	Registrations paymentdomain.RegistrationConfirmer
+	Registrations       paymentdomain.RegistrationConfirmer
+	RegistrationPricing paymentdomain.RegistrationPricingResolver   // ← add
 
 	// Utilities
-	IDGenerator id.Generator  // ← from shared
-	Clock       Clock         // ← stays local
+	IDGenerator id.Generator
+	Clock       Clock
 }
 
 // ============================================================

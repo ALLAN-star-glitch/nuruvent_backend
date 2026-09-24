@@ -267,6 +267,8 @@ type EventTicketModel struct {
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	DeletedAt         gorm.DeletedAt `gorm:"index"`
+
+	TicketType *TicketTypeModel `gorm:"foreignKey:TicketTypeID"`
 }
 
 func (EventTicketModel) TableName() string {

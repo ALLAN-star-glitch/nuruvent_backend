@@ -23,12 +23,34 @@ import (
 // ============================================================
 
 type fakeService struct {
-	initiateFunc     func(ctx context.Context, cmd service.InitiateCommand) (*paymentdomain.Payment, error)
-	confirmFunc      func(ctx context.Context, paymentID string) error
-	failFunc         func(ctx context.Context, paymentID, reason string) error
-	refundFunc       func(ctx context.Context, cmd service.RefundCommand) error
+	// Order
+	createOrderFunc func(ctx context.Context, cmd service.CreateOrderCommand) (*paymentdomain.Order, error)
+	getOrderFunc    func(ctx context.Context, orderID string) (*paymentdomain.Order, error)
+
+	// Payment
+	initiateFunc      func(ctx context.Context, cmd service.InitiateCommand) (*paymentdomain.Payment, error)
+	confirmFunc       func(ctx context.Context, paymentID string) error
+	failFunc          func(ctx context.Context, paymentID, reason string) error
+	refundFunc        func(ctx context.Context, cmd service.RefundCommand) error
 	handleWebhookFunc func(ctx context.Context, provider string, payload []byte, headers map[string]string) error
-	getPaymentFunc    func(ctx context.Context, paymentID string) (*paymentdomain.Payment, error) 
+	getPaymentFunc    func(ctx context.Context, paymentID string) (*paymentdomain.Payment, error)
+}
+
+
+
+
+func (f *fakeService) CreateOrder(ctx context.Context, cmd service.CreateOrderCommand) (*paymentdomain.Order, error) {
+	if f.createOrderFunc != nil {
+		return f.createOrderFunc(ctx, cmd)
+	}
+	return nil, nil
+}
+
+func (f *fakeService) GetOrder(ctx context.Context, orderID string) (*paymentdomain.Order, error) {
+	if f.getOrderFunc != nil {
+		return f.getOrderFunc(ctx, orderID)
+	}
+	return nil, paymentdomain.ErrOrderNotFound
 }
 
 func (f *fakeService) InitiatePayment(ctx context.Context, cmd service.InitiateCommand) (*paymentdomain.Payment, error) {
@@ -80,21 +102,22 @@ func (f *fakeService) HandleWebhook(ctx context.Context, provider string, payloa
 // newTestApp returns a Fiber app with the payment routes and a fake
 // service. The auth middleware is a no-op that sets a user ID.
 func newTestApp(t *testing.T, fake *fakeService) *fiber.App {
-    t.Helper()
+	t.Helper()
 
-    app := fiber.New()
+	app := fiber.New()
 
-    // Correct: uses the same constant production code reads from.
-    authMiddleware := func(c fiber.Ctx) error {
-        c.Locals(types.ContextKeyUserID, "test-user")
-        return c.Next()
-    }
+	authMiddleware := func(c fiber.Ctx) error {
+		c.Locals(types.ContextKeyUserID, "test-user")
+		return c.Next()
+	}
 
-    handler := NewHandler(fake)
-    api := app.Group("/api/v1")
-    RegisterRoutes(api, handler, authMiddleware)
+	orderHandler := NewOrderHandler(fake)
+	paymentHandler := NewHandler(fake)
 
-    return app
+	api := app.Group("/api/v1")
+	RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware)
+
+	return app
 }
 
 // doJSON executes a JSON request against the app and returns the

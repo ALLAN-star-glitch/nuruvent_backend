@@ -53,6 +53,7 @@ func (r *PaymentRepository) Update(ctx context.Context, p *paymentdomain.Payment
 			"status":             string(p.Status),
 			"provider_reference": nullableString(p.ProviderReference),
 			"failure_reason":     nullableString(p.FailureReason),
+			"redirect_url":       p.RedirectURL,
 			"completed_at":       p.CompletedAt,
 			"failed_at":          p.FailedAt,
 			"updated_at":         p.UpdatedAt,
@@ -195,6 +196,31 @@ func (r *PaymentRepository) FindByOrderID(
 		payments = append(payments, p)
 	}
 	return payments, nil
+}
+
+
+// FindPendingByOrder returns the current pending payment for an order,
+// if one exists. Only one pending payment per order is allowed.
+func (r *PaymentRepository) FindPendingByOrder(
+	ctx context.Context,
+	orderID string,
+) (*paymentdomain.Payment, error) {
+	var model PaymentModel
+	err := r.db.WithContext(ctx).
+		Where("order_id = ? AND status = ?",
+			orderID,
+			string(paymentdomain.PaymentStatusPending),
+		).
+		Order("created_at DESC").
+		First(&model).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, paymentdomain.ErrPaymentNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find pending payment: %w", err)
+	}
+	return toPaymentDomain(&model)
 }
 
 // ============================================================

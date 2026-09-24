@@ -1,4 +1,3 @@
-
 // internal/modules/payment/infrastructure/providers/registry.go
 
 package providers
@@ -16,9 +15,9 @@ import (
 // method. Providers register at construction time; the registry is
 // read-only afterward, so it's safe for concurrent use.
 type Registry struct {
-	mu        sync.RWMutex
-	byName    map[string]paymentdomain.PaymentProvider
-	byMethod  map[paymentdomain.PaymentMethod]paymentdomain.PaymentProvider
+	mu       sync.RWMutex
+	byName   map[string]paymentdomain.PaymentProvider
+	byMethod map[paymentdomain.PaymentMethod]paymentdomain.PaymentProvider
 }
 
 // NewRegistry constructs an empty registry.
@@ -54,6 +53,39 @@ func (r *Registry) Register(p paymentdomain.PaymentProvider) error {
 		r.byMethod[method] = p
 	}
 
+	return nil
+}
+
+// RegisterForMethod registers a provider for a specific method, without
+// going through the provider's Method() value.
+//
+// Use this when a single provider serves multiple methods — e.g.
+// IntaSend handles both M-Pesa (STK push) and cards (hosted checkout).
+//
+// Like Register, the first provider registered for a given method wins
+// as the default for ByMethod. If a provider is already registered for
+// the method, this is a no-op. Does not add the provider to byName;
+// use Register for that.
+func (r *Registry) RegisterForMethod(
+	p paymentdomain.PaymentProvider,
+	method paymentdomain.PaymentMethod,
+) error {
+	if p == nil {
+		return fmt.Errorf("provider must not be nil")
+	}
+	if p.Name() == "" {
+		return fmt.Errorf("provider name must not be empty")
+	}
+	if method == "" {
+		return fmt.Errorf("method must not be empty")
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, exists := r.byMethod[method]; !exists {
+		r.byMethod[method] = p
+	}
 	return nil
 }
 

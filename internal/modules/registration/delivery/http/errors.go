@@ -4,6 +4,7 @@ package http
 
 import (
 	"errors"
+	"log"
 
 	"github.com/gofiber/fiber/v3"
 
@@ -58,5 +59,6 @@ func mapDomainError(c fiber.Ctx, err error) error {
 		return response.InternalError(c, "Unknown registration target", nil)
 	}
 
-	return response.InternalError(c, "Something went wrong", nil)
+	log.Printf("UNMAPPED REGISTRATION ERROR: %T: %v", err, err)
+    return response.InternalError(c, "Something went wrong", err) 
 }

@@ -34,18 +34,8 @@ var ProviderSet = wire.NewSet(
 		new(*notifier.Noop),
 	),
 
-	// RegistrableResolver is provided by the app's cross-module
-	// adapters (NewRegistrableResolver) — not from within this module.
-
-	// ============================================================
-	// Shared utilities
-	// ============================================================
-
-	id.NewUUIDGenerator,
-	wire.Bind(
-		new(id.Generator),
-		new(*id.UUIDGenerator),
-	),
+	
+	
 
 	ProvideSystemClock,
 	ProvideServiceDependencies,

@@ -177,6 +177,7 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 	}
 
 	// Set Tickets
+		// Set Tickets
 	if len(event.Tickets) > 0 {
 		tickets := make([]TicketDTO, len(event.Tickets))
 		for i, t := range event.Tickets {
@@ -201,6 +202,21 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 			if t.GroupDiscount != nil {
 				ticket.GroupDiscount = *t.GroupDiscount
 			}
+
+			// Nested ticket type                              
+			if t.TicketType != nil {
+				ticket.TicketType = &TicketTypeDTO{
+					ID:          t.TicketType.ID,
+					Slug:        t.TicketType.Slug,
+					Name:        t.TicketType.Name,
+					DisplayName: t.TicketType.DisplayName,
+					Description: t.TicketType.Description,
+					SortOrder:   t.TicketType.SortOrder,
+					IsActive:    t.TicketType.IsActive,
+				}
+			}                                                 
+
+			
 			tickets[i] = ticket
 		}
 		resp.Tickets = tickets

@@ -76,6 +76,12 @@ func toRegistrationDomain(m *RegistrationModel) (*registrationdomain.Registratio
 
 // toEventRegistrationDomain composes a Registration and its selections
 // into an EventRegistration domain entity.
+//
+// Uses HydrateEventRegistration (not NewEventRegistration) because the
+// DB row carries the persisted state — including whether the row is
+// currently active. NewEventRegistration is only for fresh creations,
+// where is_active always starts as true.
+//
 // Requires the Registration relation to be preloaded.
 func toEventRegistrationDomain(
 	m *EventRegistrationModel,
@@ -90,15 +96,12 @@ func toEventRegistrationDomain(
 		return nil, err
 	}
 
-	pricing := registrationdomain.PricingSnapshot{
-		Currency:      reg.Currency,
-		Subtotal:      reg.Subtotal,
-		DiscountTotal: reg.DiscountTotal,
-		Total:         reg.TotalAmount,
-		SnapshotAt:    reg.CreatedAt,
-	}
-
-	return registrationdomain.NewEventRegistration(reg, m.EventID, selections, pricing)
+	return registrationdomain.HydrateEventRegistration(
+		reg,
+		m.EventID,
+		m.IsActive,     // ← pull persisted value
+		selections,
+	), nil
 }
 
 // toWaitlistDomain converts a GORM waitlist model into a domain entity.

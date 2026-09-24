@@ -18,6 +18,7 @@ type PaymentModel struct {
 	Status         string  `gorm:"type:varchar(20);not null;default:'pending';index"`
 	IdempotencyKey string  `gorm:"type:varchar(100);not null"`
 	ProviderReference *string `gorm:"type:varchar(255)"`
+	RedirectURL string `gorm:"column:redirect_url"`
 	FailureReason  *string `gorm:"type:text"`
 
 	InitiatedAt time.Time  `gorm:"not null"`

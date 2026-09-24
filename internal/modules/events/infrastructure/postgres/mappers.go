@@ -520,19 +520,34 @@ func toDomainTickets(models []EventTicketModel) []domain.EventTicket {
 	tickets := make([]domain.EventTicket, len(models))
 	for i, m := range models {
 		tickets[i] = domain.EventTicket{
-			ID:                 m.ID,
-			EventID:            m.EventID,
-			TicketTypeID:       m.TicketTypeID,
-			Name:               m.Name,
-			Description:        m.Description,
-			Price:              m.Price,
-			Quantity:           m.Quantity,
-			MaxPerPerson:       m.MaxPerPerson,
-			EarlyBirdDeadline:  m.EarlyBirdDeadline,
-			GroupMinAttendees:  m.GroupMinAttendees,
-			GroupDiscount:      m.GroupDiscount,
-			SortOrder:          m.SortOrder,
-			IsActive:           m.IsActive,
+			ID:                m.ID,
+			EventID:           m.EventID,
+			TicketTypeID:      m.TicketTypeID,
+			Name:              m.Name,
+			Description:       m.Description,
+			Price:             m.Price,
+			Quantity:          m.Quantity,
+			MaxPerPerson:      m.MaxPerPerson,
+			EarlyBirdDeadline: m.EarlyBirdDeadline,
+			GroupMinAttendees: m.GroupMinAttendees,
+			GroupDiscount:     m.GroupDiscount,
+			SortOrder:         m.SortOrder,
+			IsActive:          m.IsActive,
+		}
+
+		// Map the preloaded ticket type (if present)
+		if m.TicketType != nil {
+			tickets[i].TicketType = &domain.TicketTypeRow{
+				ID:          m.TicketType.ID,
+				Slug:        m.TicketType.Slug,
+				Name:        m.TicketType.Name,
+				DisplayName: m.TicketType.DisplayName,
+				Description: m.TicketType.Description,
+				SortOrder:   m.TicketType.SortOrder,
+				IsActive:    m.TicketType.IsActive,
+				CreatedAt:   m.TicketType.CreatedAt,
+				UpdatedAt:   m.TicketType.UpdatedAt,
+			}
 		}
 	}
 	return tickets

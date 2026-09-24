@@ -142,33 +142,25 @@ func (h *Handler) Refund(c fiber.Ctx) error {
 
 	return response.Success(c, "Refund processed successfully", nil)
 }
-
-// ============================================================
-// WEBHOOK
-// ============================================================
-
-// FlutterwaveWebhook handles POST /webhooks/flutterwave.
+// IntaSendWebhook handles POST /webhooks/intasend.
 //
-// This route is NOT behind auth middleware. The Flutterwave signature
-// header is the sole authentication mechanism. The service verifies it
+// This route is NOT behind auth middleware. The IntaSend challenge
+// field is the sole authentication mechanism. The service verifies it
 // inside HandleWebhook.
-func (h *Handler) FlutterwaveWebhook(c fiber.Ctx) error {
-	// Read raw body — signature verification needs the exact bytes.
+func (h *Handler) IntaSendWebhook(c fiber.Ctx) error {
 	payload := c.Body()
 	if len(payload) == 0 {
 		return response.BadRequest(c, "Empty webhook payload", nil)
 	}
 
-	// Collect headers as a map.
 	headers := make(map[string]string)
 	c.Request().Header.VisitAll(func(k, v []byte) {
 		headers[string(k)] = string(v)
 	})
 
-	if err := h.svc.HandleWebhook(c.Context(), "flutterwave", payload, headers); err != nil {
+	if err := h.svc.HandleWebhook(c.Context(), "intasend", payload, headers); err != nil {
 		return mapDomainError(c, err)
 	}
 
-	// Flutterwave expects a 200 with no body or a small acknowledgment.
 	return response.Success(c, "Webhook received", nil)
 }

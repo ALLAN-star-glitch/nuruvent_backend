@@ -17,6 +17,7 @@ func toPaymentResponse(p *paymentdomain.Payment) PaymentResponse {
 		Currency:          p.Currency,
 		Status:            string(p.Status),
 		ProviderReference: p.ProviderReference,
+		RedirectURL:       p.RedirectURL,       
 		FailureReason:     p.FailureReason,
 		InitiatedAt:       p.InitiatedAt,
 		ExpiresAt:         p.ExpiresAt,
@@ -24,5 +25,39 @@ func toPaymentResponse(p *paymentdomain.Payment) PaymentResponse {
 		FailedAt:          p.FailedAt,
 		CreatedAt:         p.CreatedAt,
 		UpdatedAt:         p.UpdatedAt,
+	}
+}
+
+
+
+// toOrderResponse converts a domain Order to its wire format.
+func toOrderResponse(o *paymentdomain.Order) OrderResponse {
+	items := make([]OrderItemResponse, 0, len(o.Items))
+	for _, it := range o.Items {
+		items = append(items, OrderItemResponse{
+			TicketTypeID: it.TicketTypeID,
+			Quantity:     it.Quantity,
+			UnitPrice:    it.UnitPrice,
+			Discount:     it.Discount,
+			LineTotal:    it.LineTotal,
+		})
+	}
+
+	return OrderResponse{
+		ID:             o.ID,
+		RegistrationID: o.RegistrationID,
+		UserID:         o.UserID,
+		GuestEmail:     o.GuestEmail,
+		Currency:       o.Currency,
+		Subtotal:       o.Subtotal,
+		DiscountTotal:  o.DiscountTotal,
+		TotalAmount:    o.TotalAmount,
+		Status:         string(o.Status),
+		ExpiresAt:      o.ExpiresAt,
+		PaidAt:         o.PaidAt,
+		CancelledAt:    o.CancelledAt,
+		CreatedAt:      o.CreatedAt,
+		UpdatedAt:      o.UpdatedAt,
+		Items:          items,
 	}
 }

@@ -37,6 +37,12 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
 	notificationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 
+	// Payment Module
+	payment "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment"
+	paymentHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/delivery/http"
+	paymentService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/service"
+
+
 	// Team Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team"
 	teamHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
@@ -47,15 +53,14 @@ import (
 	regHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
 	regService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 
-	// Shared
+		// Shared
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/id"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
-
-
 )
 
 // ============================================================
@@ -92,6 +97,12 @@ type AppDependencies struct {
 	// Registration Module
 	RegHandler *regHandler.Handler
 	RegService regService.Service
+
+	// Payment Module
+	PaymentHandler *paymentHandler.Handler
+	OrderHandler   *paymentHandler.OrderHandler
+	PaymentService paymentService.Service
+
 }
 
 // ============================================================
@@ -109,6 +120,7 @@ func InitializeApp() (*AppDependencies, error) {
 		redis.ProviderSet,
 		storage.ProviderSet,
 		ai.ProviderSet,
+		id.ProviderSet,
 
 		// ============================================================
 		// APP-SPECIFIC
@@ -125,6 +137,7 @@ func InitializeApp() (*AppDependencies, error) {
 		notification.ProviderSet,
 		team.ProviderSet,
 		registration.ProviderSet,
+		payment.ProviderSet,
 
 		// ============================================================
 		// CROSS-MODULE ADAPTERS - AUTH
@@ -133,12 +146,14 @@ func InitializeApp() (*AppDependencies, error) {
 		NewQueueAdapter,
 		NewAuthTeamAdapter,
 
+	     // ============================================================
+		// CROSS-MODULE ADAPTERS - PAYMENT
 		// ============================================================
-		// CROSS-MODULE ADAPTERS - ACCOUNT
-		// ============================================================
-		NewAccountAuthAdapter,
-		NewAccountPermissionAdapter,
-		NewAccountMediaAdapter,
+		NewPaymentRegistrationConfirmer,
+		NewPaymentProviderRegistry,
+		NewPaymentUserEmailResolver,
+		NewPaymentNotifier,
+		NewPaymentPricingResolver,   // ← add
 
 		// ============================================================
 		// CROSS-MODULE ADAPTERS - EVENTS
@@ -159,6 +174,16 @@ func InitializeApp() (*AppDependencies, error) {
 		// CROSS-MODULE ADAPTERS - REGISTRATION
 		// ============================================================
 		NewRegistrableResolver,
+
+
+
+	    // ============================================================
+		// CROSS-MODULE ADAPTERS - ACCOUNT
+		// ============================================================
+		NewAccountAuthAdapter,
+		NewAccountPermissionAdapter,
+		NewAccountMediaAdapter,
+
 
 		provideOrganizerProvider,
 

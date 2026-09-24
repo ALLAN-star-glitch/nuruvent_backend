@@ -4,6 +4,7 @@ package http
 
 import (
 	"errors"
+	"log"
 
 	"github.com/gofiber/fiber/v3"
 
@@ -76,5 +77,6 @@ func mapDomainError(c fiber.Ctx, err error) error {
 		return response.ServiceUnavailable(c, "No payment provider available for this method", nil)
 	}
 
-	return response.InternalError(c, "Something went wrong", nil)
+	log.Printf("UNMAPPED DOMAIN ERROR: %T: %v", err, err)
+	return response.InternalError(c, "Something went wrong", err)
 }

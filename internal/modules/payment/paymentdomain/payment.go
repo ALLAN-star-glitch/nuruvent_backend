@@ -43,6 +43,8 @@ type Payment struct {
 	// providers, as soon as the request is accepted).
 	ProviderReference string
 
+	RedirectURL       string
+
 	// FailureReason is set when Status == failed.
 	FailureReason string
 
@@ -113,7 +115,7 @@ func HydratePayment(
 	amount int64,
 	currency string,
 	status PaymentStatus,
-	idempotencyKey, providerReference, failureReason string,
+	idempotencyKey, providerReference, failureReason string, redirectURL string,
 	initiatedAt time.Time,
 	completedAt, failedAt *time.Time,
 	expiresAt, createdAt, updatedAt time.Time,
@@ -128,6 +130,7 @@ func HydratePayment(
 		Status:            status,
 		IdempotencyKey:    idempotencyKey,
 		ProviderReference: providerReference,
+		RedirectURL:       redirectURL,
 		FailureReason:     failureReason,
 		InitiatedAt:       initiatedAt,
 		CompletedAt:       completedAt,

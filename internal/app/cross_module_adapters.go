@@ -3,12 +3,16 @@
 package app
 
 import (
+	"fmt"
+	"log"
+
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/accounts"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/auth"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/events"
+	paymentadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/payment"
+	registrationadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/registration"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/team"
 
-	registrationadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/registration"
 	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
@@ -17,8 +21,14 @@ import (
 	eventsService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 	mediaService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 	notificationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
+	paymentproviders "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/providers"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/providers/intasend"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/providers/paystack"
+	paymentdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
+	registrationService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
 // ---- AUTH ADAPTERS ----
@@ -56,21 +66,12 @@ func NewAccountNotificationAdapter(notifSvc notificationDomain.NotificationServi
 
 // NewAccountPermissionAdapter bridges auth's PermissionChecker to
 // account's PermissionChecker interface.
-//
-// The concrete implementation (authorization.PermissionChecker) already
-// satisfies both interfaces structurally. This adapter exists so that:
-//   - Cross-module wiring stays visible in one place (this file).
-//   - The account module depends on its own accountDomain.PermissionChecker
-//     interface, not on auth's.
-//   - Future changes to either interface are isolated to the adapter.
 func NewAccountPermissionAdapter(permChecker authDomain.PermissionChecker) accountDomain.PermissionChecker {
 	return accounts.NewPermissionAdapter(permChecker)
 }
 
-
 // NewAccountMediaAdapter bridges the media module to the account domain's
-// MediaService port. Used for user avatars (media_type_profile) and
-// account logos (media_type_business).
+// MediaService port.
 func NewAccountMediaAdapter(mediaSvc mediaService.Service) accountDomain.MediaService {
 	return accounts.NewMediaAdapter(mediaSvc)
 }
@@ -113,13 +114,104 @@ func NewTeamNotificationAdapter(notifSvc notificationDomain.NotificationService)
 	return team.NewTeamNotificationAdapter(notifSvc)
 }
 
-
 // ---- REGISTRATION ADAPTERS ----
 
 // NewRegistrableResolver wires the registration module's Registrable
-// resolver to the events module. The resolver is the only place that
-// knows how to adapt an events domain Event to the registration
-// module's Registrable contract.
+// resolver to the events module.
 func NewRegistrableResolver(eventsSvc eventsService.Service) registrationdomain.RegistrableResolver {
 	return registrationadapters.NewRegistrableResolver(eventsSvc)
+}
+
+// ---- PAYMENT ADAPTERS ----
+
+// NewPaymentRegistrationConfirmer wires the payment module's
+// RegistrationConfirmer port to the registration module's service.
+func NewPaymentRegistrationConfirmer(
+	regSvc registrationService.Service,
+) paymentdomain.RegistrationConfirmer {
+	return paymentadapters.NewRegistrationConfirmer(regSvc)
+}
+
+func NewPaymentProviderRegistry(
+	cfg *config.Config,
+) (paymentdomain.ProviderRegistry, error) {
+	registry := paymentproviders.NewRegistry()
+
+	// ------------------------------------------------------------------
+	// Paystack (register FIRST so it wins for mpesa and card when enabled)
+	// ------------------------------------------------------------------
+	if cfg.Paystack.IsConfigured() {
+		ps := paystack.NewProvider(cfg.Paystack)
+
+		if err := registry.Register(ps); err != nil {
+			return nil, fmt.Errorf("register paystack: %w", err)
+		}
+
+		for _, method := range ps.Methods() {
+			if method == ps.Method() {
+				continue
+			}
+			if err := registry.RegisterForMethod(ps, method); err != nil {
+				return nil, fmt.Errorf("register paystack for %s: %w", method, err)
+			}
+		}
+
+		log.Println("payment: registered paystack provider (mpesa + card)")
+	} else {
+		log.Println("payment: paystack not configured (skipping)")
+	}
+
+	// ------------------------------------------------------------------
+	// IntaSend (kept during migration; registered second so Paystack wins)
+	// ------------------------------------------------------------------
+	if cfg.IntaSend.IsConfigured() {
+		is := intasend.NewProvider(cfg.IntaSend)
+
+		if err := registry.Register(is); err != nil {
+			// Name conflict isn't possible (different names), but
+			// Method conflicts are OK — first-registered wins.
+			return nil, fmt.Errorf("register intasend: %w", err)
+		}
+
+		for _, method := range is.Methods() {
+			if method == is.Method() {
+				continue
+			}
+			if err := registry.RegisterForMethod(is, method); err != nil {
+				return nil, fmt.Errorf("register intasend for %s: %w", method, err)
+			}
+		}
+
+		log.Println("payment: registered intasend provider (mpesa + card)")
+	} else {
+		log.Println("payment: intasend not configured (skipping)")
+	}
+
+	return registry, nil
+}
+
+
+// NewPaymentUserEmailResolver wires the UserEmailResolver port to the
+// account module.
+func NewPaymentUserEmailResolver(
+	accountSvc accountService.Service,
+) paymentdomain.UserEmailResolver {
+	return paymentadapters.NewUserEmailResolver(accountSvc)
+}
+
+// NewPaymentNotifier wires the payment module's Notifier port to the
+// notification module's service.
+func NewPaymentNotifier(
+	notifSvc notificationDomain.NotificationService,
+	userEmails paymentdomain.UserEmailResolver,
+) paymentdomain.Notifier {
+	return paymentadapters.NewNotifier(notifSvc, userEmails)
+}
+
+// NewPaymentPricingResolver wires the payment module's
+// RegistrationPricingResolver port to the registration module's service.
+func NewPaymentPricingResolver(
+	regSvc registrationService.Service,
+) paymentdomain.RegistrationPricingResolver {
+	return paymentadapters.NewPricingResolver(regSvc)
 }

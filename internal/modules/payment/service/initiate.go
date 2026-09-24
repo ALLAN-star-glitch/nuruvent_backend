@@ -62,6 +62,28 @@ func (s *service) InitiatePayment(
 		}
 	}
 
+
+			// ------------------------------------------------------------
+		// 2b. Pending payment check — only one live payment per order
+		// ------------------------------------------------------------
+		// If a fresh pending payment already exists for this order, return
+		// it. This prevents double-charges when a client retries with a
+		// different idempotency key or switches providers.
+		existingPending, err := s.deps.Payments.FindPendingByOrder(ctx, order.ID)
+		if err == nil && existingPending != nil {
+			// If the existing payment is expired, mark it failed and proceed.
+			if existingPending.IsExpired(now) {
+				if failErr := existingPending.MarkFailed("payment expired", now); failErr == nil {
+					_ = s.deps.Payments.Update(ctx, existingPending)
+				}
+			} else {
+				// Fresh pending payment — return it.
+				return existingPending, nil
+			}
+		} else if err != nil && !errors.Is(err, paymentdomain.ErrPaymentNotFound) {
+			return nil, fmt.Errorf("pending payment check: %w", err)
+		}
+
 	// ------------------------------------------------------------
 	// 3. Resolve the provider before any state change
 	// ------------------------------------------------------------
@@ -127,6 +149,10 @@ func (s *service) InitiatePayment(
 	// ------------------------------------------------------------
 	if result.ProviderReference != "" {
 		payment.ProviderReference = result.ProviderReference
+	}
+
+	if result.RedirectURL != "" {
+		payment.RedirectURL = result.RedirectURL  
 	}
 
 	// If the provider immediately succeeded (rare, but possible for

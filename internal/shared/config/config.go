@@ -20,7 +20,8 @@ type Config struct {
 	Email       EmailConfig
 	Casbin      CasbinConfig
 	MPesa       MPesaConfig
-	Flutterwave FlutterwaveConfig
+	IntaSend    IntaSendConfig
+	Paystack    PaystackConfig
 	Supabase    SupabaseConfig
 	OpenAI      OpenAIConfig
 	Gemini      GeminiConfig
@@ -30,27 +31,47 @@ type Config struct {
 }
 
 // ============================================================
-// FLUTTERWAVE
+// INTASEND (kept during Paystack migration)
 // ============================================================
 
-// FlutterwaveConfig holds credentials and configuration for the
-// Flutterwave payment gateway.
+// IntaSendConfig holds credentials for the IntaSend payment gateway.
 //
-// The SecretKey, PublicKey, and EncryptionKey come from the Flutterwave
-// dashboard. The SecretHash is a string you choose and paste into the
-// dashboard's webhook settings — it's used to verify incoming webhooks.
-type FlutterwaveConfig struct {
-	SecretKey     string
-	PublicKey     string
-	EncryptionKey string
-	SecretHash    string
-	BaseURL       string
+// IntaSend serves M-Pesa and cards. M-Pesa uses /payment/collection/
+// (secret key auth). Card uses /checkout/ (publishable key in body).
+type IntaSendConfig struct {
+	PublishableKey string
+	SecretKey      string
+	BaseURL        string
+	Challenge      string
+	Enabled        bool
 }
 
 // IsConfigured reports whether the minimum required credentials are
-// present for the Flutterwave provider to operate.
-func (c FlutterwaveConfig) IsConfigured() bool {
-	return c.SecretKey != "" && c.PublicKey != ""
+// present for the IntaSend provider to operate.
+func (c IntaSendConfig) IsConfigured() bool {
+	return c.Enabled && c.SecretKey != "" && c.PublishableKey != ""
+}
+
+// ============================================================
+// PAYSTACK
+// ============================================================
+
+// PaystackConfig holds credentials for the Paystack payment gateway.
+//
+// Paystack serves both M-Pesa and cards through a single hosted
+// checkout. The SecretKey is used for both API calls (Bearer auth) and
+// webhook signature verification (HMAC-SHA512).
+type PaystackConfig struct {
+	SecretKey string
+	PublicKey string
+	BaseURL   string
+	Enabled   bool
+}
+
+// IsConfigured reports whether the minimum required credentials are
+// present for the Paystack provider to operate.
+func (c PaystackConfig) IsConfigured() bool {
+	return c.Enabled && c.SecretKey != "" && c.PublicKey != ""
 }
 
 // ============================================================
@@ -181,12 +202,18 @@ func Load() *Config {
 			Shortcode:      getEnv("MPESA_SHORTCODE", "174379"),
 			Environment:    getEnv("MPESA_ENVIRONMENT", "sandbox"),
 		},
-		Flutterwave: FlutterwaveConfig{
-			SecretKey:     getEnv("FLUTTERWAVE_SECRET_KEY", ""),
-			PublicKey:     getEnv("FLUTTERWAVE_PUBLIC_KEY", ""),
-			EncryptionKey: getEnv("FLUTTERWAVE_ENCRYPTION_KEY", ""),
-			SecretHash:    getEnv("FLUTTERWAVE_SECRET_HASH", ""),
-			BaseURL:       getEnv("FLUTTERWAVE_BASE_URL", "https://api.flutterwave.com/v3"),
+		IntaSend: IntaSendConfig{
+			PublishableKey: getEnv("INTASEND_PUBLISHABLE_KEY", ""),
+			SecretKey:      getEnv("INTASEND_SECRET_KEY", ""),
+			BaseURL:        getEnv("INTASEND_BASE_URL", "https://sandbox.intasend.com/api/v1"),
+			Challenge:      getEnv("INTASEND_CHALLENGE", ""),
+			Enabled:        getEnvBool("INTASEND_ENABLED", false),
+		},
+		Paystack: PaystackConfig{
+			SecretKey: getEnv("PAYSTACK_SECRET_KEY", ""),
+			PublicKey: getEnv("PAYSTACK_PUBLIC_KEY", ""),
+			BaseURL:   getEnv("PAYSTACK_BASE_URL", "https://api.paystack.co"),
+			Enabled:   getEnvBool("PAYSTACK_ENABLED", false),
 		},
 		Supabase: SupabaseConfig{
 			URL:               getEnv("SUPABASE_URL", ""),

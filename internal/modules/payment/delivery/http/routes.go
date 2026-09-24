@@ -4,25 +4,39 @@ package http
 
 import "github.com/gofiber/fiber/v3"
 
-// RegisterRoutes wires the handler methods into the Fiber router.
+// RegisterRoutes wires the payment module's handler methods into the
+// Fiber router.
 //
-// The webhook route is intentionally NOT behind auth middleware —
-// Flutterwave identifies itself via the verif-hash signature header,
-// which the service verifies inside HandleWebhook.
+// Two handlers are registered:
+//
+//   - OrderHandler: order creation and retrieval
+//   - Handler: payment initiation, retrieval, refund, and webhook
+//
+// All routes are authenticated except the webhook. The webhook uses
+// challenge-based verification (inside the service) as its sole
+// authentication mechanism — IntaSend has no user session to present.
 func RegisterRoutes(
 	r fiber.Router,
-	h *Handler,
+	orderHandler *OrderHandler,
+	paymentHandler *Handler,
 	authMiddleware fiber.Handler,
 ) {
-	// Payment initiation — authenticated
-	r.Post("/payments/initiate", authMiddleware, h.InitiatePayment)
+	// ============================================================
+	// ORDER ROUTES — authenticated
+	// ============================================================
+	r.Post("/orders", authMiddleware, orderHandler.CreateOrder)
+	r.Get("/orders/:id", authMiddleware, orderHandler.GetOrder)
 
-	// Payment read — authenticated
-	r.Get("/payments/:id", authMiddleware, h.GetPayment)
+	// ============================================================
+	// PAYMENT ROUTES — authenticated
+	// ============================================================
+	r.Post("/payments/initiate", authMiddleware, paymentHandler.InitiatePayment)
+	r.Get("/payments/:id", authMiddleware, paymentHandler.GetPayment)
+	r.Post("/payments/:id/refund", authMiddleware, paymentHandler.Refund)
 
-	// Refund — authenticated (organizer-only enforced in service)
-	r.Post("/payments/:id/refund", authMiddleware, h.Refund)
-
-	// Webhook — no auth, signature verification inside the service
-	r.Post("/webhooks/flutterwave", h.FlutterwaveWebhook)
+	// ============================================================
+	// WEBHOOK — no auth, challenge verification inside the service
+	// ============================================================
+	r.Post("/webhooks/intasend", paymentHandler.IntaSendWebhook)
+	r.Post("/webhooks/paystack", paymentHandler.PaystackWebhook)
 }

@@ -148,4 +148,8 @@ var (
 
 
 	ErrPricingMismatch = errors.New("pricing mismatch")
+
+
+	// Cross-module
+	ErrRegistrationNotFound = errors.New("registration not found")
 )

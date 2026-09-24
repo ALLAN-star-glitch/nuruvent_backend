@@ -27,22 +27,23 @@ func NewWebhookEventRepository(db *gorm.DB) *WebhookEventRepository {
 // WRITE
 // ============================================================
 
-// RecordIfNew inserts a webhook event if the (provider, provider_event_id)
-// pair is new. Returns ErrDuplicateWebhook when the event has already
-// been recorded.
+// RecordIfNew stores a webhook event for audit.
 //
-// The uniqueness is enforced by a database constraint, not by an
-// application-level check. This means two concurrent deliveries of the
-// same event resolve deterministically: one inserts, the other fails
-// with a unique violation that we translate to ErrDuplicateWebhook.
-func (r *WebhookEventRepository) RecordIfNew(ctx context.Context, e *paymentdomain.WebhookEvent) error {
+// This is a straight insert. There is no deduplication: the DB-level
+// unique constraint on (provider, provider_event_id) was intentionally
+// removed because IntaSend (and most providers) send multiple webhook
+// deliveries per transaction — PENDING, PROCESSING, COMPLETE — all
+// sharing the same provider_event_id. Deduplicating on event ID alone
+// would silently drop the state changes that matter.
+//
+// Idempotency is enforced at the service layer, not here.
+func (r *WebhookEventRepository) RecordIfNew(
+	ctx context.Context,
+	e *paymentdomain.WebhookEvent,
+) error {
 	model := toWebhookEventModel(e)
-
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
-		if isUniqueViolation(err) {
-			return fmt.Errorf("%w: %s", paymentdomain.ErrDuplicateWebhook, err)
-		}
-		return translateError(err, "record webhook event")
+		return fmt.Errorf("record webhook event: %w", err)
 	}
 	return nil
 }

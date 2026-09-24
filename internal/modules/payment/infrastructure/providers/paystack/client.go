@@ -1,4 +1,6 @@
-package flutterwave
+// internal/modules/payment/infrastructure/providers/paystack/client.go
+
+package paystack
 
 import (
 	"bytes"
@@ -12,14 +14,17 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
-// client is a thin HTTP wrapper around Flutterwave's v3 API.
+// client is a thin HTTP wrapper around Paystack's API.
+//
+// All Paystack endpoints use the same authentication:
+// Authorization: Bearer <secret_key>
 type client struct {
 	baseURL    string
 	secretKey  string
 	httpClient *http.Client
 }
 
-func newClient(cfg config.FlutterwaveConfig) *client {
+func newClient(cfg config.PaystackConfig) *client {
 	return &client{
 		baseURL:   cfg.BaseURL,
 		secretKey: cfg.SecretKey,
@@ -30,7 +35,10 @@ func newClient(cfg config.FlutterwaveConfig) *client {
 }
 
 // do performs an authenticated request and returns the raw response body.
-// Non-2xx responses are converted to typed errors.
+//
+// Every Paystack request uses the secret key as a Bearer token — there
+// is no unauthenticated endpoint, and no "publishable key in body"
+// flow like IntaSend.
 func (c *client) do(ctx context.Context, method, path string, body any) ([]byte, error) {
 	var reqBody io.Reader
 	if body != nil {

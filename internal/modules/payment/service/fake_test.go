@@ -78,6 +78,7 @@ type fakePaymentRepository struct {
 	findByIDFunc                func(ctx context.Context, id string) (*paymentdomain.Payment, error)
 	findByProviderReferenceFunc func(ctx context.Context, provider, ref string) (*paymentdomain.Payment, error)
 	findByIdempotencyKeyFunc    func(ctx context.Context, orderID, key string) (*paymentdomain.Payment, error)
+	findPendingByOrderFunc      func(ctx context.Context, orderID string) (*paymentdomain.Payment, error)  // ← ADD
 
 	mu      sync.Mutex
 	created []*paymentdomain.Payment
@@ -121,6 +122,15 @@ func (f *fakePaymentRepository) FindByProviderReference(ctx context.Context, pro
 func (f *fakePaymentRepository) FindByIdempotencyKey(ctx context.Context, orderID, key string) (*paymentdomain.Payment, error) {
 	if f.findByIdempotencyKeyFunc != nil {
 		return f.findByIdempotencyKeyFunc(ctx, orderID, key)
+	}
+	return nil, paymentdomain.ErrPaymentNotFound
+}
+
+// FindPendingByOrder returns the current pending payment for an order,
+// if any. Default: no pending payment (fresh order).
+func (f *fakePaymentRepository) FindPendingByOrder(ctx context.Context, orderID string) (*paymentdomain.Payment, error) {
+	if f.findPendingByOrderFunc != nil {
+		return f.findPendingByOrderFunc(ctx, orderID)
 	}
 	return nil, paymentdomain.ErrPaymentNotFound
 }
@@ -408,7 +418,6 @@ func (f *fakeUnitOfWork) Do(ctx context.Context, fn func(paymentdomain.Repositor
 	if f.doFunc != nil {
 		return f.doFunc(ctx, fn)
 	}
-	// Default: execute the callback with the same repos (no real tx).
 	return fn(paymentdomain.Repositories{
 		Orders:   f.deps.Orders,
 		Payments: f.deps.Payments,
@@ -421,7 +430,6 @@ func (f *fakeUnitOfWork) Do(ctx context.Context, fn func(paymentdomain.Repositor
 // DETERMINISTIC GENERATORS
 // ============================================================
 
-// fixedIDGenerator returns IDs from a fixed list in order.
 type fixedIDGenerator struct {
 	mu    sync.Mutex
 	ids   []string
@@ -443,7 +451,6 @@ func (g *fixedIDGenerator) NewID() string {
 	return id
 }
 
-// fixedClock returns a fixed time for every call.
 type fixedClock struct {
 	t time.Time
 }
@@ -458,8 +465,6 @@ func (c *fixedClock) Now() time.Time { return c.t }
 // TEST HARNESS
 // ============================================================
 
-// newTestService wires a service with fresh fakes and returns both
-// the service and the deps so tests can inspect captured calls.
 func newTestService(t *testing.T, customize func(*Dependencies)) (Service, *Dependencies) {
 	t.Helper()
 
@@ -487,7 +492,6 @@ func newTestService(t *testing.T, customize func(*Dependencies)) (Service, *Depe
 // FIXTURES
 // ============================================================
 
-// newPendingOrder builds a valid pending order for tests.
 func newPendingOrder(t *testing.T) *paymentdomain.Order {
 	t.Helper()
 
@@ -517,7 +521,6 @@ func newPendingOrder(t *testing.T) *paymentdomain.Order {
 	return o
 }
 
-// newPendingPayment builds a valid pending payment for tests.
 func newPendingPayment(t *testing.T, orderID string) *paymentdomain.Payment {
 	t.Helper()
 

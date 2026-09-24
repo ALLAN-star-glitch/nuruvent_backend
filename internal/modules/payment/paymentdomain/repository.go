@@ -39,6 +39,8 @@ type PaymentRepository interface {
 	Update(ctx context.Context, p *Payment) error
 	FindByID(ctx context.Context, id string) (*Payment, error)
 
+	FindPendingByOrder(ctx context.Context, orderID string) (*Payment, error)   // ← ADD
+
 	// FindByProviderReference looks up a payment by the provider's
 	// transaction ID. This is the primary lookup for webhooks and
 	// reconciliation.

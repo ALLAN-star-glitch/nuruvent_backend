@@ -26,3 +26,49 @@ type RegistrationConfirmer interface {
 	// Called when a payment window elapses without success.
 	ExpirePending(ctx context.Context, registrationID string) error
 }
+
+// ============================================================
+// PRICING RESOLVER
+// ============================================================
+
+// RegistrationPricing is a flattened snapshot of a registration's
+// pricing, as seen by the payment module.
+//
+// The payment module cannot import the registration module's domain
+// types directly, so the adapter flattens them into this struct.
+type RegistrationPricing struct {
+	RegistrationID string
+
+	// Exactly one of UserID or GuestEmail is populated.
+	UserID     string
+	GuestEmail string
+
+	Currency      string
+	Subtotal      int64 // minor units
+	DiscountTotal int64 // minor units
+	TotalAmount   int64 // minor units
+
+	Items []RegistrationPricingItem
+}
+
+// RegistrationPricingItem is one line of a registration, flattened for
+// the payment module.
+type RegistrationPricingItem struct {
+	TicketTypeID string
+	Quantity     int
+	UnitPrice    int64 // minor units
+	Discount     int64 // minor units
+}
+
+// RegistrationPricingResolver is the outbound port the payment module
+// uses to fetch a registration's pricing when creating an order.
+//
+// It is implemented by an adapter in internal/app/adapters/payment/.
+// The adapter calls the registration module's service and returns a
+// flattened RegistrationPricing.
+//
+// Returns an error if the registration doesn't exist, isn't pending, or
+// the registration module is unreachable.
+type RegistrationPricingResolver interface {
+	ResolvePricing(ctx context.Context, registrationID string) (*RegistrationPricing, error)
+}

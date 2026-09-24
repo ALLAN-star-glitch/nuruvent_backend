@@ -7,14 +7,23 @@ import (
 )
 
 func (s *service) GetByID(ctx context.Context, id, actorID string) (*registrationdomain.EventRegistration, error) {
-    reg, err := s.deps.EventRegistrations.FindByID(ctx, id)
-    if err != nil {
-        return nil, err
-    }
-    if reg.Registration.UserID != "" && reg.Registration.UserID != actorID {
-        return nil, registrationdomain.ErrNotOwner
-    }
-    return reg, nil
+	reg, err := s.deps.EventRegistrations.FindByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Empty actorID means an internal/system call (e.g. the payment
+	// module resolving pricing for an order). Skip the ownership check.
+	if actorID == "" {
+		return reg, nil
+	}
+
+	// External call — actor must own the registration.
+	if reg.Registration == nil || reg.Registration.UserID == "" || reg.Registration.UserID != actorID {
+		return nil, registrationdomain.ErrNotOwner
+	}
+
+	return reg, nil
 }
 
 func (s *service) ListByEvent(

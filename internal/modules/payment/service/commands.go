@@ -62,3 +62,19 @@ type RefundCommand struct {
 	// IdempotencyKey prevents duplicate refund creation.
 	IdempotencyKey string
 }
+
+// ============================================================
+// CREATE ORDER
+// ============================================================
+
+// CreateOrderCommand is the input for CreateOrder.
+//
+// The caller supplies only the registration ID. The payment module
+// resolves the pricing, builds the order items, and computes the
+// totals from the registration's snapshot.
+//
+// This means the client cannot influence the order amount — the price
+// always reflects what the registration agreed to.
+type CreateOrderCommand struct {
+	RegistrationID string
+}
