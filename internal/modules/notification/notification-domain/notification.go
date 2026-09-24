@@ -108,6 +108,15 @@ const (
 	TypeTeamInviteRegistration  NotificationType = "team_invite_registration"   // ✅ New users (no OTP)
 	TypeTeamInviteAccepted      NotificationType = "team_invite_accepted"       // ✅ Admin notification
 	TypeTeamInviteDeclined      NotificationType = "team_invite_declined"       // ✅ Admin notification
+
+		// ============================================================
+	// PAYMENT NOTIFICATION TYPES
+	// ============================================================
+	TypePaymentInitiated NotificationType = "payment_initiated"
+	TypePaymentSucceeded NotificationType = "payment_succeeded"
+	TypePaymentFailed    NotificationType = "payment_failed"
+	TypePaymentExpired   NotificationType = "payment_expired"
+	TypeRefundIssued     NotificationType = "refund_issued"
 )
 
 func (t NotificationType) String() string {

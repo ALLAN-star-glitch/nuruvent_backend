@@ -82,19 +82,23 @@ func (h *Handler) RegisterForEvent(c fiber.Ctx) error {
 
 // GetByID handles GET /registrations/:id
 func (h *Handler) GetByID(c fiber.Ctx) error {
-	id := c.Params("id")
-	if id == "" {
-		return response.BadRequest(c, "Registration ID is required", nil)
-	}
+    id := c.Params("id")
+    if id == "" {
+        return response.BadRequest(c, "Registration ID is required", nil)
+    }
 
-	actorID := handlerhelper.GetUserIDOptional(c)
+    // The frontend can supply an email for guest registrations.
+    // The service verifies it matches the stored guest_email.
+    guestEmail := c.Query("email")
 
-	reg, err := h.svc.GetByID(c.Context(), id, actorID)
-	if err != nil {
-		return mapDomainError(c, err)
-	}
+    actorID := handlerhelper.GetUserIDOptional(c)
 
-	return response.Success(c, "Registration retrieved successfully", toRegistrationResponse(reg))
+    er, err := h.svc.GetByID(c.Context(), id, actorID, guestEmail)
+    if err != nil {
+        return mapDomainError(c, err)
+    }
+
+    return response.Success(c, "Registration retrieved successfully", toRegistrationResponse(er))
 }
 
 // ListByEvent handles GET /events/:id/registrations

@@ -231,3 +231,15 @@ func statusesToSlugs(statuses []registrationdomain.Status) []string {
 	}
 	return slugs
 }
+
+// Deactivate marks the event registration row as inactive.
+// Called when the parent registration is cancelled or expires.
+func (r *EventRegistrationRepository) Deactivate(
+    ctx context.Context,
+    registrationID string,
+) error {
+    return r.db.WithContext(ctx).
+        Model(&EventRegistrationModel{}).
+        Where("registration_id = ?", registrationID).
+        Update("is_active", false).Error
+}

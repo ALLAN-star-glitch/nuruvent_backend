@@ -609,5 +609,218 @@ func (w *NotificationWorker) HandleTeamInviteDeclined(ctx context.Context, task 
 	return w.ProcessTeamInviteDeclined(ctx, data)
 }
 
+
+// ============================================================
+// PAYMENT HANDLERS
+// ============================================================
+
+// ProcessPaymentInitiated implements notificationdomain.TaskProcessor
+// Sent to: the payer when the provider has accepted initiation and the
+// customer must complete an action (STK push, 3DS redirect).
+func (w *NotificationWorker) ProcessPaymentInitiated(ctx context.Context, data notificationdomain.PaymentInitiatedTask) error {
+	log.Printf("[NotificationWorker] Processing payment initiated notification for %s (payment: %s)", data.To, data.PaymentID)
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Complete Your Payment - Nuruvent",
+		Type:    notificationdomain.TypePaymentInitiated,
+		Meta: map[string]string{
+			"name":         data.Name,
+			"amount":       formatAmount(data.Amount),
+			"currency":     data.Currency,
+			"provider":     data.Provider,
+			"method":       data.Method,
+			"customer_msg": data.CustomerMsg,
+			"payment_id":   data.PaymentID,
+			"order_id":     data.OrderID,
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send payment initiated to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Payment initiated notification sent to %s", data.To)
+	return nil
+}
+
+// HandlePaymentInitiated is the asynq task handler
+func (w *NotificationWorker) HandlePaymentInitiated(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.PaymentInitiatedTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse payment initiated task: %v", err)
+		return err
+	}
+	return w.ProcessPaymentInitiated(ctx, data)
+}
+
+// ProcessPaymentSucceeded implements notificationdomain.TaskProcessor
+// Sent to: the payer after a successful charge.
+func (w *NotificationWorker) ProcessPaymentSucceeded(ctx context.Context, data notificationdomain.PaymentSucceededTask) error {
+	log.Printf("[NotificationWorker] Processing payment succeeded notification for %s (payment: %s)", data.To, data.PaymentID)
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Payment Received - Nuruvent",
+		Type:    notificationdomain.TypePaymentSucceeded,
+		Meta: map[string]string{
+			"name":               data.Name,
+			"amount":             formatAmount(data.Amount),
+			"currency":           data.Currency,
+			"provider":           data.Provider,
+			"method":             data.Method,
+			"provider_reference": data.ProviderReference,
+			"payment_id":         data.PaymentID,
+			"order_id":           data.OrderID,
+			"registration_id":    data.RegistrationID,
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send payment succeeded to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Payment succeeded notification sent to %s", data.To)
+	return nil
+}
+
+// HandlePaymentSucceeded is the asynq task handler
+func (w *NotificationWorker) HandlePaymentSucceeded(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.PaymentSucceededTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse payment succeeded task: %v", err)
+		return err
+	}
+	return w.ProcessPaymentSucceeded(ctx, data)
+}
+
+// ProcessPaymentFailed implements notificationdomain.TaskProcessor
+// Sent to: the payer when a charge is declined or rejected.
+func (w *NotificationWorker) ProcessPaymentFailed(ctx context.Context, data notificationdomain.PaymentFailedTask) error {
+	log.Printf("[NotificationWorker] Processing payment failed notification for %s (payment: %s)", data.To, data.PaymentID)
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Payment Failed - Nuruvent",
+		Type:    notificationdomain.TypePaymentFailed,
+		Meta: map[string]string{
+			"name":           data.Name,
+			"amount":         formatAmount(data.Amount),
+			"currency":       data.Currency,
+			"provider":       data.Provider,
+			"method":         data.Method,
+			"failure_reason": data.FailureReason,
+			"payment_id":     data.PaymentID,
+			"order_id":       data.OrderID,
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send payment failed to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Payment failed notification sent to %s", data.To)
+	return nil
+}
+
+// HandlePaymentFailed is the asynq task handler
+func (w *NotificationWorker) HandlePaymentFailed(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.PaymentFailedTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse payment failed task: %v", err)
+		return err
+	}
+	return w.ProcessPaymentFailed(ctx, data)
+}
+
+// ProcessPaymentExpired implements notificationdomain.TaskProcessor
+// Sent to: the payer when the payment window elapses without success.
+func (w *NotificationWorker) ProcessPaymentExpired(ctx context.Context, data notificationdomain.PaymentExpiredTask) error {
+	log.Printf("[NotificationWorker] Processing payment expired notification for %s (payment: %s)", data.To, data.PaymentID)
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Payment Window Expired - Nuruvent",
+		Type:    notificationdomain.TypePaymentExpired,
+		Meta: map[string]string{
+			"name":       data.Name,
+			"amount":     formatAmount(data.Amount),
+			"currency":   data.Currency,
+			"provider":   data.Provider,
+			"method":     data.Method,
+			"payment_id": data.PaymentID,
+			"order_id":   data.OrderID,
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send payment expired to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Payment expired notification sent to %s", data.To)
+	return nil
+}
+
+// HandlePaymentExpired is the asynq task handler
+func (w *NotificationWorker) HandlePaymentExpired(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.PaymentExpiredTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse payment expired task: %v", err)
+		return err
+	}
+	return w.ProcessPaymentExpired(ctx, data)
+}
+
+// ProcessRefundIssued implements notificationdomain.TaskProcessor
+// Sent to: the payer after a refund has been processed.
+func (w *NotificationWorker) ProcessRefundIssued(ctx context.Context, data notificationdomain.RefundIssuedTask) error {
+	log.Printf("[NotificationWorker] Processing refund issued notification for %s (refund: %s)", data.To, data.RefundID)
+
+	isPartial := "false"
+	if data.IsPartial {
+		isPartial = "true"
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "Refund Processed - Nuruvent",
+		Type:    notificationdomain.TypeRefundIssued,
+		Meta: map[string]string{
+			"name":               data.Name,
+			"amount":             formatAmount(data.Amount),
+			"currency":           data.Currency,
+			"original_amount":    formatAmount(data.OriginalAmount),
+			"provider_reference": data.ProviderReference,
+			"reason":             data.Reason,
+			"payment_id":         data.PaymentID,
+			"refund_id":          data.RefundID,
+			"is_partial":         isPartial,
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send refund issued to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Refund issued notification sent to %s", data.To)
+	return nil
+}
+
+// HandleRefundIssued is the asynq task handler
+func (w *NotificationWorker) HandleRefundIssued(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.RefundIssuedTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse refund issued task: %v", err)
+		return err
+	}
+	return w.ProcessRefundIssued(ctx, data)
+}
+
+
 // Ensure NotificationWorker implements notificationdomain.TaskProcessor
 var _ notificationdomain.TaskProcessor = (*NotificationWorker)(nil)

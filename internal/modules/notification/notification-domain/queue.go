@@ -68,4 +68,30 @@ type TaskEnqueuer interface {
 	// EnqueueTeamInviteDeclined enqueues a notification when invitation is declined
 	// Sent to: Admin who sent the invitation
 	EnqueueTeamInviteDeclined(ctx context.Context, task TeamInviteDeclinedTask) error
+
+
+		// ============================================================
+	// PAYMENT TASKS
+	// ============================================================
+
+	// EnqueuePaymentInitiated enqueues a payment-initiated notification.
+	// Sent to: the payer
+	EnqueuePaymentInitiated(ctx context.Context, task PaymentInitiatedTask) error
+
+	
+	// EnqueuePaymentSucceeded enqueues a payment-succeeded notification.
+	// Sent to: the payer
+	EnqueuePaymentSucceeded(ctx context.Context, task PaymentSucceededTask) error
+
+	// EnqueuePaymentFailed enqueues a payment-failed notification.
+	// Sent to: the payer
+	EnqueuePaymentFailed(ctx context.Context, task PaymentFailedTask) error
+
+	// EnqueuePaymentExpired enqueues a payment-expired notification.
+	// Sent to: the payer
+	EnqueuePaymentExpired(ctx context.Context, task PaymentExpiredTask) error
+
+	// EnqueueRefundIssued enqueues a refund-issued notification.
+	// Sent to: the payer
+	EnqueueRefundIssued(ctx context.Context, task RefundIssuedTask) error
 }

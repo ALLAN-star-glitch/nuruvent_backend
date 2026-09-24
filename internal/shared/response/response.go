@@ -3,6 +3,9 @@
 package response
 
 import (
+	"log"
+	"runtime/debug"
+
 	"github.com/gofiber/fiber/v3"
 )
 
@@ -89,10 +92,26 @@ func TooManyRequests(c fiber.Ctx, message string, errors any) error {
 	})
 }
 
+
 func InternalError(c fiber.Ctx, message string, errors any) error {
-	return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{
-		Success: false,
-		Message: message,
-		Errors:  errors,
+    log.Printf("500 ERROR | message=%q | errors=%v\n%s", message, errors, debug.Stack())
+    return c.Status(fiber.StatusInternalServerError).JSON(BaseResponse{
+        Success: false,
+        Message: message,
+        Errors:  errors,
+    })
+}
+
+// In pkg/response/response.go
+func BadGateway(c fiber.Ctx, message string, errors any) error {
+
+	return c.Status(fiber.StatusBadGateway).JSON(BaseResponse{
+		Success: false, Message: message, Errors: errors,
+	})
+}
+
+func ServiceUnavailable(c fiber.Ctx, message string, errors any) error {
+	return c.Status(fiber.StatusServiceUnavailable).JSON(BaseResponse{
+		Success: false, Message: message, Errors: errors,
 	})
 }

@@ -17,7 +17,7 @@ type Service interface {
 	JoinWaitlist(ctx context.Context, cmd JoinWaitlistCommand) (*registrationdomain.WaitlistEntry, error)
 	PromoteFromWaitlist(ctx context.Context, eventID string) (*registrationdomain.EventRegistration, error)
 
-	GetByID(ctx context.Context, id, actorID string) (*registrationdomain.EventRegistration, error)
+	GetByID(ctx context.Context, id, actorID, guestEmail string) (*registrationdomain.EventRegistration, error)
 	ListByEvent(ctx context.Context, eventID, actorID string, f ListFilterInput) ([]*registrationdomain.EventRegistration, int, error)
 	ListByUser(ctx context.Context, userID string, f ListFilterInput) ([]*registrationdomain.EventRegistration, int, error)
 }

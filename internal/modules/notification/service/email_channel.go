@@ -205,6 +205,21 @@ func (c *EmailChannel) getTemplateName(notifType notificationdomain.Notification
 		return "team-invite-accepted"
 	case notificationdomain.TypeTeamInviteDeclined:
 		return "team-invite-declined"
+
+	// ============================================================
+	// PAYMENT NOTIFICATIONS
+	// ============================================================
+	case notificationdomain.TypePaymentInitiated:
+		return "payment-initiated"
+	case notificationdomain.TypePaymentSucceeded:
+		return "payment-succeeded"
+	case notificationdomain.TypePaymentFailed:
+		return "payment-failed"
+	case notificationdomain.TypePaymentExpired:
+		return "payment-expired"
+	case notificationdomain.TypeRefundIssued:
+		return "refund-issued"
+
 	default:
 		return "welcome-individual"
 	}
@@ -276,9 +291,8 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["team_id"] = req.Meta["team_id"]
 		data["accept_link"] = req.Meta["accept_link"]
 		data["expires_in"] = req.Meta["expires_in"]
-		data["role"] = req.Meta["role"] // may be empty for existing account members
+		data["role"] = req.Meta["role"]
 
-		// AI content
 		if req.Meta["ai_subject"] != "" {
 			data["ai_subject"] = req.Meta["ai_subject"]
 		}
@@ -314,9 +328,8 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["team_id"] = req.Meta["team_id"]
 		data["registration_link"] = req.Meta["registration_link"]
 		data["expires_in"] = req.Meta["expires_in"]
-		data["role"] = req.Meta["role"] // always populated for new users
+		data["role"] = req.Meta["role"]
 
-		// AI content
 		if req.Meta["ai_subject"] != "" {
 			data["ai_subject"] = req.Meta["ai_subject"]
 		}
@@ -353,7 +366,6 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["team_id"] = req.Meta["team_id"]
 		data["role"] = req.Meta["role"]
 
-		// AI content
 		if req.Meta["ai_subject"] != "" {
 			data["ai_subject"] = req.Meta["ai_subject"]
 		}
@@ -381,7 +393,6 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["team_id"] = req.Meta["team_id"]
 		data["role"] = req.Meta["role"]
 
-		// AI content
 		if req.Meta["ai_subject"] != "" {
 			data["ai_subject"] = req.Meta["ai_subject"]
 		}
@@ -397,6 +408,60 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		if req.Meta["ai_closing"] != "" {
 			data["ai_closing"] = req.Meta["ai_closing"]
 		}
+
+	// ============================================================
+	// PAYMENT NOTIFICATIONS
+	// ============================================================
+	case notificationdomain.TypePaymentInitiated:
+		data["name"] = req.Meta["name"]
+		data["amount"] = req.Meta["amount"]
+		data["currency"] = req.Meta["currency"]
+		data["provider"] = req.Meta["provider"]
+		data["method"] = req.Meta["method"]
+		data["customer_msg"] = req.Meta["customer_msg"]
+		data["payment_id"] = req.Meta["payment_id"]
+		data["order_id"] = req.Meta["order_id"]
+
+	case notificationdomain.TypePaymentSucceeded:
+		data["name"] = req.Meta["name"]
+		data["amount"] = req.Meta["amount"]
+		data["currency"] = req.Meta["currency"]
+		data["provider"] = req.Meta["provider"]
+		data["method"] = req.Meta["method"]
+		data["provider_reference"] = req.Meta["provider_reference"]
+		data["payment_id"] = req.Meta["payment_id"]
+		data["order_id"] = req.Meta["order_id"]
+		data["registration_id"] = req.Meta["registration_id"]
+
+	case notificationdomain.TypePaymentFailed:
+		data["name"] = req.Meta["name"]
+		data["amount"] = req.Meta["amount"]
+		data["currency"] = req.Meta["currency"]
+		data["provider"] = req.Meta["provider"]
+		data["method"] = req.Meta["method"]
+		data["failure_reason"] = req.Meta["failure_reason"]
+		data["payment_id"] = req.Meta["payment_id"]
+		data["order_id"] = req.Meta["order_id"]
+
+	case notificationdomain.TypePaymentExpired:
+		data["name"] = req.Meta["name"]
+		data["amount"] = req.Meta["amount"]
+		data["currency"] = req.Meta["currency"]
+		data["provider"] = req.Meta["provider"]
+		data["method"] = req.Meta["method"]
+		data["payment_id"] = req.Meta["payment_id"]
+		data["order_id"] = req.Meta["order_id"]
+
+	case notificationdomain.TypeRefundIssued:
+		data["name"] = req.Meta["name"]
+		data["amount"] = req.Meta["amount"]
+		data["currency"] = req.Meta["currency"]
+		data["original_amount"] = req.Meta["original_amount"]
+		data["provider_reference"] = req.Meta["provider_reference"]
+		data["reason"] = req.Meta["reason"]
+		data["payment_id"] = req.Meta["payment_id"]
+		data["refund_id"] = req.Meta["refund_id"]
+		data["is_partial"] = req.Meta["is_partial"]
 	}
 
 	return data
@@ -620,6 +685,65 @@ func (c *EmailChannel) buildTextVersion(req notificationdomain.ChannelRequest, d
 		}
 		text += " on Nuruvent.\n\n"
 		text += "You can invite other users to join your team at any time.\n\n"
+
+	// ============================================================
+	// PAYMENT NOTIFICATIONS
+	// ============================================================
+	case notificationdomain.TypePaymentInitiated:
+		text += "Hello " + data["name"] + ",\n\n"
+		text += "Your payment of " + data["amount"] + " " + data["currency"] + " has been initiated via " + data["provider"] + ".\n\n"
+		text += data["customer_msg"] + "\n\n"
+		text += "Details:\n"
+		text += "- Amount: " + data["amount"] + " " + data["currency"] + "\n"
+		text += "- Method: " + data["method"] + "\n"
+		text += "- Reference: " + data["payment_id"] + "\n\n"
+		text += "Once your payment is confirmed, we'll send you another email with your registration details.\n\n"
+
+	case notificationdomain.TypePaymentSucceeded:
+		text += "Hello " + data["name"] + ",\n\n"
+		text += "We've received your payment of " + data["amount"] + " " + data["currency"] + ". Your spot is confirmed.\n\n"
+		text += "Receipt:\n"
+		text += "- Amount Paid: " + data["amount"] + " " + data["currency"] + "\n"
+		text += "- Method: " + data["method"] + "\n"
+		text += "- Receipt Number: " + data["provider_reference"] + "\n\n"
+		text += "Keep this receipt for your records. You can also download it any time from your Nuruvent dashboard.\n\n"
+		text += "Thank you for choosing Nuruvent. We'll see you at the event!\n\n"
+
+	case notificationdomain.TypePaymentFailed:
+		text += "Hello " + data["name"] + ",\n\n"
+		text += "Unfortunately, your payment of " + data["amount"] + " " + data["currency"] + " could not be processed.\n\n"
+		text += "Reason: " + data["failure_reason"] + "\n\n"
+		text += "Details:\n"
+		text += "- Amount: " + data["amount"] + " " + data["currency"] + "\n"
+		text += "- Method: " + data["method"] + "\n"
+		text += "- Reference: " + data["payment_id"] + "\n\n"
+		text += "You can try again with a different payment method or ensure your account has sufficient funds.\n\n"
+		text += "If you continue to experience issues, contact us at hello@nuruvent.com\n\n"
+
+	case notificationdomain.TypePaymentExpired:
+		text += "Hello " + data["name"] + ",\n\n"
+		text += "Your payment window for " + data["amount"] + " " + data["currency"] + " has ended without a successful transaction.\n\n"
+		text += "Your registration has been expired and any held spots have been released.\n\n"
+		text += "Details:\n"
+		text += "- Amount: " + data["amount"] + " " + data["currency"] + "\n"
+		text += "- Method: " + data["method"] + "\n"
+		text += "- Reference: " + data["payment_id"] + "\n\n"
+		text += "No worries — you can start a new registration any time. Just visit the event page and complete the process.\n\n"
+		text += "We hope to see you next time.\n\n"
+
+	case notificationdomain.TypeRefundIssued:
+		text += "Hello " + data["name"] + ",\n\n"
+		text += "A refund of " + data["amount"] + " " + data["currency"] + " has been processed to your original payment method.\n\n"
+		text += "Refund Details:\n"
+		text += "- Refund Amount: " + data["amount"] + " " + data["currency"] + "\n"
+		text += "- Original Amount: " + data["original_amount"] + " " + data["currency"] + "\n"
+		text += "- Reference: " + data["provider_reference"] + "\n"
+		if data["reason"] != "" {
+			text += "- Reason: " + data["reason"] + "\n"
+		}
+		text += "\n"
+		text += "Refunds typically appear in your account within 5–10 business days, depending on your provider.\n\n"
+		text += "If you have any questions, reach out to hello@nuruvent.com\n\n"
 	}
 
 	text += "\n--\nNuruvent - Light Your Events. Illuminate Your Growth."

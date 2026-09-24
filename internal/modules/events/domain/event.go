@@ -240,6 +240,7 @@ type EventTicket struct {
 	ID                string
 	EventID           string
 	TicketTypeID      string
+	TicketType        *TicketTypeRow 
 	Name              string
 	Description       string
 	Price             float64

@@ -118,6 +118,9 @@ help:
 	@echo "  make cache-clear-all"
 	@echo "  make db-reset"
 
+	@echo "  make test-payment
+	@echo "  make test-payment-verbose
+
 # ================================================
 # MIGRATIONS
 # ================================================
@@ -635,3 +638,10 @@ ecr-login:
 ecr-build-push:
 	@echo "🐳 Building and pushing to AWS ECR..."
 	@$(MAKE) dockerhub-build-push REGISTRY=$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+
+
+test-payment:
+	go test -race ./internal/modules/payment/...
+
+test-payment-verbose:
+	go test -v -race ./internal/modules/payment/...

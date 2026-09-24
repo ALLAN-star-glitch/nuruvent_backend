@@ -14,6 +14,7 @@ type RegistrationRepository struct {
 	db *gorm.DB
 }
 
+
 func NewRegistrationRepository(db *gorm.DB) registrationdomain.RegistrationRepository {
 	return &RegistrationRepository{db: db}
 }
@@ -95,6 +96,7 @@ func (r *RegistrationRepository) FindActiveByUserAndEvent(ctx context.Context, u
 		Where("er.event_id = ?", eventID).
 		Where("rs.slug IN ?", []string{"pending", "confirmed"}).
 		Where("registrations.deleted_at IS NULL").
+		Preload("Status").
 		First(&model).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -106,22 +108,21 @@ func (r *RegistrationRepository) FindActiveByUserAndEvent(ctx context.Context, u
 	return toRegistrationDomain(&model)
 }
 
-
 func (r *RegistrationRepository) WithTx(
-    ctx context.Context,
-    fn func(
-        registrationdomain.RegistrationRepository,
-        registrationdomain.EventRegistrationRepository,
-        registrationdomain.WaitlistRepository,
-    ) error,
+	ctx context.Context,
+	fn func(
+		registrationdomain.RegistrationRepository,
+		registrationdomain.EventRegistrationRepository,
+		registrationdomain.WaitlistRepository,
+	) error,
 ) error {
-    return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-        return fn(
-            &RegistrationRepository{db: tx},
-            &EventRegistrationRepository{db: tx},
-            &WaitlistRepository{db: tx},
-        )
-    })
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		return fn(
+			&RegistrationRepository{db: tx},
+			&EventRegistrationRepository{db: tx},
+			&WaitlistRepository{db: tx},
+		)
+	})
 }
 
 func (r *RegistrationRepository) resolveStatusID(
@@ -140,3 +141,5 @@ func (r *RegistrationRepository) resolveStatusID(
 	}
 	return row.ID, nil
 }
+
+

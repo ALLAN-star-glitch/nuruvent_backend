@@ -150,6 +150,30 @@ type NotificationService interface {
 	
 	// SendTeamInviteDeclined sends notification to admin when user declines invitation
 	SendTeamInviteDeclined(ctx context.Context, req SendTeamInviteDeclinedRequest) error
+
+
+
+		// ============================================================
+	// PAYMENT NOTIFICATIONS
+	// ============================================================
+
+	// SendPaymentInitiated notifies the payer that a payment has been
+	// started and requires their action (e.g. "enter your M-Pesa PIN").
+	SendPaymentInitiated(ctx context.Context, req SendPaymentInitiatedRequest) error
+
+	// SendPaymentSucceeded notifies the payer that a payment completed.
+	SendPaymentSucceeded(ctx context.Context, req SendPaymentSucceededRequest) error
+
+	// SendPaymentFailed notifies the payer that a payment attempt failed.
+	SendPaymentFailed(ctx context.Context, req SendPaymentFailedRequest) error
+
+	// SendPaymentExpired notifies the payer that a pending payment
+	// window elapsed without success.
+	SendPaymentExpired(ctx context.Context, req SendPaymentExpiredRequest) error
+
+	// SendRefundIssued notifies the payer that a refund has been
+	// processed.
+	SendRefundIssued(ctx context.Context, req SendRefundIssuedRequest) error
 }
 
 // ============================================================
@@ -307,4 +331,77 @@ type SendTeamInviteDeclinedRequest struct {
 	// ✅ AI-Ready: Personalized content (optional, for future use)
 	// Defined in tasks.go
 	PersonalizedContent *types.PersonalizedInvitationContent 
+}
+
+// ============================================================
+// PAYMENT NOTIFICATION COMMANDS
+// ============================================================
+
+// SendPaymentInitiatedRequest - Payment initiated, awaiting customer action
+//
+// Sent when: The provider has accepted an initiation and the customer
+// must complete a step (M-Pesa STK push, card 3DS redirect).
+type SendPaymentInitiatedRequest struct {
+	To           string // Customer email
+	Name         string // Customer name (best-effort)
+	Amount       int64  // Minor units
+	Currency     string // ISO 4217
+	Provider     string // "flutterwave"
+	Method       string // "mpesa" | "card"
+	CustomerMsg  string // Provider's instruction: "Enter your M-Pesa PIN…"
+	PaymentID    string
+	OrderID      string
+}
+
+// SendPaymentSucceededRequest - Payment completed successfully.
+type SendPaymentSucceededRequest struct {
+	To                string // Customer email
+	Name              string // Customer name
+	Amount            int64
+	Currency          string
+	Provider          string
+	Method            string
+	ProviderReference string // Provider's transaction ID
+	PaymentID         string
+	OrderID           string
+	RegistrationID    string // so the email can link to the registration
+}
+
+// SendPaymentFailedRequest - Payment attempt failed.
+type SendPaymentFailedRequest struct {
+	To            string
+	Name          string
+	Amount        int64
+	Currency      string
+	Provider      string
+	Method        string
+	FailureReason string
+	PaymentID     string
+	OrderID       string
+}
+
+// SendPaymentExpiredRequest - Payment window elapsed without success.
+type SendPaymentExpiredRequest struct {
+	To        string
+	Name      string
+	Amount    int64
+	Currency  string
+	Provider  string
+	Method    string
+	PaymentID string
+	OrderID   string
+}
+
+// SendRefundIssuedRequest - A refund has been processed.
+type SendRefundIssuedRequest struct {
+	To                string
+	Name              string
+	Amount            int64  // Refund amount (minor units)
+	Currency          string
+	OriginalAmount    int64  // Original payment amount
+	ProviderReference string // Provider's refund reference
+	Reason            string
+	PaymentID         string
+	RefundID          string
+	IsPartial         bool
 }

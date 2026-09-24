@@ -25,6 +25,15 @@ const (
 	TaskTeamInviteRegistration  = "notification:team_invite_registration"   // ✅ New users (no OTP)
 	TaskTeamInviteAccepted      = "notification:team_invite_accepted"       // ✅ Admin notification
 	TaskTeamInviteDeclined      = "notification:team_invite_declined"       // ✅ Admin notification
+
+		// ============================================================
+	// PAYMENT TASKS
+	// ============================================================
+	TaskPaymentInitiated = "notification:payment_initiated"
+	TaskPaymentSucceeded = "notification:payment_succeeded"
+	TaskPaymentFailed    = "notification:payment_failed"
+	TaskPaymentExpired   = "notification:payment_expired"
+	TaskRefundIssued     = "notification:refund_issued"
 )
 
 
@@ -162,3 +171,75 @@ type TeamInviteDeclinedTask struct {
 
 
 
+// ============================================================
+// PAYMENT TASK STRUCTS
+// ============================================================
+
+// PaymentInitiatedTask - Payment started, awaiting customer action
+//
+// Sent when: The provider has accepted an initiation and the customer
+// must complete a step (M-Pesa STK push, card 3DS redirect).
+type PaymentInitiatedTask struct {
+	To          string // Customer email
+	Name        string // Customer name
+	Amount      int64  // Minor units
+	Currency    string // ISO 4217
+	Provider    string // "flutterwave"
+	Method      string // "mpesa" | "card"
+	CustomerMsg string // Provider's instruction: "Enter your M-Pesa PIN…"
+	PaymentID   string
+	OrderID     string
+}
+
+// PaymentSucceededTask - Payment completed successfully
+type PaymentSucceededTask struct {
+	To                string // Customer email
+	Name              string // Customer name
+	Amount            int64  // Minor units
+	Currency          string
+	Provider          string
+	Method            string
+	ProviderReference string // Provider's transaction ID
+	PaymentID         string
+	OrderID           string
+	RegistrationID    string // so the email can link to the registration
+}
+
+// PaymentFailedTask - Payment attempt failed
+type PaymentFailedTask struct {
+	To            string
+	Name          string
+	Amount        int64
+	Currency      string
+	Provider      string
+	Method        string
+	FailureReason string
+	PaymentID     string
+	OrderID       string
+}
+
+// PaymentExpiredTask - Payment window elapsed without success
+type PaymentExpiredTask struct {
+	To        string
+	Name      string
+	Amount    int64
+	Currency  string
+	Provider  string
+	Method    string
+	PaymentID string
+	OrderID   string
+}
+
+// RefundIssuedTask - A refund has been processed
+type RefundIssuedTask struct {
+	To                string
+	Name              string
+	Amount            int64  // Refund amount (minor units)
+	Currency          string
+	OriginalAmount    int64  // Original payment amount
+	ProviderReference string // Provider's refund reference
+	Reason            string
+	PaymentID         string
+	RefundID          string
+	IsPartial         bool
+}

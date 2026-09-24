@@ -47,6 +47,14 @@ func (s *service) CancelRegistration(ctx context.Context, cmd CancelCommand) err
 		return fmt.Errorf("update registration: %w", err)
 	}
 
+	// Mark the event_registrations row inactive so the partial unique
+	// index no longer blocks the user from re-registering for the same
+	// event. Best-effort — if this fails, the cancellation still stands;
+	// a re-register attempt will retry the deactivation path.
+	if err := s.deps.EventRegistrations.Deactivate(ctx, cmd.RegistrationID); err != nil {
+		log.Printf("[cancel] deactivate event registration for %s: %v", cmd.RegistrationID, err)
+	}
+
 	// Adjust the event counter — best-effort. Failure must NOT roll back
 	// the cancellation; the counter is a derived value.
 	if wasConfirmed {

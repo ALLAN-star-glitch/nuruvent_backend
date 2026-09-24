@@ -33,6 +33,10 @@ import (
 	// Notification Module
 	notificationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 
+	// Payment Module
+	paymentHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/delivery/http"
+	paymentService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/service"
+
 	// Team Module
 	teamHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
@@ -85,7 +89,6 @@ func provideFiberAppWithMiddleware() *fiber.App {
 // APP DEPENDENCIES
 // ============================================================
 
-
 // provideAppDependencies assembles the root application dependencies.
 func provideAppDependencies(
 	cfg *config.Config,
@@ -113,8 +116,12 @@ func provideAppDependencies(
 	eventsAIService eventsService.AIService,
 	organizerProvider eventsDomain.OrganizerProvider,
 	accountsPermissionChecker accountDomain.PermissionChecker,
-	regHandler	*regHandler.Handler,
-	regService		regService.Service,
+	regHandler *regHandler.Handler,
+	regService regService.Service,
+	paymentHndlr *paymentHandler.Handler,
+	orderHndlr *paymentHandler.OrderHandler,
+	paymentSvc paymentService.Service,
+	
 ) *AppDependencies {
 	return &AppDependencies{
 		Config:                    cfg,
@@ -142,7 +149,10 @@ func provideAppDependencies(
 		AccountsPermissionChecker: accountsPermissionChecker,
 		AIClient:                  aiClient,
 		EventsAIService:           eventsAIService,
-		RegHandler:				   regHandler,
-		RegService:				   regService,
+		RegHandler:                regHandler,
+		RegService:                regService,
+		PaymentHandler:            paymentHndlr,
+		OrderHandler:              orderHndlr, 
+		PaymentService:            paymentSvc,
 	}
 }

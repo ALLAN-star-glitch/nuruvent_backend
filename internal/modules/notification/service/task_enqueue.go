@@ -260,5 +260,105 @@ func (e *taskEnqueuer) EnqueueTeamInviteDeclined(ctx context.Context, task notif
 	return nil
 }
 
+// ============================================================
+// PAYMENT ENQUEUE METHODS
+// ============================================================
+
+// EnqueuePaymentInitiated enqueues a payment-initiated notification.
+// Sent to: the payer when the provider has accepted initiation and
+// the customer must complete an action (STK push, 3DS redirect).
+func (e *taskEnqueuer) EnqueuePaymentInitiated(ctx context.Context, task notificationdomain.PaymentInitiatedTask) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing payment initiated notification for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskPaymentInitiated, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue payment initiated: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Payment initiated notification enqueued for %s", task.To)
+	return nil
+}
+
+// EnqueuePaymentSucceeded enqueues a payment-succeeded notification.
+// Sent to: the payer after a successful charge.
+func (e *taskEnqueuer) EnqueuePaymentSucceeded(ctx context.Context, task notificationdomain.PaymentSucceededTask) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing payment succeeded notification for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskPaymentSucceeded, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue payment succeeded: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Payment succeeded notification enqueued for %s", task.To)
+	return nil
+}
+
+// EnqueuePaymentFailed enqueues a payment-failed notification.
+// Sent to: the payer when a charge is declined or rejected.
+func (e *taskEnqueuer) EnqueuePaymentFailed(ctx context.Context, task notificationdomain.PaymentFailedTask) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing payment failed notification for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskPaymentFailed, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue payment failed: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Payment failed notification enqueued for %s", task.To)
+	return nil
+}
+
+// EnqueuePaymentExpired enqueues a payment-expired notification.
+// Sent to: the payer when the payment window elapses without success.
+func (e *taskEnqueuer) EnqueuePaymentExpired(ctx context.Context, task notificationdomain.PaymentExpiredTask) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing payment expired notification for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskPaymentExpired, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue payment expired: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Payment expired notification enqueued for %s", task.To)
+	return nil
+}
+
+// EnqueueRefundIssued enqueues a refund-issued notification.
+// Sent to: the payer after a refund is processed.
+func (e *taskEnqueuer) EnqueueRefundIssued(ctx context.Context, task notificationdomain.RefundIssuedTask) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing refund issued notification for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskRefundIssued, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue refund issued: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Refund issued notification enqueued for %s", task.To)
+	return nil
+}
+
 // Ensure taskEnqueuer implements notificationdomain.TaskEnqueuer
 var _ notificationdomain.TaskEnqueuer = (*taskEnqueuer)(nil)

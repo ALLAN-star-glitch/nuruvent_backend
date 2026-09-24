@@ -13,6 +13,7 @@ import (
 
 var DB *gorm.DB
 
+
 // Connect initializes the database connection
 func Connect(cfg *config.Config) (*gorm.DB, error) {
 	var dsn string

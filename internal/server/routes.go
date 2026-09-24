@@ -8,6 +8,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
+	paymenthttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/delivery/http"
 	registrationhttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
 	teamHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
@@ -26,6 +27,8 @@ func SetupRoutes(
 	teamHandler *teamHandler.TeamHandler,
 	accountHandler *handler.AccountHandler,
 	regHandler *registrationhttp.Handler,
+	paymentHandler *paymenthttp.Handler,
+	orderHandler *paymenthttp.OrderHandler,
 ) {
 	// ================================================
 	// 1. SWAGGER - Must be FIRST to avoid 404
@@ -62,6 +65,9 @@ func SetupRoutes(
 	// Registration routes
 	registrationhttp.RegisterRoutes(api, regHandler, authMiddleware, optionalAuth)
 
+	// Payment routes (orders + payments + webhooks)
+	paymenthttp.RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware, optionalAuth)
+
 	// ================================================
 	// 4. 404 Handler - Must be LAST
 	// ================================================
@@ -76,6 +82,7 @@ func healthCheck(c fiber.Ctx) error {
 		"time":   time.Now().UTC(),
 	})
 }
+
 
 func welcome(c fiber.Ctx) error {
 	return response.Success(c, "Welcome to Nuruvent API", fiber.Map{

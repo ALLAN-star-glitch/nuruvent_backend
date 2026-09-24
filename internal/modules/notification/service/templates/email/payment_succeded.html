@@ -1,0 +1,35 @@
+{{define "payment-succeeded"}}
+<h1 class="title">Payment <span class="highlight">Received</span></h1>
+<p class="subtitle">Your registration is confirmed</p>
+
+<div class="alert-success">
+    <div class="message">Payment Successful</div>
+    <div class="sub">You're all set</div>
+</div>
+
+<p class="greeting">Hello <span class="name">{{.name}}</span>,</p>
+<p class="body-text">
+    We've received your payment of <span class="highlight">{{.amount}} {{.currency}}</span>. Your spot is confirmed.
+</p>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">Amount Paid</span>
+        <span class="value">{{.amount}} {{.currency}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Method</span>
+        <span class="value">{{.method}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Receipt Number</span>
+        <span class="value">{{.provider_reference}}</span>
+    </div>
+</div>
+
+<div class="alert-info">
+    <p>Keep this receipt for your records. You can also download it any time from your Nuruvent dashboard.</p>
+</div>
+
+<p class="body-text text-muted text-center">Thank you for choosing Nuruvent. We'll see you at the event!</p>
+{{end}}

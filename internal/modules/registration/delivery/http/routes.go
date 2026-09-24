@@ -4,13 +4,6 @@ package http
 
 import "github.com/gofiber/fiber/v3"
 
-// RegisterRoutes wires the handler methods into the Fiber router.
-//
-// For the register-for-event feature:
-//   - Event-scoped routes (POST /events/:id/register) are registered here
-//     to keep the flow self-contained. If the events module later needs to
-//     own all /events/... routes, this can be moved.
-//   - User-scoped and registration-scoped routes are registered here as well.
 func RegisterRoutes(
 	r fiber.Router,
 	h *Handler,
@@ -20,21 +13,9 @@ func RegisterRoutes(
 	// ------------------------------------------------------------
 	// Event-scoped routes (registration flow)
 	// ------------------------------------------------------------
-	// POST /events/:id/register — register for an event
-	// Auth is optional; the handler accepts either an authenticated user
-	// or guest details in the body.
 	r.Post("/events/:id/register", optionalAuth, h.RegisterForEvent)
-
-	// GET /events/:id/registrations — list registrations for an event
-	// Auth required; only the event organizer should see this.
 	r.Get("/events/:id/registrations", authMiddleware, h.ListByEvent)
-
-	// POST /events/:id/waitlist — join the event waitlist
-	// Auth optional; guest details allowed.
 	r.Post("/events/:id/waitlist", optionalAuth, h.JoinWaitlist)
-
-	// POST /events/:id/waitlist/promote — promote the next waitlisted user
-	// Auth required; typically organizer-only.
 	r.Post("/events/:id/waitlist/promote", authMiddleware, h.PromoteFromWaitlist)
 
 	// ------------------------------------------------------------
@@ -44,9 +25,12 @@ func RegisterRoutes(
 	me.Get("/registrations", h.ListMine)
 
 	// ------------------------------------------------------------
-	// Registration-scoped routes (authenticated for now)
+	// Registration-scoped routes
 	// ------------------------------------------------------------
-	reg := r.Group("/registrations", authMiddleware)
-	reg.Get("/:id", h.GetByID)
-	reg.Delete("/:id", h.Cancel)
+	// GET allows guests to fetch their own registration by
+	// supplying `?email=<guest_email>`.
+	// DELETE requires full authentication.
+	reg := r.Group("/registrations")
+	reg.Get("/:id", optionalAuth, h.GetByID)
+	reg.Delete("/:id", authMiddleware, h.Cancel)
 }

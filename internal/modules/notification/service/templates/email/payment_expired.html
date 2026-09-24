@@ -1,0 +1,34 @@
+{{define "payment-expired"}}
+<h1 class="title">Payment Window <span class="highlight">Expired</span></h1>
+<p class="subtitle">Your reservation has been released</p>
+
+<p class="greeting">Hello <span class="name">{{.name}}</span>,</p>
+<p class="body-text">
+    Your payment window for <span class="highlight">{{.amount}} {{.currency}}</span> has ended without a successful transaction.
+</p>
+
+<div class="alert-warning">
+    <p>Your registration has been expired and any held spots have been released.</p>
+</div>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">Amount</span>
+        <span class="value">{{.amount}} {{.currency}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Method</span>
+        <span class="value">{{.method}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Reference</span>
+        <span class="value">{{.payment_id}}</span>
+    </div>
+</div>
+
+<p class="body-text">
+    No worries — you can start a new registration any time. Just visit the event page and complete the process.
+</p>
+
+<p class="body-text text-muted text-center">We hope to see you next time.</p>
+{{end}}

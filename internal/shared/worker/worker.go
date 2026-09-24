@@ -1,121 +1,137 @@
 package worker
 
 import (
-    "log"
+	"log"
 
-    "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
-    "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
-    "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
-    "github.com/hibiken/asynq"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+	"github.com/hibiken/asynq"
 )
 
 // StartEmbeddedWorker initializes and starts the Asynq worker server asynchronously.
 // It returns a shutdown function to gracefully drain and stop tasks when the API exits.
 func StartEmbeddedWorker(cfg *config.Config) func() {
-    log.Println("🚀 Initializing embedded notification worker...")
+	log.Println("🚀 Initializing embedded notification worker...")
 
-    log.Printf("📧 Email Configuration:")
-    log.Printf("   API Key: %s", maskString(cfg.Email.APIKey))
-    log.Printf("   From: %s", cfg.Email.From)
+	log.Printf("📧 Email Configuration:")
+	log.Printf("   API Key: %s", maskString(cfg.Email.APIKey))
+	log.Printf("   From: %s", cfg.Email.From)
 
-    if cfg.Email.APIKey == "" {
-        log.Printf("⚠️ WARNING: EMAIL_API_KEY is empty! Check your configuration")
-    }
+	if cfg.Email.APIKey == "" {
+		log.Printf("⚠️ WARNING: EMAIL_API_KEY is empty! Check your configuration")
+	}
 
-    // 1. Create Email Channel & Worker
-    emailConfig := service.EmailChannelConfig{
-        EMAIL_API_KEY: cfg.Email.APIKey,
-        EMAIL_FROM:    cfg.Email.From,
-    }
-    
+	// 1. Create Email Channel & Worker
+	emailConfig := service.EmailChannelConfig{
+		EMAIL_API_KEY: cfg.Email.APIKey,
+		EMAIL_FROM:    cfg.Email.From,
+	}
 
-    emailChannel := service.NewEmailChannel(emailConfig)
-    notificationWorker := service.NewNotificationWorker(emailChannel)
+	emailChannel := service.NewEmailChannel(emailConfig)
+	notificationWorker := service.NewNotificationWorker(emailChannel)
 
-    // 2. Parse Redis URL cleanly via Asynq native parser
-    redisURL := cfg.GetRedisURL()
-    redisOpt, err := asynq.ParseRedisURI(redisURL)
-    if err != nil {
-        log.Fatalf("Failed to parse Redis URI for Asynq worker (%s): %v", redisURL, err)
-    }
+	// 2. Parse Redis URL cleanly via Asynq native parser
+	redisURL := cfg.GetRedisURL()
+	redisOpt, err := asynq.ParseRedisURI(redisURL)
+	if err != nil {
+		log.Fatalf("Failed to parse Redis URI for Asynq worker (%s): %v", redisURL, err)
+	}
 
-    // Initialize Asynq server with parsed options
-    srv := asynq.NewServer(
-        redisOpt,
-        asynq.Config{
-            Concurrency: 10,
-            Queues: map[string]int{
-                "critical": 6,
-                "default":  3,
-                "low":      1,
-            },
-        },
-    )
+	// Initialize Asynq server with parsed options
+	srv := asynq.NewServer(
+		redisOpt,
+		asynq.Config{
+			Concurrency: 10,
+			Queues: map[string]int{
+				"critical": 6,
+				"default":  3,
+				"low":      1,
+			},
+		},
+	)
 
-    // 4. Register Task Handlers
-    mux := asynq.NewServeMux()
-    mux.HandleFunc(notificationdomain.TaskVerificationOTP, notificationWorker.HandleVerificationOTP)
-    mux.HandleFunc(notificationdomain.TaskWelcomeIndividual, notificationWorker.HandleWelcomeIndividual)
-    mux.HandleFunc(notificationdomain.TaskWelcomeInstitution, notificationWorker.HandleWelcomeInstitution)
-    mux.HandleFunc(notificationdomain.TaskPasswordResetConfirm, notificationWorker.HandlePasswordResetConfirm)
-    mux.HandleFunc(notificationdomain.TaskLoginNotification, notificationWorker.HandleLoginNotification)
-    mux.HandleFunc(notificationdomain.TaskWelcomeInstitutionKYC, notificationWorker.HandleWelcomeInstitutionKYC)
-    mux.HandleFunc(notificationdomain.TaskNewPersonalAccountRegistration, notificationWorker.HandleNewPersonalAccountRegistration)
-    mux.HandleFunc(notificationdomain.TaskNewInstitutionAccountRegistration, notificationWorker.HandleNewInstitutionAccountRegistration)
-    
-    // ============================================================
-    // ✅ TEAM INVITATION TASK HANDLERS (UPDATED)
-    // ============================================================
-    // NO ROLE - Roles are inherited from account level
-    // NO OTP - Uses accept link or registration link with token
-    mux.HandleFunc(notificationdomain.TaskTeamInviteExistingUser, notificationWorker.HandleTeamInviteExistingUser)
-    mux.HandleFunc(notificationdomain.TaskTeamInviteRegistration, notificationWorker.HandleTeamInviteRegistration)
-    mux.HandleFunc(notificationdomain.TaskTeamInviteAccepted, notificationWorker.HandleTeamInviteAccepted)
-    mux.HandleFunc(notificationdomain.TaskTeamInviteDeclined, notificationWorker.HandleTeamInviteDeclined)
+	// 4. Register Task Handlers
+	mux := asynq.NewServeMux()
+	mux.HandleFunc(notificationdomain.TaskVerificationOTP, notificationWorker.HandleVerificationOTP)
+	mux.HandleFunc(notificationdomain.TaskWelcomeIndividual, notificationWorker.HandleWelcomeIndividual)
+	mux.HandleFunc(notificationdomain.TaskWelcomeInstitution, notificationWorker.HandleWelcomeInstitution)
+	mux.HandleFunc(notificationdomain.TaskPasswordResetConfirm, notificationWorker.HandlePasswordResetConfirm)
+	mux.HandleFunc(notificationdomain.TaskLoginNotification, notificationWorker.HandleLoginNotification)
+	mux.HandleFunc(notificationdomain.TaskWelcomeInstitutionKYC, notificationWorker.HandleWelcomeInstitutionKYC)
+	mux.HandleFunc(notificationdomain.TaskNewPersonalAccountRegistration, notificationWorker.HandleNewPersonalAccountRegistration)
+	mux.HandleFunc(notificationdomain.TaskNewInstitutionAccountRegistration, notificationWorker.HandleNewInstitutionAccountRegistration)
 
-    log.Println("✅ All task handlers registered")
-    log.Println("📋 Registered tasks:")
-    log.Printf("   - %s (unified for all OTP purposes)", notificationdomain.TaskVerificationOTP)
-    log.Printf("   - %s", notificationdomain.TaskWelcomeIndividual)
-    log.Printf("   - %s", notificationdomain.TaskWelcomeInstitution)
-    log.Printf("   - %s", notificationdomain.TaskPasswordResetConfirm)
-    log.Printf("   - %s", notificationdomain.TaskLoginNotification)
-    log.Printf("   - %s", notificationdomain.TaskWelcomeInstitutionKYC)
-    log.Printf("   - %s", notificationdomain.TaskNewPersonalAccountRegistration)
-    log.Printf("   - %s", notificationdomain.TaskNewInstitutionAccountRegistration)
-    
-    // ✅ TEAM INVITATION TASKS (UPDATED)
-    log.Println("   📋 Team Invitation Tasks (NO ROLE, NO OTP):")
-    log.Printf("   - %s (existing users - accept link)", notificationdomain.TaskTeamInviteExistingUser)
-    log.Printf("   - %s (new users - registration link)", notificationdomain.TaskTeamInviteRegistration)
-    log.Printf("   - %s (admin notification - accepted)", notificationdomain.TaskTeamInviteAccepted)
-    log.Printf("   - %s (admin notification - declined)", notificationdomain.TaskTeamInviteDeclined)
+	// ============================================================
+	// ✅ TEAM INVITATION TASK HANDLERS (UPDATED)
+	// ============================================================
+	// NO ROLE - Roles are inherited from account level
+	// NO OTP - Uses accept link or registration link with token
+	mux.HandleFunc(notificationdomain.TaskTeamInviteExistingUser, notificationWorker.HandleTeamInviteExistingUser)
+	mux.HandleFunc(notificationdomain.TaskTeamInviteRegistration, notificationWorker.HandleTeamInviteRegistration)
+	mux.HandleFunc(notificationdomain.TaskTeamInviteAccepted, notificationWorker.HandleTeamInviteAccepted)
+	mux.HandleFunc(notificationdomain.TaskTeamInviteDeclined, notificationWorker.HandleTeamInviteDeclined)
 
-    // 5. Start Worker in a Background Goroutine
-    go func() {
-        log.Println("🚀 Asynq notification worker active. Listening for tasks...")
-        log.Printf("📊 Queue priorities: critical=6, default=3, low=1")
-        if err := srv.Run(mux); err != nil {
-            log.Printf("❌ Asynq worker execution stopped: %v", err)
-        }
-    }()
+	// ============================================================
+	// PAYMENT TASK HANDLERS
+	// ============================================================
+	mux.HandleFunc(notificationdomain.TaskPaymentInitiated, notificationWorker.HandlePaymentInitiated)
+	mux.HandleFunc(notificationdomain.TaskPaymentSucceeded, notificationWorker.HandlePaymentSucceeded)
+	mux.HandleFunc(notificationdomain.TaskPaymentFailed, notificationWorker.HandlePaymentFailed)
+	mux.HandleFunc(notificationdomain.TaskPaymentExpired, notificationWorker.HandlePaymentExpired)
+	mux.HandleFunc(notificationdomain.TaskRefundIssued, notificationWorker.HandleRefundIssued)
 
-    // 6. Return closure for clean shutdown
-    return func() {
-        log.Println("🛑 Shutting down embedded Asynq worker...")
-        srv.Shutdown()
-        log.Println("✅ Embedded worker stopped")
-    }
+	log.Println("✅ All task handlers registered")
+	log.Println("📋 Registered tasks:")
+	log.Printf("   - %s (unified for all OTP purposes)", notificationdomain.TaskVerificationOTP)
+	log.Printf("   - %s", notificationdomain.TaskWelcomeIndividual)
+	log.Printf("   - %s", notificationdomain.TaskWelcomeInstitution)
+	log.Printf("   - %s", notificationdomain.TaskPasswordResetConfirm)
+	log.Printf("   - %s", notificationdomain.TaskLoginNotification)
+	log.Printf("   - %s", notificationdomain.TaskWelcomeInstitutionKYC)
+	log.Printf("   - %s", notificationdomain.TaskNewPersonalAccountRegistration)
+	log.Printf("   - %s", notificationdomain.TaskNewInstitutionAccountRegistration)
+
+	// ✅ TEAM INVITATION TASKS (UPDATED)
+	log.Println("   📋 Team Invitation Tasks (NO ROLE, NO OTP):")
+	log.Printf("   - %s (existing users - accept link)", notificationdomain.TaskTeamInviteExistingUser)
+	log.Printf("   - %s (new users - registration link)", notificationdomain.TaskTeamInviteRegistration)
+	log.Printf("   - %s (admin notification - accepted)", notificationdomain.TaskTeamInviteAccepted)
+	log.Printf("   - %s (admin notification - declined)", notificationdomain.TaskTeamInviteDeclined)
+
+	// ✅ PAYMENT TASKS
+	log.Println("   💳 Payment Tasks:")
+	log.Printf("   - %s (initiated)", notificationdomain.TaskPaymentInitiated)
+	log.Printf("   - %s (succeeded)", notificationdomain.TaskPaymentSucceeded)
+	log.Printf("   - %s (failed)", notificationdomain.TaskPaymentFailed)
+	log.Printf("   - %s (expired)", notificationdomain.TaskPaymentExpired)
+	log.Printf("   - %s (refund issued)", notificationdomain.TaskRefundIssued)
+
+	// 5. Start Worker in a Background Goroutine
+	go func() {
+		log.Println("🚀 Asynq notification worker active. Listening for tasks...")
+		log.Printf("📊 Queue priorities: critical=6, default=3, low=1")
+		if err := srv.Run(mux); err != nil {
+			log.Printf("❌ Asynq worker execution stopped: %v", err)
+		}
+	}()
+
+	// 6. Return closure for clean shutdown
+	return func() {
+		log.Println("🛑 Shutting down embedded Asynq worker...")
+		srv.Shutdown()
+		log.Println("✅ Embedded worker stopped")
+	}
 }
-
 
 // maskString masks a string for logging (shows first 4 and last 4 characters)
 func maskString(s string) string {
-    if s == "" {
-        return "[EMPTY]"
-    }
-    if len(s) <= 8 {
-        return "***"
-    }
-    return s[:4] + "..." + s[len(s)-4:]
+	if s == "" {
+		return "[EMPTY]"
+	}
+	if len(s) <= 8 {
+		return "***"
+	}
+	return s[:4] + "..." + s[len(s)-4:]
 }
+

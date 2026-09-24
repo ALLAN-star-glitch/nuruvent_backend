@@ -53,4 +53,24 @@ type TaskProcessor interface {
 	// ProcessTeamInviteDeclined processes a notification when invitation is declined
 	// Sent to: Admin who sent the invitation
 	ProcessTeamInviteDeclined(ctx context.Context, task TeamInviteDeclinedTask) error
+
+
+		// ============================================================
+	// PAYMENT TASKS
+	// ============================================================
+
+	// ProcessPaymentInitiated processes a payment-initiated notification.
+	ProcessPaymentInitiated(ctx context.Context, task PaymentInitiatedTask) error
+
+	// ProcessPaymentSucceeded processes a payment-succeeded notification.
+	ProcessPaymentSucceeded(ctx context.Context, task PaymentSucceededTask) error
+
+	// ProcessPaymentFailed processes a payment-failed notification.
+	ProcessPaymentFailed(ctx context.Context, task PaymentFailedTask) error
+
+	// ProcessPaymentExpired processes a payment-expired notification.
+	ProcessPaymentExpired(ctx context.Context, task PaymentExpiredTask) error
+
+	// ProcessRefundIssued processes a refund-issued notification.
+	ProcessRefundIssued(ctx context.Context, task RefundIssuedTask) error
 }

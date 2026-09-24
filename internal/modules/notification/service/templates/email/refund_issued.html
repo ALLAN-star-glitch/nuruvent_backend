@@ -1,0 +1,41 @@
+{{define "refund-issued"}}
+<h1 class="title">Refund <span class="highlight">Processed</span></h1>
+<p class="subtitle">Your refund has been sent</p>
+
+<div class="alert-success">
+    <div class="message">Refund Successful</div>
+    <div class="sub">Funds are on their way</div>
+</div>
+
+<p class="greeting">Hello <span class="name">{{.name}}</span>,</p>
+<p class="body-text">
+    A refund of <span class="highlight">{{.amount}} {{.currency}}</span> has been processed to your original payment method.
+</p>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">Refund Amount</span>
+        <span class="value">{{.amount}} {{.currency}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Original Amount</span>
+        <span class="value">{{.original_amount}} {{.currency}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Reference</span>
+        <span class="value">{{.provider_reference}}</span>
+    </div>
+    {{if .reason}}
+    <div class="row">
+        <span class="label">Reason</span>
+        <span class="value">{{.reason}}</span>
+    </div>
+    {{end}}
+</div>
+
+<div class="alert-info">
+    <p>Refunds typically appear in your account within 5–10 business days, depending on your provider.</p>
+</div>
+
+<p class="body-text text-muted text-center">If you have any questions, reach out to hello@nuruvent.com</p>
+{{end}}

@@ -693,7 +693,10 @@ func (r *PostgresRepository) loadChildEntities(ctx context.Context, event *domai
 
 	// Load tickets
 	var ticketModels []EventTicketModel
-	if err := r.db.WithContext(ctx).Where("event_id = ? AND deleted_at IS NULL", event.ID).Find(&ticketModels).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Preload("TicketType").                                   // ← ADD
+		Where("event_id = ? AND deleted_at IS NULL", event.ID).
+		Find(&ticketModels).Error; err != nil {
 		return err
 	}
 	event.Tickets = toDomainTickets(ticketModels)

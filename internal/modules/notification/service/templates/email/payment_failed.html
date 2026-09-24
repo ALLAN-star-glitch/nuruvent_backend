@@ -1,0 +1,34 @@
+{{define "payment-failed"}}
+<h1 class="title">Payment <span class="highlight">Failed</span></h1>
+<p class="subtitle">Your transaction couldn't be completed</p>
+
+<p class="greeting">Hello <span class="name">{{.name}}</span>,</p>
+<p class="body-text">
+    Unfortunately, your payment of <span class="highlight">{{.amount}} {{.currency}}</span> could not be processed.
+</p>
+
+<div class="alert-danger">
+    <p><strong>Reason:</strong> {{.failure_reason}}</p>
+</div>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">Amount</span>
+        <span class="value">{{.amount}} {{.currency}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Method</span>
+        <span class="value">{{.method}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Reference</span>
+        <span class="value">{{.payment_id}}</span>
+    </div>
+</div>
+
+<p class="body-text">
+    You can try again with a different payment method or ensure your account has sufficient funds.
+</p>
+
+<p class="body-text text-muted text-center">If you continue to experience issues, contact us at hello@nuruvent.com</p>
+{{end}}
