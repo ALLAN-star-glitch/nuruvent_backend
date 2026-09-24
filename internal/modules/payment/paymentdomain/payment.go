@@ -48,6 +48,9 @@ type Payment struct {
 	// FailureReason is set when Status == failed.
 	FailureReason string
 
+
+	AccessCode string
+
 	InitiatedAt time.Time
 	ExpiresAt   time.Time
 	CreatedAt   time.Time

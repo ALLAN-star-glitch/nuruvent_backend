@@ -22,7 +22,6 @@ import (
 	mediaService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 	notificationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 	paymentproviders "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/providers"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/providers/intasend"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/providers/paystack"
 	paymentdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
@@ -132,14 +131,17 @@ func NewPaymentRegistrationConfirmer(
 	return paymentadapters.NewRegistrationConfirmer(regSvc)
 }
 
+// NewPaymentProviderRegistry builds the provider registry from
+// configured credentials.
+//
+// Paystack is currently the sole payment provider for both M-Pesa and
+// cards — it handles both methods through one hosted integration, so
+// there's no per-method fallback to worry about.
 func NewPaymentProviderRegistry(
 	cfg *config.Config,
 ) (paymentdomain.ProviderRegistry, error) {
 	registry := paymentproviders.NewRegistry()
 
-	// ------------------------------------------------------------------
-	// Paystack (register FIRST so it wins for mpesa and card when enabled)
-	// ------------------------------------------------------------------
 	if cfg.Paystack.IsConfigured() {
 		ps := paystack.NewProvider(cfg.Paystack)
 
@@ -161,35 +163,8 @@ func NewPaymentProviderRegistry(
 		log.Println("payment: paystack not configured (skipping)")
 	}
 
-	// ------------------------------------------------------------------
-	// IntaSend (kept during migration; registered second so Paystack wins)
-	// ------------------------------------------------------------------
-	if cfg.IntaSend.IsConfigured() {
-		is := intasend.NewProvider(cfg.IntaSend)
-
-		if err := registry.Register(is); err != nil {
-			// Name conflict isn't possible (different names), but
-			// Method conflicts are OK — first-registered wins.
-			return nil, fmt.Errorf("register intasend: %w", err)
-		}
-
-		for _, method := range is.Methods() {
-			if method == is.Method() {
-				continue
-			}
-			if err := registry.RegisterForMethod(is, method); err != nil {
-				return nil, fmt.Errorf("register intasend for %s: %w", method, err)
-			}
-		}
-
-		log.Println("payment: registered intasend provider (mpesa + card)")
-	} else {
-		log.Println("payment: intasend not configured (skipping)")
-	}
-
 	return registry, nil
 }
-
 
 // NewPaymentUserEmailResolver wires the UserEmailResolver port to the
 // account module.
@@ -209,9 +184,13 @@ func NewPaymentNotifier(
 }
 
 // NewPaymentPricingResolver wires the payment module's
-// RegistrationPricingResolver port to the registration module's service.
+// RegistrationPricingResolver port to the registration repository.
+//
+// We inject the repository rather than the service so the adapter can
+// load a registration without going through the service's ownership
+// check. The payment service enforces ownership itself.
 func NewPaymentPricingResolver(
-	regSvc registrationService.Service,
+	regRepo registrationdomain.EventRegistrationRepository,
 ) paymentdomain.RegistrationPricingResolver {
-	return paymentadapters.NewPricingResolver(regSvc)
+	return paymentadapters.NewPricingResolver(regRepo)
 }

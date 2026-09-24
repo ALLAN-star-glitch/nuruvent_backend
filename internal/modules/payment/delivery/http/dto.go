@@ -57,6 +57,7 @@ type PaymentResponse struct {
 	InitiatedAt       time.Time  `json:"initiated_at"`
 	ExpiresAt         time.Time  `json:"expires_at"`
 	CompletedAt       *time.Time `json:"completed_at,omitempty"`
+	AccessCode  string `json:"access_code,omitempty"`
 	FailedAt          *time.Time `json:"failed_at,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
@@ -72,7 +73,8 @@ type PaymentResponse struct {
 // pricing, items, and totals from the registration — the client cannot
 // influence the amount.
 type CreateOrderRequest struct {
-	RegistrationID string `json:"registration_id"`
+    RegistrationID string `json:"registration_id"`
+    GuestEmail     string `json:"guest_email,omitempty"` // for guests
 }
 
 // ============================================================

@@ -155,6 +155,10 @@ func (s *service) InitiatePayment(
 		payment.RedirectURL = result.RedirectURL  
 	}
 
+	if result.AccessCode != "" {
+    payment.AccessCode = result.AccessCode   
+}
+
 	// If the provider immediately succeeded (rare, but possible for
 	// pre-authorized charges), transition state accordingly.
 	if result.Status == paymentdomain.PaymentStatusSucceeded {

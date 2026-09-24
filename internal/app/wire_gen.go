@@ -133,7 +133,7 @@ func InitializeApp() (*AppDependencies, error) {
 	paymentdomainNotifier := NewPaymentNotifier(notificationService, userEmailResolver)
 	unitOfWork := postgres7.NewUnitOfWork(db)
 	registrationConfirmer := NewPaymentRegistrationConfirmer(service13)
-	registrationPricingResolver := NewPaymentPricingResolver(service13)
+	registrationPricingResolver := NewPaymentPricingResolver(eventRegistrationRepository)
 	systemClock := payment.ProvideSystemClock()
 	serviceDependencies := payment.ProvideServiceDependencies(orderRepository, paymentRepository, refundRepository, webhookEventRepository, providerRegistry, paymentdomainNotifier, unitOfWork, registrationConfirmer, registrationPricingResolver, uuidGenerator, systemClock)
 	service14 := service8.New(serviceDependencies)

@@ -20,7 +20,6 @@ type Config struct {
 	Email       EmailConfig
 	Casbin      CasbinConfig
 	MPesa       MPesaConfig
-	IntaSend    IntaSendConfig
 	Paystack    PaystackConfig
 	Supabase    SupabaseConfig
 	OpenAI      OpenAIConfig
@@ -28,28 +27,6 @@ type Config struct {
 	Groq        GroqConfig
 	OpenRouter  OpenRouterConfig
 	NuruOnboardingNoticeEmails NuruventOnboardingNoticeEmails
-}
-
-// ============================================================
-// INTASEND (kept during Paystack migration)
-// ============================================================
-
-// IntaSendConfig holds credentials for the IntaSend payment gateway.
-//
-// IntaSend serves M-Pesa and cards. M-Pesa uses /payment/collection/
-// (secret key auth). Card uses /checkout/ (publishable key in body).
-type IntaSendConfig struct {
-	PublishableKey string
-	SecretKey      string
-	BaseURL        string
-	Challenge      string
-	Enabled        bool
-}
-
-// IsConfigured reports whether the minimum required credentials are
-// present for the IntaSend provider to operate.
-func (c IntaSendConfig) IsConfigured() bool {
-	return c.Enabled && c.SecretKey != "" && c.PublishableKey != ""
 }
 
 // ============================================================
@@ -201,13 +178,6 @@ func Load() *Config {
 			Passkey:        getEnv("MPESA_PASSKEY", ""),
 			Shortcode:      getEnv("MPESA_SHORTCODE", "174379"),
 			Environment:    getEnv("MPESA_ENVIRONMENT", "sandbox"),
-		},
-		IntaSend: IntaSendConfig{
-			PublishableKey: getEnv("INTASEND_PUBLISHABLE_KEY", ""),
-			SecretKey:      getEnv("INTASEND_SECRET_KEY", ""),
-			BaseURL:        getEnv("INTASEND_BASE_URL", "https://sandbox.intasend.com/api/v1"),
-			Challenge:      getEnv("INTASEND_CHALLENGE", ""),
-			Enabled:        getEnvBool("INTASEND_ENABLED", false),
 		},
 		Paystack: PaystackConfig{
 			SecretKey: getEnv("PAYSTACK_SECRET_KEY", ""),

@@ -66,7 +66,7 @@ func SetupRoutes(
 	registrationhttp.RegisterRoutes(api, regHandler, authMiddleware, optionalAuth)
 
 	// Payment routes (orders + payments + webhooks)
-	paymenthttp.RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware)
+	paymenthttp.RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware, optionalAuth)
 
 	// ================================================
 	// 4. 404 Handler - Must be LAST
@@ -82,6 +82,7 @@ func healthCheck(c fiber.Ctx) error {
 		"time":   time.Now().UTC(),
 	})
 }
+
 
 func welcome(c fiber.Ctx) error {
 	return response.Success(c, "Welcome to Nuruvent API", fiber.Map{

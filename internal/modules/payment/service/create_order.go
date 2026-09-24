@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
@@ -23,11 +24,12 @@ const DefaultOrderTTL = 30 * time.Minute
 //
 // Steps:
 //  1. Resolve the registration's pricing via the cross-module port.
-//  2. Check for an existing pending order for the same registration.
+//  2. Enforce ownership (authenticated actor or matching guest email).
+//  3. Check for an existing pending order for the same registration.
 //     If one exists, return it (idempotent).
-//  3. Build the Order entity with items from the pricing snapshot.
-//  4. Persist it.
-//  5. Return it.
+//  4. Build the Order entity with items from the pricing snapshot.
+//  5. Persist it.
+//  6. Return it.
 //
 // The client supplies only the registration ID. All pricing, items,
 // and identity come from the registration — the client cannot
@@ -43,7 +45,9 @@ func (s *service) CreateOrder(
 	now := s.deps.Clock.Now()
 
 	// ------------------------------------------------------------
-	// 1. Resolve pricing from the registration module
+	// 1. Resolve pricing from the registration module.
+	//    The snapshot carries UserID + GuestEmail, which we use for
+	//    the ownership check below — no separate call needed.
 	// ------------------------------------------------------------
 	pricing, err := s.deps.RegistrationPricing.ResolvePricing(ctx, cmd.RegistrationID)
 	if err != nil {
@@ -54,7 +58,15 @@ func (s *service) CreateOrder(
 	}
 
 	// ------------------------------------------------------------
-	// 2. Duplicate check
+	// 2. Ownership check — BEFORE any side effects.
+	//    Mirrors the rule in registration.GetByID.
+	// ------------------------------------------------------------
+	if err := assertRegistrationOwnership(cmd, pricing); err != nil {
+		return nil, err
+	}
+
+	// ------------------------------------------------------------
+	// 3. Duplicate check
 	// ------------------------------------------------------------
 	existing, err := s.deps.Orders.FindActiveByRegistration(ctx, cmd.RegistrationID)
 	if err == nil && existing != nil {
@@ -65,7 +77,7 @@ func (s *service) CreateOrder(
 	}
 
 	// ------------------------------------------------------------
-	// 3. Build the Order entity
+	// 4. Build the Order entity
 	// ------------------------------------------------------------
 	items := make([]paymentdomain.OrderItem, 0, len(pricing.Items))
 	for _, it := range pricing.Items {
@@ -95,13 +107,45 @@ func (s *service) CreateOrder(
 	}
 
 	// ------------------------------------------------------------
-	// 4. Persist
+	// 5. Persist
 	// ------------------------------------------------------------
 	if err := s.deps.Orders.Create(ctx, order); err != nil {
 		return nil, fmt.Errorf("persist order: %w", err)
 	}
 
 	return order, nil
+}
+
+// assertRegistrationOwnership enforces the same identity rule used by
+// the registration module's GetByID:
+//
+//	authenticated actor → must own the registration
+//	guest email         → must match the stored guest_email
+//	neither             → unauthorized
+//
+// Note: UserID and GuestEmail are plain strings on RegistrationPricing;
+// an empty value means "not set" for that identity path.
+func assertRegistrationOwnership(
+	cmd CreateOrderCommand,
+	pricing *paymentdomain.RegistrationPricing,
+) error {
+	switch {
+	case cmd.ActorID != "":
+		if pricing.UserID == "" || pricing.UserID != cmd.ActorID {
+			return paymentdomain.ErrForbidden
+		}
+		return nil
+
+	case cmd.GuestEmail != "":
+		if pricing.GuestEmail == "" ||
+			!strings.EqualFold(pricing.GuestEmail, cmd.GuestEmail) {
+			return paymentdomain.ErrForbidden
+		}
+		return nil
+
+	default:
+		return paymentdomain.ErrUnauthorized
+	}
 }
 
 // ============================================================

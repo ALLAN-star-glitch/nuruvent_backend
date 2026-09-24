@@ -216,6 +216,7 @@ func (p *Provider) initiateCard(
 
 	return &paymentdomain.InitiateResult{
 		ProviderReference: data.Data.Reference,
+		AccessCode:        data.Data.AccessCode,
 		RedirectURL:       data.Data.AuthorizationURL,
 		Status:            paymentdomain.PaymentStatusPending,
 		CustomerMessage:   "Redirecting you to a secure card checkout.",
@@ -367,9 +368,11 @@ func parseTime(s string) time.Time {
 		if t, err := time.Parse(layout, s); err == nil {
 			return t.UTC()
 		}
+
 	}
 	return time.Now().UTC()
 }
+
 
 
 // Compile-time assertion.

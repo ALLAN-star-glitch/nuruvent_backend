@@ -15,28 +15,26 @@ import "github.com/gofiber/fiber/v3"
 // All routes are authenticated except the webhook. The webhook uses
 // challenge-based verification (inside the service) as its sole
 // authentication mechanism — IntaSend has no user session to present.
+
 func RegisterRoutes(
-	r fiber.Router,
-	orderHandler *OrderHandler,
-	paymentHandler *Handler,
-	authMiddleware fiber.Handler,
+    r fiber.Router,
+    orderHandler *OrderHandler,
+    paymentHandler *Handler,
+    authMiddleware fiber.Handler,
+    optionalAuth fiber.Handler,   // add this param
 ) {
-	// ============================================================
-	// ORDER ROUTES — authenticated
-	// ============================================================
-	r.Post("/orders", authMiddleware, orderHandler.CreateOrder)
-	r.Get("/orders/:id", authMiddleware, orderHandler.GetOrder)
+    // Orders — allow guests, verify ownership in the handler/service
+    r.Post("/orders", optionalAuth, orderHandler.CreateOrder)
+    r.Get("/orders/:id", optionalAuth, orderHandler.GetOrder)
 
-	// ============================================================
-	// PAYMENT ROUTES — authenticated
-	// ============================================================
-	r.Post("/payments/initiate", authMiddleware, paymentHandler.InitiatePayment)
-	r.Get("/payments/:id", authMiddleware, paymentHandler.GetPayment)
-	r.Post("/payments/:id/refund", authMiddleware, paymentHandler.Refund)
+    // Payments — allow guests, verify ownership in the handler/service
+    r.Post("/payments/initiate", optionalAuth, paymentHandler.InitiatePayment)
+    r.Get("/payments/:id", optionalAuth, paymentHandler.GetPayment)
 
-	// ============================================================
-	// WEBHOOK — no auth, challenge verification inside the service
-	// ============================================================
-	r.Post("/webhooks/intasend", paymentHandler.IntaSendWebhook)
-	r.Post("/webhooks/paystack", paymentHandler.PaystackWebhook)
+    // Refund — keep auth-only (admin/organizer action)
+    r.Post("/payments/:id/refund", authMiddleware, paymentHandler.Refund)
+
+    // Webhooks unchanged
+    r.Post("/webhooks/intasend", paymentHandler.IntaSendWebhook)
+    r.Post("/webhooks/paystack", paymentHandler.PaystackWebhook)
 }

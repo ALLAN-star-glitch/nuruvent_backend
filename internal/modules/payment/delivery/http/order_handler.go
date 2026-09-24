@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/handlerhelper"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 )
 
@@ -36,26 +37,35 @@ func NewOrderHandler(svc service.Service) *OrderHandler {
 // Idempotent: calling this endpoint twice with the same registration
 // returns the same order. If the registration already has a pending
 // order, that order is returned instead of creating a duplicate.
+// internal/modules/payment/delivery/http/order_handler.go
+
+// order_handler.go
+
 func (h *OrderHandler) CreateOrder(c fiber.Ctx) error {
-	var body CreateOrderRequest
-	if err := c.Bind().Body(&body); err != nil {
-		return response.BadRequest(c, "Invalid request body", fiber.Map{
-			"error": err.Error(),
-		})
-	}
+    var body CreateOrderRequest
+    if err := c.Bind().Body(&body); err != nil {
+        return response.BadRequest(c, "Invalid request body", fiber.Map{"error": err.Error()})
+    }
+    if body.RegistrationID == "" {
+        return response.BadRequest(c, "registration_id is required", nil)
+    }
 
-	if body.RegistrationID == "" {
-		return response.BadRequest(c, "registration_id is required", nil)
-	}
+    actorID := handlerhelper.GetUserIDOptional(c)
 
-	order, err := h.svc.CreateOrder(c.Context(), service.CreateOrderCommand{
-		RegistrationID: body.RegistrationID,
-	})
-	if err != nil {
-		return mapDomainError(c, err)
-	}
+    if actorID == "" && body.GuestEmail == "" {
+        return response.Unauthorized(c, "Authentication or guest email required", nil)
+    }
 
-	return response.Created(c, "Order created successfully", toOrderResponse(order))
+    order, err := h.svc.CreateOrder(c.Context(), service.CreateOrderCommand{
+        RegistrationID: body.RegistrationID,
+        ActorID:        actorID,
+        GuestEmail:     body.GuestEmail,
+    })
+    if err != nil {
+        return mapDomainError(c, err)
+    }
+
+    return response.Created(c, "Order created successfully", toOrderResponse(order))
 }
 
 

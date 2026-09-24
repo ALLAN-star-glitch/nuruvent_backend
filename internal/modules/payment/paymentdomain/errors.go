@@ -153,3 +153,13 @@ var (
 	// Cross-module
 	ErrRegistrationNotFound = errors.New("registration not found")
 )
+
+var (
+	// ErrForbidden is returned when the caller is authenticated (or
+	// provided guest proof) but does not own the target resource.
+	ErrForbidden = errors.New("forbidden")
+
+	// ErrUnauthorized is returned when no usable identity proof was
+	// supplied at all.
+	ErrUnauthorized = errors.New("unauthorized")
+)

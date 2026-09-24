@@ -9,23 +9,27 @@ import (
 
 	paymentdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
 	registrationdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
-	registrationService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 )
 
 // PricingResolver implements paymentdomain.RegistrationPricingResolver
-// by delegating to the registration module.
+// by reading registrations directly from the registration repository.
 //
-// The payment module uses this to fetch a registration's pricing at
-// the moment an order is created. This ensures the order total always
-// matches what the user was quoted at registration time.
+// The repository's FindByID is unconditional — it does not enforce
+// ownership. That's intentional here: the payment module enforces its
+// own ownership rule (actor OR matching guest email) inside
+// CreateOrder and InitiatePayment, using the UserID / GuestEmail
+// returned in the snapshot. Enforcing ownership twice — once here and
+// once in the payment service — would break legitimate guest checkouts
+// because the payment module has no actor to present.
 type PricingResolver struct {
-	regSvc registrationService.Service
+	regRepo registrationdomain.EventRegistrationRepository
 }
 
 // NewPricingResolver constructs the adapter.
-func NewPricingResolver(regSvc registrationService.Service) *PricingResolver {
-	return &PricingResolver{regSvc: regSvc}
+func NewPricingResolver(regRepo registrationdomain.EventRegistrationRepository) *PricingResolver {
+	return &PricingResolver{regRepo: regRepo}
 }
+
 
 // ResolvePricing loads a registration and returns a flat snapshot of
 // its pricing for the payment module.
@@ -33,10 +37,6 @@ func NewPricingResolver(regSvc registrationService.Service) *PricingResolver {
 // The registration must be in pending status. If it's already
 // confirmed, cancelled, or expired, an error is returned — the caller
 // (payment service) surfaces this as a 409 Conflict.
-//
-// Reads pricing from the persisted Registration fields (Currency,
-// Subtotal, DiscountTotal, TotalAmount). The domain's PricingSnapshot
-// is only populated at creation time and is empty after hydration.
 func (r *PricingResolver) ResolvePricing(
 	ctx context.Context,
 	registrationID string,
@@ -45,11 +45,10 @@ func (r *PricingResolver) ResolvePricing(
 		return nil, errors.New("registration_id is required")
 	}
 
-	// The registration service's GetByID takes an actorID for
-	// authorization. The payment module isn't an "actor" — it's an
-	// internal caller. Pass an empty string; the service treats empty
-	// actorID as an internal/system call.
-	reg, err := r.regSvc.GetByID(ctx, registrationID, "")
+	// Unconditional lookup — no actor or guest email required.
+	// Ownership is enforced by the payment service on the returned
+	// snapshot, not here.
+	reg, err := r.regRepo.FindByID(ctx, registrationID)
 	if err != nil {
 		return nil, fmt.Errorf("load registration: %w", err)
 	}
@@ -57,9 +56,7 @@ func (r *PricingResolver) ResolvePricing(
 		return nil, fmt.Errorf("%w: %s", paymentdomain.ErrRegistrationNotFound, registrationID)
 	}
 
-	// Only pending registrations can become orders. A confirmed
-	// registration is already paid for; a cancelled one shouldn't be
-	// charged.
+	// Only pending registrations can become orders.
 	if reg.Registration.Status != registrationdomain.StatusPending {
 		return nil, fmt.Errorf(
 			"registration %s is not pending (status: %s)",
@@ -67,7 +64,7 @@ func (r *PricingResolver) ResolvePricing(
 		)
 	}
 
-	// Flatten the ticket selections into the payment module's shape.
+	// Flatten ticket selections.
 	items := make([]paymentdomain.RegistrationPricingItem, 0, len(reg.Selections))
 	for _, s := range reg.Selections {
 		items = append(items, paymentdomain.RegistrationPricingItem{
@@ -78,9 +75,6 @@ func (r *PricingResolver) ResolvePricing(
 		})
 	}
 
-	// Use the persisted Registration fields, not reg.Pricing.*. The
-	// pricing snapshot on the domain is only set at creation time and
-	// is empty when the registration is hydrated from the database.
 	return &paymentdomain.RegistrationPricing{
 		RegistrationID: reg.Registration.ID,
 		UserID:         reg.Registration.UserID,
@@ -92,7 +86,6 @@ func (r *PricingResolver) ResolvePricing(
 		Items:          items,
 	}, nil
 }
-
 
 // Compile-time assertion.
 var _ paymentdomain.RegistrationPricingResolver = (*PricingResolver)(nil)

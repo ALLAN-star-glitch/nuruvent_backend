@@ -6,26 +6,35 @@ import (
     "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 )
 
-func (s *service) GetByID(ctx context.Context, id, actorID string) (*registrationdomain.EventRegistration, error) {
-	reg, err := s.deps.EventRegistrations.FindByID(ctx, id)
+func (s *service) GetByID(
+	ctx context.Context,
+	id, actorID, guestEmail string,
+) (*registrationdomain.EventRegistration, error) {
+	er, err := s.deps.EventRegistrations.FindByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-
-	// Empty actorID means an internal/system call (e.g. the payment
-	// module resolving pricing for an order). Skip the ownership check.
-	if actorID == "" {
-		return reg, nil
+	if er == nil || er.Registration == nil {
+		return nil, registrationdomain.ErrRegistrationNotFound
 	}
 
-	// External call — actor must own the registration.
-	if reg.Registration == nil || reg.Registration.UserID == "" || reg.Registration.UserID != actorID {
-		return nil, registrationdomain.ErrNotOwner
+	reg := er.Registration
+
+	// ---- Authenticated user path ----
+	if actorID != "" {
+		if reg.UserID != actorID {
+			return nil, registrationdomain.ErrNotOwner
+		}
+		return er, nil
 	}
 
-	return reg, nil
+	// ---- Guest path ----
+	if guestEmail != "" && reg.GuestEmail == guestEmail {
+		return er, nil
+	}
+
+	return nil, registrationdomain.ErrNotOwner
 }
-
 func (s *service) ListByEvent(
     ctx context.Context,
     eventID, actorID string,

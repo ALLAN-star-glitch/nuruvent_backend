@@ -7,7 +7,6 @@ import (
 
 	paymenthttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/delivery/http"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/postgres"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/providers/intasend"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/providers/paystack"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/service"
@@ -65,7 +64,6 @@ var ProviderSet = wire.NewSet(
 	// ============================================================
 	// Provider implementations
 	// ============================================================
-	intasend.NewProvider,   // ← was flutterwave.NewProvider
 	paystack.NewProvider,
 
 	// ============================================================

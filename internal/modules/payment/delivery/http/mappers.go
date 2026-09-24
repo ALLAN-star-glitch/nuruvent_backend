@@ -22,6 +22,7 @@ func toPaymentResponse(p *paymentdomain.Payment) PaymentResponse {
 		InitiatedAt:       p.InitiatedAt,
 		ExpiresAt:         p.ExpiresAt,
 		CompletedAt:       p.CompletedAt,
+		AccessCode:  p.AccessCode,
 		FailedAt:          p.FailedAt,
 		CreatedAt:         p.CreatedAt,
 		UpdatedAt:         p.UpdatedAt,

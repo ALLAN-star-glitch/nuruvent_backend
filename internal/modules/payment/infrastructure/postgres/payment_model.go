@@ -19,6 +19,7 @@ type PaymentModel struct {
 	IdempotencyKey string  `gorm:"type:varchar(100);not null"`
 	ProviderReference *string `gorm:"type:varchar(255)"`
 	RedirectURL string `gorm:"column:redirect_url"`
+	AccessCode  string `gorm:"column:access_code"`
 	FailureReason  *string `gorm:"type:text"`
 
 	InitiatedAt time.Time  `gorm:"not null"`

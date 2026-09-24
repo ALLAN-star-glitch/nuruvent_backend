@@ -111,11 +111,18 @@ func newTestApp(t *testing.T, fake *fakeService) *fiber.App {
 		return c.Next()
 	}
 
+	// For tests, optionalAuth behaves the same as authMiddleware —
+	// we only have one identity path here.
+	optionalAuth := func(c fiber.Ctx) error {
+		c.Locals(types.ContextKeyUserID, "test-user")
+		return c.Next()
+	}
+
 	orderHandler := NewOrderHandler(fake)
 	paymentHandler := NewHandler(fake)
 
 	api := app.Group("/api/v1")
-	RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware)
+	RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware, optionalAuth)
 
 	return app
 }

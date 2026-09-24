@@ -176,6 +176,9 @@ type InitiateResult struct {
 	// Raw is the provider's raw response for logging and debugging.
 	// Never returned to end users.
 	Raw map[string]any
+
+
+	AccessCode        string
 }
 
 // ============================================================
