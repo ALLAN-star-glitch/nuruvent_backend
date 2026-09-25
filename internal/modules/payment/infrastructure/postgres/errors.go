@@ -52,6 +52,9 @@ func isForeignKeyViolation(err error) bool {
 	return strings.Contains(err.Error(), "violates foreign key constraint")
 }
 
+
+
+
 // isNotNullViolation reports whether err is a Postgres NOT NULL
 // violation. Usually a bug — a required field was left empty.
 func isNotNullViolation(err error) bool {

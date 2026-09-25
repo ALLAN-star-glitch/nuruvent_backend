@@ -182,12 +182,12 @@ func main() {
 			Description: "Seed attendance statuses (registered, joined, partial, full, confirmed, no_show)",
 			Deps:        []string{"registration_statuses"},
 		},
-		{
-			Name:        "waitlist_statuses",
-			Fn:          registrationseeder.SeedWaitlistStatuses,
-			Description: "Seed waitlist statuses (waiting, offered, converted, expired, cancelled)",
-			Deps:        []string{"registration_statuses"},
-		},
+		// {
+		// 	Name:        "waitlist_statuses",
+		// 	Fn:          registrationseeder.SeedWaitlistStatuses,
+		// 	Description: "Seed waitlist statuses (waiting, offered, converted, expired, cancelled)",
+		// 	Deps:        []string{"registration_statuses"},
+		// },
 	}
 
 	// Always validate dependencies

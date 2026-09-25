@@ -65,9 +65,9 @@ func (r *PricingResolver) ResolvePricing(
 	}
 
 	// Flatten ticket selections.
-	items := make([]paymentdomain.RegistrationPricingItem, 0, len(reg.Selections))
+	registration_pricing_items := make([]paymentdomain.RegistrationPricingItem, 0, len(reg.Selections)) // this is a slice with len 0, capacity is the length of the ticket selections
 	for _, s := range reg.Selections {
-		items = append(items, paymentdomain.RegistrationPricingItem{
+		registration_pricing_items = append(registration_pricing_items, paymentdomain.RegistrationPricingItem{
 			TicketTypeID: s.TicketTypeID,
 			Quantity:     s.Quantity,
 			UnitPrice:    s.UnitPrice,
@@ -83,7 +83,7 @@ func (r *PricingResolver) ResolvePricing(
 		Subtotal:       reg.Registration.Subtotal,
 		DiscountTotal:  reg.Registration.DiscountTotal,
 		TotalAmount:    reg.Registration.TotalAmount,
-		Items:          items,
+		Items:          registration_pricing_items,
 	}, nil
 }
 

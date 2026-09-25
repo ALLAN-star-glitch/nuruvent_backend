@@ -25,15 +25,24 @@ const DefaultOrderTTL = 30 * time.Minute
 // Steps:
 //  1. Resolve the registration's pricing via the cross-module port.
 //  2. Enforce ownership (authenticated actor or matching guest email).
-//  3. Check for an existing pending order for the same registration.
-//     If one exists, return it (idempotent).
-//  4. Build the Order entity with items from the pricing snapshot.
-//  5. Persist it.
-//  6. Return it.
+//  3. Inside a transaction:
+//     a. Check for an existing pending order for the same
+//        registration. If one exists, return it (idempotent).
+//     b. Build the Order entity from the pricing snapshot.
+//     c. Persist it.
+//  4. Return it.
 //
 // The client supplies only the registration ID. All pricing, items,
 // and identity come from the registration — the client cannot
 // influence the order amount.
+//
+// Concurrency: the duplicate check and the insert share a single
+// transaction, so two concurrent requests for the same registration
+// cannot both create an order. The database's unique partial index on
+// (registration_id) WHERE status = 'pending' is the final safety net;
+// if it fires, the repository translates the Postgres 23505 into
+// paymentdomain.ErrDuplicateOrder, and we re-fetch and return the
+// winning order.
 func (s *service) CreateOrder(
 	ctx context.Context,
 	cmd CreateOrderCommand,
@@ -42,12 +51,15 @@ func (s *service) CreateOrder(
 		return nil, fmt.Errorf("registration_id is required")
 	}
 
-	now := s.deps.Clock.Now()
-
 	// ------------------------------------------------------------
 	// 1. Resolve pricing from the registration module.
 	//    The snapshot carries UserID + GuestEmail, which we use for
 	//    the ownership check below — no separate call needed.
+	//
+	//    This is a cross-module read. It happens outside the
+	//    transaction because it may hit another module's tables, and
+	//    we don't want to hold a payment-module transaction open
+	//    across it.
 	// ------------------------------------------------------------
 	pricing, err := s.deps.RegistrationPricing.ResolvePricing(ctx, cmd.RegistrationID)
 	if err != nil {
@@ -65,53 +77,111 @@ func (s *service) CreateOrder(
 		return nil, err
 	}
 
+	now := s.deps.Clock.Now()
+
 	// ------------------------------------------------------------
-	// 3. Duplicate check
+	// 3. Everything that touches the DB goes inside Do.
 	// ------------------------------------------------------------
-	existing, err := s.deps.Orders.FindActiveByRegistration(ctx, cmd.RegistrationID)
-	if err == nil && existing != nil {
-		return existing, nil
-	}
-	if err != nil && !errors.Is(err, paymentdomain.ErrOrderNotFound) {
-		return nil, fmt.Errorf("duplicate check: %w", err)
+	var order *paymentdomain.Order
+
+	txErr := s.deps.UnitOfWork.Do(ctx, func(repos paymentdomain.Repositories) error {
+		// --------------------------------------------------------
+		// 3a. Duplicate check inside the transaction.
+		//     If a pending order already exists, return it. The
+		//     transaction commits with no writes.
+		// --------------------------------------------------------
+		existing, err := repos.Orders.FindActiveByRegistration(ctx, cmd.RegistrationID)
+		if err == nil && existing != nil {
+			order = existing
+			return nil
+		}
+		if err != nil && !errors.Is(err, paymentdomain.ErrOrderNotFound) {
+			return fmt.Errorf("duplicate check: %w", err)
+		}
+
+		// --------------------------------------------------------
+		// 3b. Build the Order entity.
+		// --------------------------------------------------------
+		order_items := make([]paymentdomain.OrderItem, 0, len(pricing.Items))
+		for _, it := range pricing.Items {
+			order_items = append(order_items, paymentdomain.OrderItem{
+				TicketTypeID: it.TicketTypeID,
+				Quantity:     it.Quantity,
+				UnitPrice:    it.UnitPrice,
+				Discount:     it.Discount,
+				LineTotal:    it.UnitPrice*int64(it.Quantity) - it.Discount,
+			})
+		}
+
+		newOrder, err := paymentdomain.NewOrder(
+			s.deps.IDGenerator.NewID(),
+			pricing.RegistrationID,
+			pricing.UserID,
+			pricing.GuestEmail,
+			pricing.Currency,
+			order_items,
+			DefaultOrderTTL,
+			now,
+		)
+		if err != nil {
+			return err
+		}
+
+		// --------------------------------------------------------
+		// 3c. Persist inside the transaction.
+		// --------------------------------------------------------
+		if err := repos.Orders.Create(ctx, newOrder); err != nil {
+			return fmt.Errorf("persist order: %w", err)
+		}
+
+		// Future: enqueue an outbox event here for "order.created".
+		// Example:
+		//   if err := repos.Outbox.Enqueue(ctx, outbox.Event{
+		//       Type:    "order.created",
+		//       Payload: marshal(newOrder),
+		//   }); err != nil {
+		//       return err
+		//   }
+
+		order = newOrder
+		return nil
+	})
+
+	if txErr != nil {
+		// ----------------------------------------------------------
+		// Unique-constraint safety net.
+		//
+		// Two concurrent requests can both pass the duplicate check
+		// inside their own transactions and both attempt the INSERT.
+		// The partial unique index on (registration_id)
+		// WHERE status = 'pending' rejects the second one with
+		// Postgres SQLSTATE 23505, which the repository translates
+		// into paymentdomain.ErrDuplicateOrder.
+		//
+		// When that happens, re-fetch and return the winner so the
+		// caller sees idempotent behavior instead of a 500.
+		// ----------------------------------------------------------
+		if errors.Is(txErr, paymentdomain.ErrDuplicateOrder) {
+			existing, findErr := s.deps.Orders.FindActiveByRegistration(ctx, cmd.RegistrationID)
+			if findErr == nil && existing != nil {
+				return existing, nil
+			}
+			// Fall through: if we still can't find it, return the
+			// original error so the caller sees something real.
+		}
+		return nil, txErr
 	}
 
 	// ------------------------------------------------------------
-	// 4. Build the Order entity
+	// 4. Non-transactional side effects go AFTER commit.
+	//
+	//    Notifications, emails, webhooks to other systems — none of
+	//    these belong inside the transaction. If they fail, the
+	//    order is still valid; the notification can be retried.
+	//
+	//    For now there are none, but this is where they'd go:
+	//      _ = s.deps.Notifier.OrderCreated(ctx, order)
 	// ------------------------------------------------------------
-	items := make([]paymentdomain.OrderItem, 0, len(pricing.Items))
-	for _, it := range pricing.Items {
-		items = append(items, paymentdomain.OrderItem{
-			TicketTypeID: it.TicketTypeID,
-			Quantity:     it.Quantity,
-			UnitPrice:    it.UnitPrice,
-			Discount:     it.Discount,
-			LineTotal:    it.UnitPrice*int64(it.Quantity) - it.Discount,
-		})
-	}
-
-	orderID := s.deps.IDGenerator.NewID()
-
-	order, err := paymentdomain.NewOrder(
-		orderID,
-		pricing.RegistrationID,
-		pricing.UserID,
-		pricing.GuestEmail,
-		pricing.Currency,
-		items,
-		DefaultOrderTTL,
-		now,
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	// ------------------------------------------------------------
-	// 5. Persist
-	// ------------------------------------------------------------
-	if err := s.deps.Orders.Create(ctx, order); err != nil {
-		return nil, fmt.Errorf("persist order: %w", err)
-	}
 
 	return order, nil
 }
