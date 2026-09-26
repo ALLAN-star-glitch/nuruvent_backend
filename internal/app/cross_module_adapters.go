@@ -15,6 +15,7 @@ import (
 
 	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
+	attendanceService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/service"
 	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	eventsDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
@@ -27,6 +28,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 	registrationService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
+	videoService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
@@ -92,6 +94,17 @@ func NewEventsMediaAdapter(mediaSvc mediaService.Service) eventsDomain.MediaServ
 	return events.NewMediaAdapter(mediaSvc)
 }
 
+// NewEventsAttendanceRegistrar wires the events module's
+// AttendanceRegistrar port to the attendance service.
+//
+// The events service uses this to mirror event schedules into
+// attendance sessions on publish and update.
+func NewEventsAttendanceRegistrar(
+	attendanceSvc attendanceService.Service,
+) eventsDomain.AttendanceRegistrar {
+	return events.NewAttendanceRegistrarAdapter(attendanceSvc)
+}
+
 // ---- TEAM ADAPTERS ----
 
 // NewTeamAuthAdapter satisfies teamService.AuthService using authDomain.Repository
@@ -119,6 +132,33 @@ func NewTeamNotificationAdapter(notifSvc notificationDomain.NotificationService)
 // resolver to the events module.
 func NewRegistrableResolver(eventsSvc eventsService.Service) registrationdomain.RegistrableResolver {
 	return registrationadapters.NewRegistrableResolver(eventsSvc)
+}
+
+// NewRegistrationAttendanceRegistrar wires the registration module's
+// AttendanceRegistrar port to the attendance service.
+//
+// The registration service uses this to register attendees and issue
+// join tokens when a registration is confirmed. Join URLs are built
+// using cfg.App.PublicURL.
+func NewRegistrationAttendanceRegistrar(
+	attendanceSvc attendanceService.Service,
+	cfg *config.Config,
+) registrationdomain.AttendanceRegistrar {
+	return registrationadapters.NewAttendanceRegistrarAdapter(
+		attendanceSvc,
+		cfg.App.PublicURL,
+	)
+}
+
+// NewRegistrationUserInfoAdapter wires the registration module's
+// UserInfoProvider port to the auth service.
+//
+// The registration service uses this to resolve an authenticated
+// user's display name and email when building the attendance record.
+func NewRegistrationUserInfoAdapter(
+	authSvc authService.Service,
+) registrationdomain.UserInfoProvider {
+	return registrationadapters.NewUserInfoAdapter(authSvc)
 }
 
 // ---- PAYMENT ADAPTERS ----
@@ -193,4 +233,12 @@ func NewPaymentPricingResolver(
 	regRepo registrationdomain.EventRegistrationRepository,
 ) paymentdomain.RegistrationPricingResolver {
 	return paymentadapters.NewPricingResolver(regRepo)
+}
+
+// NewEventsVideoAdapter wires the events module's VideoMeetingCreator
+// port to the video service.
+func NewEventsVideoAdapter(
+	videoSvc videoService.Service,
+) eventsDomain.VideoMeetingCreator {
+	return events.NewVideoAdapter(videoSvc)
 }

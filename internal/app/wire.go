@@ -16,6 +16,11 @@ import (
 	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 
+	// Attendance Module
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance"
+	attendanceHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/delivery/http"
+	attendanceService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/service"
+
 	// Auth Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth"
 	authHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
@@ -42,7 +47,6 @@ import (
 	paymentHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/delivery/http"
 	paymentService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/service"
 
-
 	// Team Module
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team"
 	teamHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
@@ -53,7 +57,12 @@ import (
 	regHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
 	regService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 
-		// Shared
+	// Video Module
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video"
+	videoHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/delivery/http"
+	videoService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/service"
+
+	// Shared
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
@@ -103,6 +112,13 @@ type AppDependencies struct {
 	OrderHandler   *paymentHandler.OrderHandler
 	PaymentService paymentService.Service
 
+	// Attendance Module
+	AttendanceHandler *attendanceHandler.Handlers
+	AttendanceService attendanceService.Service
+
+	// Video Module
+	VideoHandler *videoHandler.Handlers
+	VideoService videoService.Service
 }
 
 // ============================================================
@@ -138,6 +154,8 @@ func InitializeApp() (*AppDependencies, error) {
 		team.ProviderSet,
 		registration.ProviderSet,
 		payment.ProviderSet,
+		attendance.ProviderSet,
+		video.ProviderSet,
 
 		// ============================================================
 		// CROSS-MODULE ADAPTERS - AUTH
@@ -146,14 +164,14 @@ func InitializeApp() (*AppDependencies, error) {
 		NewQueueAdapter,
 		NewAuthTeamAdapter,
 
-	     // ============================================================
+		// ============================================================
 		// CROSS-MODULE ADAPTERS - PAYMENT
 		// ============================================================
 		NewPaymentRegistrationConfirmer,
 		NewPaymentProviderRegistry,
 		NewPaymentUserEmailResolver,
 		NewPaymentNotifier,
-		NewPaymentPricingResolver,   // ← add
+		NewPaymentPricingResolver,
 
 		// ============================================================
 		// CROSS-MODULE ADAPTERS - EVENTS
@@ -161,6 +179,9 @@ func InitializeApp() (*AppDependencies, error) {
 		NewEventsPermissionAdapter,
 		NewEventsUserInfoAdapter,
 		NewEventsMediaAdapter,
+		NewEventsAttendanceRegistrar,
+		NewRegistrationAttendanceRegistrar,
+		NewRegistrationUserInfoAdapter,
 
 		// ============================================================
 		// CROSS-MODULE ADAPTERS - TEAM
@@ -175,15 +196,16 @@ func InitializeApp() (*AppDependencies, error) {
 		// ============================================================
 		NewRegistrableResolver,
 
-
-
-	    // ============================================================
+		// ============================================================
 		// CROSS-MODULE ADAPTERS - ACCOUNT
 		// ============================================================
 		NewAccountAuthAdapter,
 		NewAccountPermissionAdapter,
 		NewAccountMediaAdapter,
 
+
+
+		NewEventsVideoAdapter,
 
 		provideOrganizerProvider,
 

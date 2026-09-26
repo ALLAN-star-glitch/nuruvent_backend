@@ -15,59 +15,58 @@ import (
 // ============================================================
 
 func toJSONB(v interface{}) JSONB {
-    if v == nil {
-        return nil
-    }
-    data, err := json.Marshal(v)
-    if err != nil || len(data) == 0 || string(data) == "null" {
-        return nil
-    }
-    return JSONB(data)
+	if v == nil {
+		return nil
+	}
+	data, err := json.Marshal(v)
+	if err != nil || len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	return JSONB(data)
 }
 
-
 func fromJSONBToStringArray(j JSONB) []string {
-    if len(j) == 0 {
-        return nil
-    }
-    var out []string
-    if err := json.Unmarshal(j, &out); err != nil {
-        return nil
-    }
-    return out
+	if len(j) == 0 {
+		return nil
+	}
+	var out []string
+	if err := json.Unmarshal(j, &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 func fromJSONBToMapString(j JSONB) map[string]string {
-    if len(j) == 0 {
-        return nil
-    }
-    var out map[string]string
-    if err := json.Unmarshal(j, &out); err != nil {
-        return nil
-    }
-    return out
+	if len(j) == 0 {
+		return nil
+	}
+	var out map[string]string
+	if err := json.Unmarshal(j, &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 func fromJSONBToMapFloat64(j JSONB) map[string]float64 {
-    if len(j) == 0 {
-        return nil
-    }
-    var out map[string]float64
-    if err := json.Unmarshal(j, &out); err != nil {
-        return nil
-    }
-    return out
+	if len(j) == 0 {
+		return nil
+	}
+	var out map[string]float64
+	if err := json.Unmarshal(j, &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 func fromJSONBToMapInterface(j JSONB) map[string]interface{} {
-    if len(j) == 0 {
-        return nil
-    }
-    var out map[string]interface{}
-    if err := json.Unmarshal(j, &out); err != nil {
-        return nil
-    }
-    return out
+	if len(j) == 0 {
+		return nil
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal(j, &out); err != nil {
+		return nil
+	}
+	return out
 }
 
 // ============================================================
@@ -95,6 +94,14 @@ func toModelEvent(event *domain.Event) *EventModel {
 		restoredBy = event.RestoredBy
 	}
 
+	// Date is derived. Store nil when the source is zero so the DB
+	// column stays NULL for drafts with no schedules.
+	var datePtr *time.Time
+	if !event.Date.IsZero() {
+		d := event.Date
+		datePtr = &d
+	}
+
 	return &EventModel{
 		// Core Identity
 		ID:               event.ID,
@@ -107,21 +114,24 @@ func toModelEvent(event *domain.Event) *EventModel {
 		Language:         event.Language,
 
 		// Relations
-		EventTypeID:          event.EventTypeID,
-		EventStatusID:        event.EventStatusID,
-		CategoryID:           event.CategoryID,
-		EventFormatID:        event.EventFormatID,
+		EventTypeID:           event.EventTypeID,
+		EventStatusID:         event.EventStatusID,
+		CategoryID:            event.CategoryID,
+		EventFormatID:         event.EventFormatID,
 		CertificateTemplateID: event.CertificateTemplateID,
 
 		// Ownership
-		TeamID:    event.TeamID, // Changed from AccountID
+		TeamID:    event.TeamID,
 		CreatedBy: event.CreatedBy,
 
-		// Schedule & Venue
-		StartDate:   event.StartDate,
-		EndDate:     event.EndDate,
-		IsMultiDay:  event.IsMultiDay,
-		IsRecurring: event.IsRecurring,
+		// Schedule & Venue (derived)
+		StartDate:          event.StartDate,
+		EndDate:            event.EndDate,
+		Date:               datePtr,
+		Time:               event.Time,
+		Duration:           event.Duration,
+		IsMultiDay:         event.IsMultiDay,
+		IsRecurring:        event.IsRecurring,
 
 		// Recurrence
 		RecurrencePatternID:   event.RecurrencePatternID,
@@ -166,13 +176,13 @@ func toModelEvent(event *domain.Event) *EventModel {
 		ApprovalRequiredFor: toJSONB(event.ApprovalRequiredFor),
 
 		// Monetization
-		IsFeatured:          event.IsFeatured,
-		FeaturedUntil:       event.FeaturedUntil,
-		CertificateEnabled:  event.CertificateEnabled,
-		CertificatePrice:    event.CertificatePrice,
+		IsFeatured:                  event.IsFeatured,
+		FeaturedUntil:               event.FeaturedUntil,
+		CertificateEnabled:          event.CertificateEnabled,
+		CertificatePrice:            event.CertificatePrice,
 		EarlyBirdDiscountPercentage: event.EarlyBirdDiscountPercentage,
-		GroupDiscountPercentage: event.GroupDiscountPercentage,
-		GroupMinAttendees:   event.GroupMinAttendees,
+		GroupDiscountPercentage:     event.GroupDiscountPercentage,
+		GroupMinAttendees:           event.GroupMinAttendees,
 
 		// SEO
 		SEOTitle:        event.SEO.Title,
@@ -230,12 +240,12 @@ func toDomainCategory(model *CategoryModel) *domain.Category {
 	if model == nil {
 		return nil
 	}
-	
+
 	var deletedAt *time.Time
 	if model.DeletedAt.Valid {
 		deletedAt = &model.DeletedAt.Time
 	}
-	
+
 	return &domain.Category{
 		ID:          model.ID,
 		Slug:        model.Slug,
@@ -273,6 +283,13 @@ func toDomainEvent(model *EventModel) *domain.Event {
 		restoredBy = model.RestoredBy
 	}
 
+	// Date is nullable in the DB; zero out when NULL so the domain
+	// sees a zero time.Time.
+	var date time.Time
+	if model.Date != nil {
+		date = *model.Date
+	}
+
 	event := &domain.Event{
 		// Core Identity
 		ID:               model.ID,
@@ -285,19 +302,22 @@ func toDomainEvent(model *EventModel) *domain.Event {
 		Language:         model.Language,
 
 		// Relations
-		EventTypeID:          model.EventTypeID,
-		EventStatusID:        model.EventStatusID,
-		CategoryID:           model.CategoryID,
-		EventFormatID:        model.EventFormatID,
+		EventTypeID:           model.EventTypeID,
+		EventStatusID:         model.EventStatusID,
+		CategoryID:            model.CategoryID,
+		EventFormatID:         model.EventFormatID,
 		CertificateTemplateID: model.CertificateTemplateID,
 
 		// Ownership
-		TeamID:    model.TeamID, // Changed from AccountID
+		TeamID:    model.TeamID,
 		CreatedBy: model.CreatedBy,
 
-		// Schedule & Venue
+		// Schedule & Venue (derived)
 		StartDate:   model.StartDate,
 		EndDate:     model.EndDate,
+		Date:        date,
+		Time:        model.Time,
+		Duration:    model.Duration,
 		IsMultiDay:  model.IsMultiDay,
 		IsRecurring: model.IsRecurring,
 
@@ -344,14 +364,17 @@ func toDomainEvent(model *EventModel) *domain.Event {
 		ApprovalRequiredFor: fromJSONBToStringArray(model.ApprovalRequiredFor),
 
 		// Monetization
-		IsFeatured:          model.IsFeatured,
-		FeaturedUntil:       model.FeaturedUntil,
-		CertificateEnabled:  model.CertificateEnabled,
-		CertificatePrice:    model.CertificatePrice,
+		IsFeatured:                  model.IsFeatured,
+		FeaturedUntil:               model.FeaturedUntil,
+		CertificateEnabled:          model.CertificateEnabled,
+		CertificatePrice:            model.CertificatePrice,
 		EarlyBirdDiscountPercentage: model.EarlyBirdDiscountPercentage,
-		GroupDiscountPercentage: model.GroupDiscountPercentage,
-		GroupMinAttendees:   model.GroupMinAttendees,
+		GroupDiscountPercentage:     model.GroupDiscountPercentage,
+		GroupMinAttendees:           model.GroupMinAttendees,
 
+
+
+		
 		// Media
 		ImageURL:     model.ImageURL,
 		ThumbnailURL: model.ThumbnailURL,
@@ -469,20 +492,21 @@ func toDomainSchedules(models []EventScheduleModel) []domain.EventSchedule {
 	schedules := make([]domain.EventSchedule, len(models))
 	for i, m := range models {
 		schedules[i] = domain.EventSchedule{
-			ID:            m.ID,
-			EventID:       m.EventID,
-			SessionName:   m.SessionName,
-			SessionNumber: m.SessionNumber,
-			StartDate:     m.StartDate,
-			EndDate:       m.EndDate,
-			StartTime:     m.StartTime,
-			EndTime:       m.EndTime,
-			Timezone:      m.Timezone,
-			Location:      m.Location,
-			IsVirtual:     m.IsVirtual,
-			ZoomLink:      m.ZoomLink,
-			MeetLink:      m.MeetLink,
-			MaxAttendees:  m.MaxAttendees,
+			ID:             m.ID,
+			EventID:        m.EventID,
+			SessionName:    m.SessionName,
+			SessionNumber:  m.SessionNumber,
+			StartDate:      m.StartDate,
+			EndDate:        m.EndDate,
+			StartTime:      m.StartTime,
+			EndTime:        m.EndTime,
+			Timezone:       m.Timezone,
+			Location:       m.Location,
+			IsVirtual:      m.IsVirtual,
+			ZoomLink:       m.ZoomLink,
+			MeetLink:       m.MeetLink,
+			VideoMeetingID: m.VideoMeetingID,
+			MaxAttendees:   m.MaxAttendees,
 		}
 	}
 	return schedules
@@ -493,19 +517,20 @@ func toModelSchedules(eventID string, schedules []domain.EventSchedule) []EventS
 	models := make([]EventScheduleModel, len(schedules))
 	for i, s := range schedules {
 		models[i] = EventScheduleModel{
-			EventID:       eventID,
-			SessionName:   s.SessionName,
-			SessionNumber: s.SessionNumber,
-			StartDate:     s.StartDate,
-			EndDate:       s.EndDate,
-			StartTime:     s.StartTime,
-			EndTime:       s.EndTime,
-			Timezone:      s.Timezone,
-			Location:      s.Location,
-			IsVirtual:     s.IsVirtual,
-			ZoomLink:      s.ZoomLink,
-			MeetLink:      s.MeetLink,
-			MaxAttendees:  s.MaxAttendees,
+			EventID:        eventID,
+			SessionName:    s.SessionName,
+			SessionNumber:  s.SessionNumber,
+			StartDate:      s.StartDate,
+			EndDate:        s.EndDate,
+			StartTime:      s.StartTime,
+			EndTime:        s.EndTime,
+			Timezone:       s.Timezone,
+			Location:       s.Location,
+			IsVirtual:      s.IsVirtual,
+			ZoomLink:       s.ZoomLink,
+			MeetLink:       s.MeetLink,
+			VideoMeetingID: s.VideoMeetingID,
+			MaxAttendees:   s.MaxAttendees,
 		}
 	}
 	return models
@@ -558,18 +583,18 @@ func toModelTickets(eventID string, tickets []domain.EventTicket) []EventTicketM
 	models := make([]EventTicketModel, len(tickets))
 	for i, t := range tickets {
 		models[i] = EventTicketModel{
-			EventID:            eventID,
-			TicketTypeID:       t.TicketTypeID,
-			Name:               t.Name,
-			Description:        t.Description,
-			Price:              t.Price,
-			Quantity:           t.Quantity,
-			MaxPerPerson:       t.MaxPerPerson,
-			EarlyBirdDeadline:  t.EarlyBirdDeadline,
-			GroupMinAttendees:  t.GroupMinAttendees,
-			GroupDiscount:      t.GroupDiscount,
-			SortOrder:          t.SortOrder,
-			IsActive:           t.IsActive,
+			EventID:           eventID,
+			TicketTypeID:      t.TicketTypeID,
+			Name:              t.Name,
+			Description:       t.Description,
+			Price:             t.Price,
+			Quantity:          t.Quantity,
+			MaxPerPerson:      t.MaxPerPerson,
+			EarlyBirdDeadline: t.EarlyBirdDeadline,
+			GroupMinAttendees: t.GroupMinAttendees,
+			GroupDiscount:     t.GroupDiscount,
+			SortOrder:         t.SortOrder,
+			IsActive:          t.IsActive,
 		}
 	}
 	return models

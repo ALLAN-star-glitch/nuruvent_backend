@@ -56,6 +56,9 @@ func (s *service) ConfirmRegistration(ctx context.Context, registrationID string
 		return nil
 	}
 
+	// Sync to attendance (best-effort). Populates reg.JoinLinks.
+	s.syncRegistrationToAttendance(ctx, eventReg)
+
 	// Notify (best-effort).
 	_ = s.deps.Notifier.RegistrationConfirmed(ctx, reg)
 

@@ -115,3 +115,28 @@ func ServiceUnavailable(c fiber.Ctx, message string, errors any) error {
 		Success: false, Message: message, Errors: errors,
 	})
 }
+
+func Gone(c fiber.Ctx, message string, errors any) error {
+	return c.Status(fiber.StatusGone).JSON(BaseResponse{
+		Success: false,
+		Message: message,
+		Errors:  errors,
+	})
+}
+
+func NotImplemented(c fiber.Ctx, message string, errors any) error {
+	return c.Status(fiber.StatusNotImplemented).JSON(BaseResponse{
+		Success: false,
+		Message: message,
+		Errors:  errors,
+	})
+}
+
+
+
+
+
+
+
+
+

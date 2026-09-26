@@ -1,91 +1,14 @@
+// internal/modules/events/service/ai_corrections.go
+
 package service
 
 import (
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
-
-// ============================================================
-// AI OUTPUT DTO
-// ============================================================
-
-type GeneratedEventDraft struct {
-	Name               string               `json:"name"`
-	Description        string               `json:"description"`
-	ShortDescription   string               `json:"short_description"`
-	Tags               []string             `json:"tags"`
-	Language           string               `json:"language"`
-	Schedules          []GeneratedSchedule  `json:"schedules"`
-	IsMultiDay         bool                 `json:"is_multi_day"`
-	IsRecurring        bool                 `json:"is_recurring"`
-	Recurrence         *GeneratedRecurrence `json:"recurrence"`
-	IsVirtual          bool                 `json:"is_virtual"`
-	IsHybrid           bool                 `json:"is_hybrid"`
-	InPersonLocation   string               `json:"in_person_location"`
-	VenueName          string               `json:"venue_name"`
-	VenueAddress       string               `json:"venue_address"`
-	VenueCity          string               `json:"venue_city"`
-	VenueCountry       string               `json:"venue_country"`
-	VirtualPlatform    string               `json:"virtual_platform"`
-	VirtualPlatformURL string               `json:"virtual_platform_url"`
-	Timezone           string               `json:"timezone"`
-	IsFree             bool                 `json:"is_free"`
-	Capacity           int                  `json:"capacity"`
-	Tickets            []GeneratedTicket    `json:"tickets"`
-	Visibility         string               `json:"visibility"`
-	InviteOnly         bool                 `json:"invite_only"`
-	IsFeatured         bool                 `json:"is_featured"`
-	CertificateEnabled bool                 `json:"certificate_enabled"`
-}
-
-type GeneratedSchedule struct {
-	StartDate     string  `json:"start_date"`
-	EndDate       *string `json:"end_date"`
-	StartTime     string  `json:"start_time"`
-	EndTime       string  `json:"end_time"`
-	Timezone      string  `json:"timezone"`
-	SessionName   string  `json:"session_name"`
-	SessionNumber int     `json:"session_number"`
-	Location      string  `json:"location"`
-	IsVirtual     bool    `json:"is_virtual"`
-	ZoomLink      *string `json:"zoom_link"`
-	MeetLink      *string `json:"meet_link"`
-}
-
-type GeneratedTicket struct {
-	TicketTypeID string  `json:"ticket_type_id"`
-	Name         string  `json:"name"`
-	Description  string  `json:"description"`
-	Price        float64 `json:"price"`
-	Quantity     int     `json:"quantity"`
-	MaxPerPerson *int    `json:"max_per_person"`
-}
-
-type GeneratedRecurrence struct {
-	Pattern     string   `json:"pattern"`
-	Interval    int      `json:"interval"`
-	DaysOfWeek  []string `json:"days_of_week"`
-	DayOfMonth  *int     `json:"day_of_month"`
-	WeekOfMonth *string  `json:"week_of_month"`
-	EndsOn      *string  `json:"ends_on"`
-	Occurrences *int     `json:"occurrences"`
-}
-
-// ============================================================
-// CORRECTION CONTEXT
-// ============================================================
-
-type correctionContext struct {
-	Request       GenerateEventDraftRequest
-	EventTypeID   string
-	CategoryID    *string
-	TicketTypeIDs map[string]struct{}
-	Timezone      string
-	Language      string
-	MinCapacity   int
-	MaxCapacity   int
-}
 
 // ============================================================
 // CORRECTION ENGINE
@@ -108,15 +31,11 @@ func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string,
 	}
 
 	// --- description -----------------------------------------
-	// Do NOT pad short descriptions with repeated text — it produces
-	// garbage that reaches the user. Leave the text as-is and let
-	// checkPublishReadiness flag it, which triggers the retry path
-	// with a specific prompt telling the model how to expand it.
 	desc := strings.TrimSpace(d.Description)
 	d.Description = desc
 	if len(desc) < 100 {
 		warnings = append(warnings, fmt.Sprintf(
-			"Description is %d chars (minimum 100) — will be retried.", len(desc)))
+			"Description is %d chars (minimum 100) - will be retried.", len(desc)))
 	}
 
 	// --- short_description -----------------------------------
@@ -125,9 +44,8 @@ func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string,
 		warnings = append(warnings, "Generated short description from full description.")
 	}
 
-	// --- language / timezone forced to request values --------
+	// --- language forced to request value --------------------
 	d.Language = cctx.Language
-	d.Timezone = cctx.Timezone
 
 	// --- tags ------------------------------------------------
 	if len(d.Tags) == 0 {
@@ -142,27 +60,22 @@ func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string,
 	if len(d.Schedules) == 0 {
 		return nil, fmt.Errorf("at least one schedule is required")
 	}
+	// Exactly one schedule. If the AI returned more, keep the first.
+	// Recurrence defines the rest.
+	if len(d.Schedules) > 1 {
+		originalCount := len(d.Schedules)
+		d.Schedules = d.Schedules[:1]
+		warnings = append(warnings, fmt.Sprintf(
+			"Collapsed %d schedules to 1 - the recurrence block defines the cadence.",
+			originalCount))
+	}
 	warnings = append(warnings, correctSchedules(d.Schedules, cctx.Timezone)...)
 
-	// --- collapse over-expanded recurring schedules ---
-	if d.IsRecurring && len(d.Schedules) > 1 {
-		uniform := true
-		for i := 1; i < len(d.Schedules); i++ {
-			if d.Schedules[i].StartTime != d.Schedules[0].StartTime ||
-				d.Schedules[i].EndTime != d.Schedules[0].EndTime ||
-				d.Schedules[i].Timezone != d.Schedules[0].Timezone {
-				uniform = false
-				break
-			}
-		}
-		if uniform {
-			originalCount := len(d.Schedules)
-			d.Schedules = d.Schedules[:1]
-			warnings = append(warnings, fmt.Sprintf(
-				"Collapsed %d schedules to 1 — the recurrence block defines the cadence.",
-				originalCount))
-		}
-	}
+	// --- duration from prompt (authoritative) ----------------
+	// Runs AFTER correctSchedules so the base times are valid, and
+	// BEFORE the weekday shift so a duration change doesn't interact
+	// with the date.
+	warnings = append(warnings, applyPromptDuration(d, cctx.Request.Prompt)...)
 
 	// --- align schedule date with declared weekday ---
 	if d.IsRecurring && d.Recurrence != nil &&
@@ -183,27 +96,9 @@ func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string,
 				}
 				oldDate := d.Schedules[0].StartDate
 				d.Schedules[0].StartDate = shifted.Format("2006-01-02")
-
-				if d.Schedules[0].EndDate != nil && *d.Schedules[0].EndDate != "" &&
-					*d.Schedules[0].EndDate <= d.Schedules[0].StartDate {
-					d.Schedules[0].EndDate = nil
-					warnings = append(warnings,
-						"Cleared stale end_date after shifting start_date.")
-				}
-
 				warnings = append(warnings, fmt.Sprintf(
 					"Shifted schedule from %s to %s to match declared weekday %s.",
 					oldDate, d.Schedules[0].StartDate, weekdayName(shifted.Weekday())))
-			}
-		}
-	}
-
-	if d.IsVirtual || d.IsHybrid {
-		for i := range d.Schedules {
-			if !d.Schedules[i].IsVirtual {
-				d.Schedules[i].IsVirtual = true
-				warnings = append(warnings, fmt.Sprintf(
-					"Marked schedule %d as virtual to match event format.", i+1))
 			}
 		}
 	}
@@ -231,9 +126,9 @@ func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string,
 	recurrenceWarnings := correctRecurrence(d, cctx)
 	warnings = append(warnings, recurrenceWarnings...)
 
-	// --- venue consistency -----------------------------------
-	venueIssues := validateVenueConsistency(d)
-	warnings = append(warnings, venueIssues...)
+	// --- schedule-level consistency --------------------------
+	scheduleIssues := validateScheduleConsistency(d)
+	warnings = append(warnings, scheduleIssues...)
 
 	// --- visibility ------------------------------------------
 	if d.Visibility != "public" && d.Visibility != "private" && d.Visibility != "unlisted" {
@@ -248,6 +143,7 @@ func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string,
 // FIELD-LEVEL CORRECTORS
 // ============================================================
 
+// correctSchedules normalizes the single canonical schedule.
 func correctSchedules(schedules []GeneratedSchedule, fallbackTZ string) []string {
 	var warnings []string
 	now := time.Now().UTC()
@@ -259,6 +155,7 @@ func correctSchedules(schedules []GeneratedSchedule, fallbackTZ string) []string
 			s.Timezone = fallbackTZ
 		}
 
+		// Start date must be in the future.
 		if start, err := time.Parse("2006-01-02", s.StartDate); err == nil {
 			if start.Before(now) {
 				shifted := start
@@ -288,16 +185,10 @@ func correctSchedules(schedules []GeneratedSchedule, fallbackTZ string) []string
 				"Adjusted schedule %d end_time.", i+1))
 		}
 
-		if s.EndDate != nil && *s.EndDate != "" && *s.EndDate < s.StartDate {
-			*s.EndDate = s.StartDate
-			warnings = append(warnings, fmt.Sprintf(
-				"Adjusted schedule %d end_date to match start_date.", i+1))
-		}
-
 		if s.SessionNumber < 1 {
-			s.SessionNumber = i + 1
+			s.SessionNumber = 1
 			warnings = append(warnings, fmt.Sprintf(
-				"Reset schedule %d session_number to %d.", i+1, s.SessionNumber))
+				"Reset schedule %d session_number to 1.", i+1))
 		}
 
 		if strings.TrimSpace(s.SessionName) == "" {
@@ -310,16 +201,88 @@ func correctSchedules(schedules []GeneratedSchedule, fallbackTZ string) []string
 	return warnings
 }
 
+// ============================================================
+// DURATION CORRECTOR
+// ============================================================
+
+// applyPromptDuration scans the prompt for an explicit session
+// duration and, if found, overrides the schedule's end_time.
+//
+// The AI is unreliable at arithmetic: it will produce end_time
+// values that don't match a stated duration. This corrector makes
+// the duration authoritative: whatever the prompt says wins.
+//
+// Recognizes:
+//   "90 minutes", "90 min", "2 hours", "2 hrs", "2h", "1.5 hours"
+//
+// Called from applyCorrections after correctSchedules.
+func applyPromptDuration(d *GeneratedEventDraft, prompt string) []string {
+	if len(d.Schedules) == 0 {
+		return nil
+	}
+
+	dur, ok := parseDurationFromPrompt(prompt)
+	if !ok || dur <= 0 {
+		return nil
+	}
+
+	s := &d.Schedules[0]
+
+	start, err := time.Parse("15:04:05", s.StartTime)
+	if err != nil {
+		start, err = time.Parse("15:04", s.StartTime)
+		if err != nil {
+			return nil
+		}
+	}
+
+	end := start.Add(dur)
+	newEnd := end.Format("15:04:05")
+
+	if s.EndTime == newEnd {
+		return nil
+	}
+
+	old := s.EndTime
+	s.EndTime = newEnd
+
+	return []string{fmt.Sprintf(
+		"Set end_time to %s (was %s) to match the stated duration %s.",
+		newEnd, old, dur)}
+}
+
+// parseDurationFromPrompt extracts a session duration from free text.
+// Returns (0, false) when no duration phrase is present.
+func parseDurationFromPrompt(prompt string) (time.Duration, bool) {
+	p := strings.ToLower(prompt)
+
+	// hour-based: "1.5 hours", "2 hours", "2 hrs", "2h"
+	hourRe := regexp.MustCompile(`(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b`)
+	if m := hourRe.FindStringSubmatch(p); len(m) == 2 {
+		if f, err := strconv.ParseFloat(m[1], 64); err == nil && f > 0 {
+			return time.Duration(f * float64(time.Hour)), true
+		}
+	}
+
+	// minute-based: "90 minutes", "90 min", "90m"
+	minRe := regexp.MustCompile(`(\d+)\s*(?:minutes?|mins?|m)\b`)
+	if m := minRe.FindStringSubmatch(p); len(m) == 2 {
+		if n, err := strconv.Atoi(m[1]); err == nil && n > 0 {
+			return time.Duration(n) * time.Minute, true
+		}
+	}
+
+	return 0, false
+}
+
 // correctRecurrence normalizes the AI's recurrence block in place.
 //
 // If the caller supplied a structured recurrence (cctx.Request.Recurrence),
 // the AI's output is discarded and replaced with exactly what the caller
-// asked for. This is what makes the modal's "This event repeats" toggle
-// authoritative — the AI cannot invent a different pattern.
+// asked for.
 //
 // Otherwise, the function normalizes what the AI produced and can
-// INFER missing fields from the schedules array (weekdays from schedule
-// dates, ends_on from the last schedule date or a sensible default).
+// INFER missing fields from the schedule's date.
 func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string {
 	var warnings []string
 
@@ -382,12 +345,7 @@ func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string 
 		r.Interval = 1
 	}
 
-	// --- Normalize custom + interval > 1 + weekdays into weekly ---
-	//
-	// The AI reaches for "custom" when it sees phrases like
-	// "every 3 days per week" and then stuffs weekdays in. That's
-	// really a weekly recurrence on those days, not a custom pattern.
-	// Correct it before the pattern-specific cleanup runs.
+	// Normalize custom + interval > 1 + weekdays into weekly.
 	if r.Pattern == "custom" && r.Interval > 1 && len(r.DaysOfWeek) > 0 {
 		r.Pattern = "weekly"
 		r.Interval = 1
@@ -432,65 +390,35 @@ func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string 
 		// Unknown pattern — checkPublishReadiness will reject.
 	}
 
-	// --- Inference from schedules ---
+	// --- Inference from the schedule's date ---
 	if r.Pattern == "weekly" || r.Pattern == "custom" {
 		if len(r.DaysOfWeek) == 0 && len(d.Schedules) > 0 {
-			seen := make(map[string]struct{})
-			derived := make([]string, 0, len(d.Schedules))
-			for _, s := range d.Schedules {
-				t, err := time.Parse("2006-01-02", s.StartDate)
-				if err != nil {
-					continue
+			if t, err := time.Parse("2006-01-02", d.Schedules[0].StartDate); err == nil {
+				if day := weekdayName(t.Weekday()); day != "" {
+					r.DaysOfWeek = []string{day}
+					warnings = append(warnings, fmt.Sprintf(
+						"Derived days_of_week from schedule date: [%s]", day))
 				}
-				day := weekdayName(t.Weekday())
-				if day == "" {
-					continue
-				}
-				if _, ok := seen[day]; ok {
-					continue
-				}
-				seen[day] = struct{}{}
-				derived = append(derived, day)
-			}
-			if len(derived) > 0 {
-				r.DaysOfWeek = derived
-				warnings = append(warnings, fmt.Sprintf(
-					"Derived days_of_week from schedule dates: %v", derived))
 			}
 		}
 	}
 
 	// --- Ensure the recurrence has an end condition ---
-	//
-	// Two fallbacks:
-	//   1. If the AI produced multiple schedules, use the last one's date.
-	//   2. Otherwise, apply a sensible default occurrence count.
 	if r.EndsOn == nil && r.Occurrences == nil {
-		if len(d.Schedules) > 1 {
-			last := d.Schedules[len(d.Schedules)-1]
-			if last.StartDate != "" {
-				endsOn := last.StartDate
-				r.EndsOn = &endsOn
-				warnings = append(warnings, fmt.Sprintf(
-					"Derived recurrence ends_on from last schedule date: %s",
-					last.StartDate))
-			}
-		} else {
-			defaults := map[string]int{
-				"daily":   10,
-				"weekly":  4,
-				"monthly": 3,
-				"custom":  4,
-			}
-			n := defaults[r.Pattern]
-			if n == 0 {
-				n = 4
-			}
-			r.Occurrences = &n
-			warnings = append(warnings, fmt.Sprintf(
-				"Applied default occurrences=%d for %s recurrence.",
-				n, r.Pattern))
+		defaults := map[string]int{
+			"daily":   10,
+			"weekly":  4,
+			"monthly": 3,
+			"custom":  4,
 		}
+		n := defaults[r.Pattern]
+		if n == 0 {
+			n = 4
+		}
+		r.Occurrences = &n
+		warnings = append(warnings, fmt.Sprintf(
+			"Applied default occurrences=%d for %s recurrence.",
+			n, r.Pattern))
 	}
 
 	return warnings
@@ -560,8 +488,6 @@ func normalizeWeekday(s string) string {
 	return ""
 }
 
-// normalizeWeekdays applies normalizeWeekday to a slice and drops
-// any entries that couldn't be recognized.
 func normalizeWeekdays(in []string) []string {
 	out := make([]string, 0, len(in))
 	for _, d := range in {
@@ -659,40 +585,26 @@ func correctTickets(d *GeneratedEventDraft, cctx correctionContext) ([]string, e
 	return warnings, nil
 }
 
-func validateVenueConsistency(d *GeneratedEventDraft) []string {
+// validateScheduleConsistency checks the single schedule for the
+// invariants that matter at the schedule level. Event-level venue and
+// virtual/hybrid checks are gone — those are derived downstream.
+func validateScheduleConsistency(d *GeneratedEventDraft) []string {
 	var issues []string
 
-	if !d.IsVirtual && !d.IsHybrid {
-		if d.InPersonLocation == "" {
-			issues = append(issues, "in-person events require in_person_location")
-		}
-		if d.VenueName == "" {
-			issues = append(issues, "in-person events require venue_name")
-		}
+	if len(d.Schedules) == 0 {
+		return []string{"at least one schedule is required"}
 	}
 
-	if d.IsVirtual || d.IsHybrid {
-		hasLink := d.VirtualPlatformURL != ""
-		for _, s := range d.Schedules {
-			if (s.ZoomLink != nil && *s.ZoomLink != "") ||
-				(s.MeetLink != nil && *s.MeetLink != "") {
-				hasLink = true
-				break
-			}
-		}
-		if !hasLink {
-			issues = append(issues,
-				"virtual or hybrid events require virtual_platform_url or a zoom_link/meet_link on at least one schedule")
-		}
+	s := d.Schedules[0]
+
+	if !s.IsVirtual && strings.TrimSpace(s.Location) == "" {
+		issues = append(issues,
+			"in-person schedules require a location")
 	}
 
-	if d.IsHybrid {
-		for i, s := range d.Schedules {
-			if !s.IsVirtual && s.Location == "" {
-				issues = append(issues, fmt.Sprintf(
-					"hybrid event schedule %d is marked in-person but has no location", i+1))
-			}
-		}
+	if s.IsVirtual && strings.TrimSpace(s.Location) == "" {
+		issues = append(issues,
+			"virtual schedules require a location label (e.g. \"Virtual on Zoom\")")
 	}
 
 	return issues
@@ -732,3 +644,4 @@ func truncateAt(s string, n int) string {
 	}
 	return cut
 }
+

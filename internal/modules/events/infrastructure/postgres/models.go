@@ -82,10 +82,21 @@ type EventModel struct {
 	// ============================================================
 	// Schedule & Venue
 	// ============================================================
-	StartDate   time.Time  `gorm:"index"`
-	EndDate     *time.Time `gorm:"index"`
-	IsMultiDay  bool
-	IsRecurring bool `gorm:"index"`
+	//
+	// StartDate, EndDate, Date, Time, Duration, IsMultiDay, IsVirtual,
+	// IsHybrid, VirtualPlatform, VirtualPlatformURL, InPersonLocation,
+	// ZoomLink, MeetLink, and the Venue* fields are DERIVED from
+	// schedules. They remain in the schema as read-optimized caches for
+	// the discovery feed, event cards, sorting, and public pages — but
+	// the service writes them from the schedules and ignores anything
+	// the client sends.
+	StartDate          time.Time  `gorm:"index"`
+	EndDate            *time.Time `gorm:"index"`
+	Date               *time.Time `gorm:"index"`                       // date portion of StartDate
+	Time               string     `gorm:"type:varchar(8);default:''"`  // "HH:MM:SS" of first schedule
+	Duration           int        `gorm:"default:0"`                   // total minutes across schedules
+	IsMultiDay         bool
+	IsRecurring        bool `gorm:"index"`
 
 	// Recurrence
 	RecurrencePatternID   *string `gorm:"index"`
@@ -96,7 +107,7 @@ type EventModel struct {
 	RecurrenceDayOfMonth  *int
 	RecurrenceWeekOfMonth *string
 
-	// Venue
+	// Venue (derived)
 	VenueName          string
 	VenueAddress       string
 	VenueCity          string
@@ -236,10 +247,16 @@ type EventScheduleModel struct {
 	IsVirtual     bool           `gorm:"default:false"`
 	ZoomLink      string
 	MeetLink      string
-	MaxAttendees  *int
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	DeletedAt     gorm.DeletedAt `gorm:"index"`
+
+	// VideoMeetingID references video_meetings.id when the schedule's
+	// meeting was created automatically by the video module. Null for
+	// manually-pasted links or in-person sessions.
+	VideoMeetingID *string `gorm:"index"`
+
+	MaxAttendees *int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	DeletedAt    gorm.DeletedAt `gorm:"index"`
 }
 
 func (EventScheduleModel) TableName() string {

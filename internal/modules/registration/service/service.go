@@ -32,6 +32,8 @@ type Dependencies struct {
 	IDGenerator        id.Generator  // ← from shared
 	Clock              Clock         // ← stays local (service-specific)
 	NumberGenerator    registrationdomain.RegistrationNumberGenerator
+	Users      registrationdomain.UserInfoProvider   // 👈 new
+	Attendance registrationdomain.AttendanceRegistrar // 👈 new
 }
 
 // Clock abstracts time.Now so tests can control time.

@@ -22,6 +22,10 @@ import (
 	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 
+	// Attendance Module
+	attendanceHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/delivery/http"
+	attendanceService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/service"
+
 	// Events Module
 	eventsHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	eventsDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
@@ -44,6 +48,10 @@ import (
 	// Registration Module
 	regHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
 	regService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
+
+	// Video Module
+	videoHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/delivery/http"
+	videoService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/service"
 
 	// Shared
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
@@ -121,7 +129,10 @@ func provideAppDependencies(
 	paymentHndlr *paymentHandler.Handler,
 	orderHndlr *paymentHandler.OrderHandler,
 	paymentSvc paymentService.Service,
-	
+	attendanceHndlr *attendanceHandler.Handlers,
+	attendanceSvc attendanceService.Service,
+	videoHndlr *videoHandler.Handlers,
+	videoSvc videoService.Service,
 ) *AppDependencies {
 	return &AppDependencies{
 		Config:                    cfg,
@@ -152,7 +163,11 @@ func provideAppDependencies(
 		RegHandler:                regHandler,
 		RegService:                regService,
 		PaymentHandler:            paymentHndlr,
-		OrderHandler:              orderHndlr, 
+		OrderHandler:              orderHndlr,
 		PaymentService:            paymentSvc,
+		AttendanceHandler:         attendanceHndlr,
+		AttendanceService:         attendanceSvc,
+		VideoHandler:              videoHndlr,
+		VideoService:              videoSvc,
 	}
 }
