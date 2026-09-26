@@ -36,6 +36,15 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 		return nil, err
 	}
 
+	// NEW: Retry video meeting creation for any virtual schedule that
+	// doesn't yet have a link. Covers drafts saved before the host
+	// connected their platform. attachVideoMeetings is idempotent —
+	// schedules that already have a VideoMeetingID or manual link are
+	// skipped.
+	if err := s.attachVideoMeetings(ctx, event, publishedBy); err != nil {
+		log.Printf("⚠️ video integration on publish: %v", err)
+	}
+
 	if err := event.ValidateForPublish(); err != nil {
 		log.Printf("❌ Publish validation failed: %v", err)
 		return nil, fmt.Errorf("cannot publish event: %w", err)
@@ -55,9 +64,6 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 		log.Printf("⚠️ Could not reload event for attendance sync: %v", reloadErr)
 	}
 
-	// Mirror schedules into the attendance module. Best-effort:
-	// failures are logged inside the helper and do not fail the
-	// caller.
 	s.syncEventSchedulesToAttendance(ctx, event)
 
 	log.Printf("✅ Event published successfully: %s", id)
