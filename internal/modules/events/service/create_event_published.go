@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
@@ -224,35 +223,38 @@ func (s *eventService) buildPublishedEvent(
 		return nil, err
 	}
 
+	// Derive event-level timing, venue, and virtual/hybrid flags from
+	// the schedules. Schedules are the source of truth.
+	deriveEventFromSchedules(event)
+
+	// Create meetings on the host's video platform for every virtual
+	// session that doesn't already have a link. Best-effort: failures
+	// are logged and skipped. Manual links are respected.
+	if err := s.attachVideoMeetings(ctx, event, cmd.CreatedBy); err != nil {
+		log.Printf("⚠️ video integration: %v", err)
+	}
+
 	return event, nil
 }
 
-// populatePublishedEventFields fills all non-schedule fields for published events.
+// populatePublishedEventFields fills all non-schedule, non-derived fields
+// for published events.
+//
+// Event-level timing, venue, virtual/hybrid flags, and meeting links are
+// NOT set here — they are derived from schedules by
+// deriveEventFromSchedules. Client-provided values for those fields are
+// ignored.
 func (s *eventService) populatePublishedEventFields(ctx context.Context, event *domain.Event, cmd CreateEventCommand) {
 	event.ShortDescription = cmd.ShortDescription
 	event.Tags = cmd.Tags
 	event.Language = cmd.Language
 	event.CategoryID = cmd.CategoryID
 
-	event.IsMultiDay = cmd.IsMultiDay
 	event.IsRecurring = cmd.IsRecurring
 
 	if cmd.Recurrence != nil {
 		s.applyRecurrence(ctx, event, cmd.Recurrence)
 	}
-
-	// Venue fields
-	event.IsVirtual = cmd.IsVirtual
-	event.IsHybrid = cmd.IsHybrid
-	event.InPersonLocation = cmd.InPersonLocation
-	event.VirtualPlatform = cmd.VirtualPlatform
-	event.VirtualPlatformURL = cmd.VirtualPlatformURL
-	event.ZoomLink = cmd.ZoomLink
-	event.MeetLink = cmd.MeetLink
-	event.VenueName = cmd.VenueName
-	event.VenueAddress = cmd.VenueAddress
-	event.VenueCity = cmd.VenueCity
-	event.VenueCountry = cmd.VenueCountry
 
 	// Ticket fields
 	event.IsFreeEvent = cmd.IsFree
@@ -290,6 +292,9 @@ func (s *eventService) populatePublishedEventFields(ctx context.Context, event *
 }
 
 // populateEventSchedules converts and sets schedules.
+//
+// Does NOT set event.StartDate — that is derived from the schedules by
+// deriveEventFromSchedules, which the caller invokes after this function.
 func (s *eventService) populateEventSchedules(ctx context.Context, event *domain.Event, schedules []ScheduleInput) error {
 	if len(schedules) == 0 {
 		return nil
@@ -300,11 +305,6 @@ func (s *eventService) populateEventSchedules(ctx context.Context, event *domain
 		return err
 	}
 	event.Schedules = converted
-
-	startDate, err := time.Parse("2006-01-02", schedules[0].StartDate)
-	if err == nil {
-		event.StartDate = startDate
-	}
 	return nil
 }
 
@@ -343,6 +343,7 @@ func (s *eventService) setPublishedStatusAndSave(ctx context.Context, event *dom
 	// before we mirror them into attendance.
 	if reloaded, reloadErr := s.repo.GetEventByID(ctx, event.ID); reloadErr == nil && reloaded != nil {
 		event.Schedules = reloaded.Schedules
+		event.Tickets = reloaded.Tickets
 	} else if reloadErr != nil {
 		log.Printf("⚠️ Could not reload event for attendance sync: %v", reloadErr)
 	}

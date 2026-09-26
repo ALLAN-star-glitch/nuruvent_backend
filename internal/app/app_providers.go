@@ -49,6 +49,10 @@ import (
 	regHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
 	regService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 
+	// Video Module
+	videoHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/delivery/http"
+	videoService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/service"
+
 	// Shared
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
@@ -125,8 +129,10 @@ func provideAppDependencies(
 	paymentHndlr *paymentHandler.Handler,
 	orderHndlr *paymentHandler.OrderHandler,
 	paymentSvc paymentService.Service,
-	attendanceHndlr *attendanceHandler.Handlers, // 👈 added
-	attendanceSvc attendanceService.Service,     // 👈 added
+	attendanceHndlr *attendanceHandler.Handlers,
+	attendanceSvc attendanceService.Service,
+	videoHndlr *videoHandler.Handlers,
+	videoSvc videoService.Service,
 ) *AppDependencies {
 	return &AppDependencies{
 		Config:                    cfg,
@@ -159,7 +165,9 @@ func provideAppDependencies(
 		PaymentHandler:            paymentHndlr,
 		OrderHandler:              orderHndlr,
 		PaymentService:            paymentSvc,
-		AttendanceHandler:         attendanceHndlr, // 👈 added
-		AttendanceService:         attendanceSvc,   // 👈 added
+		AttendanceHandler:         attendanceHndlr,
+		AttendanceService:         attendanceSvc,
+		VideoHandler:              videoHndlr,
+		VideoService:              videoSvc,
 	}
 }

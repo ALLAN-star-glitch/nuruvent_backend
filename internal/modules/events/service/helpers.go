@@ -417,33 +417,270 @@ type TeamInfo struct {
 	ID        string
 	Type      string // "personal" or "institution"
 	AccountID string
+
+
+}
+// ============================================================
+// EVENT DERIVATION FROM SCHEDULES
+// ============================================================
+//
+// Event-level timing, venue, and virtual/hybrid flags are derived from
+// the schedules. Schedules are the single source of truth. The client
+// may still send these fields on create/update — they are ignored.
+//
+// Called after schedules are populated, and on update when
+// cmd.Schedules is non-nil.
+
+// deriveEventFromSchedules computes event-level fields from schedules.
+// No-op when there are no schedules.
+func deriveEventFromSchedules(event *domain.Event) {
+	if event == nil || len(event.Schedules) == 0 {
+		return
+	}
+
+	// 1. Earliest start and latest end across all schedules.
+	earliestStart := firstScheduleStart(event.Schedules)
+	latestEnd := lastScheduleEnd(event.Schedules)
+
+	event.StartDate = earliestStart
+	event.Date = time.Date(
+		earliestStart.Year(), earliestStart.Month(), earliestStart.Day(),
+		0, 0, 0, 0, earliestStart.Location(),
+	)
+	event.Time = scheduleStartClock(event.Schedules[0])
+
+	if !latestEnd.IsZero() {
+		event.EndDate = &latestEnd
+	}
+
+	// 2. Multi-day detection.
+	event.IsMultiDay = computeIsMultiDay(event.Schedules)
+
+	// 3. Duration = sum of (end - start) across schedules, in minutes.
+	event.Duration = computeTotalDurationMinutes(event.Schedules)
+
+	// 4. Virtual / hybrid / platform.
+	event.IsVirtual, event.IsHybrid = computeVirtualFlags(event.Schedules)
+	event.VirtualPlatform = computeVirtualPlatform(event.Schedules)
+	event.VirtualPlatformURL = virtualPlatformBaseURL(event.VirtualPlatform)
+
+	// 5. Mirror the first matching schedule's links for display convenience.
+	event.ZoomLink = firstNonEmptyLink(event.Schedules, "zoom")
+	event.MeetLink = firstNonEmptyLink(event.Schedules, "meet")
+
+	// 6. Venue from the first in-person schedule.
+	applyVenueFromSchedules(event, event.Schedules)
 }
 
-// applyScheduleDates copies the first schedule's start date (and the
-// last schedule's end date) up to the event-level fields. The
-// ValidateForPublish check reads event.StartDate, which nothing was
-// setting after schedules were attached.
-func applyScheduleDates(event *domain.Event) {
-    if event == nil || len(event.Schedules) == 0 {
-        return
-    }
+// ------------------------------------------------------------
+// Internals
+// ------------------------------------------------------------
 
-    first := event.Schedules[0]
-    if !first.StartDate.IsZero() {
-        event.StartDate = first.StartDate
-    }
+// firstScheduleStart returns the earliest start datetime across schedules.
+// Combines StartDate + StartTime in the schedule's timezone.
+func firstScheduleStart(schedules []domain.EventSchedule) time.Time {
+	var earliest time.Time
+	for _, s := range schedules {
+		t := scheduleStartDateTime(s)
+		if t.IsZero() {
+			continue
+		}
+		if earliest.IsZero() || t.Before(earliest) {
+			earliest = t
+		}
+	}
+	return earliest
+}
 
-    last := event.Schedules[len(event.Schedules)-1]
-    if last.EndDate != nil && !last.EndDate.IsZero() {
-        event.EndDate = last.EndDate
-    } else if !last.StartDate.IsZero() {
-        endCopy := last.StartDate
-        event.EndDate = &endCopy
-    }
+// lastScheduleEnd returns the latest end datetime across schedules.
+func lastScheduleEnd(schedules []domain.EventSchedule) time.Time {
+	var latest time.Time
+	for _, s := range schedules {
+		t := scheduleEndDateTime(s)
+		if t.IsZero() {
+			continue
+		}
+		if latest.IsZero() || t.After(latest) {
+			latest = t
+		}
+	}
+	return latest
+}
 
-    if len(event.Schedules) > 1 {
-        event.IsMultiDay = true
-    } else if event.EndDate != nil && !event.EndDate.Equal(event.StartDate) {
-        event.IsMultiDay = true
-    }
+// scheduleStartDateTime combines StartDate + StartTime in the schedule's tz.
+func scheduleStartDateTime(s domain.EventSchedule) time.Time {
+	if s.StartDate.IsZero() {
+		return time.Time{}
+	}
+	return combineDateAndClock(s.StartDate, s.StartTime, s.Timezone)
+}
+
+// scheduleEndDateTime combines EndDate (or StartDate) + EndTime.
+func scheduleEndDateTime(s domain.EventSchedule) time.Time {
+	date := s.StartDate
+	if s.EndDate != nil && !s.EndDate.IsZero() {
+		date = *s.EndDate
+	}
+	if date.IsZero() {
+		return time.Time{}
+	}
+	return combineDateAndClock(date, s.EndTime, s.Timezone)
+}
+
+// combineDateAndClock merges a date with an "HH:MM:SS" string in the
+// given IANA timezone. Falls back to UTC if the timezone can't be loaded.
+func combineDateAndClock(date time.Time, clock, tz string) time.Time {
+	loc := time.UTC
+	if tz != "" {
+		if loaded, err := time.LoadLocation(tz); err == nil {
+			loc = loaded
+		}
+	}
+
+	// Parse the clock string. Accept "15:04:05" and "15:04".
+	parsed, err := time.Parse("15:04:05", clock)
+	if err != nil {
+		parsed, err = time.Parse("15:04", clock)
+	}
+	if err != nil {
+		return time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)
+	}
+	return time.Date(
+		date.Year(), date.Month(), date.Day(),
+		parsed.Hour(), parsed.Minute(), parsed.Second(), 0, loc,
+	)
+}
+
+// scheduleStartClock extracts the "HH:MM:SS" start of a schedule. Falls
+// back to parsing StartTime if needed.
+func scheduleStartClock(s domain.EventSchedule) string {
+	if s.StartTime != "" {
+		return s.StartTime
+	}
+	return ""
+}
+
+// computeIsMultiDay reports whether any schedule spans more than one day,
+// or whether the schedules as a whole span more than one calendar day.
+func computeIsMultiDay(schedules []domain.EventSchedule) bool {
+	var minDay, maxDay string
+	for _, s := range schedules {
+		if s.StartDate.IsZero() {
+			continue
+		}
+		d := s.StartDate.Format("2006-01-02")
+		if minDay == "" || d < minDay {
+			minDay = d
+		}
+		if maxDay == "" || d > maxDay {
+			maxDay = d
+		}
+
+		// Schedule itself spans days?
+		if s.EndDate != nil && !s.EndDate.IsZero() && !s.EndDate.Equal(s.StartDate) {
+			return true
+		}
+	}
+	return minDay != "" && maxDay != "" && minDay != maxDay
+}
+
+// computeTotalDurationMinutes sums (end - start) across schedules, in
+// minutes. Schedules with unparseable times contribute 0.
+func computeTotalDurationMinutes(schedules []domain.EventSchedule) int {
+	total := 0
+	for _, s := range schedules {
+		start := scheduleStartDateTime(s)
+		end := scheduleEndDateTime(s)
+		if start.IsZero() || end.IsZero() || end.Before(start) {
+			continue
+		}
+		total += int(end.Sub(start).Minutes())
+	}
+	return total
+}
+
+// computeVirtualFlags returns (allVirtual, isHybrid).
+//
+//   - All virtual   → IsVirtual = true, IsHybrid = false
+//   - All in-person → IsVirtual = false, IsHybrid = false
+//   - Mixed         → IsVirtual = false, IsHybrid = true
+func computeVirtualFlags(schedules []domain.EventSchedule) (bool, bool) {
+	virtual, inPerson := 0, 0
+	for _, s := range schedules {
+		if s.IsVirtual {
+			virtual++
+		} else {
+			inPerson++
+		}
+	}
+	switch {
+	case virtual > 0 && inPerson == 0:
+		return true, false
+	case virtual == 0 && inPerson > 0:
+		return false, false
+	case virtual > 0 && inPerson > 0:
+		return false, true
+	}
+	return false, false
+}
+
+// computeVirtualPlatform returns "zoom", "google_meet", or "" based on
+// the first link found in schedules.
+func computeVirtualPlatform(schedules []domain.EventSchedule) string {
+	for _, s := range schedules {
+		if s.ZoomLink != "" {
+			return "zoom"
+		}
+		if s.MeetLink != "" {
+			return "google_meet"
+		}
+	}
+	return ""
+}
+
+// virtualPlatformBaseURL maps a platform slug to its public base URL.
+func virtualPlatformBaseURL(platform string) string {
+	switch platform {
+	case "zoom":
+		return "https://zoom.us/"
+	case "google_meet":
+		return "https://meet.google.com/"
+	default:
+		return ""
+	}
+}
+
+// firstNonEmptyLink returns the first schedule's link of the given kind.
+func firstNonEmptyLink(schedules []domain.EventSchedule, kind string) string {
+	for _, s := range schedules {
+		switch kind {
+		case "zoom":
+			if s.ZoomLink != "" {
+				return s.ZoomLink
+			}
+		case "meet":
+			if s.MeetLink != "" {
+				return s.MeetLink
+			}
+		}
+	}
+	return ""
+}
+
+// applyVenueFromSchedules copies the first in-person schedule's location
+// into the event-level venue fields.
+func applyVenueFromSchedules(event *domain.Event, schedules []domain.EventSchedule) {
+	for _, s := range schedules {
+		if s.IsVirtual {
+			continue
+		}
+		if s.Location == "" {
+			continue
+		}
+		event.InPersonLocation = s.Location
+		event.VenueName = s.Location
+		// We only have a free-text location string, so don't attempt
+		// to split into street/city/country. That's a future feature.
+		return
+	}
 }

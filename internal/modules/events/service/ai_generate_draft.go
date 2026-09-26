@@ -1,3 +1,5 @@
+// internal/modules/events/service/ai_generate_draft.go
+
 package service
 
 import (
@@ -23,13 +25,13 @@ type GenerateEventDraftResult struct {
 	Warnings []string             `json:"warnings"`
 }
 
-// GenerateEventDraft orchestrates the AI generation pipeline:
+// GenerateEventDraft orchestrates the AI generation pipeline.
 //
 //  1. Authorization — same two-tier check as CreateDraft.
 //  2. Shape validation + defaults.
 //  3. Resolve DB context (event type, category, ticket types).
 //  4. Build prompts.
-//  5. Call AI (attempt 1) → parse → correct → check publish-readiness.
+//  5. Call AI (attempt 1) -> parse -> correct -> check publish-readiness.
 //  6. On validation failure, retry once with a fix prompt.
 //  7. Return draft + warnings, or a structured error.
 func (s *eventService) GenerateEventDraft(
@@ -77,7 +79,7 @@ func (s *eventService) GenerateEventDraft(
 	)
 	if hardErr != nil {
 		log.Printf("[AI] parse failed: %v", hardErr)
-		return nil, hardErr // already wrapped as ErrAIProvider / ErrAIParseFailure
+		return nil, hardErr
 	}
 
 	// 5. If the first attempt is publishable, return it.
@@ -153,7 +155,7 @@ func (s *eventService) attemptGenerate(
 
 	corrections, corrErr := applyCorrections(&parsed, cctx)
 	if corrErr != nil {
-		// Correction failure is a *validation* error, not a parse error.
+		// Correction failure is a validation error, not a parse error.
 		// The retry can fix it.
 		return &parsed, corrections, []string{corrErr.Error()}, nil
 	}
@@ -231,12 +233,11 @@ func (s *eventService) loadPromptContext(
 // ============================================================
 
 // checkPublishReadiness returns a list of structural errors that must
-// be resolved before the draft is considered publishable. These errors
-// trigger the retry path — they are not fatal on the first attempt.
+// be resolved before the draft is considered publishable.
 func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 	var errs []string
 
-	// Name — the raw title from which display_name and slug are derived.
+	// Name.
 	trimmedName := strings.TrimSpace(d.Name)
 	if trimmedName == "" {
 		errs = append(errs, "name is required")
@@ -244,8 +245,7 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 		errs = append(errs, "name must be at least 3 characters")
 	}
 
-	// Description — the retry prompt in ai_prompts.go detects this
-	// error string and injects explicit expansion guidance.
+	// Description.
 	if len(strings.TrimSpace(d.Description)) < 100 {
 		errs = append(errs, fmt.Sprintf(
 			"description is %d characters — minimum is 100; expand with the agenda, target audience, and outcomes",
@@ -274,8 +274,7 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 		}
 	}
 
-	// Recurrence — if the AI said the event repeats, the block must
-	// be structurally valid. Invalid recurrence triggers a retry.
+	// Recurrence.
 	if d.IsRecurring {
 		if d.Recurrence == nil {
 			errs = append(errs, "is_recurring is true but recurrence block is missing")
@@ -311,8 +310,8 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 		}
 	}
 
-	// Venue consistency — soft issues become retry triggers.
-	errs = append(errs, validateVenueConsistency(d)...)
+	// Schedule-level consistency.
+	errs = append(errs, validateScheduleConsistency(d)...)
 
 	return errs
 }

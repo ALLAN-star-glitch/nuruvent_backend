@@ -28,6 +28,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 	registrationService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
+	videoService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
@@ -232,4 +233,12 @@ func NewPaymentPricingResolver(
 	regRepo registrationdomain.EventRegistrationRepository,
 ) paymentdomain.RegistrationPricingResolver {
 	return paymentadapters.NewPricingResolver(regRepo)
+}
+
+// NewEventsVideoAdapter wires the events module's VideoMeetingCreator
+// port to the video service.
+func NewEventsVideoAdapter(
+	videoSvc videoService.Service,
+) eventsDomain.VideoMeetingCreator {
+	return events.NewVideoAdapter(videoSvc)
 }

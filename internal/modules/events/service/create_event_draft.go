@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
@@ -241,35 +240,40 @@ func (s *eventService) buildDraftEvent(
 		return nil, err
 	}
 
+	// Derive event-level fields from schedules. No-op when the draft
+	// has no schedules yet.
+	deriveEventFromSchedules(event)
+
+
+
+
+	// Create meetings on the host's video platform for every virtual
+	// session that doesn't already have a link. Best-effort: failures
+	// are logged and skipped. Manual links are respected.
+	if err := s.attachVideoMeetings(ctx, event, cmd.CreatedBy); err != nil {
+		log.Printf("⚠️ video integration: %v", err)
+	}
+
 	return event, nil
 }
 
-// populateEventFields fills all non-schedule fields.
+// populateEventFields fills all non-schedule, non-derived fields.
+//
+// Event-level timing, venue, virtual/hybrid flags, and meeting links are
+// NOT set here — they are derived from schedules by
+// deriveEventFromSchedules. Client-provided values for those fields are
+// ignored.
 func (s *eventService) populateEventFields(ctx context.Context, event *domain.Event, cmd CreateDraftCommand) {
 	event.ShortDescription = cmd.ShortDescription
 	event.Tags = cmd.Tags
 	event.Language = cmd.Language
 	event.CategoryID = cmd.CategoryID
 
-	event.IsMultiDay = cmd.IsMultiDay
 	event.IsRecurring = cmd.IsRecurring
 
 	if cmd.Recurrence != nil {
 		s.applyRecurrence(ctx, event, cmd.Recurrence)
 	}
-
-	// Venue fields
-	event.IsVirtual = cmd.IsVirtual
-	event.IsHybrid = cmd.IsHybrid
-	event.InPersonLocation = cmd.InPersonLocation
-	event.VirtualPlatform = cmd.VirtualPlatform
-	event.VirtualPlatformURL = cmd.VirtualPlatformURL
-	event.ZoomLink = cmd.ZoomLink
-	event.MeetLink = cmd.MeetLink
-	event.VenueName = cmd.VenueName
-	event.VenueAddress = cmd.VenueAddress
-	event.VenueCity = cmd.VenueCity
-	event.VenueCountry = cmd.VenueCountry
 
 	// Ticket fields
 	event.IsFreeEvent = cmd.IsFree
@@ -306,6 +310,9 @@ func (s *eventService) populateEventFields(ctx context.Context, event *domain.Ev
 }
 
 // populateSchedules converts and sets schedules.
+//
+// Does NOT set event.StartDate — that is derived from the schedules by
+// deriveEventFromSchedules, which the caller invokes after this function.
 func (s *eventService) populateSchedules(ctx context.Context, event *domain.Event, schedules []ScheduleInput) error {
 	if len(schedules) == 0 {
 		return nil
@@ -316,11 +323,6 @@ func (s *eventService) populateSchedules(ctx context.Context, event *domain.Even
 		return err
 	}
 	event.Schedules = converted
-
-	startDate, err := time.Parse("2006-01-02", schedules[0].StartDate)
-	if err == nil {
-		event.StartDate = startDate
-	}
 	return nil
 }
 
@@ -349,5 +351,16 @@ func (s *eventService) setDraftStatusAndSave(ctx context.Context, event *domain.
 		log.Printf("❌ Failed to create draft: %v", err)
 		return fmt.Errorf("failed to create draft: %w", err)
 	}
+
+		// Reload so DB-assigned IDs (schedules, tickets) land on the domain
+	// struct before we return. Without this, the API response has empty
+	// ticket IDs and no ticket_type objects.
+	if reloaded, reloadErr := s.repo.GetEventByID(ctx, event.ID); reloadErr == nil && reloaded != nil {
+		event.Schedules = reloaded.Schedules
+		event.Tickets = reloaded.Tickets
+	} else if reloadErr != nil {
+		log.Printf("⚠️ Could not reload draft: %v", reloadErr)
+	}
+
 	return nil
 }

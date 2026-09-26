@@ -123,3 +123,20 @@ func Gone(c fiber.Ctx, message string, errors any) error {
 		Errors:  errors,
 	})
 }
+
+func NotImplemented(c fiber.Ctx, message string, errors any) error {
+	return c.Status(fiber.StatusNotImplemented).JSON(BaseResponse{
+		Success: false,
+		Message: message,
+		Errors:  errors,
+	})
+}
+
+
+
+
+
+
+
+
+

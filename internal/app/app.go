@@ -72,7 +72,7 @@ func (app *App) SetupRoutes() {
 
 	optionalAuth := authmiddleware.OptionalAuthMiddleware(tokenSvc)
 
-	server.SetupRoutes(
+		server.SetupRoutes(
 		app.App,
 		app.Config,
 		authMiddleware,
@@ -85,7 +85,8 @@ func (app *App) SetupRoutes() {
 		app.RegHandler,
 		app.PaymentHandler,
 		app.OrderHandler,
-		app.AttendanceHandler, // 👈 added
+		app.AttendanceHandler,
+		app.VideoHandler,
 	)
 	log.Println("Routes registered successfully")
 }

@@ -66,8 +66,8 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 
 		// Monetization
 		IsFeatured:         event.IsFeatured,
-		CertificateEnabled:  event.CertificateEnabled,
-		CertificatePrice:    event.CertificatePrice,
+		CertificateEnabled: event.CertificateEnabled,
+		CertificatePrice:   event.CertificatePrice,
 
 		// Media
 		ImageURL:     event.ImageURL,
@@ -104,13 +104,19 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 		resp.MaxTicketsPerOrder = *event.MaxTicketsPerOrder
 	}
 
-	// Set StartDate and EndDate
+	// Set StartDate, EndDate, Date, Time, Duration
 	if !event.StartDate.IsZero() {
 		resp.StartDate = event.StartDate.Format(time.RFC3339)
 	}
 	if event.EndDate != nil {
 		resp.EndDate = event.EndDate.Format(time.RFC3339)
 	}
+	if !event.Date.IsZero() {
+		d := event.Date.Format("2006-01-02")
+		resp.Date = &d
+	}
+	resp.Time = event.Time
+	resp.Duration = event.Duration
 
 	// Set Venue
 	if event.VenueName != "" || event.VenueAddress != "" || event.VenueCity != "" || event.VenueCountry != "" {
@@ -168,6 +174,9 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 			if s.EndDate != nil {
 				schedule.EndDate = s.EndDate.Format("2006-01-02")
 			}
+			if s.VideoMeetingID != nil {
+				schedule.VideoMeetingID = *s.VideoMeetingID
+			}
 			if s.MaxAttendees != nil {
 				schedule.MaxAttendees = *s.MaxAttendees
 			}
@@ -177,7 +186,6 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 	}
 
 	// Set Tickets
-		// Set Tickets
 	if len(event.Tickets) > 0 {
 		tickets := make([]TicketDTO, len(event.Tickets))
 		for i, t := range event.Tickets {
@@ -203,7 +211,7 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 				ticket.GroupDiscount = *t.GroupDiscount
 			}
 
-			// Nested ticket type                              
+			// Nested ticket type
 			if t.TicketType != nil {
 				ticket.TicketType = &TicketTypeDTO{
 					ID:          t.TicketType.ID,
@@ -214,9 +222,8 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 					SortOrder:   t.TicketType.SortOrder,
 					IsActive:    t.TicketType.IsActive,
 				}
-			}                                                 
+			}
 
-			
 			tickets[i] = ticket
 		}
 		resp.Tickets = tickets

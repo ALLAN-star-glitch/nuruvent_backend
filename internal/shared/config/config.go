@@ -22,6 +22,7 @@ type Config struct {
 	MPesa       MPesaConfig
 	Paystack    PaystackConfig
 	Zoom        ZoomConfig
+	Video       VideoConfig
 	App         AppConfig
 	Supabase    SupabaseConfig
 	OpenAI      OpenAIConfig
@@ -36,10 +37,6 @@ type Config struct {
 // ============================================================
 
 // PaystackConfig holds credentials for the Paystack payment gateway.
-//
-// Paystack serves both M-Pesa and cards through a single hosted
-// checkout. The SecretKey is used for both API calls (Bearer auth) and
-// webhook signature verification (HMAC-SHA512).
 type PaystackConfig struct {
 	SecretKey string
 	PublicKey string
@@ -47,33 +44,82 @@ type PaystackConfig struct {
 	Enabled   bool
 }
 
-// IsConfigured reports whether the minimum required credentials are
-// present for the Paystack provider to operate.
 func (c PaystackConfig) IsConfigured() bool {
 	return c.Enabled && c.SecretKey != "" && c.PublicKey != ""
 }
 
 // ============================================================
-// ZOOM
+// ZOOM (webhook-only)
 // ============================================================
 
-// ZoomConfig holds credentials for the Zoom integration.
+// ZoomConfig holds credentials for the Zoom webhook integration.
 //
-// Nuruvent uses Zoom for attendance tracking. Hosts bring their own
-// Zoom meetings; the platform subscribes to participant webhooks via
-// a Server-to-Server OAuth app.
+// This config is used by the attendance module's Zoom webhook
+// provider to verify signatures on incoming participant events.
 //
-//   - SecretToken is the app's Secret Token from the Zoom
-//     Marketplace. It signs every webhook delivery (HMAC-SHA256).
-//   - AccountID, ClientID, ClientSecret are used when calling Zoom
-//     REST APIs. Not required for webhook-only integrations, but
-//     retained for future use (e.g. pulling meeting reports).
+// The OAuth credentials used for connecting host accounts live in
+// VideoConfig.ZoomOAuth, because they belong to the video module.
 type ZoomConfig struct {
-	SecretToken  string
-	AccountID    string
+	// SecretToken is the app's Secret Token from the Zoom
+	// Marketplace's Feature → Event Subscriptions page. It signs
+	// every webhook delivery (HMAC-SHA256).
+	SecretToken string
+
+	// Enabled turns webhook processing on or off. When false, the
+	// attendance module will not register a Zoom provider.
+	Enabled bool
+}
+
+// IsConfigured reports whether the minimum required credentials are
+// present for the Zoom webhook integration to operate.
+func (c ZoomConfig) IsConfigured() bool {
+	return c.Enabled && c.SecretToken != ""
+}
+
+// ============================================================
+// VIDEO (OAuth + encryption)
+// ============================================================
+
+// VideoConfig holds everything the video module needs to operate:
+// per-platform OAuth credentials and the encryption key used to
+// protect tokens at rest.
+type VideoConfig struct {
+	// EncryptionKey is a base64- or hex-encoded 32-byte key used to
+	// encrypt OAuth tokens before storing them.
+	//
+	// Required. Without it, the video module cannot start.
+	EncryptionKey string
+
+	// ZoomOAuth carries the Zoom General App's OAuth credentials.
+	// Used when hosts connect their own Zoom accounts.
+	ZoomOAuth VideoOAuthPlatformConfig
+
+	// GoogleMeetOAuth is reserved for the eventual Google Meet
+	// integration. Leaving it unconfigured keeps the platform
+	// disabled.
+	GoogleMeetOAuth VideoOAuthPlatformConfig
+}
+
+// VideoOAuthPlatformConfig is the set of OAuth credentials for one
+// video platform.
+type VideoOAuthPlatformConfig struct {
 	ClientID     string
 	ClientSecret string
+	RedirectURI  string
 	Enabled      bool
+}
+
+// IsConfigured reports whether the platform has enough credentials to
+// operate.
+func (c VideoOAuthPlatformConfig) IsConfigured() bool {
+	return c.Enabled && c.ClientID != "" && c.ClientSecret != "" && c.RedirectURI != ""
+}
+
+// IsConfigured reports whether the video module has the minimum
+// required credentials. Only the encryption key is strictly required;
+// individual platforms enable themselves.
+func (c VideoConfig) IsConfigured() bool {
+	return c.EncryptionKey != ""
 }
 
 // ============================================================
@@ -84,17 +130,8 @@ type ZoomConfig struct {
 // specific subsystem.
 type AppConfig struct {
 	// PublicURL is the base URL of the public-facing app. Used to
-	// build join links, confirmation links, etc. Example:
-	// "https://nuruvent.com" (production) or
-	// "http://localhost:3000" (development).
+	// build join links, confirmation links, etc.
 	PublicURL string
-}
-
-// IsConfigured reports whether the minimum required credentials are
-// present for the Zoom integration to operate. Only SecretToken is
-// strictly required for webhook handling.
-func (c ZoomConfig) IsConfigured() bool {
-	return c.Enabled && c.SecretToken != ""
 }
 
 // ============================================================
@@ -186,7 +223,6 @@ type GeminiConfig struct {
 // LOAD
 // ============================================================
 
-// Load reads configuration from environment variables (and .env in dev).
 func Load() *Config {
 	if err := godotenv.Load(); err != nil {
 		log.Println("Warning: .env file not found, using environment variables")
@@ -232,13 +268,25 @@ func Load() *Config {
 			Enabled:   getEnvBool("PAYSTACK_ENABLED", false),
 		},
 		Zoom: ZoomConfig{
-			SecretToken:  getEnv("ZOOM_SECRET_TOKEN", ""),
-			AccountID:    getEnv("ZOOM_ACCOUNT_ID", ""),
-			ClientID:     getEnv("ZOOM_CLIENT_ID", ""),
-			ClientSecret: getEnv("ZOOM_CLIENT_SECRET", ""),
-			Enabled:      getEnvBool("ZOOM_ENABLED", false),
+			SecretToken: getEnv("ZOOM_SECRET_TOKEN", ""),
+			Enabled:     getEnvBool("ZOOM_ENABLED", false),
 		},
-	    App: AppConfig{
+		Video: VideoConfig{
+			EncryptionKey: getEnv("VIDEO_TOKEN_ENCRYPTION_KEY", ""),
+			ZoomOAuth: VideoOAuthPlatformConfig{
+				ClientID:     getEnv("ZOOM_OAUTH_CLIENT_ID", ""),
+				ClientSecret: getEnv("ZOOM_OAUTH_CLIENT_SECRET", ""),
+				RedirectURI:  getEnv("ZOOM_OAUTH_REDIRECT_URI", ""),
+				Enabled:      getEnvBool("ZOOM_OAUTH_ENABLED", true),
+			},
+			GoogleMeetOAuth: VideoOAuthPlatformConfig{
+				ClientID:     getEnv("GOOGLE_MEET_OAUTH_CLIENT_ID", ""),
+				ClientSecret: getEnv("GOOGLE_MEET_OAUTH_CLIENT_SECRET", ""),
+				RedirectURI:  getEnv("GOOGLE_MEET_OAUTH_REDIRECT_URI", ""),
+				Enabled:      getEnvBool("GOOGLE_MEET_OAUTH_ENABLED", false),
+			},
+		},
+		App: AppConfig{
 			PublicURL: getEnv("APP_PUBLIC_URL", "http://localhost:3000"),
 		},
 		Supabase: SupabaseConfig{
@@ -297,7 +345,6 @@ func Load() *Config {
 // HELPERS
 // ============================================================
 
-// GetDSN returns the database connection string.
 func (c *Config) GetDSN() string {
 	if c.Database.URL != "" {
 		return c.Database.URL
@@ -307,7 +354,6 @@ func (c *Config) GetDSN() string {
 		"/" + c.Database.Name + "?sslmode=" + c.Database.SSLMode
 }
 
-// GetRedisURL returns the Redis connection string.
 func (c *Config) GetRedisURL() string {
 	return c.Redis.URL
 }

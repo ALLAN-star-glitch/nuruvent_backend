@@ -18,6 +18,7 @@ type eventService struct {
 	organizer domain.OrganizerProvider
 	aiSvc       AIService 
 	attendance  domain.AttendanceRegistrar
+	video       domain.VideoMeetingCreator 
 }
 
 func NewService(
@@ -28,6 +29,7 @@ func NewService(
 	organizerProvider domain.OrganizerProvider,
 	aiSvc AIService,    
 	attendance domain.AttendanceRegistrar,
+	video domain.VideoMeetingCreator,  
 ) Service {
 	return &eventService{
 		repo:        repo,
@@ -38,6 +40,7 @@ func NewService(
 		organizer: organizerProvider,
 		aiSvc: aiSvc,
 		attendance:  attendance,
+		video:       video,
 	}
 }
 

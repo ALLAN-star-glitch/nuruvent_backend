@@ -67,6 +67,9 @@ type Event struct {
 	// ============================================================
 	StartDate   time.Time
 	EndDate     *time.Time
+	Date        time.Time   // ← new: derived, date portion of StartDate
+	Time        string      // ← new: derived, "HH:MM:SS" of first schedule
+	Duration    int         // ← new: derived, sum of session durations in minutes
 	IsMultiDay  bool
 	IsRecurring bool
 
@@ -218,6 +221,7 @@ func (e *Event) ResolveAccountDomain() string {
 // ============================================================
 
 // EventSchedule represents a schedule for multi-day events
+
 type EventSchedule struct {
 	ID            string
 	EventID       string
@@ -232,9 +236,14 @@ type EventSchedule struct {
 	IsVirtual     bool
 	ZoomLink      string
 	MeetLink      string
-	MaxAttendees  *int
-}
 
+	// VideoMeetingID references video_meetings.id when the meeting was
+	// created automatically by the video module. Nil for manually-pasted
+	// links and in-person sessions.
+	VideoMeetingID *string
+
+	MaxAttendees *int
+}
 // EventTicket represents a ticket type for an event
 type EventTicket struct {
 	ID                string

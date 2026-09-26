@@ -408,19 +408,20 @@ type CertificateTemplateDTO struct {
 
 // ScheduleDTO - Schedule response
 type ScheduleDTO struct {
-	ID            string `json:"id"`
-	SessionName   string `json:"session_name,omitempty"`
-	SessionNumber int    `json:"session_number,omitempty"`
-	StartDate     string `json:"start_date"`
-	EndDate       string `json:"end_date,omitempty"`
-	StartTime     string `json:"start_time"`
-	EndTime       string `json:"end_time"`
-	Timezone      string `json:"timezone"`
-	Location      string `json:"location,omitempty"`
-	IsVirtual     bool   `json:"is_virtual"`
-	ZoomLink      string `json:"zoom_link,omitempty"`
-	MeetLink      string `json:"meet_link,omitempty"`
-	MaxAttendees  int    `json:"max_attendees,omitempty"`
+	ID             string `json:"id"`
+	SessionName    string `json:"session_name,omitempty"`
+	SessionNumber  int    `json:"session_number,omitempty"`
+	StartDate      string `json:"start_date"`
+	EndDate        string `json:"end_date,omitempty"`
+	StartTime      string `json:"start_time"`
+	EndTime        string `json:"end_time"`
+	Timezone       string `json:"timezone"`
+	Location       string `json:"location,omitempty"`
+	IsVirtual      bool   `json:"is_virtual"`
+	ZoomLink       string `json:"zoom_link,omitempty"`
+	MeetLink       string `json:"meet_link,omitempty"`
+	VideoMeetingID string `json:"video_meeting_id,omitempty"`
+	MaxAttendees   int    `json:"max_attendees,omitempty"`
 }
 
 // TicketDTO - Ticket response
@@ -543,15 +544,19 @@ type EventResponse struct {
 	// Ownership
 	TeamID string `json:"team_id"` // Team ID this event belongs to
 	
+	
 	// Organizer (public-facing - always shown)
 	Organizer *OrganizerResponse `json:"organizer"`
 	
 	// Creator (internal - only for authorized users)
 	Creator *CreatorDTO `json:"creator,omitempty"`
 
-	// Schedule
+		// Schedule
 	StartDate   string         `json:"start_date,omitempty"`
 	EndDate     string         `json:"end_date,omitempty"`
+	Date        *string        `json:"date,omitempty"`
+	Time        string         `json:"time,omitempty"`
+	Duration    int            `json:"duration_minutes"`
 	IsMultiDay  bool           `json:"is_multi_day"`
 	IsRecurring bool           `json:"is_recurring"`
 	Schedules   []ScheduleDTO  `json:"schedules,omitempty"`

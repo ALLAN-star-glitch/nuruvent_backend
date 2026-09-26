@@ -24,7 +24,6 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
 	}
 
 
-
 	// 1. Create Email Channel & Worker
 	emailConfig := service.EmailChannelConfig{
 		EMAIL_API_KEY: cfg.Email.APIKey,

@@ -57,6 +57,11 @@ import (
 	regHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
 	regService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 
+	// Video Module
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video"
+	videoHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/delivery/http"
+	videoService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/service"
+
 	// Shared
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
@@ -108,8 +113,12 @@ type AppDependencies struct {
 	PaymentService paymentService.Service
 
 	// Attendance Module
-	AttendanceHandler *attendanceHandler.Handlers   // 👈 added
-	AttendanceService attendanceService.Service     // 👈 added
+	AttendanceHandler *attendanceHandler.Handlers
+	AttendanceService attendanceService.Service
+
+	// Video Module
+	VideoHandler *videoHandler.Handlers
+	VideoService videoService.Service
 }
 
 // ============================================================
@@ -145,7 +154,8 @@ func InitializeApp() (*AppDependencies, error) {
 		team.ProviderSet,
 		registration.ProviderSet,
 		payment.ProviderSet,
-		attendance.ProviderSet,   // 👈 added
+		attendance.ProviderSet,
+		video.ProviderSet,
 
 		// ============================================================
 		// CROSS-MODULE ADAPTERS - AUTH
@@ -169,7 +179,7 @@ func InitializeApp() (*AppDependencies, error) {
 		NewEventsPermissionAdapter,
 		NewEventsUserInfoAdapter,
 		NewEventsMediaAdapter,
-		NewEventsAttendanceRegistrar, 
+		NewEventsAttendanceRegistrar,
 		NewRegistrationAttendanceRegistrar,
 		NewRegistrationUserInfoAdapter,
 
@@ -192,6 +202,10 @@ func InitializeApp() (*AppDependencies, error) {
 		NewAccountAuthAdapter,
 		NewAccountPermissionAdapter,
 		NewAccountMediaAdapter,
+
+
+
+		NewEventsVideoAdapter,
 
 		provideOrganizerProvider,
 

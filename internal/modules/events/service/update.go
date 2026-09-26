@@ -24,8 +24,6 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
 	}
 
 	// 1. Get event and check permissions.
-	//    Delegates to getEventAndCheckUpdatePermission, which resolves the
-	//    account via resolveEventAccountID when the event doesn't carry one.
 	event, err := s.getEventAndCheckUpdatePermission(ctx, cmd.ID, cmd.UpdatedBy)
 	if err != nil {
 		return nil, err
@@ -48,9 +46,22 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
 	if err := s.applyAllUpdates(ctx, event, cmd, nameData); err != nil {
 		return nil, err
 	}
-	applyScheduleDates(event)
 
-	// 5. Save to database.
+	// 5. Re-derive event-level fields from schedules only when the
+	//    caller supplied a schedules array. If cmd.Schedules is nil,
+	//    the existing derived values stay.
+		if cmd.Schedules != nil {
+		deriveEventFromSchedules(event)
+
+		// Create meetings for any newly-added virtual sessions.
+		// Existing sessions keep their VideoMeetingID and are skipped
+		// by attachVideoMeetings.
+		if err := s.attachVideoMeetings(ctx, event, cmd.UpdatedBy); err != nil {
+			log.Printf("⚠️ video integration: %v", err)
+		}
+	}
+
+	// 6. Save to database.
 	if err := s.saveUpdatedEvent(ctx, event); err != nil {
 		return nil, err
 	}
@@ -184,6 +195,10 @@ func (s *eventService) buildUpdatedFields(event *domain.Event, cmd UpdateEventCo
 //
 // Any conversion failure is returned so the caller can surface a real
 // error instead of silently keeping the old value.
+//
+// Venue, virtual/hybrid flags, and meeting links are NOT applied from
+// the command — they are derived from schedules by the caller. There is
+// no applyVenueUpdates step.
 func (s *eventService) applyAllUpdates(ctx context.Context, event *domain.Event, cmd UpdateEventCommand, nameData *NameUpdateData) error {
 	// Apply name updates.
 	if nameData.NameChanged {
@@ -202,9 +217,6 @@ func (s *eventService) applyAllUpdates(ctx context.Context, event *domain.Event,
 	if err := s.applyScheduleUpdates(ctx, event, cmd); err != nil {
 		return fmt.Errorf("schedule update failed: %w", err)
 	}
-
-	// Apply venue updates.
-	s.applyVenueUpdates(event, cmd)
 
 	// Apply ticket updates.
 	if err := s.applyTicketUpdates(ctx, event, cmd); err != nil {
@@ -257,14 +269,10 @@ func (s *eventService) applyBasicUpdates(event *domain.Event, cmd UpdateEventCom
 //   - true  → apply the incoming RecurrenceRequest
 //   - false → clear every recurrence column
 //
-// Go's encoding/json collapses "field absent" and "field null" to the
-// same nil for *RecurrenceRequest, so we can't rely on the Recurrence
-// pointer alone to detect a clear. IsRecurring is the unambiguous signal.
+// IsMultiDay, IsVirtual, IsHybrid, VirtualPlatform, VirtualPlatformURL,
+// ZoomLink, MeetLink, and venue fields are NOT set here — they are
+// derived from schedules by the caller.
 func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.Event, cmd UpdateEventCommand) error {
-	if cmd.IsMultiDay != nil {
-		event.IsMultiDay = *cmd.IsMultiDay
-	}
-
 	if cmd.Schedules != nil {
 		schedules, err := s.convertSchedules(cmd.Schedules)
 		if err != nil {
@@ -308,43 +316,6 @@ func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.E
 	}
 
 	return nil
-}
-
-// applyVenueUpdates applies venue-related updates.
-func (s *eventService) applyVenueUpdates(event *domain.Event, cmd UpdateEventCommand) {
-	if cmd.IsVirtual != nil {
-		event.IsVirtual = *cmd.IsVirtual
-	}
-	if cmd.IsHybrid != nil {
-		event.IsHybrid = *cmd.IsHybrid
-	}
-	if cmd.InPersonLocation != nil {
-		event.InPersonLocation = *cmd.InPersonLocation
-	}
-	if cmd.VirtualPlatform != nil {
-		event.VirtualPlatform = *cmd.VirtualPlatform
-	}
-	if cmd.VirtualPlatformURL != nil {
-		event.VirtualPlatformURL = *cmd.VirtualPlatformURL
-	}
-	if cmd.ZoomLink != nil {
-		event.ZoomLink = *cmd.ZoomLink
-	}
-	if cmd.MeetLink != nil {
-		event.MeetLink = *cmd.MeetLink
-	}
-	if cmd.VenueName != nil {
-		event.VenueName = *cmd.VenueName
-	}
-	if cmd.VenueAddress != nil {
-		event.VenueAddress = *cmd.VenueAddress
-	}
-	if cmd.VenueCity != nil {
-		event.VenueCity = *cmd.VenueCity
-	}
-	if cmd.VenueCountry != nil {
-		event.VenueCountry = *cmd.VenueCountry
-	}
 }
 
 // applyTicketUpdates applies ticket-related updates.
@@ -445,6 +416,7 @@ func (s *eventService) saveUpdatedEvent(ctx context.Context, event *domain.Event
 	// Reload so schedule IDs are hydrated before syncing.
 	if reloaded, reloadErr := s.repo.GetEventByID(ctx, event.ID); reloadErr == nil && reloaded != nil {
 		event.Schedules = reloaded.Schedules
+		event.Tickets = reloaded.Tickets  
 	} else if reloadErr != nil {
 		log.Printf("⚠️ Could not reload event for attendance sync: %v", reloadErr)
 	}
