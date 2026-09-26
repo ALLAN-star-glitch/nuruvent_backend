@@ -17,6 +17,7 @@ type eventService struct {
 	validator   *validation.Validator
 	organizer domain.OrganizerProvider
 	aiSvc       AIService 
+	attendance  domain.AttendanceRegistrar
 }
 
 func NewService(
@@ -26,6 +27,7 @@ func NewService(
 	mediaSvc domain.MediaService,
 	organizerProvider domain.OrganizerProvider,
 	aiSvc AIService,    
+	attendance domain.AttendanceRegistrar,
 ) Service {
 	return &eventService{
 		repo:        repo,
@@ -35,6 +37,7 @@ func NewService(
 		validator:   validation.New(),
 		organizer: organizerProvider,
 		aiSvc: aiSvc,
+		attendance:  attendance,
 	}
 }
 

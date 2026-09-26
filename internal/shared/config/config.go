@@ -21,6 +21,8 @@ type Config struct {
 	Casbin      CasbinConfig
 	MPesa       MPesaConfig
 	Paystack    PaystackConfig
+	Zoom        ZoomConfig
+	App         AppConfig
 	Supabase    SupabaseConfig
 	OpenAI      OpenAIConfig
 	Gemini      GeminiConfig
@@ -49,6 +51,50 @@ type PaystackConfig struct {
 // present for the Paystack provider to operate.
 func (c PaystackConfig) IsConfigured() bool {
 	return c.Enabled && c.SecretKey != "" && c.PublicKey != ""
+}
+
+// ============================================================
+// ZOOM
+// ============================================================
+
+// ZoomConfig holds credentials for the Zoom integration.
+//
+// Nuruvent uses Zoom for attendance tracking. Hosts bring their own
+// Zoom meetings; the platform subscribes to participant webhooks via
+// a Server-to-Server OAuth app.
+//
+//   - SecretToken is the app's Secret Token from the Zoom
+//     Marketplace. It signs every webhook delivery (HMAC-SHA256).
+//   - AccountID, ClientID, ClientSecret are used when calling Zoom
+//     REST APIs. Not required for webhook-only integrations, but
+//     retained for future use (e.g. pulling meeting reports).
+type ZoomConfig struct {
+	SecretToken  string
+	AccountID    string
+	ClientID     string
+	ClientSecret string
+	Enabled      bool
+}
+
+// ============================================================
+// APP
+// ============================================================
+
+// AppConfig holds application-level settings that aren't tied to a
+// specific subsystem.
+type AppConfig struct {
+	// PublicURL is the base URL of the public-facing app. Used to
+	// build join links, confirmation links, etc. Example:
+	// "https://nuruvent.com" (production) or
+	// "http://localhost:3000" (development).
+	PublicURL string
+}
+
+// IsConfigured reports whether the minimum required credentials are
+// present for the Zoom integration to operate. Only SecretToken is
+// strictly required for webhook handling.
+func (c ZoomConfig) IsConfigured() bool {
+	return c.Enabled && c.SecretToken != ""
 }
 
 // ============================================================
@@ -184,6 +230,16 @@ func Load() *Config {
 			PublicKey: getEnv("PAYSTACK_PUBLIC_KEY", ""),
 			BaseURL:   getEnv("PAYSTACK_BASE_URL", "https://api.paystack.co"),
 			Enabled:   getEnvBool("PAYSTACK_ENABLED", false),
+		},
+		Zoom: ZoomConfig{
+			SecretToken:  getEnv("ZOOM_SECRET_TOKEN", ""),
+			AccountID:    getEnv("ZOOM_ACCOUNT_ID", ""),
+			ClientID:     getEnv("ZOOM_CLIENT_ID", ""),
+			ClientSecret: getEnv("ZOOM_CLIENT_SECRET", ""),
+			Enabled:      getEnvBool("ZOOM_ENABLED", false),
+		},
+	    App: AppConfig{
+			PublicURL: getEnv("APP_PUBLIC_URL", "http://localhost:3000"),
 		},
 		Supabase: SupabaseConfig{
 			URL:               getEnv("SUPABASE_URL", ""),

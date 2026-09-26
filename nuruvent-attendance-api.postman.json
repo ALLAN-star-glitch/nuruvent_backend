@@ -1,0 +1,795 @@
+{
+  "info": {
+    "name": "Nuruvent Attendance API",
+    "description": "Attendance module endpoints. Covers: registering attendees, creating sessions, issuing join tokens, redeeming them, recording attendance, host confirm/override, reporting, and Zoom webhook ingestion. Public endpoints (join, webhooks) skip auth; all others require a valid JWT.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080" },
+    { "key": "access_token", "value": "" },
+    { "key": "attendee_id", "value": "" },
+    { "key": "session_id", "value": "" },
+    { "key": "external_id", "value": "" },
+    { "key": "external_type", "value": "event" },
+    { "key": "registration_external_id", "value": "" },
+    { "key": "join_token", "value": "" },
+    { "key": "display_name", "value": "Jane Doe" },
+    { "key": "email", "value": "jane@example.com" },
+    { "key": "zoom_secret", "value": "REPLACE_WITH_ZOOM_SECRET_TOKEN" },
+    { "key": "zoom_meeting_id", "value": "98765432100" },
+    { "key": "provider_url", "value": "https://zoom.us/j/98765432100" }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{access_token}}", "type": "string" }
+    ]
+  },
+  "item": [
+    {
+      "name": "Attendees",
+      "item": [
+        {
+          "name": "1. Register Attendee",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.id) {",
+                  "    pm.collectionVariables.set('attendee_id', res.data.id);",
+                  "    console.log('Saved attendee_id:', res.data.id);",
+                  "    console.log('External:', res.data.external_type, '/', res.data.external_id);",
+                  "    console.log('Email:', res.data.email);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/attendees",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "attendees"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"external_type\": \"event_registration\",\n    \"external_id\": \"{{registration_external_id}}\",\n    \"display_name\": \"{{display_name}}\",\n    \"email\": \"{{email}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "2. Register Attendee — Missing external_id (400)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/attendees",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "attendees"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"external_type\": \"event_registration\",\n    \"display_name\": \"Jane Doe\",\n    \"email\": \"jane@example.com\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Register Attendee — Invalid Email (400)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/attendees",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "attendees"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"external_type\": \"event_registration\",\n    \"external_id\": \"{{registration_external_id}}\",\n    \"display_name\": \"Jane Doe\",\n    \"email\": \"not-an-email\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Register Attendee For External",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/attendees/{{attendee_id}}/register-for-external",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "attendees", "{{attendee_id}}", "register-for-external"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"external_type\": \"{{external_type}}\",\n    \"external_id\": \"{{external_id}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "console.log('Attendee registered for external:', pm.collectionVariables.get('external_type'), '/', pm.collectionVariables.get('external_id'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Get Attendee Summary",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/attendees/{{attendee_id}}/summary",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "attendees", "{{attendee_id}}", "summary"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "if (res.data) {",
+                  "    console.log('Attendee:', res.data.attendee.display_name);",
+                  "    console.log('Session statuses:', res.data.statuses ? res.data.statuses.length : 0);",
+                  "    console.log('Roll-ups:', res.data.rollups ? res.data.rollups.length : 0);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "item": [
+        {
+          "name": "6. Upsert Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.id) {",
+                  "    pm.collectionVariables.set('session_id', res.data.id);",
+                  "    console.log('Saved session_id:', res.data.id);",
+                  "    console.log('Title:', res.data.title);",
+                  "    console.log('Provider:', res.data.provider);",
+                  "    console.log('Status:', res.data.status);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"external_type\": \"event\",\n    \"external_id\": \"{{external_id}}\",\n    \"title\": \"Kubernetes Workshop — Session 1\",\n    \"scheduled_start\": \"2026-10-01T14:00:00Z\",\n    \"scheduled_end\": \"2026-10-01T16:00:00Z\",\n    \"provider\": \"zoom\",\n    \"provider_meeting_id\": \"{{zoom_meeting_id}}\",\n    \"provider_url\": \"{{provider_url}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "7. Upsert Session — Invalid Provider (400)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"external_type\": \"event\",\n    \"external_id\": \"{{external_id}}\",\n    \"title\": \"Bad Provider\",\n    \"scheduled_start\": \"2026-10-01T14:00:00Z\",\n    \"scheduled_end\": \"2026-10-01T16:00:00Z\",\n    \"provider\": \"teams\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "8. Upsert Session — End Before Start (400)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"external_type\": \"event\",\n    \"external_id\": \"{{external_id}}\",\n    \"title\": \"Bad Schedule\",\n    \"scheduled_start\": \"2026-10-01T16:00:00Z\",\n    \"scheduled_end\": \"2026-10-01T14:00:00Z\",\n    \"provider\": \"zoom\",\n    \"provider_meeting_id\": \"{{zoom_meeting_id}}\",\n    \"provider_url\": \"{{provider_url}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Join Tokens",
+      "item": [
+        {
+          "name": "9. Issue Join Token",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.raw_token) {",
+                  "    pm.collectionVariables.set('join_token', res.data.raw_token);",
+                  "    console.log('');",
+                  "    console.log('★ RAW JOIN TOKEN (copy this — shown once):');",
+                  "    console.log(res.data.raw_token);",
+                  "    console.log('');",
+                  "    console.log('★ JOIN URL (open in browser):');",
+                  "    console.log(res.data.join_url);",
+                  "    console.log('');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/join-tokens",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}", "join-tokens"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"attendee_id\": \"{{attendee_id}}\",\n    \"grace\": \"24h\"\n}"
+            }
+          }
+        },
+        {
+          "name": "10. Issue Join Token — Missing attendee_id (400)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/join-tokens",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}", "join-tokens"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11. Redeem Join Token (public, no auth)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/join/{{join_token}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "join", "{{join_token}}"]
+            },
+            "auth": { "type": "noauth" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// This endpoint redirects to the provider URL.",
+                  "// Postman will not follow the redirect by default.",
+                  "pm.test('302 Redirect or 200 OK', () => pm.expect(pm.response.code).to.be.oneOf([200, 302]));",
+                  "const location = pm.response.headers.get('Location');",
+                  "if (location) {",
+                  "    console.log('Redirected to:', location);",
+                  "}",
+                  "console.log('Body preview:', pm.response.text().slice(0, 200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12. Redeem Join Token — Invalid (410)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/join/nrt_invalid_token_that_does_not_exist",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "join", "nrt_invalid_token_that_does_not_exist"]
+            },
+            "auth": { "type": "noauth" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('404 or 410', () => pm.expect(pm.response.code).to.be.oneOf([404, 410]));",
+                  "console.log('Body preview:', pm.response.text().slice(0, 200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13. Revoke Join Tokens",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/join-tokens",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}", "join-tokens"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"attendee_id\": \"{{attendee_id}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Attendance Reporting",
+      "item": [
+        {
+          "name": "14. List Session Attendance",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/attendance",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}", "attendance"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "if (res.data) {",
+                  "    console.log('Attendees:', res.data.count);",
+                  "    (res.data.attendees || []).forEach(a => {",
+                  "        console.log(' -', a.attendee_id, a.effective_status, 'cert_eligible=' + a.cert_eligible);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15. Export Session Attendance (CSV)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/attendance/export",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}", "attendance", "export"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const contentType = pm.response.headers.get('Content-Type');",
+                  "pm.test('Content-Type is CSV', () => pm.expect(contentType).to.include('text/csv'));",
+                  "console.log('CSV preview:');",
+                  "console.log(pm.response.text().slice(0, 500));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Host Operations",
+      "item": [
+        {
+          "name": "16. Confirm Attendance",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/attendance/{{attendee_id}}/confirm",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}", "attendance", "{{attendee_id}}", "confirm"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"reason\": \"Host verified attendance during the session\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17. Override Attendance — Full",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/attendance/{{attendee_id}}/override",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}", "attendance", "{{attendee_id}}", "override"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"new_status\": \"full\",\n    \"reason\": \"Attended entire session, webhook dropped\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "18. Override Attendance — Invalid Status (400)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/attendance/{{attendee_id}}/override",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}", "attendance", "{{attendee_id}}", "override"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"new_status\": \"excellent\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19. Bulk Confirm",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/sessions/{{session_id}}/attendance/bulk-confirm",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "sessions", "{{session_id}}", "attendance", "bulk-confirm"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"attendee_ids\": [\"{{attendee_id}}\"],\n    \"reason\": \"Bulk confirmed after review\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Zoom Webhook",
+      "item": [
+        {
+          "name": "20. Zoom URL Validation",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Compute the signature the way Zoom does: HMAC-SHA256 of",
+                  "// 'v0:' + timestamp + ':' + rawBody, keyed by the secret.",
+                  "const secret = pm.collectionVariables.get('zoom_secret');",
+                  "const ts = Date.now().toString();",
+                  "const rawBody = pm.request.body.raw;",
+                  "const message = 'v0:' + ts + ':' + rawBody;",
+                  "const signature = 'v0=' + CryptoJS.HmacSHA256(message, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.request.headers.upsert({ key: 'x-zm-request-timestamp', value: ts });",
+                  "pm.request.headers.upsert({ key: 'x-zm-signature', value: signature });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const res = pm.response.json();",
+                  "console.log('Response:', JSON.stringify(res, null, 2));",
+                  "pm.test('has encryptedToken', () => pm.expect(res.encryptedToken).to.be.a('string').and.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/webhooks/zoom",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "webhooks", "zoom"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-zm-request-timestamp", "value": "0" },
+              { "key": "x-zm-signature", "value": "REPLACE_WITH_COMPUTED_SIGNATURE" }
+            ],
+            "auth": { "type": "noauth" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"event\": \"endpoint.url_validation\",\n    \"payload\": {\n        \"plainToken\": \"test-plain-token-abc123\"\n    }\n}"
+            }
+          }
+        },
+        {
+          "name": "21. Zoom Webhook — Participant Joined",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const secret = pm.collectionVariables.get('zoom_secret');",
+                  "const ts = Date.now().toString();",
+                  "const rawBody = pm.request.body.raw;",
+                  "const message = 'v0:' + ts + ':' + rawBody;",
+                  "const signature = 'v0=' + CryptoJS.HmacSHA256(message, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.request.headers.upsert({ key: 'x-zm-request-timestamp', value: ts });",
+                  "pm.request.headers.upsert({ key: 'x-zm-signature', value: signature });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "console.log('Response:', pm.response.text());",
+                  "console.log('');",
+                  "console.log('If an attendee with email', pm.collectionVariables.get('email'), 'is registered for this session,');",
+                  "console.log('a new attendance record should now exist. Check via the reporting endpoint.');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/webhooks/zoom",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "webhooks", "zoom"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-zm-request-timestamp", "value": "0" },
+              { "key": "x-zm-signature", "value": "REPLACE_WITH_COMPUTED_SIGNATURE" }
+            ],
+            "auth": { "type": "noauth" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"event\": \"meeting.participant_joined\",\n    \"event_ts\": 1759300000000,\n    \"payload\": {\n        \"account_id\": \"test-account\",\n        \"object\": {\n            \"id\": \"{{zoom_meeting_id}}\",\n            \"uuid\": \"test-meeting-uuid==\",\n            \"topic\": \"Kubernetes Workshop\",\n            \"start_time\": \"2026-10-01T14:00:00Z\",\n            \"participant\": {\n                \"user_id\": \"user-test\",\n                \"user_name\": \"{{display_name}}\",\n                \"email\": \"{{email}}\",\n                \"participant_uuid\": \"participant-uuid-xyz\",\n                \"join_time\": \"2026-10-01T14:03:12Z\"\n            }\n        }\n    }\n}"
+            }
+          }
+        },
+        {
+          "name": "22. Zoom Webhook — Participant Left",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const secret = pm.collectionVariables.get('zoom_secret');",
+                  "const ts = Date.now().toString();",
+                  "const rawBody = pm.request.body.raw;",
+                  "const message = 'v0:' + ts + ':' + rawBody;",
+                  "const signature = 'v0=' + CryptoJS.HmacSHA256(message, secret).toString(CryptoJS.enc.Hex);",
+                  "pm.request.headers.upsert({ key: 'x-zm-request-timestamp', value: ts });",
+                  "pm.request.headers.upsert({ key: 'x-zm-signature', value: signature });"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "console.log('Response:', pm.response.text());",
+                  "console.log('');",
+                  "console.log('Run test #14 (List Session Attendance) to verify the status now shows full or partial.');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/webhooks/zoom",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "webhooks", "zoom"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-zm-request-timestamp", "value": "0" },
+              { "key": "x-zm-signature", "value": "REPLACE_WITH_COMPUTED_SIGNATURE" }
+            ],
+            "auth": { "type": "noauth" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"event\": \"meeting.participant_left\",\n    \"event_ts\": 1759303600000,\n    \"payload\": {\n        \"account_id\": \"test-account\",\n        \"object\": {\n            \"id\": \"{{zoom_meeting_id}}\",\n            \"uuid\": \"test-meeting-uuid==\",\n            \"topic\": \"Kubernetes Workshop\",\n            \"start_time\": \"2026-10-01T14:00:00Z\",\n            \"participant\": {\n                \"user_id\": \"user-test\",\n                \"user_name\": \"{{display_name}}\",\n                \"email\": \"{{email}}\",\n                \"participant_uuid\": \"participant-uuid-xyz\",\n                \"join_time\": \"2026-10-01T14:03:12Z\",\n                \"leave_time\": \"2026-10-01T15:01:00Z\"\n            }\n        }\n    }\n}"
+            }
+          }
+        },
+        {
+          "name": "23. Zoom Webhook — Invalid Signature (400)",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/webhooks/zoom",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "webhooks", "zoom"]
+            },
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "x-zm-request-timestamp", "value": "0" },
+              { "key": "x-zm-signature", "value": "v0=deadbeef" }
+            ],
+            "auth": { "type": "noauth" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"event\": \"meeting.participant_joined\",\n    \"payload\": {\n        \"object\": {\n            \"id\": \"{{zoom_meeting_id}}\",\n            \"participant\": { \"email\": \"{{email}}\" }\n        }\n    }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Background Jobs",
+      "item": [
+        {
+          "name": "24. Transition Sessions",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{base_url}}/api/v1/attendance/transition-sessions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "attendance", "transition-sessions"]
+            },
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"now\": \"2026-10-01T17:00:00Z\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 or 404 (not wired)', () => pm.expect(pm.response.code).to.be.oneOf([200, 404, 501]));",
+                  "console.log('Response:', pm.response.text().slice(0, 200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

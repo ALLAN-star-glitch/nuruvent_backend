@@ -22,6 +22,10 @@ import (
 	accountHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 
+	// Attendance Module
+	attendanceHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/delivery/http"
+	attendanceService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/service"
+
 	// Events Module
 	eventsHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	eventsDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
@@ -121,7 +125,8 @@ func provideAppDependencies(
 	paymentHndlr *paymentHandler.Handler,
 	orderHndlr *paymentHandler.OrderHandler,
 	paymentSvc paymentService.Service,
-	
+	attendanceHndlr *attendanceHandler.Handlers, // 👈 added
+	attendanceSvc attendanceService.Service,     // 👈 added
 ) *AppDependencies {
 	return &AppDependencies{
 		Config:                    cfg,
@@ -152,7 +157,9 @@ func provideAppDependencies(
 		RegHandler:                regHandler,
 		RegService:                regService,
 		PaymentHandler:            paymentHndlr,
-		OrderHandler:              orderHndlr, 
+		OrderHandler:              orderHndlr,
 		PaymentService:            paymentSvc,
+		AttendanceHandler:         attendanceHndlr, // 👈 added
+		AttendanceService:         attendanceSvc,   // 👈 added
 	}
 }

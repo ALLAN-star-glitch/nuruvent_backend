@@ -124,25 +124,28 @@ func toPaymentDomain(m *PaymentModel) (*paymentdomain.Payment, error) {
 	}
 
 	return paymentdomain.HydratePayment(
-		m.ID,
-		m.OrderID,
-		m.Provider,
-		method,
-		m.Amount,
-		m.Currency,
-		status,
-		m.IdempotencyKey,
-		derefString(m.ProviderReference),
-		m.RedirectURL,
-		derefString(m.FailureReason),
-		m.InitiatedAt,
-		m.CompletedAt,
-		m.FailedAt,
-		m.ExpiresAt,
-		m.CreatedAt,
-		m.UpdatedAt,
-	), nil
+    m.ID,
+    m.OrderID,
+    m.Provider,
+    method,
+    m.Amount,
+    m.Currency,
+    status,
+    m.IdempotencyKey,
+    derefString(m.ProviderReference),
+    derefString(m.FailureReason),     // 👈 10th: failureReason
+    m.RedirectURL,                    // 👈 11th: redirectURL
+    m.InitiatedAt,
+    m.CompletedAt,
+    m.FailedAt,
+    m.ExpiresAt,
+    m.CreatedAt,
+    m.UpdatedAt,
+), nil
 }
+
+
+
 
 func toPaymentModel(p *paymentdomain.Payment) *PaymentModel {
 	return &PaymentModel{

@@ -4,12 +4,17 @@ import "time"
 
 // EventRegistration is the event-specific extension of Registration.
 type EventRegistration struct {
-    Registration  *Registration
-    IsActive     bool 
-    EventID       string
-    Selections    []TicketSelection
-    Pricing       PricingSnapshot
-    AttendedAt    *time.Time // reserved for future attendance
+	Registration *Registration
+	IsActive     bool
+	EventID      string
+	Selections   []TicketSelection
+	Pricing      PricingSnapshot
+	AttendedAt   *time.Time // reserved for future attendance
+
+	// JoinLinks is populated in memory during confirmation and read by
+	// the notifier. Not persisted — the tokens themselves live in the
+	// attendance module's join_tokens table.
+	JoinLinks []JoinLink
 }
 
 // NewEventRegistration composes a base registration with event-specific data.

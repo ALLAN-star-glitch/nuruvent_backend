@@ -59,7 +59,6 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
 	return event, nil
 }
 
-
 // ============================================================
 // PRIVATE HELPER FUNCTIONS
 // ============================================================
@@ -288,7 +287,6 @@ func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.E
 		event.RecurrenceWeekOfMonth = nil
 		event.RecurrenceEndsOn = nil
 		event.RecurrenceOccurrences = nil
-	
 
 	case cmd.IsRecurring != nil && *cmd.IsRecurring:
 		// Explicitly on — the recurrence block must be present.
@@ -307,7 +305,6 @@ func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.E
 		if err := s.applyRecurrence(ctx, event, cmd.Recurrence); err != nil {
 			return fmt.Errorf("invalid recurrence: %w", err)
 		}
-		
 	}
 
 	return nil
@@ -431,6 +428,11 @@ func (s *eventService) applySpeakersMaterialsSEO(ctx context.Context, event *dom
 }
 
 // saveUpdatedEvent saves the updated event to the database.
+//
+// After the write, the event is reloaded so DB-assigned schedule IDs
+// are populated on the domain struct before we mirror the schedules
+// into the attendance module. Without this, a schedule created by
+// this update would sync with an empty provider_session_id.
 func (s *eventService) saveUpdatedEvent(ctx context.Context, event *domain.Event) error {
 	if err := s.repo.UpdateEvent(ctx, event); err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "23505") {
@@ -439,6 +441,20 @@ func (s *eventService) saveUpdatedEvent(ctx context.Context, event *domain.Event
 		}
 		return fmt.Errorf("failed to update event: %w", err)
 	}
+
+	// Reload so schedule IDs are hydrated before syncing.
+	if reloaded, reloadErr := s.repo.GetEventByID(ctx, event.ID); reloadErr == nil && reloaded != nil {
+		event.Schedules = reloaded.Schedules
+	} else if reloadErr != nil {
+		log.Printf("⚠️ Could not reload event for attendance sync: %v", reloadErr)
+	}
+
+	// Mirror schedules into attendance if this is a published event.
+	// Drafts don't sync.
+	if event.IsPublished() {
+		s.syncEventSchedulesToAttendance(ctx, event)
+	}
+
 	return nil
 }
 

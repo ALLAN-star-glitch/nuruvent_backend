@@ -15,7 +15,7 @@ import (
 // App wraps the application dependencies.
 type App struct {
 	*AppDependencies
-} 
+}
 
 // NewApp creates and initializes the application.
 func NewApp() (*App, error) {
@@ -70,9 +70,8 @@ func (app *App) SetupRoutes() {
 		app.PermissionChecker,
 	)
 
-	optionalAuth := authmiddleware.OptionalAuthMiddleware(tokenSvc) 
+	optionalAuth := authmiddleware.OptionalAuthMiddleware(tokenSvc)
 
-	
 	server.SetupRoutes(
 		app.App,
 		app.Config,
@@ -86,6 +85,7 @@ func (app *App) SetupRoutes() {
 		app.RegHandler,
 		app.PaymentHandler,
 		app.OrderHandler,
+		app.AttendanceHandler, // 👈 added
 	)
 	log.Println("Routes registered successfully")
 }

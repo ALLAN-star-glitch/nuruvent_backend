@@ -1,3 +1,5 @@
+// internal/server/routes.go
+
 package server
 
 import (
@@ -6,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
+	attendancehttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/delivery/http"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	paymenthttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/delivery/http"
@@ -29,6 +32,7 @@ func SetupRoutes(
 	regHandler *registrationhttp.Handler,
 	paymentHandler *paymenthttp.Handler,
 	orderHandler *paymenthttp.OrderHandler,
+	attendanceHandler *attendancehttp.Handlers,
 ) {
 	// ================================================
 	// 1. SWAGGER - Must be FIRST to avoid 404
@@ -68,6 +72,9 @@ func SetupRoutes(
 	// Payment routes (orders + payments + webhooks)
 	paymenthttp.RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware, optionalAuth)
 
+	// Attendance routes (sessions, join links, webhooks, host operations)
+	attendancehttp.RegisterRoutes(api, attendanceHandler, authMiddleware, optionalAuth)
+
 	// ================================================
 	// 4. 404 Handler - Must be LAST
 	// ================================================
@@ -82,7 +89,6 @@ func healthCheck(c fiber.Ctx) error {
 		"time":   time.Now().UTC(),
 	})
 }
-
 
 func welcome(c fiber.Ctx) error {
 	return response.Success(c, "Welcome to Nuruvent API", fiber.Map{

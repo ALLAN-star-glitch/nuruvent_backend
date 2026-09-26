@@ -9,6 +9,7 @@ import (
 	"github.com/hibiken/asynq"
 )
 
+
 // StartEmbeddedWorker initializes and starts the Asynq worker server asynchronously.
 // It returns a shutdown function to gracefully drain and stop tasks when the API exits.
 func StartEmbeddedWorker(cfg *config.Config) func() {
@@ -21,6 +22,8 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
 	if cfg.Email.APIKey == "" {
 		log.Printf("⚠️ WARNING: EMAIL_API_KEY is empty! Check your configuration")
 	}
+
+
 
 	// 1. Create Email Channel & Worker
 	emailConfig := service.EmailChannelConfig{

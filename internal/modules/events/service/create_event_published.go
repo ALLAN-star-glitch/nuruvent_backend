@@ -338,5 +338,19 @@ func (s *eventService) setPublishedStatusAndSave(ctx context.Context, event *dom
 		log.Printf("❌ Failed to create event: %v", err)
 		return fmt.Errorf("failed to create event: %w", err)
 	}
+
+	// Reload so DB-assigned schedule IDs land on event.Schedules
+	// before we mirror them into attendance.
+	if reloaded, reloadErr := s.repo.GetEventByID(ctx, event.ID); reloadErr == nil && reloaded != nil {
+		event.Schedules = reloaded.Schedules
+	} else if reloadErr != nil {
+		log.Printf("⚠️ Could not reload event for attendance sync: %v", reloadErr)
+	}
+
+	// Mirror schedules into the attendance module. Best-effort:
+	// failures are logged inside the helper and do not fail the
+	// caller.
+	s.syncEventSchedulesToAttendance(ctx, event)
+
 	return nil
 }

@@ -17,6 +17,12 @@ import (
 // ============================================================
 
 // PublishEvent publishes a single event.
+//
+// Also mirrors the event's schedules into the attendance module, so
+// attendance has sessions ready the moment the event goes live. The
+// reload after the write ensures schedule IDs are populated on the
+// domain struct before the sync runs — otherwise the sync would emit
+// sessions with empty provider_session_id.
 func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
 	log.Printf("📤 Publishing event: %s", id)
 
@@ -40,6 +46,19 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 		log.Printf("❌ Failed to update event: %v", err)
 		return nil, fmt.Errorf("failed to publish event: %w", err)
 	}
+
+	// Reload so DB-assigned schedule IDs are populated on the domain
+	// struct before we mirror schedules into attendance.
+	if reloaded, reloadErr := s.repo.GetEventByID(ctx, id); reloadErr == nil && reloaded != nil {
+		event.Schedules = reloaded.Schedules
+	} else if reloadErr != nil {
+		log.Printf("⚠️ Could not reload event for attendance sync: %v", reloadErr)
+	}
+
+	// Mirror schedules into the attendance module. Best-effort:
+	// failures are logged inside the helper and do not fail the
+	// caller.
+	s.syncEventSchedulesToAttendance(ctx, event)
 
 	log.Printf("✅ Event published successfully: %s", id)
 	return event, nil
@@ -242,3 +261,9 @@ func (s *eventService) getEventStatusBySlug(ctx context.Context, slug string) (*
 	}
 	return status, nil
 }
+
+
+
+
+
+

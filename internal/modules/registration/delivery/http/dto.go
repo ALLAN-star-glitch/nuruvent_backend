@@ -22,6 +22,11 @@ type TicketSelectionRequest struct {
 	Quantity     int    `json:"quantity"`
 }
 
+
+
+
+
+
 // GuestRequest carries guest identity when the caller is unauthenticated.
 type GuestRequest struct {
 	Name  string `json:"name"`
