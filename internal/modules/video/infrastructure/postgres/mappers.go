@@ -111,3 +111,4 @@ func toMeetingDomain(m *VideoMeetingModel) *videodomain.Meeting {
 		m.UpdatedAt,
 	)
 }
+

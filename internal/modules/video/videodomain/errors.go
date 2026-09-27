@@ -76,6 +76,8 @@ var (
 	// responses from the platform.
 	ErrPlatformUnavailable = errors.New("platform unavailable")
 
+	ErrPlatformRateLimited = errors.New("platform rate limited")
+
 	// ErrPlatformTimeout is returned when a platform call exceeds the
 	// configured timeout.
 	ErrPlatformTimeout = errors.New("platform timeout")
@@ -100,3 +102,4 @@ var (
 	// under VALIDATION
 	ErrInvalidCallback = errors.New("invalid oauth callback")
 )
+

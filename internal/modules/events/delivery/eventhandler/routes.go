@@ -10,6 +10,7 @@ func (h *EventHandler) RegisterRoutes(
 	authzMiddleware fiber.Handler,
 ) {
 	
+	
 	// ============================================================
 	// PUBLIC ROUTES
 	// ============================================================
