@@ -81,6 +81,79 @@ func (c *Client) CreateMeeting(
 }
 
 // ============================================================
+// UPDATE MEETING
+// ============================================================
+
+// UpdateMeeting updates an existing meeting's topic, start time,
+// duration, and timezone.
+//
+// Zoom's PATCH /meetings/{id} endpoint accepts a partial body: only
+// the fields present in the JSON are changed. We always send the full
+// set so the meeting matches the schedule exactly.
+//
+// On success, Zoom returns 204 No Content and the join_url is
+// unchanged — attendees keep the same link.
+//
+// If the meeting doesn't exist on Zoom (e.g. the host deleted it
+// manually), Zoom returns 404 and we surface ErrMeetingNotFound so the
+// caller can decide whether to recreate it.
+func (c *Client) UpdateMeeting(
+	ctx context.Context,
+	conn *videodomain.Connection,
+	externalID string,
+	spec videodomain.MeetingSpec,
+) (*videodomain.Meeting, error) {
+	if conn == nil || strings.TrimSpace(conn.AccessToken) == "" {
+		return nil, videodomain.ErrNotConnected
+	}
+	if strings.TrimSpace(externalID) == "" {
+		return nil, fmt.Errorf("%w: external id is required", videodomain.ErrInvalidMeeting)
+	}
+	if err := spec.Validate(); err != nil {
+		return nil, err
+	}
+
+	body := updateMeetingRequest{
+		Topic:     spec.Topic,
+		StartTime: formatZoomTime(spec.StartTime),
+		Duration:  int(spec.Duration.Minutes()),
+		Timezone:  spec.Timezone,
+		Agenda:    spec.Agenda,
+	}
+
+	endpoint := c.baseURL + "/meetings/" + url.PathEscape(externalID)
+
+	resp, err := c.doAuthedJSON(ctx, http.MethodPatch, endpoint,
+		conn.AccessToken, body)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNoContent || resp.StatusCode == http.StatusOK {
+		// Zoom returns no body on success. We construct the domain
+		// Meeting from the spec plus the external ID — the join URL
+		// is unchanged, but the caller may not have it in memory,
+		// so we leave it empty and let the service preserve the
+		// existing value from the DB.
+		now := time.Now().UTC()
+		return &videodomain.Meeting{
+			UserID:     conn.UserID,
+			Platform:   videodomain.PlatformZoom,
+			ExternalID: externalID,
+			JoinURL:    "", // preserved by the caller
+			Topic:      spec.Topic,
+			StartTime:  spec.StartTime,
+			Duration:   spec.Duration,
+			Timezone:   spec.Timezone,
+			UpdatedAt:  now,
+		}, nil
+	}
+
+	return nil, mapHTTPError(resp)
+}
+
+// ============================================================
 // DELETE MEETING
 // ============================================================
 
@@ -126,8 +199,9 @@ func (c *Client) DeleteMeeting(
 // HELPERS
 // ============================================================
 
-// doAuthedJSON marshals body as JSON and POSTs/PUTs it with a bearer
-// token. Callers are responsible for closing resp.Body.
+// doAuthedJSON marshals body as JSON and sends it with a bearer
+// token. Supports POST, PUT, and PATCH. Callers are responsible for
+// closing resp.Body.
 func (c *Client) doAuthedJSON(
 	ctx context.Context,
 	method, endpoint, accessToken string,

@@ -102,4 +102,8 @@ func welcome(c fiber.Ctx) error {
 		"version": "1.0.0",
 		"status":  "running",
 	})
+
+
+	
+
 }

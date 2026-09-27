@@ -6,7 +6,6 @@ import (
 	"context"
 	"strings"
 
-
 	videodomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/videodomain"
 	videoservice "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/service"
 	eventsdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
@@ -68,13 +67,49 @@ func (a *VideoAdapter) CreateMeeting(
 	}, nil
 }
 
+// UpdateMeeting updates an existing meeting on the host's connected
+// account.
+//
+// Called when a schedule's meeting spec (topic, start time, duration,
+// timezone) changes but the meeting already exists on the platform.
+// The join URL is preserved — attendees keep the same link.
+func (a *VideoAdapter) UpdateMeeting(
+	ctx context.Context,
+	req eventsdomain.UpdateVideoMeetingRequest,
+) (*eventsdomain.VideoMeetingResult, error) {
+	platform := videodomain.Platform(strings.ToLower(req.Platform))
+
+	meeting, err := a.svc.UpdateMeeting(ctx, videoservice.UpdateMeetingCommand{
+		UserID:     req.UserID,
+		Platform:   platform,
+		ExternalID: req.ExternalID,
+		Spec: videodomain.MeetingSpec{
+			Topic:      req.Topic,
+			StartTime:  req.StartTime,
+			Duration:   req.Duration,
+			Timezone:   req.Timezone,
+			Agenda:     req.Agenda,
+			HostUserID: req.UserID,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return &eventsdomain.VideoMeetingResult{
+		MeetingID: meeting.ExternalID,
+		JoinURL:   meeting.JoinURL,
+		StartURL:  meeting.StartURL,
+	}, nil
+}
+
 // DeleteMeeting removes a meeting from the platform.
 func (a *VideoAdapter) DeleteMeeting(
 	ctx context.Context,
 	req eventsdomain.VideoMeetingDeleteRequest,
 ) error {
 	return a.svc.DeleteMeeting(ctx, videoservice.DeleteMeetingCommand{
-		MeetingID: req.MeetingID,
+		MeetingID: req.ExternalID,   // ← use ExternalID
 		UserID:    req.UserID,
 	})
 }

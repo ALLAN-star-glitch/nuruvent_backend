@@ -70,6 +70,8 @@ type Service interface {
 	// at the platform; always removes the local record.
 	DeleteMeeting(ctx context.Context, cmd DeleteMeetingCommand) error
 
+	UpdateMeeting(ctx context.Context, cmd UpdateMeetingCommand) (*videodomain.Meeting, error) // ← add
+
 	// ============================================================
 	// MAINTENANCE
 	// ============================================================

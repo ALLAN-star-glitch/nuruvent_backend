@@ -110,3 +110,16 @@ type zoomError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
+
+// updateMeetingRequest is the body for PATCH /meetings/{id}.
+//
+// Zoom treats the body as a partial update: only the fields present
+// are changed. We always send the full spec so the meeting matches
+// the schedule exactly.
+type updateMeetingRequest struct {
+	Topic     string `json:"topic,omitempty"`
+	StartTime string `json:"start_time,omitempty"`
+	Duration  int    `json:"duration,omitempty"`
+	Timezone  string `json:"timezone,omitempty"`
+	Agenda    string `json:"agenda,omitempty"`
+}
