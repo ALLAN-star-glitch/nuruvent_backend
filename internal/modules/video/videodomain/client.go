@@ -90,6 +90,10 @@ type MeetingProvisioner interface {
 		spec MeetingSpec,
 	) (*Meeting, error)
 
+
+
+	UpdateMeeting(ctx context.Context, conn *Connection, externalID string, spec MeetingSpec) (*Meeting, error)
+
 	// DeleteMeeting removes a meeting from the platform.
 	DeleteMeeting(
 		ctx context.Context,

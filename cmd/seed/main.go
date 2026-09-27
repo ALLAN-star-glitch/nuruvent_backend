@@ -21,6 +21,8 @@ import (
 	"gorm.io/gorm"
 )
 
+
+
 type SeederLog struct {
 	ID         string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	SeederName string    `gorm:"uniqueIndex"`

@@ -89,6 +89,18 @@ type CreateMeetingCommand struct {
 }
 
 
+// UpdateMeetingCommand updates an existing meeting on the host's
+// platform account.
+//
+// The external ID identifies which meeting to update. The spec carries
+// the new values.
+type UpdateMeetingCommand struct {
+	UserID     string
+	Platform   videodomain.Platform
+	ExternalID string
+	Spec       videodomain.MeetingSpec
+}
+
 
 // DeleteMeetingCommand is the input to DeleteMeeting.
 type DeleteMeetingCommand struct {

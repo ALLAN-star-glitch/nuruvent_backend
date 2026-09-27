@@ -12,16 +12,19 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
 
-// attachVideoMeetings creates a meeting via the video module for every
-// virtual schedule that doesn't already have a link.
+// attachVideoMeetings creates, updates, or skips video meetings to
+// match the current state of the event's schedules.
 //
-// Called during published event creation and, for new schedules only,
-// during update. Drafts never call this.
+// Called during published event creation and during update whenever
+// schedules are present in the command.
 //
 // Rules:
 //   - In-person schedules are skipped.
-//   - Schedules with ZoomLink or MeetLink already set are skipped (manual mode).
-//   - Schedules with VideoMeetingID already set are skipped (already created).
+//   - Schedules with ZoomLink or MeetLink set and no VideoMeetingID
+//     are skipped (manual mode).
+//   - Schedules with VideoMeetingID already set have their meeting
+//     updated on the platform (topic, start time, duration, timezone).
+//   - Schedules with no meeting are created.
 //   - If the host is not connected, the schedule is skipped and a
 //     warning is logged. Publish validation will surface the missing
 //     link to the caller.
@@ -51,11 +54,8 @@ func (s *eventService) attachVideoMeetings(
 			continue
 		}
 		if sched.ZoomLink != "" || sched.MeetLink != "" {
-			// Manual mode — host pasted a link. Nothing to create.
-			continue
-		}
-		if sched.VideoMeetingID != nil && *sched.VideoMeetingID != "" {
-			// Already created for this schedule.
+			// Manual mode — host pasted a link. Nothing to create or
+			// update.
 			continue
 		}
 
@@ -83,6 +83,41 @@ func (s *eventService) attachVideoMeetings(
 		start := combineScheduleStart(*sched)
 		duration := scheduleDuration(*sched)
 
+		// ─────────────────────────────────────────────────────────
+		// Case 1: schedule already has a meeting — update it.
+		// ─────────────────────────────────────────────────────────
+		if sched.VideoMeetingID != nil && *sched.VideoMeetingID != "" {
+			updated, err := s.video.UpdateMeeting(ctx, domain.UpdateVideoMeetingRequest{
+				UserID:     hostUserID,
+				Platform:   platform,
+				ExternalID: *sched.VideoMeetingID,
+				Topic:      sched.SessionName,
+				StartTime:  start,
+				Duration:   duration,
+				Timezone:   sched.Timezone,
+				Agenda:     event.Description,
+			})
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("session %d: update meeting: %v",
+					sched.SessionNumber, err))
+				continue
+			}
+
+			// The join URL is unchanged on update, but reassigning is
+			// harmless and covers the case where the provider returns
+			// it anyway.
+			if updated.JoinURL != "" {
+				sched.ZoomLink = updated.JoinURL
+			}
+
+			log.Printf("video: updated meeting %s for session %d on %s",
+				updated.ExternalID, sched.SessionNumber, platform)
+			continue
+		}
+
+		// ─────────────────────────────────────────────────────────
+		// Case 2: schedule has no meeting — create one.
+		// ─────────────────────────────────────────────────────────
 		result, err := s.video.CreateMeeting(ctx, domain.VideoMeetingRequest{
 			UserID:    hostUserID,
 			Platform:  platform,
@@ -99,11 +134,11 @@ func (s *eventService) attachVideoMeetings(
 		}
 
 		sched.ZoomLink = result.JoinURL
-		mid := result.MeetingID
+		mid := result.ExternalID // platform-side ID, not the Nuruvent UUID
 		sched.VideoMeetingID = &mid
 
 		log.Printf("video: created meeting %s for session %d on %s",
-			result.MeetingID, sched.SessionNumber, platform)
+			result.ExternalID, sched.SessionNumber, platform)
 	}
 
 	if len(errs) > 0 {
