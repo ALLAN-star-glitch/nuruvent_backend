@@ -112,3 +112,15 @@ var (
 	// Callers may treat this as success.
 	ErrMeetingAlreadyExists = errors.New("meeting already exists")
 )
+
+var (
+	// ... existing errors ...
+
+	// Publish-path translation errors. These wrap the user-facing
+	// messages produced by translatePublishError so the classifier can
+	// recognize them and surface the specific text.
+	ErrPublishRateLimited = errors.New("publish: rate limited")
+	ErrPublishConnectionInvalid = errors.New("publish: connection invalid")
+	ErrPublishPlatformUnavailable = errors.New("publish: platform unavailable")
+	ErrPublishMeetingCreationFailed = errors.New("publish: meeting creation failed")
+)

@@ -27,10 +27,16 @@ import (
 // fmt.Errorf("%w: ...", ...) and unwrapped here via errors.Is/As.
 
 // classifiedError is the internal shape the classifier produces.
+//
+// Message is the short internal label used in logs and as a fallback.
+// UserMessage, when set, is the specific text shown to the user — it
+// overrides Message in the HTTP response. This lets the classifier
+// keep a stable label for logs while surfacing an actionable message.
 type classifiedError struct {
-	Status  int
-	Message string
-	Details fiber.Map
+	Status      int
+	Message     string
+	UserMessage string
+	Details     fiber.Map
 }
 
 // ============================================================
@@ -107,11 +113,11 @@ func classifyEventError(action string, err error) classifiedError {
 		}
 	}
 
-
+	// ---------- MEETING MANAGEMENT ----------
 	if errors.Is(err, domain.ErrEventNotVirtual) {
-	return classifiedError{
-		Status:  fiber.StatusUnprocessableEntity,
-		Message: "This event is not virtual — there is no meeting to manage",
+		return classifiedError{
+			Status:  fiber.StatusUnprocessableEntity,
+			Message: "This event is not virtual — there is no meeting to manage",
 		}
 	}
 	if errors.Is(err, domain.ErrNoMeetingToManage) {
@@ -219,14 +225,51 @@ func classifyEventError(action string, err error) classifiedError {
 		}
 	}
 
+	// ---------- PUBLISH-PATH TRANSLATION ----------
+	// translatePublishError wraps domain sentinels so we can surface
+	// the specific, actionable message for each failure case.
+	if errors.Is(err, domain.ErrPublishRateLimited) {
+		return classifiedError{
+			Status:      fiber.StatusUnprocessableEntity,
+			Message:     "Publish blocked: Zoom rate limit",
+			UserMessage: stripSentinel(err, domain.ErrPublishRateLimited),
+			Details:     fiber.Map{"error": err.Error()},
+		}
+	}
+	if errors.Is(err, domain.ErrPublishConnectionInvalid) {
+		return classifiedError{
+			Status:      fiber.StatusUnprocessableEntity,
+			Message:     "Publish blocked: Zoom connection invalid",
+			UserMessage: stripSentinel(err, domain.ErrPublishConnectionInvalid),
+			Details:     fiber.Map{"error": err.Error()},
+		}
+	}
+	if errors.Is(err, domain.ErrPublishPlatformUnavailable) {
+		return classifiedError{
+			Status:      fiber.StatusUnprocessableEntity,
+			Message:     "Publish blocked: platform unavailable",
+			UserMessage: stripSentinel(err, domain.ErrPublishPlatformUnavailable),
+			Details:     fiber.Map{"error": err.Error()},
+		}
+	}
+	if errors.Is(err, domain.ErrPublishMeetingCreationFailed) {
+		return classifiedError{
+			Status:      fiber.StatusUnprocessableEntity,
+			Message:     "Publish blocked: meeting creation failed",
+			UserMessage: stripSentinel(err, domain.ErrPublishMeetingCreationFailed),
+			Details:     fiber.Map{"error": err.Error()},
+		}
+	}
+
 	// ---------- PUBLISH VALIDATION SUMMARY ----------
 	// `ValidateForPublish` returns `fmt.Errorf("validation failed: %s", ...)`.
 	// Extract the joined list so the user sees every failing rule.
 	if summary := extractValidationSummary(err); summary != "" {
 		return classifiedError{
-			Status:  fiber.StatusUnprocessableEntity,
-			Message: "Event is not ready to publish: " + summary,
-			Details: fiber.Map{"error": err.Error()},
+			Status:      fiber.StatusUnprocessableEntity,
+			Message:     "Event is not ready to publish",
+			UserMessage: summary,
+			Details:     fiber.Map{"error": err.Error()},
 		}
 	}
 
@@ -335,6 +378,22 @@ func cleanReason(raw string) string {
 	return raw
 }
 
+// stripSentinel removes the sentinel prefix from a wrapped error so the
+// caller gets only the human-readable portion. For example:
+//
+//	publish: connection invalid: your Zoom connection is no longer valid...
+//
+// becomes:
+//
+//	your Zoom connection is no longer valid...
+func stripSentinel(err error, sentinel error) string {
+	if err == nil {
+		return ""
+	}
+	prefix := sentinel.Error() + ": "
+	return strings.TrimPrefix(err.Error(), prefix)
+}
+
 // ============================================================
 // RESPONDER
 // ============================================================
@@ -343,6 +402,9 @@ func cleanReason(raw string) string {
 //
 // `action` is a verb phrase like "publish event" — used only when the
 // classifier falls through to the generic case.
+//
+// When the classifier sets UserMessage, that string is used as the
+// top-level `message` field. Otherwise Message is used.
 func respondClassifiedError(c fiber.Ctx, action string, err error) error {
 	ce := classifyEventError(action, err)
 
@@ -351,28 +413,33 @@ func respondClassifiedError(c fiber.Ctx, action string, err error) error {
 		details = fiber.Map{}
 	}
 
+	msg := ce.Message
+	if ce.UserMessage != "" {
+		msg = ce.UserMessage
+	}
+
 	switch ce.Status {
 	case fiber.StatusBadRequest:
-		return response.BadRequest(c, ce.Message, details)
+		return response.BadRequest(c, msg, details)
 	case fiber.StatusUnauthorized:
-		return response.Unauthorized(c, ce.Message, details)
+		return response.Unauthorized(c, msg, details)
 	case fiber.StatusForbidden:
-		return response.Forbidden(c, ce.Message, details)
+		return response.Forbidden(c, msg, details)
 	case fiber.StatusNotFound:
-		return response.NotFound(c, ce.Message, details)
+		return response.NotFound(c, msg, details)
 	case fiber.StatusConflict:
 		return c.Status(fiber.StatusConflict).JSON(fiber.Map{
 			"success": false,
-			"message": ce.Message,
+			"message": msg,
 			"errors":  details,
 		})
 	case fiber.StatusUnprocessableEntity:
 		return c.Status(fiber.StatusUnprocessableEntity).JSON(fiber.Map{
 			"success": false,
-			"message": ce.Message,
+			"message": msg,
 			"errors":  details,
 		})
 	default:
-		return response.InternalError(c, ce.Message, details)
+		return response.InternalError(c, msg, details)
 	}
 }
