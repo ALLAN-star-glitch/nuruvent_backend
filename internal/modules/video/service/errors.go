@@ -88,3 +88,5 @@ func errorsIsNotFound(err error) bool {
 func errorsIsMeetingNotFound(err error) bool {
 	return errors.Is(err, videodomain.ErrMeetingNotFound)
 }
+
+

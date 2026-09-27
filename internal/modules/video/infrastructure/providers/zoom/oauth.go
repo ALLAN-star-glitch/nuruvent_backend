@@ -3,11 +3,13 @@
 package zoom
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -87,10 +89,27 @@ func (c *Client) exchangeCodeForTokens(
 	req.Header.Set("Authorization", basicAuth(c.oauth.ClientID, c.oauth.ClientSecret))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
+	// ─── DEBUG: outgoing code-exchange request ─────────────────
+	log.Printf("🔑 EXCHANGE: client_id=%q redirect_uri=%q endpoint=%q",
+		c.oauth.ClientID, c.oauth.RedirectURI, c.oauthBaseURL+"/token")
+	log.Printf("🔑 EXCHANGE: code_len=%d", len(code))
+	// ────────────────────────────────────────────────────────────
+
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, mapNetworkError(err)
 	}
+
+	// ─── DEBUG: Zoom's response body (must be re-wrapped) ──────
+	{
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		log.Printf("🔑 ZOOM RESPONSE (exchange): status=%d body=%s",
+			resp.StatusCode, string(body))
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+	}
+	// ────────────────────────────────────────────────────────────
+
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, mapHTTPError(resp)
 	}
@@ -102,9 +121,19 @@ func (c *Client) exchangeCodeForTokens(
 	}
 	resp.Body.Close()
 
-	if tr.AccessToken == "" {
+		if tr.AccessToken == "" {
 		return nil, fmt.Errorf("%w: empty access token", videodomain.ErrPlatformRejected)
 	}
+
+	// ─── DEBUG: what Zoom actually returned ────────────────────
+	log.Printf("🔑 TOKEN EXCHANGE: access_len=%d refresh_len=%d equal=%v",
+		len(tr.AccessToken), len(tr.RefreshToken), tr.AccessToken == tr.RefreshToken)
+	log.Printf("🔑 TOKEN EXCHANGE: access_prefix=%q refresh_prefix=%q",
+		safePrefix(tr.AccessToken, 30), safePrefix(tr.RefreshToken, 30))
+	log.Printf("🔑 TOKEN EXCHANGE: access_is_jwt=%v refresh_is_jwt=%v",
+		strings.Count(tr.AccessToken, ".") == 2,
+		strings.Count(tr.RefreshToken, ".") == 2)
+	// ────────────────────────────────────────────────────────────
 
 	return &videodomain.TokenSet{
 		AccessToken:  tr.AccessToken,
@@ -150,10 +179,29 @@ func (c *Client) RefreshAccessToken(
 	req.Header.Set("Authorization", basicAuth(c.oauth.ClientID, c.oauth.ClientSecret))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
+	// ─── DEBUG: outgoing refresh request ───────────────────────
+	log.Printf("🔑 REFRESH: conn_id=%s user=%s platform=%s",
+		conn.ID, conn.UserID, conn.Platform)
+	log.Printf("🔑 REFRESH: access_len=%d refresh_len=%d scopes=%q",
+		len(conn.AccessToken), len(conn.RefreshToken), conn.Scopes)
+	log.Printf("🔑 REFRESH: client_id=%q redirect_uri=%q endpoint=%q",
+		c.oauth.ClientID, c.oauth.RedirectURI, c.oauthBaseURL+"/token")
+	// ────────────────────────────────────────────────────────────
+
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, mapNetworkError(err)
 	}
+
+	// ─── DEBUG: Zoom's response body (must be re-wrapped) ──────
+	{
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		log.Printf("🔑 ZOOM RESPONSE (refresh): status=%d body=%s",
+			resp.StatusCode, string(body))
+		resp.Body = io.NopCloser(bytes.NewReader(body))
+	}
+	// ────────────────────────────────────────────────────────────
 
 	// Zoom signals an expired refresh token with 400 + code 1002.
 	if resp.StatusCode == http.StatusBadRequest {
@@ -308,4 +356,13 @@ func (c *Client) fetchUserInfo(
 func basicAuth(clientID, clientSecret string) string {
 	raw := clientID + ":" + clientSecret
 	return "Basic " + base64.StdEncoding.EncodeToString([]byte(raw))
+}
+
+// safePrefix returns the first n characters of s, or s if it's shorter.
+// Used only in debug logging to avoid printing full tokens.
+func safePrefix(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
 }
