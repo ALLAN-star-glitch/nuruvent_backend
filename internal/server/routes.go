@@ -93,6 +93,7 @@ func healthCheck(c fiber.Ctx) error {
 		"status": "ok",
 		"time":   time.Now().UTC(),
 	})
+	
 }
 
 func welcome(c fiber.Ctx) error {

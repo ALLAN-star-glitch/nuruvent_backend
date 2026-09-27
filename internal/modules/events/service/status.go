@@ -46,16 +46,21 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 	// still fails, we can translate the underlying cause into a
 	// user-facing message that explains what to do next.
 	var meetingErr error
-	if err := s.attachVideoMeetings(ctx, event, publishedBy); err != nil {
-		log.Printf("⚠️ video integration on publish: %v", err)
-		meetingErr = err
-	}
+		if err := s.attachVideoMeetings(ctx, event, publishedBy); err != nil {
+			log.Printf("⚠️ video integration on publish: %v", err)
+			meetingErr = err
+		}
 
-	if err := event.ValidateForPublish(); err != nil {
-		log.Printf("❌ Publish validation failed: %v", err)
-		return nil, s.translatePublishError(err, meetingErr)
-	}
+		log.Printf("🔎 PUBLISH: meetingErr=%v (nil=%v)", meetingErr, meetingErr == nil)
 
+		if err := event.ValidateForPublish(); err != nil {
+			log.Printf("❌ Publish validation failed: %v", err)
+			log.Printf("🔎 PUBLISH: sending to translator, validationErr=%v meetingErr=%v",
+				err, meetingErr)
+			return nil, s.translatePublishError(err, meetingErr)
+		}
+
+		
 	event.EventStatusID = status.ID
 	if err := s.repo.UpdateEvent(ctx, event); err != nil {
 		log.Printf("❌ Failed to update event: %v", err)
