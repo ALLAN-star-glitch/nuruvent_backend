@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -782,4 +783,37 @@ func convertDeletedAt(d gorm.DeletedAt) *time.Time {
 		return &d.Time
 	}
 	return nil
+}
+
+// toScheduleModel maps a single domain schedule to a model, using the
+// provided session number as the fallback when the domain object doesn't
+// carry one.
+func toScheduleModel(eventID string, s domain.EventSchedule, sessionNumber int) *EventScheduleModel {
+	id := s.ID
+	if id == "" {
+		id = uuid.NewString() // or whatever your existing ID generator is
+	}
+	sn := sessionNumber
+	if s.SessionNumber != 0 {
+		sn = s.SessionNumber
+	}
+
+	
+	return &EventScheduleModel{
+		ID:             id,
+		EventID:        eventID,
+		SessionName:    s.SessionName,
+		SessionNumber:  sn,
+		StartDate:      s.StartDate,
+		EndDate:        s.EndDate,
+		StartTime:      s.StartTime,
+		EndTime:        s.EndTime,
+		Timezone:       s.Timezone,
+		Location:       s.Location,
+		IsVirtual:      s.IsVirtual,
+		ZoomLink:       s.ZoomLink,
+		MeetLink:       s.MeetLink,
+		VideoMeetingID: s.VideoMeetingID,
+		MaxAttendees:   s.MaxAttendees,
+	}
 }

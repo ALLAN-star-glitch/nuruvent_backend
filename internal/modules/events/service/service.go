@@ -110,6 +110,13 @@ type Service interface {
 
 
 	AdjustAttendeeCount(ctx context.Context, eventID string, delta int) error
+
+
+
+
+	CreateEventMeeting(ctx context.Context, eventID, userID string) (*domain.Event, error)
+	DeleteEventMeeting(ctx context.Context, eventID, userID string) (*domain.Event, error)
+	RegenerateEventMeeting(ctx context.Context, eventID, userID string) (*domain.Event, error)
 }
 
 // ============================================================

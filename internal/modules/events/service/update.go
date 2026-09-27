@@ -274,11 +274,17 @@ func (s *eventService) applyBasicUpdates(event *domain.Event, cmd UpdateEventCom
 // derived from schedules by the caller.
 func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.Event, cmd UpdateEventCommand) error {
 	if cmd.Schedules != nil {
-		schedules, err := s.convertSchedules(cmd.Schedules)
+		incoming, err := s.convertSchedules(cmd.Schedules)
 		if err != nil {
 			return fmt.Errorf("invalid schedules: %w", err)
 		}
-		event.Schedules = schedules
+	
+		
+
+		// Merge incoming schedules with the existing ones so we don't
+		// lose internal fields (video_meeting_id, provider_session_id,
+		// attendance mirrors) that the client never sends.
+		event.Schedules = mergeSchedules(event.Schedules, incoming)
 	}
 
 	// Recurrence: IsRecurring is the master switch.
@@ -316,6 +322,54 @@ func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.E
 	}
 
 	return nil
+}
+
+// mergeSchedules matches incoming schedules to existing ones by ID.
+//
+// For each incoming schedule:
+//   - If it has an ID that matches an existing schedule, overlay the
+//     incoming fields onto the existing one. Internal fields the
+//     client doesn't send (video_meeting_id) survive.
+//   - If it has no ID, or the ID doesn't match, treat it as a new
+//     schedule and append it.
+//
+// Existing schedules not represented in the incoming set are dropped,
+// which is the intended behaviour when the caller removes a session.
+func mergeSchedules(
+	existing []domain.EventSchedule,
+	incoming []domain.EventSchedule,
+) []domain.EventSchedule {
+
+	log.Printf("🔎 mergeSchedules: existing=%d incoming=%d", len(existing), len(incoming))
+	for _, s := range incoming {
+		log.Printf("🔎   incoming id=%q video_meeting_id=%v", s.ID, s.VideoMeetingID)
+	}
+	for _, s := range existing {
+		log.Printf("🔎   existing id=%q video_meeting_id=%v", s.ID, s.VideoMeetingID)
+	}
+
+	if len(existing) == 0 {
+		return incoming
+	}
+
+	byID := make(map[string]domain.EventSchedule, len(existing))
+	for _, s := range existing {
+		if s.ID != "" {
+			byID[s.ID] = s
+		}
+	}
+
+	merged := make([]domain.EventSchedule, 0, len(incoming))
+	for _, inc := range incoming {
+		if inc.ID != "" {
+			if prev, ok := byID[inc.ID]; ok {
+				// Preserve fields the client never sends.
+				inc.VideoMeetingID = prev.VideoMeetingID
+			}
+		}
+		merged = append(merged, inc)
+	}
+	return merged
 }
 
 // applyTicketUpdates applies ticket-related updates.

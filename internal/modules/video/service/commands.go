@@ -102,12 +102,13 @@ type UpdateMeetingCommand struct {
 }
 
 
-// DeleteMeetingCommand is the input to DeleteMeeting.
+// DeleteMeetingCommand removes a meeting from the platform.
+//
+// ExternalID is the platform-side meeting ID (Zoom numeric ID, etc.),
+// not Nuruvent's internal UUID. Platform must match the value used
+// when the meeting was created.
 type DeleteMeetingCommand struct {
-	// MeetingID is the Nuruvent-side meeting ID.
-	MeetingID string
-
-	// UserID is the requesting host. The service verifies that the
-	// meeting belongs to them before deleting (FR-V-047/048/049/308).
-	UserID string
+	UserID     string
+	Platform   videodomain.Platform
+	ExternalID string
 }

@@ -9,8 +9,6 @@ func (h *EventHandler) RegisterRoutes(
 	authMiddleware fiber.Handler,
 	authzMiddleware fiber.Handler,
 ) {
-	
-	
 	// ============================================================
 	// PUBLIC ROUTES
 	// ============================================================
@@ -69,6 +67,11 @@ func (h *EventHandler) RegisterRoutes(
 		protected.Post("/:id<guid>/cancel", authMiddleware, authzMiddleware, h.CancelEvent)
 		protected.Post("/:id<guid>/complete", authMiddleware, authzMiddleware, h.CompleteEvent)
 		protected.Post("/:id<guid>/duplicate", authMiddleware, authzMiddleware, h.DuplicateEvent)
+
+		// ---- Meeting management ----
+		protected.Post("/:id<guid>/meeting", authMiddleware, authzMiddleware, h.CreateMeeting)
+		protected.Delete("/:id<guid>/meeting", authMiddleware, authzMiddleware, h.DeleteMeeting)
+		protected.Post("/:id<guid>/meeting/regenerate", authMiddleware, authzMiddleware, h.RegenerateMeeting)
 
 		// ---- Media ----
 		protected.Post("/:id<guid>/image", authMiddleware, authzMiddleware, h.UploadEventImage)

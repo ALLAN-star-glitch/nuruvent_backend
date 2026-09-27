@@ -175,13 +175,9 @@ func (r *PostgresRepository) UpdateEvent(ctx context.Context, event *domain.Even
 		return result.Error
 	}
 
-	// Update child entities - delete and recreate
-	if err := r.deleteSchedules(ctx, event.ID); err != nil {
-		return err
-	}
-	if err := r.saveSchedules(ctx, event.ID, event.Schedules); err != nil {
-		return err
-	}
+	if err := r.upsertSchedules(ctx, event.ID, event.Schedules); err != nil {
+    return err
+     }
 
 	if err := r.deleteTickets(ctx, event.ID); err != nil {
 		return err
@@ -767,6 +763,7 @@ func (r *PostgresRepository) saveSchedules(ctx context.Context, eventID string, 
 	if len(schedules) == 0 {
 		return nil
 	}
+	
 	models := toModelSchedules(eventID, schedules)
 	return r.db.WithContext(ctx).Create(&models).Error
 }
@@ -895,4 +892,100 @@ func (r *PostgresRepository) AdjustAttendeeCount(ctx context.Context, eventID st
 		return domain.ErrEventNotFound
 	}
 	return nil
+}
+
+// upsertSchedules updates existing schedule rows in place and inserts
+// new ones. Rows present in the DB but absent from the incoming set are
+// soft-deleted.
+//
+// This preserves the schedule's UUID (and any external references like
+// video_meeting_id that ride along with it) across updates.
+func (r *PostgresRepository) upsertSchedules(
+	ctx context.Context,
+	eventID string,
+	schedules []domain.EventSchedule,
+) error {
+	// 1. Collect existing schedule IDs for this event.
+	var existingIDs []string
+	if err := r.db.WithContext(ctx).
+		Model(&EventScheduleModel{}).
+		Where("event_id = ? AND deleted_at IS NULL", eventID).
+		Pluck("id", &existingIDs).Error; err != nil {
+		return err
+	}
+
+	// 2. Track which incoming IDs we've seen, so we can drop any DB row
+	//    that's no longer part of the incoming set.
+	incoming := make(map[string]struct{}, len(schedules))
+	for _, s := range schedules {
+		if s.ID != "" {
+			incoming[s.ID] = struct{}{}
+		}
+	}
+
+	// 3. Soft-delete schedules that aren't in the incoming set.
+	toDelete := make([]string, 0)
+	for _, id := range existingIDs {
+		if _, ok := incoming[id]; !ok {
+			toDelete = append(toDelete, id)
+		}
+	}
+	if len(toDelete) > 0 {
+		if err := r.db.WithContext(ctx).
+			Where("id IN ?", toDelete).
+			Delete(&EventScheduleModel{}).Error; err != nil {
+			return err
+		}
+	}
+
+	// 4. Upsert each incoming schedule.
+	for i, s := range schedules {
+		model := toScheduleModel(eventID, s, i+1)
+
+		if s.ID == "" || !containsString(existingIDs, s.ID) {
+			// New row — insert.
+			if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
+				return err
+			}
+			continue
+		}
+
+		// Existing row — update in place. Preserve ID; do NOT touch
+		// video_meeting_id here, since the service already merged it
+		// into s.VideoMeetingID via mergeSchedules. The explicit
+		// update below carries whatever value the service decided.
+		if err := r.db.WithContext(ctx).
+			Model(&EventScheduleModel{}).
+			Where("id = ?", s.ID).
+			Updates(map[string]interface{}{
+				"session_name":     model.SessionName,
+				"session_number":   model.SessionNumber,
+				"start_date":       model.StartDate,
+				"end_date":         model.EndDate,
+				"start_time":       model.StartTime,
+				"end_time":         model.EndTime,
+				"timezone":         model.Timezone,
+				"location":         model.Location,
+				"is_virtual":       model.IsVirtual,
+				"zoom_link":        model.ZoomLink,
+				"meet_link":        model.MeetLink,
+				"video_meeting_id": model.VideoMeetingID,
+				"max_attendees":    model.MaxAttendees,
+				"updated_at":       time.Now().UTC(),
+			}).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// containsString reports whether needle is present in haystack.
+func containsString(haystack []string, needle string) bool {
+	for _, s := range haystack {
+		if s == needle {
+			return true
+		}
+	}
+	return false
 }

@@ -97,3 +97,18 @@ var (
 	ErrEventPersistenceWrite = errors.New("failed to persist event")
 	ErrEventTicketConversion = errors.New("failed to convert tickets")
 )
+
+var (
+	// ErrEventNotVirtual is returned when a meeting operation is
+	// requested on an in-person event.
+	ErrEventNotVirtual = errors.New("event is not virtual")
+
+	// ErrNoMeetingToManage is returned when a delete or regenerate
+	// is requested but no virtual schedule has a meeting.
+	ErrNoMeetingToManage = errors.New("no meeting to manage")
+
+	// ErrMeetingAlreadyExists is returned by Create when every
+	// virtual schedule already has a meeting (idempotent no-op).
+	// Callers may treat this as success.
+	ErrMeetingAlreadyExists = errors.New("meeting already exists")
+)

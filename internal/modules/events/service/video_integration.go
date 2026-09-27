@@ -20,11 +20,12 @@ import (
 //
 // Rules:
 //   - In-person schedules are skipped.
-//   - Schedules with ZoomLink or MeetLink set and no VideoMeetingID
-//     are skipped (manual mode).
-//   - Schedules with VideoMeetingID already set have their meeting
-//     updated on the platform (topic, start time, duration, timezone).
-//   - Schedules with no meeting are created.
+//   - Schedules with a manual link and no VideoMeetingID are skipped
+//     (true manual mode).
+//   - Schedules with a VideoMeetingID are updated on the platform
+//     (topic, start time, duration, timezone) — even though they also
+//     carry a zoom_link the backend wrote.
+//   - Schedules with no meeting and no manual link are created.
 //   - If the host is not connected, the schedule is skipped and a
 //     warning is logged. Publish validation will surface the missing
 //     link to the caller.
@@ -53,9 +54,15 @@ func (s *eventService) attachVideoMeetings(
 		if !sched.IsVirtual {
 			continue
 		}
-		if sched.ZoomLink != "" || sched.MeetLink != "" {
-			// Manual mode — host pasted a link. Nothing to create or
-			// update.
+
+		// A schedule with a manual link but no Nuruvent-managed meeting
+		// is a true manual link — the host pasted a URL and we should
+		// leave it alone. A schedule with a VideoMeetingID is an
+		// auto-created meeting that should be updated, even though the
+		// backend also populated its zoom_link.
+		hasManualLink := sched.ZoomLink != "" || sched.MeetLink != ""
+		hasMeeting := sched.VideoMeetingID != nil && *sched.VideoMeetingID != ""
+		if hasManualLink && !hasMeeting {
 			continue
 		}
 
@@ -86,7 +93,7 @@ func (s *eventService) attachVideoMeetings(
 		// ─────────────────────────────────────────────────────────
 		// Case 1: schedule already has a meeting — update it.
 		// ─────────────────────────────────────────────────────────
-		if sched.VideoMeetingID != nil && *sched.VideoMeetingID != "" {
+		if hasMeeting {
 			updated, err := s.video.UpdateMeeting(ctx, domain.UpdateVideoMeetingRequest{
 				UserID:     hostUserID,
 				Platform:   platform,
@@ -212,3 +219,4 @@ func scheduleDuration(s domain.EventSchedule) time.Duration {
 	}
 	return end.Sub(start)
 }
+

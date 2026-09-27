@@ -16,6 +16,7 @@ import (
 // CONVERTER HELPERS
 // ============================================================
 
+
 // convertSchedules converts schedule inputs to domain schedules.
 func (s *eventService) convertSchedules(inputs []ScheduleInput) ([]domain.EventSchedule, error) {
 	if len(inputs) == 0 {
@@ -23,36 +24,51 @@ func (s *eventService) convertSchedules(inputs []ScheduleInput) ([]domain.EventS
 	}
 
 	schedules := make([]domain.EventSchedule, len(inputs))
-	for i, input := range inputs {
-		startDate, err := time.Parse("2006-01-02", input.StartDate)
-		if err != nil {
-			return nil, fmt.Errorf("invalid start_date format: %w", err)
-		}
+for i, input := range inputs {
+	 log.Printf("🔎 convertSchedules[%d]: input.ID=%v", i, input.ID)
+    startDate, err := time.Parse("2006-01-02", input.StartDate)
+    if err != nil {
+        return nil, fmt.Errorf("invalid start_date format: %w", err)
+    }
 
-		var endDate *time.Time
-		if input.EndDate != nil && *input.EndDate != "" {
-			parsed, err := time.Parse("2006-01-02", *input.EndDate)
-			if err != nil {
-				return nil, fmt.Errorf("invalid end_date format: %w", err)
-			}
-			endDate = &parsed
-		}
+    var endDate *time.Time
+    if input.EndDate != nil && *input.EndDate != "" {
+        parsed, err := time.Parse("2006-01-02", *input.EndDate)
+        if err != nil {
+            return nil, fmt.Errorf("invalid end_date format: %w", err)
+        }
+        endDate = &parsed
+    }
 
-		schedules[i] = domain.EventSchedule{
-			SessionName:   input.SessionName,
-			SessionNumber: input.SessionNumber,
-			StartDate:     startDate,
-			EndDate:       endDate,
-			StartTime:     input.StartTime,
-			EndTime:       input.EndTime,
-			Timezone:      input.Timezone,
-			Location:      input.Location,
-			IsVirtual:     input.IsVirtual,
-			ZoomLink:      input.ZoomLink,
-			MeetLink:      input.MeetLink,
-			MaxAttendees:  input.MaxAttendees,
-		}
-	}
+	
+
+    // ScheduleInput.ID is *string; EventSchedule.ID is string.
+    // Dereference only when non-nil, otherwise leave empty (new schedule).
+    var id string
+    if input.ID != nil {
+        id = *input.ID
+    }
+
+
+    schedules[i] = domain.EventSchedule{
+        ID:            id,
+        SessionName:   input.SessionName,
+        SessionNumber: input.SessionNumber,
+        StartDate:     startDate,
+        EndDate:       endDate,
+        StartTime:     input.StartTime,
+        EndTime:       input.EndTime,
+        Timezone:      input.Timezone,
+        Location:      input.Location,
+        IsVirtual:     input.IsVirtual,
+        ZoomLink:      input.ZoomLink,
+        MeetLink:      input.MeetLink,
+        MaxAttendees:  input.MaxAttendees,
+    }
+  }
+
+
+
 	return schedules, nil
 }
 

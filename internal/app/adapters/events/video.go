@@ -61,18 +61,15 @@ func (a *VideoAdapter) CreateMeeting(
 	}
 
 	return &eventsdomain.VideoMeetingResult{
-		MeetingID: meeting.ID,
-		JoinURL:   meeting.JoinURL,
-		StartURL:  meeting.StartURL,
+		MeetingID:  meeting.ID,
+		ExternalID: meeting.ExternalID, // ← platform-side ID (Zoom numeric)
+		JoinURL:    meeting.JoinURL,
+		StartURL:   meeting.StartURL,
 	}, nil
 }
 
 // UpdateMeeting updates an existing meeting on the host's connected
 // account.
-//
-// Called when a schedule's meeting spec (topic, start time, duration,
-// timezone) changes but the meeting already exists on the platform.
-// The join URL is preserved — attendees keep the same link.
 func (a *VideoAdapter) UpdateMeeting(
 	ctx context.Context,
 	req eventsdomain.UpdateVideoMeetingRequest,
@@ -97,9 +94,10 @@ func (a *VideoAdapter) UpdateMeeting(
 	}
 
 	return &eventsdomain.VideoMeetingResult{
-		MeetingID: meeting.ExternalID,
-		JoinURL:   meeting.JoinURL,
-		StartURL:  meeting.StartURL,
+		MeetingID:  meeting.ID,
+		ExternalID: meeting.ExternalID, // ← platform-side ID
+		JoinURL:    meeting.JoinURL,
+		StartURL:   meeting.StartURL,
 	}, nil
 }
 
@@ -109,7 +107,11 @@ func (a *VideoAdapter) DeleteMeeting(
 	req eventsdomain.VideoMeetingDeleteRequest,
 ) error {
 	return a.svc.DeleteMeeting(ctx, videoservice.DeleteMeetingCommand{
-		MeetingID: req.ExternalID,   // ← use ExternalID
-		UserID:    req.UserID,
+		UserID:     req.UserID,
+		Platform:   videodomain.Platform(strings.ToLower(req.Platform)),
+		ExternalID: req.ExternalID,
 	})
 }
+
+
+

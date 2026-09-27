@@ -107,6 +107,20 @@ func classifyEventError(action string, err error) classifiedError {
 		}
 	}
 
+
+	if errors.Is(err, domain.ErrEventNotVirtual) {
+	return classifiedError{
+		Status:  fiber.StatusUnprocessableEntity,
+		Message: "This event is not virtual — there is no meeting to manage",
+		}
+	}
+	if errors.Is(err, domain.ErrNoMeetingToManage) {
+		return classifiedError{
+			Status:  fiber.StatusNotFound,
+			Message: "No meeting exists for this event",
+		}
+	}
+
 	// ---------- VALIDATION ----------
 	if ce, ok := classifyValidationError(err); ok {
 		return ce
