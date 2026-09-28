@@ -245,8 +245,15 @@ type EventScheduleModel struct {
 	Timezone      string         `gorm:"default:'Africa/Nairobi'"`
 	Location      string
 	IsVirtual     bool           `gorm:"default:false"`
-	ZoomLink      string
-	MeetLink      string
+
+	// Platform is the video provider chosen for this schedule.
+	// One of "zoom", "google_meet", or "" when not yet chosen.
+	// Populated from the frontend and written back by the events
+	// service after a meeting is auto-created.
+	Platform string `gorm:"type:varchar(32);not null;default:'';index"`
+
+	ZoomLink string
+	MeetLink string
 
 	// VideoMeetingID references video_meetings.id when the schedule's
 	// meeting was created automatically by the video module. Null for

@@ -1,3 +1,5 @@
+// internal/modules/events/service/manage_meeting_service.go
+
 package service
 
 import (
@@ -12,15 +14,20 @@ import (
 // CREATE
 // ============================================================
 
-// CreateEventMeeting creates a Zoom meeting for every virtual
-// schedule that doesn't already have one.
+// CreateEventMeeting creates a meeting on the host's connected video
+// platform for every virtual schedule that doesn't already have one.
 //
 // Idempotent: schedules with an existing video_meeting_id are skipped.
 // If every virtual schedule already has a meeting, the call is a no-op
 // and returns the event unchanged.
+//
+// platformOverride is an optional fallback for schedules whose
+// platform column is empty. It is only used when the schedule itself
+// does not carry a platform. An empty string means "use whatever the
+// schedule already has."
 func (s *eventService) CreateEventMeeting(
 	ctx context.Context,
-	eventID, userID string,
+	eventID, userID, platformOverride string,
 ) (*domain.Event, error) {
 	log.Printf("🆕 Creating meetings for event: %s by %s", eventID, userID)
 
@@ -36,7 +43,7 @@ func (s *eventService) CreateEventMeeting(
 		return nil, domain.ErrEventScheduleRequired
 	}
 
-	if err := s.attachVideoMeetings(ctx, event, userID); err != nil {
+	if err := s.attachVideoMeetings(ctx, event, userID, platformOverride); err != nil {
 		return nil, fmt.Errorf("create meeting: %w", err)
 	}
 
@@ -60,8 +67,8 @@ func (s *eventService) CreateEventMeeting(
 // DELETE
 // ============================================================
 
-// DeleteEventMeeting removes every virtual schedule's Zoom meeting
-// from the platform and clears the local meeting fields.
+// DeleteEventMeeting removes every virtual schedule's meeting from the
+// platform and clears the local meeting fields.
 func (s *eventService) DeleteEventMeeting(
 	ctx context.Context,
 	eventID, userID string,
@@ -92,7 +99,7 @@ func (s *eventService) DeleteEventMeeting(
 		}
 
 		externalID := *sched.VideoMeetingID // capture BEFORE clearing
-		platform := virtualPlatformForSchedule(*sched)
+		platform := virtualPlatformForSchedule(*sched, "")
 
 		err := s.video.DeleteMeeting(ctx, domain.VideoMeetingDeleteRequest{
 			UserID:     userID,
@@ -131,7 +138,7 @@ func (s *eventService) DeleteEventMeeting(
 // ============================================================
 
 // RegenerateEventMeeting deletes every virtual schedule's meeting on
-// Zoom and creates a fresh one.
+// the platform and creates a fresh one.
 func (s *eventService) RegenerateEventMeeting(
 	ctx context.Context,
 	eventID, userID string,
@@ -159,7 +166,7 @@ func (s *eventService) RegenerateEventMeeting(
 		}
 
 		externalID := *sched.VideoMeetingID // capture BEFORE clearing
-		platform := virtualPlatformForSchedule(*sched)
+		platform := virtualPlatformForSchedule(*sched, "")
 
 		err := s.video.DeleteMeeting(ctx, domain.VideoMeetingDeleteRequest{
 			UserID:     userID,
@@ -174,8 +181,9 @@ func (s *eventService) RegenerateEventMeeting(
 		sched.ZoomLink = ""
 	}
 
-	// 2. Create fresh meetings.
-	if err := s.attachVideoMeetings(ctx, event, userID); err != nil {
+	// 2. Create fresh meetings. No override: the schedules already
+	//    carry a platform from their previous lifecycle.
+	if err := s.attachVideoMeetings(ctx, event, userID, ""); err != nil {
 		return nil, fmt.Errorf("regenerate meeting: %w", err)
 	}
 

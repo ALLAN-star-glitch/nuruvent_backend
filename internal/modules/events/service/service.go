@@ -114,7 +114,7 @@ type Service interface {
 
 
 
-	CreateEventMeeting(ctx context.Context, eventID, userID string) (*domain.Event, error)
+    CreateEventMeeting(ctx context.Context, eventID, userID, platformOverride string) (*domain.Event, error)
 	DeleteEventMeeting(ctx context.Context, eventID, userID string) (*domain.Event, error)
 	RegenerateEventMeeting(ctx context.Context, eventID, userID string) (*domain.Event, error)
 }
@@ -426,6 +426,8 @@ type SearchFilters struct {
 	IncludeCreator bool
 }
 
+
+
 // ============================================================
 // INPUT TYPES (Shared across commands)
 // ============================================================
@@ -441,6 +443,7 @@ type ScheduleInput struct {
 	SessionNumber int
 	Location      string
 	IsVirtual     bool
+	Platform      string
 	ZoomLink      string
 	MeetLink      string
 	MaxAttendees  *int

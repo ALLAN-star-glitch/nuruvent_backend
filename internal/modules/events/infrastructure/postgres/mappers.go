@@ -504,6 +504,7 @@ func toDomainSchedules(models []EventScheduleModel) []domain.EventSchedule {
 			Timezone:       m.Timezone,
 			Location:       m.Location,
 			IsVirtual:      m.IsVirtual,
+			Platform:      m.Platform,
 			ZoomLink:       m.ZoomLink,
 			MeetLink:       m.MeetLink,
 			VideoMeetingID: m.VideoMeetingID,
@@ -528,6 +529,7 @@ func toModelSchedules(eventID string, schedules []domain.EventSchedule) []EventS
 			Timezone:       s.Timezone,
 			Location:       s.Location,
 			IsVirtual:      s.IsVirtual,
+			  Platform:      s.Platform,
 			ZoomLink:       s.ZoomLink,
 			MeetLink:       s.MeetLink,
 			VideoMeetingID: s.VideoMeetingID,
@@ -798,7 +800,7 @@ func toScheduleModel(eventID string, s domain.EventSchedule, sessionNumber int) 
 		sn = s.SessionNumber
 	}
 
-	
+
 	return &EventScheduleModel{
 		ID:             id,
 		EventID:        eventID,

@@ -46,7 +46,7 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 	// still fails, we can translate the underlying cause into a
 	// user-facing message that explains what to do next.
 	var meetingErr error
-		if err := s.attachVideoMeetings(ctx, event, publishedBy); err != nil {
+		if err := s.attachVideoMeetings(ctx, event, publishedBy, ""); err != nil {
 			log.Printf("⚠️ video integration on publish: %v", err)
 			meetingErr = err
 		}

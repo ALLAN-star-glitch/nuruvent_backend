@@ -15,19 +15,32 @@ import (
 // attachVideoMeetings creates, updates, or skips video meetings to
 // match the current state of the event's schedules.
 //
-// Called during published event creation and during update whenever
-// schedules are present in the command.
+// Called during published event creation, during update whenever
+// schedules are present in the command, and from the create-meeting
+// endpoint.
+//
+// Platform selection:
+//   - If the schedule has an explicit Platform, that is used.
+//   - Otherwise, platformOverride is used if it is non-empty. This
+//     covers schedules created before the picker existed — the caller
+//     supplies a platform at click time.
+//   - Otherwise, the URL shape of an existing link is inspected
+//     (legacy rows with a link but no platform).
+//   - If none of the above yields a platform, the schedule is skipped
+//     and logged; publish validation surfaces the missing provider.
+//
+// After a meeting is created, the chosen platform is written back to
+// the schedule so subsequent updates do not need to infer it.
 //
 // Rules:
 //   - In-person schedules are skipped.
 //   - Schedules with a manual link and no VideoMeetingID are skipped
 //     (true manual mode).
 //   - Schedules with a VideoMeetingID are updated on the platform
-//     (topic, start time, duration, timezone) — even though they also
-//     carry a zoom_link the backend wrote.
+//     (topic, start time, duration, timezone).
 //   - Schedules with no meeting and no manual link are created.
 //   - If the host is not connected, the schedule is skipped and a
-//     warning is logged. Publish validation will surface the missing
+//     warning is logged. Publish validation surfaces the missing
 //     link to the caller.
 //
 // Best-effort: a failure on one schedule doesn't abort the others.
@@ -37,6 +50,7 @@ func (s *eventService) attachVideoMeetings(
 	ctx context.Context,
 	event *domain.Event,
 	hostUserID string,
+	platformOverride string,
 ) error {
 	if s.video == nil {
 		// Video integration disabled (adapter not wired).
@@ -58,15 +72,14 @@ func (s *eventService) attachVideoMeetings(
 		// A schedule with a manual link but no Nuruvent-managed meeting
 		// is a true manual link — the host pasted a URL and we should
 		// leave it alone. A schedule with a VideoMeetingID is an
-		// auto-created meeting that should be updated, even though the
-		// backend also populated its zoom_link.
+		// auto-created meeting that should be updated.
 		hasManualLink := sched.ZoomLink != "" || sched.MeetLink != ""
 		hasMeeting := sched.VideoMeetingID != nil && *sched.VideoMeetingID != ""
 		if hasManualLink && !hasMeeting {
 			continue
 		}
 
-		platform := virtualPlatformForSchedule(*sched)
+		platform := virtualPlatformForSchedule(*sched, platformOverride)
 		if platform == "" {
 			// Virtual but no provider indicated. Skip and let
 			// publish validation reject it.
@@ -112,9 +125,10 @@ func (s *eventService) attachVideoMeetings(
 
 			// The join URL is unchanged on update, but reassigning is
 			// harmless and covers the case where the provider returns
-			// it anyway.
+			// it anyway. Route it to the field that matches the
+			// platform so URL-shape inference remains reliable.
 			if updated.JoinURL != "" {
-				sched.ZoomLink = updated.JoinURL
+				assignJoinLink(sched, platform, updated.JoinURL)
 			}
 
 			log.Printf("video: updated meeting %s for session %d on %s",
@@ -140,7 +154,15 @@ func (s *eventService) attachVideoMeetings(
 			continue
 		}
 
-		sched.ZoomLink = result.JoinURL
+		// Persist the platform so subsequent updates do not need to
+		// infer it from the link.
+		sched.Platform = platform
+
+		// Route the URL to the correct field. A Google Meet join URL
+		// must not land in ZoomLink; that would break subsequent
+		// inference and confuse display code.
+		assignJoinLink(sched, platform, result.JoinURL)
+
 		mid := result.ExternalID // platform-side ID, not the Nuruvent UUID
 		sched.VideoMeetingID = &mid
 
@@ -155,18 +177,63 @@ func (s *eventService) attachVideoMeetings(
 	return nil
 }
 
-// virtualPlatformForSchedule infers the platform from a schedule.
-// Returns "" when the schedule doesn't indicate one.
-func virtualPlatformForSchedule(s domain.EventSchedule) string {
-	if s.ZoomLink != "" {
-		return "zoom"
+// virtualPlatformForSchedule determines which video platform a
+// schedule should use.
+//
+// Priority:
+//  1. An explicit Platform field on the schedule.
+//  2. platformOverride, when non-empty. This lets the caller supply a
+//     platform for schedules that were created before the picker
+//     existed.
+//  3. The URL shape of an existing link (legacy rows with a link but
+//     no platform column set).
+//  4. Empty string — the caller skips and logs.
+//
+// Returning "" rather than defaulting to Zoom is deliberate.
+// Auto-creation requires an explicit choice; either the schedule
+// carries a platform, the caller supplies one, or a link exists whose
+// shape identifies the provider.
+func virtualPlatformForSchedule(s domain.EventSchedule, override string) string {
+	if s.Platform != "" {
+		return s.Platform
 	}
-	if s.MeetLink != "" {
-		return "google_meet"
+
+	if override != "" {
+		return override
 	}
-	// No link yet — this is the auto case. Default to zoom until the
-	// frontend sends a platform field explicitly.
-	return "zoom"
+
+	link := s.ZoomLink
+	if link == "" {
+		link = s.MeetLink
+	}
+
+	switch {
+	case strings.Contains(link, "zoom.us"):
+		return domain.VideoPlatformZoom
+	case strings.Contains(link, "meet.google.com"):
+		return domain.VideoPlatformGoogleMeet
+	}
+
+	return ""
+}
+
+// assignJoinLink writes a platform's join URL to the schedule field
+// that matches the platform.
+//
+// Keeping Zoom and Meet links in their respective fields means
+// URL-shape inference remains reliable for legacy rows and display
+// code can show the correct link without inspecting prefixes.
+func assignJoinLink(sched *domain.EventSchedule, platform, url string) {
+	switch platform {
+	case domain.VideoPlatformZoom:
+		sched.ZoomLink = url
+	case domain.VideoPlatformGoogleMeet:
+		sched.MeetLink = url
+	default:
+		// Unknown platform: fall back to ZoomLink for backward
+		// compatibility with anything that reads it.
+		sched.ZoomLink = url
+	}
 }
 
 // combineScheduleStart merges StartDate + StartTime in the schedule's
@@ -219,4 +286,3 @@ func scheduleDuration(s domain.EventSchedule) time.Duration {
 	}
 	return end.Sub(start)
 }
-

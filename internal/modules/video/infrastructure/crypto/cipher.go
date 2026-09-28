@@ -26,9 +26,9 @@ type AESGCMCipher struct {
 	gcm cipher.AEAD
 }
 
-// NewAESGCMCipher constructs a cipher from a base64-encoded 32-byte key.
+// NewAESGCMCipher constructs a cipher from a base64-encoded 32-byte key. 
 func NewAESGCMCipher(base64Key string) (*AESGCMCipher, error) {
-	key, err := base64.StdEncoding.DecodeString(base64Key)
+	key, err := base64.StdEncoding.DecodeString(base64Key) // returns key and error
 	if err != nil {
 		return nil, fmt.Errorf("decode encryption key: %w", err)
 	}

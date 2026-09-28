@@ -12,6 +12,7 @@ import (
 	videoHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/delivery/http"
 	videoCrypto "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/infrastructure/crypto"
 	videoPostgres "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/infrastructure/postgres"
+	googleMeetProvider "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/infrastructure/providers/googlemeet"
 	zoomProvider "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/infrastructure/providers/zoom"
 	videodomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/videodomain"
 	videoService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/service"
@@ -43,6 +44,7 @@ var ProviderSet = wire.NewSet(
 
 	// Provider clients
 	ProvideZoomClient,
+	ProvideGoogleMeetClient,
 	ProvideClientRegistry,
 
 	// Service dependencies
@@ -83,29 +85,77 @@ func ProvideTokenCipher(cfg *config.Config) (videodomain.TokenCipher, error) {
 }
 
 // ============================================================
+// PROVIDER CLIENT TYPES
+// ============================================================
+//
+// Wire resolves dependencies by type identity. Two parameters of the
+// same interface type (videodomain.ProviderClient) are ambiguous —
+// wire cannot decide which provider's output goes to which parameter.
+//
+// These named types give each platform's client a distinct identity
+// in the injection graph. They are aliases in behavior: any value of
+// ZoomClient or GoogleMeetClient satisfies videodomain.ProviderClient,
+// because the underlying type is the same interface. The distinction
+// exists only for wire's benefit.
+type (
+	// ZoomClient is the Zoom provider client, distinct in wire's
+	// graph from GoogleMeetClient.
+	ZoomClient videodomain.ProviderClient
+
+	// GoogleMeetClient is the Google Meet provider client, distinct
+	// in wire's graph from ZoomClient.
+	GoogleMeetClient videodomain.ProviderClient
+)
+
+// ============================================================
 // PROVIDER CLIENTS
 // ============================================================
 
-// provideZoomClient constructs the Zoom client from config, or returns
-// nil if Zoom OAuth isn't configured.
-func ProvideZoomClient(cfg *config.Config) videodomain.ProviderClient {
+// ProvideZoomClient constructs the Zoom client from config, or
+// returns nil if Zoom OAuth isn't configured.
+//
+// The return type is the named ZoomClient so wire can distinguish it
+// from GoogleMeetClient.
+func ProvideZoomClient(cfg *config.Config) ZoomClient {
 	if !cfg.Video.ZoomOAuth.IsConfigured() {
 		return nil
 	}
 	return zoomProvider.NewClient(cfg.Video.ZoomOAuth)
 }
 
-// provideClientRegistry builds the registry from configured clients.
+// ProvideGoogleMeetClient constructs the Google Meet client from
+// config, or returns nil if Google Meet OAuth isn't configured.
+//
+// The return type is the named GoogleMeetClient so wire can
+// distinguish it from ZoomClient.
+func ProvideGoogleMeetClient(cfg *config.Config) GoogleMeetClient {
+	if !cfg.Video.GoogleMeetOAuth.IsConfigured() {
+		return nil
+	}
+	return googleMeetProvider.NewClient(cfg.Video.GoogleMeetOAuth)
+}
+
+// ProvideClientRegistry builds the registry from configured clients.
 //
 // Platforms that aren't configured are simply not registered. The
 // service returns ErrUnsupportedPlatform when asked for one.
+//
+// The parameters are the named types, so wire can resolve them
+// unambiguously. Inside, they are converted back to the interface
+// type for storage in the registry map.
 func ProvideClientRegistry(
-	zoom videodomain.ProviderClient,
+	zoom ZoomClient,
+	googleMeet GoogleMeetClient,
 ) videodomain.ClientRegistry {
 	clients := make(map[videodomain.Platform]videodomain.ProviderClient)
+
 	if zoom != nil {
-		clients[videodomain.PlatformZoom] = zoom
+		clients[videodomain.PlatformZoom] = videodomain.ProviderClient(zoom)
 	}
+	if googleMeet != nil {
+		clients[videodomain.PlatformGoogleMeet] = videodomain.ProviderClient(googleMeet)
+	}
+
 	return videoService.NewClientRegistry(clients)
 }
 

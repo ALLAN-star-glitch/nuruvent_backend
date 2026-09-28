@@ -207,7 +207,6 @@ type Event struct {
 // DOMAIN RESOLUTION METHODS
 // ============================================================
 
-
 // ResolveAccountDomain returns the account domain string for inheritance fallback
 func (e *Event) ResolveAccountDomain() string {
 	if e.AccountID == "" {
@@ -221,7 +220,6 @@ func (e *Event) ResolveAccountDomain() string {
 // ============================================================
 
 // EventSchedule represents a schedule for multi-day events
-
 type EventSchedule struct {
 	ID            string
 	EventID       string
@@ -234,8 +232,19 @@ type EventSchedule struct {
 	Timezone      string
 	Location      string
 	IsVirtual     bool
-	ZoomLink      string
-	MeetLink      string
+
+	// Platform is the video provider chosen for this schedule.
+	// One of "zoom", "google_meet", or "" when not yet chosen.
+	//
+	// Populated by the frontend when the host selects a provider,
+	// and written back by the video integration service after a
+	// meeting is auto-created. Used in preference to URL-shape
+	// inference so that subsequent updates route to the correct
+	// provider even after the join URL has been persisted.
+	Platform string
+
+	ZoomLink string
+	MeetLink string
 
 	// VideoMeetingID references video_meetings.id when the meeting was
 	// created automatically by the video module. Nil for manually-pasted
@@ -244,12 +253,13 @@ type EventSchedule struct {
 
 	MaxAttendees *int
 }
+
 // EventTicket represents a ticket type for an event
 type EventTicket struct {
 	ID                string
 	EventID           string
 	TicketTypeID      string
-	TicketType        *TicketTypeRow 
+	TicketType        *TicketTypeRow
 	Name              string
 	Description       string
 	Price             float64
@@ -301,6 +311,32 @@ type EventInvitation struct {
 	DeclinedAt *time.Time
 	Token      string
 	ExpiresAt  *time.Time
+}
+
+// ============================================================
+// VIDEO PLATFORM HELPERS
+// ============================================================
+
+// Supported video platforms. These match the slugs accepted by the
+// video module's Platform type and by the ClientRegistry.
+const (
+	VideoPlatformZoom       = "zoom"
+	VideoPlatformGoogleMeet = "google_meet"
+)
+
+// validVideoPlatforms is the set of platform slugs the video module
+// supports. Used by validation to reject unknown platforms before
+// they reach the provider layer.
+var validVideoPlatforms = map[string]bool{
+	VideoPlatformZoom:       true,
+	VideoPlatformGoogleMeet: true,
+}
+
+// IsValidVideoPlatform reports whether slug names a supported video
+// platform. The empty string returns false; callers should check
+// for it separately when the distinction matters.
+func IsValidVideoPlatform(slug string) bool {
+	return validVideoPlatforms[slug]
 }
 
 // ============================================================
@@ -429,6 +465,25 @@ func (e *Event) ValidateForPublish() error {
 			}
 			if schedule.EndTime == "" {
 				validationErrors = append(validationErrors, fmt.Sprintf("schedule %d: end time is required", i+1))
+			}
+
+			// Virtual schedules require either a manual link or an
+			// explicit platform so the video integration knows which
+			// provider to call. A manual link means the host pasted
+			// the URL themselves; an explicit platform means Nuruvent
+			// will create the meeting.
+			if schedule.IsVirtual {
+				hasManualLink := schedule.ZoomLink != "" || schedule.MeetLink != ""
+
+				if !hasManualLink && schedule.Platform == "" {
+					validationErrors = append(validationErrors,
+						fmt.Sprintf("schedule %d: choose a video platform (zoom or google_meet) for virtual sessions", i+1))
+				}
+
+				if schedule.Platform != "" && !IsValidVideoPlatform(schedule.Platform) {
+					validationErrors = append(validationErrors,
+						fmt.Sprintf("schedule %d: unsupported platform %q", i+1, schedule.Platform))
+				}
 			}
 		}
 	}

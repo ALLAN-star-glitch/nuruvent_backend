@@ -201,19 +201,25 @@ type UpdateEventRequest struct {
 
 // ScheduleRequest represents a schedule for multi-day events
 type ScheduleRequest struct {
-	ID            string  `json:"id,omitempty"`
-	StartDate     string  `json:"start_date" binding:"required"`
-	EndDate       string  `json:"end_date,omitempty"`
-	StartTime     string  `json:"start_time" binding:"required"`
-	EndTime       string  `json:"end_time" binding:"required"`
-	Timezone      string  `json:"timezone,omitempty"`
-	SessionName   string  `json:"session_name,omitempty"`
-	SessionNumber int     `json:"session_number,omitempty"`
-	Location      string  `json:"location,omitempty"`
-	IsVirtual     bool    `json:"is_virtual"`
-	ZoomLink      string  `json:"zoom_link,omitempty"`
-	MeetLink      string  `json:"meet_link,omitempty"`
-	MaxAttendees  *int    `json:"max_attendees,omitempty"`
+	ID            string `json:"id,omitempty"`
+	StartDate     string `json:"start_date" binding:"required"`
+	EndDate       string `json:"end_date,omitempty"`
+	StartTime     string `json:"start_time" binding:"required"`
+	EndTime       string `json:"end_time" binding:"required"`
+	Timezone      string `json:"timezone,omitempty"`
+	SessionName   string `json:"session_name,omitempty"`
+	SessionNumber int    `json:"session_number,omitempty"`
+	Location      string `json:"location,omitempty"`
+	IsVirtual     bool   `json:"is_virtual"`
+
+	// Platform selects the video provider for this schedule. One of
+	// "zoom" or "google_meet". Omit for in-person sessions or when
+	// the schedule carries a manually-pasted link.
+	Platform string `json:"platform,omitempty" binding:"omitempty,oneof=zoom google_meet"`
+
+	ZoomLink     string `json:"zoom_link,omitempty"`
+	MeetLink     string `json:"meet_link,omitempty"`
+	MaxAttendees *int   `json:"max_attendees,omitempty"`
 }
 
 // RecurrenceRequest represents recurrence configuration
@@ -407,6 +413,7 @@ type CertificateTemplateDTO struct {
 }
 
 // ScheduleDTO - Schedule response
+// ScheduleDTO - Schedule response
 type ScheduleDTO struct {
 	ID             string `json:"id"`
 	SessionName    string `json:"session_name,omitempty"`
@@ -418,6 +425,7 @@ type ScheduleDTO struct {
 	Timezone       string `json:"timezone"`
 	Location       string `json:"location,omitempty"`
 	IsVirtual      bool   `json:"is_virtual"`
+	Platform       string `json:"platform,omitempty"`
 	ZoomLink       string `json:"zoom_link,omitempty"`
 	MeetLink       string `json:"meet_link,omitempty"`
 	VideoMeetingID string `json:"video_meeting_id,omitempty"`

@@ -53,14 +53,16 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
 		if cmd.Schedules != nil {
 		deriveEventFromSchedules(event)
 
+			
 		// Create meetings for any newly-added virtual sessions.
 		// Existing sessions keep their VideoMeetingID and are skipped
 		// by attachVideoMeetings.
-		if err := s.attachVideoMeetings(ctx, event, cmd.UpdatedBy); err != nil {
+		if err := s.attachVideoMeetings(ctx, event, cmd.UpdatedBy, ""); err != nil {
 			log.Printf("⚠️ video integration: %v", err)
 		}
 	}
 
+	
 	// 6. Save to database.
 	if err := s.saveUpdatedEvent(ctx, event); err != nil {
 		return nil, err

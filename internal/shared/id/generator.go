@@ -8,6 +8,8 @@ type Generator interface {
 	NewID() string
 }
 
+
+
 // UUIDGenerator produces random UUID v4 strings.
 type UUIDGenerator struct{}
 

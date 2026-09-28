@@ -89,7 +89,7 @@ func (s *videoService) DeleteMeeting(
 	return s.deleteLocalMeeting(ctx, meeting.ID)
 }
 
-// deleteLocalMeeting removes the meeting row.
+// deleteLocalMeeting removes the meeting row. This function executes a safe, atomic database deletion using the Unit of Work callback pattern ... remember unit of work is just an interface  
 func (s *videoService) deleteLocalMeeting(ctx context.Context, meetingID string) error {
 	return s.deps.UnitOfWork.Do(ctx, func(repos videodomain.Repositories) error {
 		if err := repos.Meetings.Delete(ctx, meetingID); err != nil {

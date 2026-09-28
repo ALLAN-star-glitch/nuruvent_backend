@@ -25,7 +25,6 @@ func (s *eventService) convertSchedules(inputs []ScheduleInput) ([]domain.EventS
 
 	schedules := make([]domain.EventSchedule, len(inputs))
 for i, input := range inputs {
-	 log.Printf("🔎 convertSchedules[%d]: input.ID=%v", i, input.ID)
     startDate, err := time.Parse("2006-01-02", input.StartDate)
     if err != nil {
         return nil, fmt.Errorf("invalid start_date format: %w", err)
@@ -40,7 +39,7 @@ for i, input := range inputs {
         endDate = &parsed
     }
 
-	
+
 
     // ScheduleInput.ID is *string; EventSchedule.ID is string.
     // Dereference only when non-nil, otherwise leave empty (new schedule).
@@ -61,6 +60,7 @@ for i, input := range inputs {
         Timezone:      input.Timezone,
         Location:      input.Location,
         IsVirtual:     input.IsVirtual,
+		Platform:      input.Platform,
         ZoomLink:      input.ZoomLink,
         MeetLink:      input.MeetLink,
         MaxAttendees:  input.MaxAttendees,

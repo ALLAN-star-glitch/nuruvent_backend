@@ -196,6 +196,7 @@ func convertScheduleRequestsToInputs(reqs []ScheduleRequest) []service.ScheduleI
 			SessionNumber: r.SessionNumber,
 			Location:      r.Location,
 			IsVirtual:     r.IsVirtual,
+			Platform:      r.Platform,
 			ZoomLink:      r.ZoomLink,
 			MeetLink:      r.MeetLink,
 			MaxAttendees:  r.MaxAttendees,
