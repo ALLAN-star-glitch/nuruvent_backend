@@ -12,6 +12,7 @@ import (
 type Handlers struct {
 	OAuth      *OAuthHandler
 	Connection *ConnectionHandler
+	MeetingSDK *MeetingSDKHandler
 }
 
 // NewHandlers constructs all handlers.
@@ -19,6 +20,7 @@ func NewHandlers(svc service.Service) *Handlers {
 	return &Handlers{
 		OAuth:      NewOAuthHandler(svc),
 		Connection: NewConnectionHandler(svc),
+		MeetingSDK: NewMeetingSDKHandler(svc),
 	}
 }
 
@@ -38,4 +40,15 @@ func RegisterRoutes(
 	r.Get("/oauth/:platform/connect", authMiddleware, h.OAuth.Connect)
 	r.Get("/connections", authMiddleware, h.Connection.List)
 	r.Post("/connections/:platform/disconnect", authMiddleware, h.Connection.Disconnect)
+
+	// ---- Meeting SDK (embedded frontend) ----
+	// Signature issues a short-lived JWT that authorizes the browser
+	// to join a specific meeting. ZAK returns the host's Zoom Access
+	// Key token for embedded host controls. Join-info wraps both for
+	// the meeting page: it loads the meeting, decides the caller's
+	// role, and returns everything the SDK needs in one response.
+	r.Post("/meetings/signature", authMiddleware, h.MeetingSDK.Signature)
+	r.Get("/meetings/zak", authMiddleware, h.MeetingSDK.ZAK)
+	r.Get("/meetings/:id/join-info", authMiddleware, h.MeetingSDK.JoinInfo)
 }
+

@@ -11,6 +11,12 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 )
 
+
+
+
+
+
+
 // mapDomainError translates video domain errors into HTTP responses.
 //
 // Unknown errors fall through to a 500 with a generic message. The
@@ -55,9 +61,16 @@ func mapDomainError(c fiber.Ctx, err error) error {
 	case errors.Is(err, videodomain.ErrRefreshTokenExpired):
 		return response.UnprocessableEntity(c, "Your session with the platform expired; please reconnect", nil)
 
+	// The platform was reached and understood the request, but refused
+	// it. Usually a missing scope or a stale credential. Not retryable
+	// without a user action.
+	case errors.Is(err, videodomain.ErrPlatformRejected):
+		return response.UnprocessableEntity(c, "The video platform rejected the request; you may need to reconnect", nil)
+
 	// ---- 502 Bad Gateway ----
+	// The platform could not be reached, or replied with a server error.
+	// Retryable.
 	case errors.Is(err, videodomain.ErrPlatformUnavailable),
-		errors.Is(err, videodomain.ErrPlatformRejected),
 		errors.Is(err, videodomain.ErrPlatformTimeout):
 		return response.BadGateway(c, "The video platform is unavailable; please try again shortly", err)
 

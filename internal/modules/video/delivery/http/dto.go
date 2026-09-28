@@ -55,3 +55,32 @@ type ListConnectionsResponse struct {
 	Count       int                   `json:"count"`
 	Connections []*ConnectionResponse `json:"connections"`
 }
+
+// GenerateSignatureRequest is the body of POST /meetings/signature.
+type GenerateSignatureRequest struct {
+	Platform      string `json:"platform" validate:"required,oneof=zoom google_meet"`
+	MeetingNumber string `json:"meeting_number" validate:"required"`
+	Role          int    `json:"role" validate:"oneof=0 1"`
+}
+
+// SignatureResponse is returned by POST /meetings/signature.
+type SignatureResponse struct {
+	Signature string `json:"signature"`
+	SDKKey    string `json:"sdk_key"`
+}
+
+// ZAKResponse is returned by GET /meetings/zak.
+type ZAKResponse struct {
+	ZAK string `json:"zak"`
+}
+
+// JoinInfoResponse is returned by GET /meetings/:id/join-info.
+type JoinInfoResponse struct {
+	MeetingNumber string `json:"meeting_number"`
+	Signature     string `json:"signature"`
+	SDKKey        string `json:"sdk_key"`
+	Password      string `json:"password"`
+	WebEndpoint   string `json:"web_endpoint"`
+	ZAK           string `json:"zak,omitempty"`
+	Role          int    `json:"role"`
+}

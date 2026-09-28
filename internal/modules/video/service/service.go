@@ -79,4 +79,14 @@ type Service interface {
 	// CleanupExpiredOAuthStates removes oauth_state rows past their
 	// expiry window. Called by a background job.
 	CleanupExpiredOAuthStates(ctx context.Context) (int, error)
+
+
+
+
+	GenerateMeetingSignature(ctx context.Context, cmd GenerateMeetingSignatureCommand) (*videodomain.MeetingSignature, error)
+    FetchMeetingZAK(ctx context.Context, cmd FetchMeetingZAKCommand) (*videodomain.MeetingZAK, error)
+
+
+	GetMeetingJoinInfo(ctx context.Context, cmd GetMeetingJoinInfoCommand) (*MeetingJoinInfo, error)
 }
+

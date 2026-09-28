@@ -112,3 +112,37 @@ type DeleteMeetingCommand struct {
 	Platform   videodomain.Platform
 	ExternalID string
 }
+
+
+
+// GenerateMeetingSignatureCommand is the input to
+// GenerateMeetingSignature.
+type GenerateMeetingSignatureCommand struct {
+	UserID        string
+	Platform      videodomain.Platform
+	MeetingNumber string
+	Role          int // 0 = attendee, 1 = host
+}
+
+// FetchMeetingZAKCommand is the input to FetchMeetingZAK.
+type FetchMeetingZAKCommand struct {
+	UserID   string
+	Platform videodomain.Platform
+}
+
+type MeetingJoinInfo struct {
+    MeetingNumber string
+    Signature     string
+    SDKKey        string
+    Password      string // Zoom meeting passcode (plaintext, from create response)
+	WebEndpoint   string
+    ZAK           string // empty for attendees
+    Role          int    // 1 = host, 0 = attendee
+}
+
+
+type GetMeetingJoinInfoCommand struct {
+    UserID     string
+    Platform   videodomain.Platform
+    ExternalID string
+}
