@@ -45,6 +45,11 @@ func (h *SessionHandler) RegisterAttendee(c fiber.Ctx) error {
 
 // RegisterAttendeeForExternal handles
 // POST /attendees/:id/register-for-external.
+//
+// Registers the attendee for every session under the external
+// reference, issues a join token per session, and returns the
+// resulting links. When the request carries a public_base_url, each
+// link includes a full join URL.
 func (h *SessionHandler) RegisterAttendeeForExternal(c fiber.Ctx) error {
 	attendeeID := c.Params("id")
 	if attendeeID == "" {
@@ -56,15 +61,36 @@ func (h *SessionHandler) RegisterAttendeeForExternal(c fiber.Ctx) error {
 		return response.BadRequest(c, "Invalid request body", fiber.Map{"error": err.Error()})
 	}
 
-	err := h.svc.RegisterAttendeeForExternal(c.Context(), service.RegisterAttendeeForExternalCommand{
-		AttendeeID: attendeeID,
-		External:   attendance.ExternalRef{Type: body.ExternalType, ID: body.ExternalID},
-	})
+	var grace time.Duration
+	if body.LinkGrace != "" {
+		d, err := time.ParseDuration(body.LinkGrace)
+		if err != nil {
+			return response.BadRequest(c, "Invalid link_grace duration", nil)
+		}
+		grace = d
+	}
+
+	result, err := h.svc.RegisterAttendeeForExternal(
+		c.Context(),
+		service.RegisterAttendeeForExternalCommand{
+			AttendeeID:    attendeeID,
+			External:      attendance.ExternalRef{Type: body.ExternalType, ID: body.ExternalID},
+			PublicBaseURL: body.PublicBaseURL,
+			LinkGrace:     grace,
+		},
+	)
 	if err != nil {
 		return mapDomainError(c, err)
 	}
 
-	return response.Success(c, "Attendee registered for external reference", nil)
+	return response.Success(
+		c,
+		"Attendee registered for external reference",
+		&RegisterAttendeeForExternalResponse{
+			AttendeeID: result.AttendeeID,
+			Links:      toAttendeeSessionLinksResponse(result.Links),
+		},
+	)
 }
 
 // UpsertSession handles POST /sessions.
@@ -96,6 +122,9 @@ func (h *SessionHandler) UpsertSession(c fiber.Ctx) error {
 }
 
 // IssueJoinToken handles POST /sessions/:id/join-tokens.
+//
+// Returns the raw token, its expiry, and — when the caller passes a
+// public_base_url in the request body — a full join URL.
 func (h *SessionHandler) IssueJoinToken(c fiber.Ctx) error {
 	sessionID := c.Params("id")
 	if sessionID == "" {
@@ -116,24 +145,21 @@ func (h *SessionHandler) IssueJoinToken(c fiber.Ctx) error {
 		grace = d
 	}
 
-	rawToken, err := h.svc.IssueJoinToken(c.Context(), service.IssueJoinTokenCommand{
-		AttendeeID: body.AttendeeID,
-		SessionID:  sessionID,
-		Grace:      grace,
+	result, err := h.svc.IssueJoinToken(c.Context(), service.IssueJoinTokenCommand{
+		AttendeeID:    body.AttendeeID,
+		SessionID:     sessionID,
+		Grace:         grace,
+		PublicBaseURL: body.PublicBaseURL,
 	})
 	if err != nil {
 		return mapDomainError(c, err)
 	}
 
-	// The service doesn't tell us the exact expiry — we only know the
-	// grace value. Return the raw token; the caller can compute the
-	// expiry or ignore it.
-	resp := &IssueJoinTokenResponse{
-		RawToken: rawToken,
-		JoinURL:  c.BaseURL() + "/join/" + rawToken,
-	}
-
-	return response.Created(c, "Join token issued", resp)
+	return response.Created(c, "Join token issued", &IssueJoinTokenResponse{
+		RawToken:  result.RawToken,
+		ExpiresAt: result.ExpiresAt,
+		JoinURL:   result.JoinURL,
+	})
 }
 
 // RevokeJoinTokens handles DELETE /sessions/:id/join-tokens.

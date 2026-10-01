@@ -29,6 +29,12 @@ type AttendeeSessionStatus struct {
 	ConfirmReason   string
 
 	LastDerivedAt time.Time
+
+	 // Populated by the repository when the query joins attendees.
+    // Read-only: derived from the attendee row, not stored on this
+    // table.
+    DisplayName string
+    Email       string
 }
 
 // NewAttendeeSessionStatus constructs a fresh status for a

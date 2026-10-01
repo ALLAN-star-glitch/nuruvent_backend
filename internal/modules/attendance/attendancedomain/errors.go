@@ -33,4 +33,9 @@ var (
 
 	// Status derivation
 	ErrInvalidStatusTransition = errors.New("invalid status transition")
+
+
+
+	ErrParticipantUnmatched = errors.New("participant unmatched")
 )
+

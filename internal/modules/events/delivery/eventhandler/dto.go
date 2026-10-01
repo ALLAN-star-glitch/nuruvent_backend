@@ -412,24 +412,35 @@ type CertificateTemplateDTO struct {
 	PreviewURL  string `json:"preview_url"`
 }
 
-// ScheduleDTO - Schedule response
-// ScheduleDTO - Schedule response
+// ScheduleDTO is the wire format for one event schedule.
+//
+// VideoMeetingID and VideoMeetingExternalID are distinct:
+//
+//   - VideoMeetingID is the Nuruvent UUID (FK to video_meetings.id),
+//     used to address meeting-scoped endpoints like
+//     POST /video/meetings/:id/fetch-attendance.
+//
+//   - VideoMeetingExternalID is the platform-side code
+//     ("spaces/abc-defg-hij" for Google Meet, numeric ID for Zoom),
+//     matching video_meetings.external_id. It is the value join URLs
+//     are built from — never use VideoMeetingID for that.
 type ScheduleDTO struct {
-	ID             string `json:"id"`
-	SessionName    string `json:"session_name,omitempty"`
-	SessionNumber  int    `json:"session_number,omitempty"`
-	StartDate      string `json:"start_date"`
-	EndDate        string `json:"end_date,omitempty"`
-	StartTime      string `json:"start_time"`
-	EndTime        string `json:"end_time"`
-	Timezone       string `json:"timezone"`
-	Location       string `json:"location,omitempty"`
-	IsVirtual      bool   `json:"is_virtual"`
-	Platform       string `json:"platform,omitempty"`
-	ZoomLink       string `json:"zoom_link,omitempty"`
-	MeetLink       string `json:"meet_link,omitempty"`
-	VideoMeetingID string `json:"video_meeting_id,omitempty"`
-	MaxAttendees   int    `json:"max_attendees,omitempty"`
+	ID             string  `json:"id"`
+	SessionName    string  `json:"session_name,omitempty"`
+	SessionNumber  int     `json:"session_number,omitempty"`
+	StartDate      string  `json:"start_date"`
+	EndDate        string  `json:"end_date,omitempty"`
+	StartTime      string  `json:"start_time"`
+	EndTime        string  `json:"end_time"`
+	Timezone       string  `json:"timezone"`
+	Location       string  `json:"location,omitempty"`
+	IsVirtual      bool    `json:"is_virtual"`
+	Platform       string  `json:"platform,omitempty"`
+	ZoomLink       string  `json:"zoom_link,omitempty"`
+	MeetLink       string  `json:"meet_link,omitempty"`
+	VideoMeetingID *string `json:"video_meeting_id,omitempty"`
+	VideoMeetingExternalID string `json:"video_meeting_external_id,omitempty"`
+	MaxAttendees   int     `json:"max_attendees,omitempty"`
 }
 
 // TicketDTO - Ticket response
@@ -695,4 +706,9 @@ type GenerateEventDraftRequest struct {
 	MaxCapacity   int      `json:"max_capacity,omitempty"`
 
 	Recurrence *RecurrenceRequest `json:"recurrence,omitempty"`
+}
+
+// ReorderSchedulesRequest - Body for POST /events/:id/schedules/reorder
+type ReorderSchedulesRequest struct {
+	OrderedIDs []string `json:"ordered_ids" binding:"required,min=1,dive,uuid"`
 }

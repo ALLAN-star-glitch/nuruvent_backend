@@ -26,3 +26,26 @@ func (r ExternalRef) IsValid() bool {
 func (r ExternalRef) Equals(other ExternalRef) bool {
 	return r.Type == other.Type && r.ID == other.ID
 }
+
+
+// EmailRequired reports whether attendees referenced by this type of
+// external ref must have an email address.
+//
+// Registration-based sources (event registrations, course
+// enrolments) always carry an email — the platform collected it at
+// signup time. Platform observation sources (e.g. participants
+// observed from a video provider's API) do not: the source platform
+// may not expose an email at all.
+//
+// New attendee-referencing types should be added to the switch when
+// the platform guarantees an email. Everything else defaults to
+// "email not required", which is the permissive choice — the
+// alternative would silently reject new sources.
+func (r ExternalRef) EmailRequired() bool {
+	switch r.Type {
+	case "event_registration", "course_enrolment":
+		return true
+	default:
+		return false
+	}
+}

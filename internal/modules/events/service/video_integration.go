@@ -29,16 +29,27 @@ import (
 //   - If none of the above yields a platform, the schedule is skipped
 //     and logged; publish validation surfaces the missing provider.
 //
-// After a meeting is created, the chosen platform is written back to
-// the schedule so subsequent updates do not need to infer it.
+// After a meeting is created, the chosen platform and both meeting
+// identifiers are written back to the schedule:
+//
+//   - VideoMeetingID          — the Nuruvent UUID (video_meetings.id)
+//   - VideoMeetingExternalID  — the platform code (spaces/..., Zoom ID)
+//
+// The two are distinct and are stored in distinct fields. Attendance
+// sync reads VideoMeetingExternalID so it never has to parse a URL.
+//
+// A schedule is considered to "have a meeting" only when BOTH IDs are
+// present. A schedule with a UUID but no external ID is a half-broken
+// row from a previous write; it is recreated rather than updated, so
+// the platform code gets populated.
 //
 // Rules:
 //   - In-person schedules are skipped.
-//   - Schedules with a manual link and no VideoMeetingID are skipped
+//   - Schedules with a manual link and no valid meeting are skipped
 //     (true manual mode).
-//   - Schedules with a VideoMeetingID are updated on the platform
+//   - Schedules with a valid meeting are updated on the platform
 //     (topic, start time, duration, timezone).
-//   - Schedules with no meeting and no manual link are created.
+//   - Schedules with no meeting (or an incomplete one) are created.
 //   - If the host is not connected, the schedule is skipped and a
 //     warning is logged. Publish validation surfaces the missing
 //     link to the caller.
@@ -53,7 +64,6 @@ func (s *eventService) attachVideoMeetings(
 	platformOverride string,
 ) error {
 	if s.video == nil {
-		// Video integration disabled (adapter not wired).
 		return nil
 	}
 
@@ -69,20 +79,36 @@ func (s *eventService) attachVideoMeetings(
 			continue
 		}
 
-		// A schedule with a manual link but no Nuruvent-managed meeting
-		// is a true manual link — the host pasted a URL and we should
-		// leave it alone. A schedule with a VideoMeetingID is an
-		// auto-created meeting that should be updated.
+		// The platform the schedule *should* have. Resolved before we
+		// decide whether the existing meeting is valid, so we can
+		// check the two for agreement.
+		platform := virtualPlatformForSchedule(*sched, platformOverride)
+
+		// A manual link with no valid meeting is true manual mode.
+		// Checked before hasMeeting so a legacy row with a pasted
+		// link and no meeting row doesn't get auto-created over.
+		hasAnyID := sched.VideoMeetingID != nil &&
+			*sched.VideoMeetingID != "" &&
+			sched.VideoMeetingExternalID != ""
 		hasManualLink := sched.ZoomLink != "" || sched.MeetLink != ""
-		hasMeeting := sched.VideoMeetingID != nil && *sched.VideoMeetingID != ""
-		if hasManualLink && !hasMeeting {
+		if hasManualLink && !hasAnyID {
 			continue
 		}
 
-		platform := virtualPlatformForSchedule(*sched, platformOverride)
+		// Determine whether the schedule has a *usable* meeting:
+		// both IDs present AND the external ID shape matches the
+		// platform we'd create on.
+		hasMeeting := hasAnyID && externalIDMatchesPlatform(
+			sched.VideoMeetingExternalID, platform,
+		)
+
+		// Stale meeting: a fully-linked row whose external ID doesn't
+		// match the schedule's current platform. e.g. the platform
+		// was switched in the editor but the meeting row still points
+		// at the previous provider.
+		hasStaleMeeting := hasAnyID && !hasMeeting
+
 		if platform == "" {
-			// Virtual but no provider indicated. Skip and let
-			// publish validation reject it.
 			log.Printf("video: schedule %d is virtual but has no provider",
 				sched.SessionNumber)
 			continue
@@ -104,13 +130,58 @@ func (s *eventService) attachVideoMeetings(
 		duration := scheduleDuration(*sched)
 
 		// ─────────────────────────────────────────────────────────
-		// Case 1: schedule already has a meeting — update it.
+		// Stale meeting: delete the old one before creating a new one
+		// so we don't orphan a row on the previous platform.
+		//
+		// Delete is best-effort. If it fails we still clear the local
+		// fields so the create branch below runs.
+		// ─────────────────────────────────────────────────────────
+		if hasStaleMeeting {
+			// We don't know which platform the OLD external ID
+			// belongs to. Try both; the module will reject the one
+			// that doesn't match.
+			for _, p := range []string{
+				domain.VideoPlatformZoom,
+				domain.VideoPlatformGoogleMeet,
+			} {
+				if err := s.video.DeleteMeeting(ctx, domain.VideoMeetingDeleteRequest{
+					UserID:     hostUserID,
+					Platform:   p,
+					ExternalID: sched.VideoMeetingExternalID,
+				}); err != nil {
+					// eslint-style: don't fail the whole pass over a
+					// stale cleanup miss.
+					log.Printf("video: cleanup stale meeting (platform=%s) session %d: %v",
+						p, sched.SessionNumber, err)
+					continue
+				}
+				// First successful delete wins.
+				break
+			}
+
+			// Clear the local pointers so the create branch below
+			// runs cleanly. The links are cleared too — they
+			// pointed at the wrong provider.
+			sched.VideoMeetingID = nil
+			sched.VideoMeetingExternalID = ""
+			sched.ZoomLink = ""
+			sched.MeetLink = ""
+
+			log.Printf("video: cleared stale meeting for session %d (was platform-mismatched)",
+				sched.SessionNumber)
+		}
+
+		// ─────────────────────────────────────────────────────────
+		// Case 1: schedule has a valid, platform-consistent meeting
+		// — update it.
 		// ─────────────────────────────────────────────────────────
 		if hasMeeting {
+			sched.Platform = platform
+
 			updated, err := s.video.UpdateMeeting(ctx, domain.UpdateVideoMeetingRequest{
 				UserID:     hostUserID,
 				Platform:   platform,
-				ExternalID: *sched.VideoMeetingID,
+				ExternalID: sched.VideoMeetingExternalID,
 				Topic:      sched.SessionName,
 				StartTime:  start,
 				Duration:   duration,
@@ -123,21 +194,21 @@ func (s *eventService) attachVideoMeetings(
 				continue
 			}
 
-			// The join URL is unchanged on update, but reassigning is
-			// harmless and covers the case where the provider returns
-			// it anyway. Route it to the field that matches the
-			// platform so URL-shape inference remains reliable.
 			if updated.JoinURL != "" {
 				assignJoinLink(sched, platform, updated.JoinURL)
 			}
+			if updated.ExternalID != "" {
+				sched.VideoMeetingExternalID = updated.ExternalID
+			}
 
 			log.Printf("video: updated meeting %s for session %d on %s",
-				updated.ExternalID, sched.SessionNumber, platform)
+				sched.VideoMeetingExternalID, sched.SessionNumber, platform)
 			continue
 		}
 
 		// ─────────────────────────────────────────────────────────
-		// Case 2: schedule has no meeting — create one.
+		// Case 2: create (no meeting, half-broken row, or stale
+		// meeting we just cleared).
 		// ─────────────────────────────────────────────────────────
 		result, err := s.video.CreateMeeting(ctx, domain.VideoMeetingRequest{
 			UserID:    hostUserID,
@@ -154,20 +225,15 @@ func (s *eventService) attachVideoMeetings(
 			continue
 		}
 
-		// Persist the platform so subsequent updates do not need to
-		// infer it from the link.
 		sched.Platform = platform
-
-		// Route the URL to the correct field. A Google Meet join URL
-		// must not land in ZoomLink; that would break subsequent
-		// inference and confuse display code.
 		assignJoinLink(sched, platform, result.JoinURL)
 
-		mid := result.ExternalID // platform-side ID, not the Nuruvent UUID
+		mid := result.MeetingID
 		sched.VideoMeetingID = &mid
+		sched.VideoMeetingExternalID = result.ExternalID
 
-		log.Printf("video: created meeting %s for session %d on %s",
-			result.ExternalID, sched.SessionNumber, platform)
+		log.Printf("video: created meeting %s (external=%s) for session %d on %s",
+			result.MeetingID, result.ExternalID, sched.SessionNumber, platform)
 	}
 
 	if len(errs) > 0 {
@@ -175,6 +241,19 @@ func (s *eventService) attachVideoMeetings(
 			len(errs), strings.Join(errs, "; "))
 	}
 	return nil
+}
+
+// externalIDForSchedule returns the platform-side meeting ID for a
+// schedule that already has an auto-created meeting.
+//
+// Only VideoMeetingExternalID is consulted. VideoMeetingID holds the
+// Nuruvent UUID, not a platform code, so falling back to it would
+// produce a value the video module cannot resolve.
+//
+// Deprecated: prefer reading sched.VideoMeetingExternalID directly.
+// Kept only for callers outside this file that still reference it.
+func externalIDForSchedule(sched domain.EventSchedule) string {
+	return sched.VideoMeetingExternalID
 }
 
 // virtualPlatformForSchedule determines which video platform a
@@ -285,4 +364,37 @@ func scheduleDuration(s domain.EventSchedule) time.Duration {
 		return 0
 	}
 	return end.Sub(start)
+}
+
+// externalIDMatchesPlatform reports whether an external meeting ID
+// looks like it belongs to the given platform.
+//
+// Google Meet external IDs always start with "spaces/". Zoom meeting
+// IDs are numeric strings. Anything else (empty, unknown shape) is
+// treated as a mismatch so the caller falls into the recreate branch
+// rather than trusting the row.
+func externalIDMatchesPlatform(externalID, platform string) bool {
+	if externalID == "" {
+		return false
+	}
+	switch platform {
+	case domain.VideoPlatformZoom:
+		return isAllDigits(externalID)
+	case domain.VideoPlatformGoogleMeet:
+		return strings.HasPrefix(externalID, "spaces/")
+	default:
+		return false
+	}
+}
+
+func isAllDigits(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }

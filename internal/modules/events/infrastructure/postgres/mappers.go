@@ -508,6 +508,7 @@ func toDomainSchedules(models []EventScheduleModel) []domain.EventSchedule {
 			ZoomLink:       m.ZoomLink,
 			MeetLink:       m.MeetLink,
 			VideoMeetingID: m.VideoMeetingID,
+			VideoMeetingExternalID: m.VideoMeetingExternalID,
 			MaxAttendees:   m.MaxAttendees,
 		}
 	}
@@ -533,6 +534,7 @@ func toModelSchedules(eventID string, schedules []domain.EventSchedule) []EventS
 			ZoomLink:       s.ZoomLink,
 			MeetLink:       s.MeetLink,
 			VideoMeetingID: s.VideoMeetingID,
+			VideoMeetingExternalID: s.VideoMeetingExternalID,
 			MaxAttendees:   s.MaxAttendees,
 		}
 	}
@@ -793,29 +795,32 @@ func convertDeletedAt(d gorm.DeletedAt) *time.Time {
 func toScheduleModel(eventID string, s domain.EventSchedule, sessionNumber int) *EventScheduleModel {
 	id := s.ID
 	if id == "" {
-		id = uuid.NewString() // or whatever your existing ID generator is
+		id = uuid.NewString()
 	}
 	sn := sessionNumber
 	if s.SessionNumber != 0 {
 		sn = s.SessionNumber
 	}
 
+	
 
 	return &EventScheduleModel{
-		ID:             id,
-		EventID:        eventID,
-		SessionName:    s.SessionName,
-		SessionNumber:  sn,
-		StartDate:      s.StartDate,
-		EndDate:        s.EndDate,
-		StartTime:      s.StartTime,
-		EndTime:        s.EndTime,
-		Timezone:       s.Timezone,
-		Location:       s.Location,
-		IsVirtual:      s.IsVirtual,
-		ZoomLink:       s.ZoomLink,
-		MeetLink:       s.MeetLink,
-		VideoMeetingID: s.VideoMeetingID,
-		MaxAttendees:   s.MaxAttendees,
+		ID:                     id,
+		EventID:                eventID,
+		SessionName:            s.SessionName,
+		SessionNumber:          sn,
+		StartDate:              s.StartDate,
+		EndDate:                s.EndDate,
+		StartTime:              s.StartTime,
+		EndTime:                s.EndTime,
+		Timezone:               s.Timezone,
+		Location:               s.Location,
+		IsVirtual:              s.IsVirtual,
+		Platform:               s.Platform,
+		ZoomLink:               s.ZoomLink,
+		MeetLink:               s.MeetLink,
+		VideoMeetingID:         s.VideoMeetingID,
+		VideoMeetingExternalID: s.VideoMeetingExternalID,
+		MaxAttendees:           s.MaxAttendees,
 	}
 }

@@ -42,10 +42,12 @@ func (s *attendanceService) IngestWebhook(
 //
 // Flow:
 //  1. Validate the event shape.
-//  2. Resolve the session by (provider, meeting_id).
-//  3. Match the participant to an attendee registered for that session.
-//  4. Record the join or leave.
-//  5. Recompute session statuses once.
+//  2. Session-level events (meeting.started, meeting.ended) branch off
+//     early — they have no participant to match.
+//  3. Resolve the session by (provider, meeting_id).
+//  4. Match the participant to an attendee registered for that session.
+//  5. Record the join or leave.
+//  6. Recompute session statuses once.
 //
 // Unmatched events are logged and ignored. Webhooks are noisy;
 // returning an error would trigger provider redelivery, and
@@ -63,6 +65,15 @@ func (s *attendanceService) ProcessWebhookEvent(
 	}
 	if !event.EventType.IsValid() {
 		return fmt.Errorf("%w: unknown event type %q", attendance.ErrInvalidSession, event.EventType)
+	}
+
+	// Session-level events have no participant. Handle them before
+	// the per-participant path below.
+	switch event.EventType {
+	case attendance.WebhookEventStarted:
+		return s.handleMeetingStarted(ctx, provider, event)
+	case attendance.WebhookEventEnded:
+		return s.handleMeetingEnded(ctx, provider, event)
 	}
 
 	// Resolve the session.
@@ -120,6 +131,96 @@ func (s *attendanceService) ProcessWebhookEvent(
 
 	return nil
 }
+
+// handleMeetingStarted processes a session-level meeting.started event.
+//
+// There is no participant to match and no row-level attendance to
+// write — this fires once when the host starts the meeting, before
+// any participant joins. What this hook is for:
+//
+//   - Flipping the session status to "live" so the UI can show a live
+//     indicator.
+//   - Future: emit real-time notifications, send "meeting is live"
+//     messages to registered attendees, etc.
+//
+// Best-effort: a session we've never seen before logs and returns nil,
+// because that's not a delivery error — the webhook is simply for a
+// meeting the attendance module doesn't track.
+func (s *attendanceService) handleMeetingStarted(
+	ctx context.Context,
+	provider attendance.SessionProvider,
+	event *attendance.WebhookEvent,
+) error {
+	session, err := s.findSessionByProviderMeeting(ctx, provider, event.ProviderMeetingID)
+	if err != nil {
+		if errors.Is(err, attendance.ErrSessionNotFound) {
+			log.Printf("[attendance] meeting.started: no session for provider=%s meeting=%s",
+				provider, event.ProviderMeetingID)
+			return nil
+		}
+		return err
+	}
+
+	if err := s.deps.UnitOfWork.Do(ctx, func(repos attendance.Repositories) error {
+		return repos.Sessions.UpdateStatus(ctx, session.ID, attendance.SessionStatusLive)
+	}); err != nil {
+		log.Printf("[attendance] meeting.started: status update failed session=%s err=%v",
+			session.ID, err)
+	}
+
+	log.Printf("[attendance] meeting.started: session=%s is live", session.ID)
+	return nil
+}
+
+// handleMeetingEnded processes a session-level meeting.ended event.
+//
+// There is no participant to match and no row-level attendance to
+// write — join/leave events already captured that. What this hook is
+// for:
+//
+//   - Marking the session as finished (so the UI can stop showing it
+//     as "in progress").
+//   - Running a final recompute so any stale rollups get refreshed.
+//   - Any future "close out the meeting" side effects.
+//
+// Best-effort: a session we've never seen before logs and returns nil,
+// because that's not a delivery error — the webhook is simply for a
+// meeting the attendance module doesn't track.
+func (s *attendanceService) handleMeetingEnded(
+	ctx context.Context,
+	provider attendance.SessionProvider,
+	event *attendance.WebhookEvent,
+) error {
+	session, err := s.findSessionByProviderMeeting(ctx, provider, event.ProviderMeetingID)
+	if err != nil {
+		if errors.Is(err, attendance.ErrSessionNotFound) {
+			log.Printf("[attendance] meeting.ended: no session for provider=%s meeting=%s",
+				provider, event.ProviderMeetingID)
+			return nil
+		}
+		return err
+	}
+
+	// Final recompute so per-session rollups reflect any last
+	// join/leave pairs that arrived just before the end event.
+	if err := s.RecomputeSessionStatuses(ctx, session.ID); err != nil {
+		log.Printf("[attendance] meeting.ended: recompute failed session=%s err=%v",
+			session.ID, err)
+	}
+
+	if err := s.deps.UnitOfWork.Do(ctx, func(repos attendance.Repositories) error {
+		return repos.Sessions.UpdateStatus(ctx, session.ID, attendance.SessionStatusEnded)
+	}); err != nil {
+		log.Printf("[attendance] meeting.ended: status update failed session=%s err=%v",
+			session.ID, err)
+	}
+
+	log.Printf("[attendance] meeting.ended: finalized session=%s", session.ID)
+	return nil
+}
+
+
+
 
 // findSessionByProviderMeeting loads a session by provider and meeting
 // ID.

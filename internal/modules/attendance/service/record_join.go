@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
@@ -20,9 +21,17 @@ import (
 // calling RecomputeSessionStatuses after this succeeds, once the
 // outer transaction (if any) has committed.
 //
-// Idempotency is not enforced here — every call creates a new record.
-// That's correct: an attendee can join multiple times (reconnects,
-// dual devices) and each interval should be recorded.
+// Idempotency:
+//   - If an open record already exists for (attendee, session), it is
+//     returned as-is. Reconnects and dual-device usage within a single
+//     open interval collapse into one record.
+//   - When the attendee leaves, the open record is closed by
+//     RecordLeave. A subsequent join opens a fresh record, which is
+//     the correct behavior for a genuine re-join.
+//
+// This is essential for pollers (Google Meet attendance): they
+// re-scan the same participants on every run, and without this check
+// each poll inserts a duplicate row.
 func (s *attendanceService) RecordJoin(
 	ctx context.Context,
 	cmd RecordJoinCommand,
@@ -53,6 +62,18 @@ func (s *attendanceService) RecordJoin(
 		}
 		if _, err := repos.Sessions.FindByID(ctx, cmd.SessionID); err != nil {
 			return fmt.Errorf("load session: %w", err)
+		}
+
+		// Idempotency: reuse an existing open record if one exists.
+		existing, err := repos.Records.FindOpenByAttendeeSession(
+			ctx, cmd.AttendeeID, cmd.SessionID,
+		)
+		if err == nil && existing != nil {
+			record = existing
+			return nil
+		}
+		if err != nil && !errors.Is(err, attendance.ErrInvalidAttendance) {
+			return fmt.Errorf("check open record: %w", err)
 		}
 
 		newRecord, err := attendance.NewAttendanceRecord(

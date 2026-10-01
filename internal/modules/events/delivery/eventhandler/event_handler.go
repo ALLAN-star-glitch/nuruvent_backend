@@ -1393,3 +1393,44 @@ func mapGenerateEventDraftError(c fiber.Ctx, err error) error {
 	// through the shared classifier.
 	return respondClassifiedError(c, "generate a draft", err)
 }
+
+// ============================================================
+// SCHEDULE REORDER
+// ============================================================
+
+// ReorderSchedules assigns session_number = 1..N to the schedules
+// listed in ordered_ids, in the order supplied. The list must contain
+// every schedule belonging to the event — partial reorders are
+// rejected so the numbering stays gapless.
+func (h *EventHandler) ReorderSchedules(c fiber.Ctx) error {
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c, "Event ID is required", nil)
+	}
+
+	userID, err := handlerhelper.GetUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
+	var req ReorderSchedulesRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request body", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	if len(req.OrderedIDs) == 0 {
+		return response.BadRequest(c, "ordered_ids must not be empty", nil)
+	}
+
+	ctx := handlerhelper.EnrichUserContext(c)
+
+	event, err := h.svc.ReorderSchedules(ctx, id, userID, req.OrderedIDs)
+	if err != nil {
+		return respondClassifiedError(c, "reorder schedules for this event", err)
+	}
+
+	return response.Success(c, "Schedules reordered successfully",
+		NewEventResponseFromEventWithCreator(event))
+}

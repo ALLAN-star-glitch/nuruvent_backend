@@ -49,4 +49,10 @@ type AttendanceUpsertSessionCommand struct {
 	// ProviderURL is the join URL (Zoom link, Meet link, or
 	// in-person location string).
 	ProviderURL string
+
+	// Denormalized from the parent event at sync time. Used by the
+	// attendance module to build the frontend redirect URL on
+	// join-token redemption (/meeting/:code?...&name=...&host=...).
+	EventDisplayName     string
+	OrganizerDisplayName string
 }

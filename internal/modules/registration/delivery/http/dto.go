@@ -27,6 +27,8 @@ type TicketSelectionRequest struct {
 
 
 
+
+
 // GuestRequest carries guest identity when the caller is unauthenticated.
 type GuestRequest struct {
 	Name  string `json:"name"`
@@ -112,4 +114,32 @@ type ListResponse struct {
 	Total    int                    `json:"total"`
 	Page     int                    `json:"page"`
 	PageSize int                    `json:"page_size"`
+}
+
+// SessionLinkResponse is the wire format for one session's
+// personalized join URL.
+type SessionLinkResponse struct {
+	SessionID      string    `json:"session_id"`
+	SessionTitle   string    `json:"session_title"`
+	ScheduledStart time.Time `json:"scheduled_start"`
+	ScheduledEnd   time.Time `json:"scheduled_end"`
+	Platform       string    `json:"platform"`
+	JoinURL        string    `json:"join_url"`
+	ExpiresAt      time.Time `json:"expires_at"`
+}
+
+
+// SessionLinkGroupResponse groups session links under the event the
+// user is registered for.
+type SessionLinkGroupResponse struct {
+	RegistrationID string                `json:"registration_id"`
+	EventID        string                `json:"event_id"`
+	EventName      string                `json:"event_name"`
+	EventDate      time.Time             `json:"event_date"`
+	Links          []SessionLinkResponse `json:"links"`
+}
+
+// MySessionLinksResponse is what GET /me/session-links returns.
+type MySessionLinksResponse struct {
+	Groups []SessionLinkGroupResponse `json:"groups"`
 }

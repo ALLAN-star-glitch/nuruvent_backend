@@ -86,6 +86,9 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
 	mux.HandleFunc(notificationdomain.TaskPaymentExpired, notificationWorker.HandlePaymentExpired)
 	mux.HandleFunc(notificationdomain.TaskRefundIssued, notificationWorker.HandleRefundIssued)
 
+
+	mux.HandleFunc(notificationdomain.TaskRegistrationConfirmed, notificationWorker.HandleRegistrationConfirmed)
+
 	log.Println("✅ All task handlers registered")
 	log.Println("📋 Registered tasks:")
 	log.Printf("   - %s (unified for all OTP purposes)", notificationdomain.TaskVerificationOTP)
@@ -111,6 +114,13 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
 	log.Printf("   - %s (failed)", notificationdomain.TaskPaymentFailed)
 	log.Printf("   - %s (expired)", notificationdomain.TaskPaymentExpired)
 	log.Printf("   - %s (refund issued)", notificationdomain.TaskRefundIssued)
+
+
+
+	
+	// ✅ REGISTRATION TASKS
+	log.Println("   📝 Registration Tasks:")
+	log.Printf("   - %s (confirmed with join links)", notificationdomain.TaskRegistrationConfirmed)
 
 	// 5. Start Worker in a Background Goroutine
 	go func() {

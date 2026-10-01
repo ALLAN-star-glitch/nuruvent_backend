@@ -280,3 +280,21 @@ func parseCSV(v string) []string {
 	}
 	return out
 }
+
+// GetMySessionLinks handles GET /me/session-links.
+//
+// Returns one group per confirmed registration for the authenticated
+// user, each carrying a fresh personalized join link per session.
+func (h *Handler) GetMySessionLinks(c fiber.Ctx) error {
+	userID := handlerhelper.GetUserIDOptional(c)
+	if userID == "" {
+		return response.Unauthorized(c, "Authentication required", nil)
+	}
+
+	result, err := h.svc.GetMySessionLinks(c.Context(), userID)
+	if err != nil {
+		return mapDomainError(c, err)
+	}
+
+	return response.Success(c, "Session links retrieved", toMySessionLinksResponse(result))
+}

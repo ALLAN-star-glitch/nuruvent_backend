@@ -29,6 +29,7 @@ var ProviderSet = wire.NewSet(
 	attendancePostgres.NewAttendeeRollupStatusRepository,
 	attendancePostgres.NewAttendanceOverrideRepository,
 	attendancePostgres.NewUnitOfWork,
+	
 
 	// Cross-cutting adapters
 	attendanceToken.NewSHA256Generator,
@@ -100,6 +101,7 @@ func ProvideAttendanceDependencies(
 	publisher *attendancePublisher.LogPublisher,
 	clock *systemClock,
 	providers map[attendance.SessionProvider]attendanceService.ProviderAdapter,
+	videoMeetings attendanceService.VideoMeetingIDResolver, 
 ) attendanceService.Dependencies {
 	return attendanceService.Dependencies{
 		UnitOfWork:       unitOfWork,
@@ -110,5 +112,6 @@ func ProvideAttendanceDependencies(
 		Providers:        providers,
 		DerivationPolicy: attendance.DefaultDerivationPolicy(),
 		JoinTokenGrace:   24 * time.Hour,
+		VideoMeetings: videoMeetings,
 	}
 }

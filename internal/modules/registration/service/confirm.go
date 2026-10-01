@@ -60,7 +60,12 @@ func (s *service) ConfirmRegistration(ctx context.Context, registrationID string
 	s.syncRegistrationToAttendance(ctx, eventReg)
 
 	// Notify (best-effort).
-	_ = s.deps.Notifier.RegistrationConfirmed(ctx, reg)
+	_ = s.deps.Notifier.RegistrationConfirmed(ctx, registrationdomain.RegistrationConfirmedPayload{
+		Registration: reg,
+		EventID:      eventReg.EventID,
+		EventName:    registrable.DisplayName(),
+		JoinLinks:    eventReg.JoinLinks,
+	})
 
 	return nil
 }

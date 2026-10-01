@@ -58,15 +58,16 @@ func (h *EventHandler) RegisterRoutes(
 			bulk.Delete("/media", authMiddleware, authzMiddleware, h.BulkDeleteEventMedia)
 		}
 
-		// ---- Single-event mutations ----
-		protected.Put("/:id<guid>", authMiddleware, authzMiddleware, h.UpdateEvent)
-		protected.Delete("/:id<guid>", authMiddleware, authzMiddleware, h.DeleteEvent)
-		protected.Delete("/:id<guid>/permanent", authMiddleware, authzMiddleware, h.PermanentlyDeleteEvent)
-		protected.Post("/:id<guid>/restore", authMiddleware, authzMiddleware, h.RestoreEvent)
-		protected.Post("/:id<guid>/publish", authMiddleware, authzMiddleware, h.PublishEvent)
-		protected.Post("/:id<guid>/cancel", authMiddleware, authzMiddleware, h.CancelEvent)
-		protected.Post("/:id<guid>/complete", authMiddleware, authzMiddleware, h.CompleteEvent)
-		protected.Post("/:id<guid>/duplicate", authMiddleware, authzMiddleware, h.DuplicateEvent)
+	// ---- Single-event mutations ----
+	protected.Put("/:id<guid>", authMiddleware, authzMiddleware, h.UpdateEvent)
+	protected.Delete("/:id<guid>", authMiddleware, authzMiddleware, h.DeleteEvent)
+	protected.Delete("/:id<guid>/permanent", authMiddleware, authzMiddleware, h.PermanentlyDeleteEvent)
+	protected.Post("/:id<guid>/restore", authMiddleware, authzMiddleware, h.RestoreEvent)
+	protected.Post("/:id<guid>/publish", authMiddleware, authzMiddleware, h.PublishEvent)
+	protected.Post("/:id<guid>/cancel", authMiddleware, authzMiddleware, h.CancelEvent)
+	protected.Post("/:id<guid>/complete", authMiddleware, authzMiddleware, h.CompleteEvent)
+	protected.Post("/:id<guid>/duplicate", authMiddleware, authzMiddleware, h.DuplicateEvent)
+	protected.Post("/:id<guid>/schedules/reorder", authMiddleware, authzMiddleware, h.ReorderSchedules)  // ← add this
 
 		// ---- Meeting management ----
 		protected.Post("/:id<guid>/meeting", authMiddleware, authzMiddleware, h.CreateMeeting)

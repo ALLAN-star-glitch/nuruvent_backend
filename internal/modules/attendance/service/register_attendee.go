@@ -14,6 +14,10 @@ import (
 //
 // Idempotent: if an attendee already exists for the given external
 // reference, the existing attendee is returned unchanged.
+//
+// The Google Meet user id is not set here — it's empty on creation
+// and populated the first time the attendee is matched to a Meet
+// participant. See matchParticipantToAttendee.
 func (s *attendanceService) RegisterAttendee(
 	ctx context.Context,
 	cmd RegisterAttendeeCommand,
@@ -43,6 +47,7 @@ func (s *attendanceService) RegisterAttendee(
 			cmd.DisplayName,
 			cmd.Email,
 			now,
+			"", // googleMeetUserID — populated later on first Meet match
 		)
 		if err != nil {
 			return err

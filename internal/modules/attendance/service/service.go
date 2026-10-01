@@ -33,9 +33,15 @@ type Service interface {
 	// ============================================================
 
 	// IssueJoinToken generates a new join token for an attendee in a
-	// session. Returns the raw token (only once — not recoverable
-	// later).
-	IssueJoinToken(ctx context.Context, cmd IssueJoinTokenCommand) (string, error)
+	// session.
+	//
+	// Returns the raw token and its expiry. The raw token is never
+	// persisted; only its SHA-256 hash. When the command carries a
+	// PublicBaseURL, the result also includes a full join URL.
+	IssueJoinToken(
+	ctx context.Context,
+	cmd IssueJoinTokenCommand,
+) (*IssueJoinTokenResult, error)
 
 	// RevokeJoinTokens revokes every active token for a
 	// (attendee, session) pair.
@@ -118,19 +124,59 @@ type Service interface {
 	// external reference.
 	RecomputeRollup(ctx context.Context, attendeeID string, ref attendance.ExternalRef) error
 
-		// RegisterAttendeeForExternal registers an attendee for every
-	// session under the given external reference. Creates a status row
-	// per session with derived_status = registered.
-	//
-	// Called by the events module after a registration is confirmed,
-	// so the attendee shows up in every session's roster.
-	//
-	// Idempotent: re-registering does not create duplicate rows.
-	RegisterAttendeeForExternal(ctx context.Context, cmd RegisterAttendeeForExternalCommand) error
+
+		// SetAttendeeGoogleMeetID persists a Google Meet user id on an
+	// attendee row. Used by the video module to link an unmatched Meet
+	// participant to a registered attendee.
+	SetAttendeeGoogleMeetID(ctx context.Context, attendeeID, googleMeetUserID string) error
+
+
+	// RegisterAttendeeForExternal registers an attendee for every session
+// under the given external reference. Creates a status row per session
+// with derived_status = registered, and issues one join token per
+// session.
+//
+// Returns one AttendeeSessionLink per session. When the command carries
+// a PublicBaseURL, each link contains a full join URL. When it does
+// not, links carry only the platform meeting code.
+//
+// Idempotent for status rows: re-registering does not create duplicate
+// rows. Tokens are always issued fresh.
+RegisterAttendeeForExternal(
+	ctx context.Context,
+	cmd RegisterAttendeeForExternalCommand,
+) (*RegisterAttendeeForExternalResult, error)
 
 
 		// ListSessionsForExternal returns every session under an external
 	// reference. Used by consumers that need to iterate a parent's
 	// sessions (e.g. issuing join tokens per session).
 	ListSessionsForExternal(ctx context.Context, ref attendance.ExternalRef) ([]*attendance.Session, error)
+
+
+
+	
+
+
+
+
+	// GetEventAttendanceSummary returns a per-session and total
+	// attendance summary for every session under an event.
+	GetEventAttendanceSummary(
+		ctx context.Context,
+		cmd GetEventAttendanceSummaryCommand,
+	) (*EventAttendanceSummary, error)
+
+
+
+	// RecordExternalParticipant records a join or leave observed on an
+	// external platform (Google Meet, Teams, etc.).
+	//
+	// The video module calls this after fetching participants from the
+	// platform's API. It is the counterpart to ProcessWebhookEvent for
+	// platforms that don't push events.
+	RecordExternalParticipant(
+		ctx context.Context,
+		cmd RecordExternalParticipantCommand,
+	) error
 }

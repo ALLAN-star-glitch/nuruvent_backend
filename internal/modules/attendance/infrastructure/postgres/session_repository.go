@@ -31,18 +31,20 @@ func (r *SessionRepository) Update(ctx context.Context, s *attendance.Session) e
 		Model(&SessionModel{}).
 		Where("id = ?", s.ID).
 		Updates(map[string]any{
-			"external_type":       s.External.Type,
-			"external_id":         s.External.ID,
-			"provider_session_id": s.ProviderSessionID,
-			"title":               s.Title,
-			"scheduled_start":     s.ScheduledStart,
-			"scheduled_end":       s.ScheduledEnd,
-			"duration_minutes":    s.DurationMinutes,
-			"provider":            string(s.Provider),
-			"provider_meeting_id": s.ProviderMeetingID,
-			"provider_url":        s.ProviderURL,
-			"status":              string(s.Status),
-			"updated_at":          s.UpdatedAt,
+			"external_type":          s.External.Type,
+			"external_id":            s.External.ID,
+			"provider_session_id":    s.ProviderSessionID,
+			"title":                  s.Title,
+			"scheduled_start":        s.ScheduledStart,
+			"scheduled_end":          s.ScheduledEnd,
+			"duration_minutes":       s.DurationMinutes,
+			"provider":               string(s.Provider),
+			"provider_meeting_id":    s.ProviderMeetingID,
+			"provider_url":           s.ProviderURL,
+			"status":                 string(s.Status),
+			"event_display_name":     s.EventDisplayName,     // ← new
+			"organizer_display_name": s.OrganizerDisplayName, // ← new
+			"updated_at":             s.UpdatedAt,
 		})
 	if res.Error != nil {
 		return translateError(res.Error, "update session", attendance.ErrSessionNotFound)
@@ -52,7 +54,6 @@ func (r *SessionRepository) Update(ctx context.Context, s *attendance.Session) e
 	}
 	return nil
 }
-
 func (r *SessionRepository) FindByID(ctx context.Context, id string) (*attendance.Session, error) {
 	var m SessionModel
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&m).Error
@@ -171,6 +172,14 @@ func (r *SessionRepository) FindEndedBefore(
 		out = append(out, toSessionDomain(&models[i]))
 	}
 	return out, nil
+}
+
+func (r *SessionRepository) UpdateStatus(ctx context.Context, sessionID string, status attendance.SessionStatus) error {
+	return r.db.WithContext(ctx).
+		Model(&SessionModel{}).
+		Where("id = ?", sessionID).
+		Update("status", string(status)).
+		Error
 }
 
 // compile-time assertion — unused for now, will be replaced with the

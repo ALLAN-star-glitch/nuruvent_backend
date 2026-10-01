@@ -39,7 +39,6 @@ import (
 	service10 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/infrastructure/notifier"
 	postgres8 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/infrastructure/postgres"
 	service9 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 	handler2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
@@ -121,7 +120,9 @@ func InitializeApp() (*AppDependencies, error) {
 	logPublisher := publisher.NewLogPublisher()
 	systemClock := attendance.NewSystemClock()
 	v2 := attendance.ProvideAttendanceProviders(configConfig)
-	dependencies := attendance.ProvideAttendanceDependencies(unitOfWork, uuidGenerator, sha256Generator, logPublisher, systemClock, v2)
+	meetingRepository := postgres7.NewMeetingRepository(db)
+	videoMeetingIDResolver := NewAttendanceVideoMeetingIDResolver(meetingRepository)
+	dependencies := attendance.ProvideAttendanceDependencies(unitOfWork, uuidGenerator, sha256Generator, logPublisher, systemClock, v2, videoMeetingIDResolver)
 	service14, err := service6.NewService(dependencies)
 	if err != nil {
 		return nil, err
@@ -134,12 +135,12 @@ func InitializeApp() (*AppDependencies, error) {
 	postgresUnitOfWork := postgres7.NewUnitOfWork(db, tokenCipher)
 	connectionRepository := postgres7.NewConnectionRepository(db, tokenCipher)
 	oAuthStateRepository := postgres7.NewOAuthStateRepository(db)
-	meetingRepository := postgres7.NewMeetingRepository(db)
+	participantRecorder := NewVideoAttendanceAdapter(service14)
 	zoomClient := video.ProvideZoomClient(configConfig)
 	googleMeetClient := video.ProvideGoogleMeetClient(configConfig)
 	clientRegistry := video.ProvideClientRegistry(zoomClient, googleMeetClient)
 	videoSystemClock := video.NewSystemClock()
-	serviceDependencies := video.ProvideVideoDependencies(postgresUnitOfWork, connectionRepository, oAuthStateRepository, meetingRepository, clientRegistry, uuidGenerator, videoSystemClock)
+	serviceDependencies := video.ProvideVideoDependencies(postgresUnitOfWork, connectionRepository, oAuthStateRepository, participantRecorder, meetingRepository, clientRegistry, uuidGenerator, videoSystemClock)
 	service15, err := service7.New(serviceDependencies)
 	if err != nil {
 		return nil, err
@@ -154,12 +155,12 @@ func InitializeApp() (*AppDependencies, error) {
 	eventRegistrationRepository := postgres8.NewEventRegistrationRepository(db)
 	waitlistRepository := postgres8.NewWaitlistRepository(db)
 	registrableResolver := NewRegistrableResolver(service16)
-	noop := notifier.NewNoop()
-	registrationdomainAttendanceRegistrar := NewRegistrationAttendanceRegistrar(service14, configConfig)
 	registrationdomainUserInfoProvider := NewRegistrationUserInfoAdapter(service11)
+	notifier := NewRegistrationNotifier(notificationService, registrationdomainUserInfoProvider)
+	registrationdomainAttendanceRegistrar := NewRegistrationAttendanceRegistrar(service14, configConfig)
 	clock := registration.ProvideSystemClock()
 	registrationNumberGenerator := postgres8.NewRegistrationNumberGenerator(db)
-	dependencies2 := registration.ProvideServiceDependencies(registrationRepository, eventRegistrationRepository, waitlistRepository, registrableResolver, noop, registrationdomainAttendanceRegistrar, registrationdomainUserInfoProvider, uuidGenerator, clock, registrationNumberGenerator)
+	dependencies2 := registration.ProvideServiceDependencies(registrationRepository, eventRegistrationRepository, waitlistRepository, registrableResolver, notifier, registrationdomainAttendanceRegistrar, registrationdomainUserInfoProvider, uuidGenerator, clock, registrationNumberGenerator)
 	service17 := service9.New(dependencies2)
 	httpHandler := http.NewHandler(service17)
 	orderRepository := postgres9.NewOrderRepository(db)

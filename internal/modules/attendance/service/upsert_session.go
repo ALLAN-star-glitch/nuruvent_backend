@@ -42,6 +42,8 @@ func (s *attendanceService) UpsertSession(
 			existing.Provider = cmd.Provider
 			existing.ProviderMeetingID = cmd.ProviderMeetingID
 			existing.ProviderURL = cmd.ProviderURL
+			existing.EventDisplayName = cmd.EventDisplayName
+			existing.OrganizerDisplayName = cmd.OrganizerDisplayName
 			existing.UpdatedAt = now
 
 			if err := validateUpdatedSession(existing); err != nil {
@@ -58,7 +60,7 @@ func (s *attendanceService) UpsertSession(
 			return fmt.Errorf("check existing session: %w", err)
 		}
 
-		newSession, err := attendance.NewSession(
+			newSession, err := attendance.NewSession(
 			s.deps.IDs.NewID(),
 			cmd.External,
 			cmd.ProviderSessionID,
@@ -68,6 +70,8 @@ func (s *attendanceService) UpsertSession(
 			cmd.Provider,
 			cmd.ProviderMeetingID,
 			cmd.ProviderURL,
+			cmd.EventDisplayName,
+			cmd.OrganizerDisplayName,
 			now,
 		)
 		if err != nil {

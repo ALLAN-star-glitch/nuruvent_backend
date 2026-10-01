@@ -32,6 +32,12 @@ type Session struct {
 	Status            SessionStatus
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+
+	// Denormalized display context, copied from the parent event at
+	// sync time. Used to build the frontend redirect URL on join-
+	// token redemption (/meeting/:code?...&name=...&host=...).
+	EventDisplayName     string
+	OrganizerDisplayName string
 }
 
 // NewSession constructs a new session with validation.
@@ -43,6 +49,7 @@ func NewSession(
 	start, end time.Time,
 	provider SessionProvider,
 	meetingID, providerURL string,
+	eventDisplayName, organizerDisplayName string,
 	now time.Time,
 ) (*Session, error) {
 	if strings.TrimSpace(id) == "" {
@@ -67,20 +74,22 @@ func NewSession(
 	if provider == ProviderZoom && strings.TrimSpace(providerURL) == "" {
 		return nil, fmt.Errorf("%w: provider url required for zoom", ErrInvalidSession)
 	}
-	return &Session{
-		ID:                id,
-		External:          external,
-		ProviderSessionID: strings.TrimSpace(providerSessionID),
-		Title:             title,
-		ScheduledStart:    start,
-		ScheduledEnd:      end,
-		DurationMinutes:   int(end.Sub(start).Minutes()),
-		Provider:          provider,
-		ProviderMeetingID: strings.TrimSpace(meetingID),
-		ProviderURL:       strings.TrimSpace(providerURL),
-		Status:            SessionStatusScheduled,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		return &Session{
+		ID:                   id,
+		External:             external,
+		ProviderSessionID:    strings.TrimSpace(providerSessionID),
+		Title:                title,
+		ScheduledStart:       start,
+		ScheduledEnd:         end,
+		DurationMinutes:      int(end.Sub(start).Minutes()),
+		Provider:             provider,
+		ProviderMeetingID:    strings.TrimSpace(meetingID),
+		ProviderURL:          strings.TrimSpace(providerURL),
+		Status:               SessionStatusScheduled,
+		CreatedAt:            now,
+		UpdatedAt:            now,
+		EventDisplayName:     strings.TrimSpace(eventDisplayName),
+		OrganizerDisplayName: strings.TrimSpace(organizerDisplayName),
 	}, nil
 }
 
@@ -95,22 +104,25 @@ func HydrateSession(
 	provider SessionProvider,
 	providerMeetingID, providerURL string,
 	status SessionStatus,
+	eventDisplayName, organizerDisplayName string,
 	createdAt, updatedAt time.Time,
 ) *Session {
 	return &Session{
-		ID:                id,
-		External:          external,
-		ProviderSessionID: providerSessionID,
-		Title:             title,
-		ScheduledStart:    scheduledStart,
-		ScheduledEnd:      scheduledEnd,
-		DurationMinutes:   durationMinutes,
-		Provider:          provider,
-		ProviderMeetingID: providerMeetingID,
-		ProviderURL:       providerURL,
-		Status:            status,
-		CreatedAt:         createdAt,
-		UpdatedAt:         updatedAt,
+		ID:                   id,
+		External:             external,
+		ProviderSessionID:    providerSessionID,
+		Title:                title,
+		ScheduledStart:       scheduledStart,
+		ScheduledEnd:         scheduledEnd,
+		DurationMinutes:      durationMinutes,
+		Provider:             provider,
+		ProviderMeetingID:    providerMeetingID,
+		ProviderURL:          providerURL,
+		Status:               status,
+		CreatedAt:            createdAt,
+		UpdatedAt:            updatedAt,
+		EventDisplayName:     eventDisplayName,
+		OrganizerDisplayName: organizerDisplayName,
 	}
 }
 

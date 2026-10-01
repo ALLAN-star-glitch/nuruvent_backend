@@ -3,6 +3,8 @@
 package http
 
 import (
+	"time"
+
 	"github.com/gofiber/fiber/v3"
 
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
@@ -190,4 +192,60 @@ func (h *AttendanceHandler) GetAttendeeSummary(c fiber.Ctx) error {
 	}
 
 	return response.Success(c, "Attendee summary retrieved", resp)
+}
+
+// EventSummary handles GET /events/:eventId/summary.
+//
+// Returns a per-session and total attendance summary for every
+// session under the event. Requires authentication.
+//
+// TODO: verify the caller has read access to the event. Currently
+// any authenticated user can request the summary by event UUID.
+func (h *AttendanceHandler) EventSummary(c fiber.Ctx) error {
+	userID := handlerhelper.GetUserIDOptional(c)
+	if userID == "" {
+		return response.Unauthorized(c, "Authentication required", nil)
+	}
+
+	eventID := c.Params("eventId")
+	if eventID == "" {
+		return response.BadRequest(c, "Event ID is required", nil)
+	}
+
+	summary, err := h.svc.GetEventAttendanceSummary(
+		c.Context(),
+		service.GetEventAttendanceSummaryCommand{
+			UserID:  userID,
+			EventID: eventID,
+		},
+	)
+	if err != nil {
+		return mapDomainError(c, err)
+	}
+
+	out := &EventAttendanceSummaryResponse{
+		Sessions: make([]SessionAttendanceSummaryResponse, 0, len(summary.Sessions)),
+		Totals: EventAttendanceTotalsResponse{
+			TotalSessions:          summary.Totals.TotalSessions,
+			SessionsWithAttendance: summary.Totals.SessionsWithAttendance,
+			UniqueAttendees:        summary.Totals.UniqueAttendees,
+			TotalAttendanceEvents:  summary.Totals.TotalAttendanceEvents,
+		},
+	}
+	for _, s := range summary.Sessions {
+		out.Sessions = append(out.Sessions, SessionAttendanceSummaryResponse{
+			SessionID:          s.SessionID,
+			Title:              s.Title,
+			Provider:           s.Provider,
+			ScheduledStart:     s.ScheduledStart.Format(time.RFC3339),
+			ScheduledEnd:       s.ScheduledEnd.Format(time.RFC3339),
+			RegisteredCount:    s.RegisteredCount,
+			AttendedCount:      s.AttendedCount,
+			AvgDurationSeconds: s.AvgDurationSeconds,
+			HasAttendanceData:  s.HasAttendanceData,
+			VideoMeetingID: s.VideoMeetingID,
+		})
+	}
+
+	return response.Success(c, "Attendance summary retrieved", out)
 }

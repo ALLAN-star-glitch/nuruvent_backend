@@ -50,5 +50,17 @@ func RegisterRoutes(
 	r.Post("/meetings/signature", authMiddleware, h.MeetingSDK.Signature)
 	r.Get("/meetings/zak", authMiddleware, h.MeetingSDK.ZAK)
 	r.Get("/meetings/:id/join-info", authMiddleware, h.MeetingSDK.JoinInfo)
-}
 
+	// ---- Attendance polling (Google Meet) ----
+	// Fetches conference records and participants from Google Meet
+	// and hands each event to the attendance module, which matches
+	// them to registered attendees and records joins/leaves.
+	//
+	// Only supported for google_meet meetings. Zoom attendance
+	// arrives via webhook.
+	r.Post("/meetings/:id/fetch-attendance", authMiddleware, h.MeetingSDK.FetchAttendance)
+
+	r.Post("/meetings/:id/fetch-attendance", authMiddleware, h.MeetingSDK.FetchAttendance)
+	r.Post("/meetings/:id/link-participant", authMiddleware, h.MeetingSDK.LinkParticipant)
+	r.Get("/meetings/:id/unmatched-participants", authMiddleware, h.MeetingSDK.GetUnmatchedParticipants)
+}

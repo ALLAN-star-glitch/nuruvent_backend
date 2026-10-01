@@ -7,6 +7,7 @@ import (
 	"time"
 
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	id "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/id"
 )
 
@@ -14,18 +15,10 @@ import (
 // CROSS-CUTTING PORTS
 // ============================================================
 
-// Clock supplies the current time. Injected so the service is
-// deterministic under test.
 type Clock interface {
 	Now() time.Time
 }
 
-// TokenGenerator produces raw join tokens and their hashes.
-//
-//   - Generate returns (rawToken, tokenHash). The caller stores the
-//     hash and hands the raw token to the user.
-//   - Hash computes the hash of a raw token for lookups at redeem
-//     time.
 type TokenGenerator interface {
 	Generate() (rawToken string, tokenHash string, err error)
 	Hash(rawToken string) string
@@ -35,14 +28,11 @@ type TokenGenerator interface {
 // PUBLISHER
 // ============================================================
 
-// StatusPublisher is notified when attendance statuses change.
 type StatusPublisher interface {
 	SessionStatusChanged(ctx context.Context, change SessionStatusChange) error
 	RollupStatusChanged(ctx context.Context, change RollupStatusChange) error
 }
 
-// SessionStatusChange describes a change to one (attendee, session)
-// status.
 type SessionStatusChange struct {
 	AttendeeID       string
 	AttendeeExternal attendance.ExternalRef
@@ -53,8 +43,6 @@ type SessionStatusChange struct {
 	OccurredAt       time.Time
 }
 
-// RollupStatusChange describes a change to an attendee's roll-up
-// status for one external entity.
 type RollupStatusChange struct {
 	AttendeeID string
 	External   attendance.ExternalRef
@@ -67,7 +55,6 @@ type RollupStatusChange struct {
 // PROVIDER ADAPTER
 // ============================================================
 
-// ProviderAdapter normalizes webhooks from one video platform.
 type ProviderAdapter interface {
 	Provider() attendance.SessionProvider
 
@@ -82,7 +69,6 @@ type ProviderAdapter interface {
 // DEPENDENCIES
 // ============================================================
 
-// Dependencies is the full set of ports the service needs.
 type Dependencies struct {
 	// Persistence
 	UnitOfWork attendance.UnitOfWork
@@ -104,9 +90,13 @@ type Dependencies struct {
 	// Default join token grace period. Applied when a command's Grace
 	// is zero.
 	JoinTokenGrace time.Duration
-}
 
-// internal/modules/attendance/service/dependencies.go
+	VideoMeetings VideoMeetingIDResolver
+
+	// AppConfig carries the frontend base URL used to build absolute
+	// redirect URLs on join-token redemption. See buildJoinRedirect.
+	AppConfig config.AppConfig
+}
 
 // URLValidator is an optional interface a ProviderAdapter may
 // implement to handle provider-specific endpoint verification.

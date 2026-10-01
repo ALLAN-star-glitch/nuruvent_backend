@@ -39,13 +39,15 @@ func (a *AttendanceRegistrarAdapter) UpsertSession(
 			Type: cmd.ExternalType,
 			ID:   cmd.ExternalID,
 		},
-		ProviderSessionID: cmd.ProviderSessionID,
-		Title:             cmd.Title,
-		ScheduledStart:    cmd.ScheduledStart,
-		ScheduledEnd:      cmd.ScheduledEnd,
-		Provider:          provider,
-		ProviderMeetingID: cmd.ProviderMeetingID,
-		ProviderURL:       cmd.ProviderURL,
+		ProviderSessionID:    cmd.ProviderSessionID,
+		Title:                cmd.Title,
+		ScheduledStart:       cmd.ScheduledStart,
+		ScheduledEnd:         cmd.ScheduledEnd,
+		Provider:             provider,
+		ProviderMeetingID:    cmd.ProviderMeetingID,
+		ProviderURL:          cmd.ProviderURL,
+		EventDisplayName:     cmd.EventDisplayName,
+		OrganizerDisplayName: cmd.OrganizerDisplayName,
 	})
 	if err != nil {
 		return fmt.Errorf("attendance.UpsertSession: %w", err)

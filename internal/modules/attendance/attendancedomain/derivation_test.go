@@ -19,6 +19,8 @@ func TestDeriveSessionStatus_FullAttendance(t *testing.T) {
 		"123",
 		"https://zoom.us/j/123",
 		SessionStatusEnded,
+		"",
+		"",
 		start, start,
 	)
 
@@ -56,6 +58,8 @@ func TestDeriveSessionStatus_PartialAttendance(t *testing.T) {
 		"123",
 		"https://zoom.us/j/123",
 		SessionStatusEnded,
+		"",
+		"",
 		start, start,
 	)
 
@@ -93,6 +97,8 @@ func TestDeriveSessionStatus_NoShow(t *testing.T) {
 		"123",
 		"https://zoom.us/j/123",
 		SessionStatusEnded,
+		"",
+		"",
 		start, start,
 	)
 
@@ -121,6 +127,8 @@ func TestDeriveSessionStatus_Joined(t *testing.T) {
 		"123",
 		"https://zoom.us/j/123",
 		SessionStatusLive,
+		"",
+		"",
 		start, start,
 	)
 
@@ -156,6 +164,8 @@ func TestDeriveRollupStatus_SingleSessionFull(t *testing.T) {
 		"123",
 		"https://zoom.us/j/123",
 		SessionStatusEnded,
+		"",
+		"",
 		start, start,
 	)
 

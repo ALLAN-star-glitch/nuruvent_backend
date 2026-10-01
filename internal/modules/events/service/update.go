@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // ============================================================
@@ -50,10 +51,9 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
 	// 5. Re-derive event-level fields from schedules only when the
 	//    caller supplied a schedules array. If cmd.Schedules is nil,
 	//    the existing derived values stay.
-		if cmd.Schedules != nil {
+	if cmd.Schedules != nil {
 		deriveEventFromSchedules(event)
 
-			
 		// Create meetings for any newly-added virtual sessions.
 		// Existing sessions keep their VideoMeetingID and are skipped
 		// by attachVideoMeetings.
@@ -62,7 +62,6 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
 		}
 	}
 
-	
 	// 6. Save to database.
 	if err := s.saveUpdatedEvent(ctx, event); err != nil {
 		return nil, err
@@ -280,13 +279,18 @@ func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.E
 		if err != nil {
 			return fmt.Errorf("invalid schedules: %w", err)
 		}
-	
-		
 
 		// Merge incoming schedules with the existing ones so we don't
-		// lose internal fields (video_meeting_id, provider_session_id,
-		// attendance mirrors) that the client never sends.
+		// lose fields the client never sends (platform, links, venue,
+		// internal video meeting ids, etc.).
 		event.Schedules = mergeSchedules(event.Schedules, incoming)
+
+		// Reconcile platform ↔ link consistency. The client (or a stale
+    // merge) can leave a schedule claiming one platform while
+    // carrying the other platform's link. Normalize so downstream
+    // validation, response serialization, and the video module all
+    // agree on which provider this session actually belongs to.
+    normalizeSchedulePlatforms(event.Schedules)
 	}
 
 	// Recurrence: IsRecurring is the master switch.
@@ -326,34 +330,57 @@ func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.E
 	return nil
 }
 
-// mergeSchedules matches incoming schedules to existing ones by ID.
+// mergeSchedules merges incoming schedules onto existing ones.
 //
-// For each incoming schedule:
-//   - If it has an ID that matches an existing schedule, overlay the
-//     incoming fields onto the existing one. Internal fields the
-//     client doesn't send (video_meeting_id) survive.
-//   - If it has no ID, or the ID doesn't match, treat it as a new
-//     schedule and append it.
+// Matching strategy, in order:
 //
-// Existing schedules not represented in the incoming set are dropped,
-// which is the intended behaviour when the caller removes a session.
+//  1. If the incoming schedule has an ID that matches an existing
+//     schedule, merge onto that one.
+//  2. Otherwise, if there's an existing schedule at the same index that
+//     hasn't already been claimed, merge onto that one. This handles
+//     clients that drop schedule IDs on round-trip: adding a schedule
+//     at the end won't cause the earlier schedules to be recreated
+//     (and therefore won't wipe fields like platform, zoom_link, etc.).
+//  3. Otherwise, treat it as a brand-new schedule.
+//
+// Existing schedules not claimed by any incoming entry are dropped.
+//
+// The merge itself is field-level: we start from the existing schedule
+// and only overwrite fields the incoming schedule actually carries a
+// value for. This preserves fields the client never sends, including
+// internal ones (VideoMeetingID, VideoMeetingExternalID).
+//
+// NOTE: this "only overwrite when non-zero" approach means a client
+// cannot clear a field (e.g. remove a zoom_link) by sending "". If you
+// need that, switch ScheduleInput to use pointers so nil = "not sent"
+// and "" = "clear it".
 func mergeSchedules(
 	existing []domain.EventSchedule,
 	incoming []domain.EventSchedule,
 ) []domain.EventSchedule {
-
 	log.Printf("🔎 mergeSchedules: existing=%d incoming=%d", len(existing), len(incoming))
-	for _, s := range incoming {
-		log.Printf("🔎   incoming id=%q video_meeting_id=%v", s.ID, s.VideoMeetingID)
+	for i, s := range incoming {
+		log.Printf("🔎   incoming[%d] id=%q platform=%q video_meeting_id=%v",
+			i, s.ID, s.Platform, s.VideoMeetingID)
 	}
-	for _, s := range existing {
-		log.Printf("🔎   existing id=%q video_meeting_id=%v", s.ID, s.VideoMeetingID)
+	for i, s := range existing {
+		log.Printf("🔎   existing[%d] id=%q platform=%q video_meeting_id=%v",
+			i, s.ID, s.Platform, s.VideoMeetingID)
 	}
 
 	if len(existing) == 0 {
-		return incoming
+		// Nothing to merge onto. Ensure new schedules have no stale id.
+		out := make([]domain.EventSchedule, len(incoming))
+		copy(out, incoming)
+		for i := range out {
+			if out[i].ID == "" {
+				out[i].ID = ""
+			}
+		}
+		return out
 	}
 
+	// Index existing schedules by ID for fast lookup.
 	byID := make(map[string]domain.EventSchedule, len(existing))
 	for _, s := range existing {
 		if s.ID != "" {
@@ -361,17 +388,124 @@ func mergeSchedules(
 		}
 	}
 
+	// Track which existing schedules have been claimed, so positional
+	// fallback doesn't reuse the same one twice.
+	claimed := make(map[string]bool, len(existing))
+
 	merged := make([]domain.EventSchedule, 0, len(incoming))
-	for _, inc := range incoming {
+	for i, inc := range incoming {
+		var base domain.EventSchedule
+		matched := false
+
+		// 1. Match by ID.
 		if inc.ID != "" {
 			if prev, ok := byID[inc.ID]; ok {
-				// Preserve fields the client never sends.
-				inc.VideoMeetingID = prev.VideoMeetingID
+				base = prev
+				claimed[prev.ID] = true
+				matched = true
 			}
 		}
-		merged = append(merged, inc)
+
+		// 2. Fall back to positional match (client dropped the id).
+		if !matched && i < len(existing) {
+			candidate := existing[i]
+			if candidate.ID != "" && !claimed[candidate.ID] {
+				base = candidate
+				claimed[candidate.ID] = true
+				matched = true
+				log.Printf("🔎   incoming[%d] had no matching id; "+
+					"falling back to positional match with existing[%d] id=%q",
+					i, i, candidate.ID)
+			}
+		}
+
+		// 3. No match — treat as brand new.
+		if !matched {
+			base = domain.EventSchedule{}
+			log.Printf("🔎   incoming[%d] is a new schedule", i)
+		}
+
+		merged = append(merged, mergeScheduleFields(base, inc))
 	}
+
 	return merged
+}
+
+// mergeScheduleFields overlays the incoming schedule onto the existing
+// schedule, only overwriting fields the incoming schedule has a
+// non-zero value for.
+//
+// If the incoming schedule has no ID, the existing ID is preserved so
+// the repository updates the row in place instead of inserting a new
+// one.
+func mergeScheduleFields(existing, incoming domain.EventSchedule) domain.EventSchedule {
+	out := existing
+
+	// Preserve ID when the client dropped it.
+	if incoming.ID != "" {
+		out.ID = incoming.ID
+	}
+
+	// --- client-visible fields ---
+	if incoming.SessionName != "" {
+		out.SessionName = incoming.SessionName
+	}
+	if incoming.SessionNumber != 0 {
+		out.SessionNumber = incoming.SessionNumber
+	}
+	if !incoming.StartDate.IsZero() {
+		out.StartDate = incoming.StartDate
+	}
+	// EndDate is a pointer: nil = "not sent", non-nil = "set/clear".
+	// For now we treat nil as "not sent". To support clearing, switch
+	// ScheduleInput.EndDate to a **string or add an explicit flag.
+	if incoming.EndDate != nil {
+		out.EndDate = incoming.EndDate
+	}
+	if incoming.StartTime != "" {
+		out.StartTime = incoming.StartTime
+	}
+	if incoming.EndTime != "" {
+		out.EndTime = incoming.EndTime
+	}
+	if incoming.Timezone != "" {
+		out.Timezone = incoming.Timezone
+	}
+	if incoming.Location != "" {
+		out.Location = incoming.Location
+	}
+
+	// Booleans: incoming true always wins. incoming false is treated
+	// as "not sent" because ScheduleInput.IsVirtual is a plain bool.
+	// If you need to flip true→false, make ScheduleInput.IsVirtual
+	// a *bool.
+	if incoming.IsVirtual {
+		out.IsVirtual = true
+	}
+
+	if incoming.Platform != "" {
+		out.Platform = incoming.Platform
+	}
+	if incoming.ZoomLink != "" {
+		out.ZoomLink = incoming.ZoomLink
+	}
+	if incoming.MeetLink != "" {
+		out.MeetLink = incoming.MeetLink
+	}
+	if incoming.MaxAttendees != nil {
+		out.MaxAttendees = incoming.MaxAttendees
+	}
+
+	// --- internal fields the client never sends ---
+	// Preserve existing values. If incoming ever carries one, prefer it.
+	if incoming.VideoMeetingID != nil {
+		out.VideoMeetingID = incoming.VideoMeetingID
+	}
+	if incoming.VideoMeetingExternalID != "" {
+		out.VideoMeetingExternalID = incoming.VideoMeetingExternalID
+	}
+
+	return out
 }
 
 // applyTicketUpdates applies ticket-related updates.
@@ -460,30 +594,104 @@ func (s *eventService) applySpeakersMaterialsSEO(ctx context.Context, event *dom
 // are populated on the domain struct before we mirror the schedules
 // into the attendance module. Without this, a schedule created by
 // this update would sync with an empty provider_session_id.
+//
+// The reload replaces the entire struct (not just Schedules/Tickets)
+// so the returned event carries the DB-fresh status, event type,
+// category, and any other relation the handler serializes.
+//
+// Error handling: Postgres returns 23505 for any unique-constraint
+// violation. The events table has a unique slug constraint; the
+// event_schedules table has a per-event session_number constraint.
+// We must inspect WHICH constraint fired — treating every 23505 as a
+// slug collision produces misleading errors when a schedule write
+// trips the schedule-number index mid-reorder.
 func (s *eventService) saveUpdatedEvent(ctx context.Context, event *domain.Event) error {
 	if err := s.repo.UpdateEvent(ctx, event); err != nil {
-		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "23505") {
-			log.Printf("❌ Duplicate slug detected: %s", event.Slug)
-			return fmt.Errorf("an event with the name '%s' already exists. Please use a different name", event.DisplayName)
+		if msg, ok := classifyUniqueViolation(err, event); ok {
+			return errors.New(msg)
 		}
 		return fmt.Errorf("failed to update event: %w", err)
 	}
 
-	// Reload so schedule IDs are hydrated before syncing.
+	// Reload the whole event so the returned struct reflects what's
+	// actually in the DB — status, type, category, schedules, and any
+	// DB-assigned IDs. Replacing only Schedules/Tickets leaves stale
+	// relations on the struct, which is why the response can report
+	// the wrong event_status after a status change.
 	if reloaded, reloadErr := s.repo.GetEventByID(ctx, event.ID); reloadErr == nil && reloaded != nil {
-		event.Schedules = reloaded.Schedules
-		event.Tickets = reloaded.Tickets  
+		*event = *reloaded
 	} else if reloadErr != nil {
 		log.Printf("⚠️ Could not reload event for attendance sync: %v", reloadErr)
 	}
 
-	// Mirror schedules into attendance if this is a published event.
-	// Drafts don't sync.
-	if event.IsPublished() {
-		s.syncEventSchedulesToAttendance(ctx, event)
-	}
+		// Mirror schedules into attendance so webhook/poll lookups always
+	// have a matching session row. The sync is idempotent — upserts on
+	// (external ref, provider_session_id) — so running it on every
+	// update (draft or published) is safe and keeps provider_meeting_id
+	// current for events that add meetings after the first publish.
+	s.syncEventSchedulesToAttendance(ctx, event)
 
 	return nil
+}
+
+
+
+// classifyUniqueViolation inspects a Postgres 23505 error and returns
+// a user-facing message that names the actual constraint that fired.
+//
+// Returns ("", false) when the error isn't a unique violation, so the
+// caller falls through to the generic error path.
+//
+// Uses constraint-name matching first (reliable), and falls back to
+// substring matching on the error text for local/dev setups where
+// the driver doesn't surface the constraint name.
+func classifyUniqueViolation(err error, event *domain.Event) (string, bool) {
+	if err == nil {
+		return "", false
+	}
+
+	errStr := err.Error()
+
+	// Non-23505 errors are not our concern.
+	if !strings.Contains(errStr, "23505") && !strings.Contains(errStr, "duplicate key") {
+		return "", false
+	}
+
+	// Try to read the constraint name via pgx (preferred).
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		switch {
+		case strings.Contains(pgErr.ConstraintName, "event_schedules") &&
+			strings.Contains(pgErr.ConstraintName, "session_number"):
+			return "sessions must have unique numbers within the event; reload the page and try again", true
+		case strings.Contains(pgErr.ConstraintName, "slug"):
+			log.Printf("❌ Duplicate slug detected: %s", event.Slug)
+			return fmt.Sprintf(
+				"an event with the name '%s' already exists. Please use a different name",
+				event.DisplayName,
+			), true
+		default:
+			// Unknown constraint — surface the real one rather than
+			// silently mislabeling it.
+			log.Printf("❌ Unhandled unique violation on %s: %s", pgErr.ConstraintName, errStr)
+			return fmt.Sprintf("update rejected by constraint %s", pgErr.ConstraintName), true
+		}
+	}
+
+	// Fallback: match on the constraint name embedded in the raw text.
+	switch {
+	case strings.Contains(errStr, "uniq_event_schedules_event_session_number"):
+		return "sessions must have unique numbers within the event; reload the page and try again", true
+	case strings.Contains(errStr, "slug"):
+		log.Printf("❌ Duplicate slug detected: %s", event.Slug)
+		return fmt.Sprintf(
+			"an event with the name '%s' already exists. Please use a different name",
+			event.DisplayName,
+		), true
+	}
+
+	// 23505 with an unrecognized constraint — let the caller handle it.
+	return "", false
 }
 
 // isDraftStatus checks if the event status is DRAFT.
@@ -494,3 +702,58 @@ func (s *eventService) isDraftStatus(ctx context.Context, statusID string) bool 
 	}
 	return status.Slug == domain.EventStatusDraft.GetSlug()
 }
+
+// normalizeSchedulePlatforms reconciles the relationship between
+// schedule.platform and schedule.{zoom_link,meet_link}.
+//
+// Rules, applied in order:
+//
+//  1. If platform is set explicitly, clear the other platform's link.
+//     "zoom"        → meet_link = ""
+//     "google_meet" → zoom_link = ""
+//
+//  2. If platform is empty but exactly one link is populated, adopt
+//     that link's platform. Covers manually-linked schedules the
+//     client didn't tag.
+//
+//  3. If platform is empty and both links are set, prefer zoom (the
+//     event-level default when there's ambiguity) and clear meet.
+//
+//  4. If platform is empty and both links are empty, leave it empty —
+//     the schedule is in-person or unconfigured, and publish
+//     validation will complain if that's wrong.
+//
+// This runs after mergeSchedules, so it also corrects any mismatch
+// introduced by an older client that flipped `platform` without
+// swapping the link.
+func normalizeSchedulePlatforms(schedules []domain.EventSchedule) {
+	for i := range schedules {
+		s := &schedules[i]
+
+		switch s.Platform {
+		case "zoom":
+			if s.MeetLink != "" {
+				log.Printf("🔧 normalize: schedule %s platform=zoom, clearing meet_link", s.ID)
+				s.MeetLink = ""
+			}
+		case "google_meet":
+			if s.ZoomLink != "" {
+				log.Printf("🔧 normalize: schedule %s platform=google_meet, clearing zoom_link", s.ID)
+				s.ZoomLink = ""
+			}
+		case "":
+			switch {
+			case s.ZoomLink != "" && s.MeetLink != "":
+				log.Printf("🔧 normalize: schedule %s has both links, defaulting to zoom", s.ID)
+				s.Platform = "zoom"
+				s.MeetLink = ""
+			case s.ZoomLink != "":
+				s.Platform = "zoom"
+			case s.MeetLink != "":
+				s.Platform = "google_meet"
+			}
+		}
+	}
+}
+
+

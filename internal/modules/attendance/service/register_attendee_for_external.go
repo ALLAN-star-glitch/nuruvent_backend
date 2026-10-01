@@ -11,27 +11,36 @@ import (
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 )
 
-// RegisterAttendeeForExternal registers an attendee for every session
-// currently under the given external reference.
+// RegisterAttendeeForExternal registers an attendee for every virtual
+// session under the given external reference, and issues one join
+// token per session.
 //
-// Idempotent: an existing status row for a session is left unchanged.
-// New rows are created with derived_status = registered.
+// Idempotent for the status rows: an existing status row for a session
+// is left unchanged. Tokens are always issued fresh, so re-registering
+// produces new, valid join URLs.
 //
-// Called by the events module after a registration is confirmed. The
-// attendance module doesn't know what an "event" is — the external
+// In-person sessions are skipped entirely: there is no remote meeting
+// to join, so no join token is issued and no link is returned. Status
+// rows for in-person sessions are also not created here — the host
+// records attendance for those manually.
+//
+// Called by the registration module after a registration is confirmed.
+// The attendance module doesn't know what an "event" is — the external
 // reference is opaque.
 func (s *attendanceService) RegisterAttendeeForExternal(
 	ctx context.Context,
 	cmd RegisterAttendeeForExternalCommand,
-) error {
+) (*RegisterAttendeeForExternalResult, error) {
 	if cmd.AttendeeID == "" {
-		return fmt.Errorf("attendee_id is required")
+		return nil, fmt.Errorf("attendee_id is required")
 	}
 	if !cmd.External.IsValid() {
-		return fmt.Errorf("external reference is required")
+		return nil, fmt.Errorf("external reference is required")
 	}
 
 	now := s.deps.Clock.Now()
+
+	var links []AttendeeSessionLink
 
 	txErr := s.deps.UnitOfWork.Do(ctx, func(repos attendance.Repositories) error {
 		// Verify the attendee exists.
@@ -45,30 +54,62 @@ func (s *attendanceService) RegisterAttendeeForExternal(
 			return fmt.Errorf("list sessions: %w", err)
 		}
 
-		// For each session, create a status row if one doesn't exist.
+		// For each virtual session: ensure a status row, then issue a
+		// token. In-person sessions are skipped — no join link is
+		// meaningful for them.
 		for _, session := range sessions {
-			existing, err := repos.SessionStatuses.FindByAttendeeSession(ctx, cmd.AttendeeID, session.ID)
-			if err == nil && existing != nil {
-				// Already registered for this session; leave as is.
+			if !session.Provider.RequiresMeetingID() {
+				// In-person (or unknown provider): no remote join.
 				continue
 			}
-			if err != nil && !errors.Is(err, attendance.ErrStatusNotFound) {
+
+			existing, err := repos.SessionStatuses.FindByAttendeeSession(ctx, cmd.AttendeeID, session.ID)
+			if err == nil && existing != nil {
+				// Already registered for this session; leave the status
+				// row alone but still issue a token so the caller gets a
+				// fresh join URL.
+			} else if err != nil && !errors.Is(err, attendance.ErrStatusNotFound) {
 				return fmt.Errorf("check session status: %w", err)
+			} else {
+				st := attendance.NewAttendeeSessionStatus(cmd.AttendeeID, session.ID, now)
+				if err := repos.SessionStatuses.Upsert(ctx, st); err != nil {
+					return fmt.Errorf("upsert status: %w", err)
+				}
 			}
 
-			st := attendance.NewAttendeeSessionStatus(cmd.AttendeeID, session.ID, now)
-			if err := repos.SessionStatuses.Upsert(ctx, st); err != nil {
-				return fmt.Errorf("upsert status: %w", err)
+			// Issue a join token inside this transaction.
+			token, err := s.issueTokenInTx(
+				ctx,
+				repos,
+				cmd.AttendeeID,
+				session,
+				cmd.LinkGrace,
+				cmd.PublicBaseURL,
+				now,
+			)
+			if err != nil {
+				return fmt.Errorf("issue token for session %s: %w", session.ID, err)
 			}
+
+			links = append(links, AttendeeSessionLink{
+				SessionID:   session.ID,
+				MeetingCode: session.ProviderMeetingID,
+				Platform:    session.Provider,
+				JoinURL:     token.JoinURL,
+				ExpiresAt:   token.ExpiresAt,
+			})
 		}
 
 		return nil
 	})
 	if txErr != nil {
-		return txErr
+		return nil, txErr
 	}
 
-	return nil
+	return &RegisterAttendeeForExternalResult{
+		AttendeeID: cmd.AttendeeID,
+		Links:      links,
+	}, nil
 }
 
 // ensureSessionRoster creates status rows for every attendee already
@@ -76,25 +117,24 @@ func (s *attendanceService) RegisterAttendeeForExternal(
 //
 // Called from UpsertSession when a new session is created, so that
 // attendees who registered before the session existed don't miss it.
+//
+// In-person sessions are skipped for the same reason as in
+// RegisterAttendeeForExternal: attendance is recorded manually.
 func (s *attendanceService) ensureSessionRoster(
 	ctx context.Context,
 	repos attendance.Repositories,
 	session *attendance.Session,
 	now time.Time,
 ) error {
-	// Find all attendees who have any status row under a sibling
-	// session of the same external reference. That's the set of
-	// "attendees registered for this external entity."
-	//
-	// For MVP we implement this by asking the rollup status
-	// repository — but it doesn't have a "list by external" method
-	// that returns all attendees. Instead, we walk siblings.
+	if !session.Provider.RequiresMeetingID() {
+		return nil
+	}
+
 	siblings, err := repos.Sessions.ListByExternalRef(ctx, session.External)
 	if err != nil {
 		return fmt.Errorf("list sibling sessions: %w", err)
 	}
 
-	// Collect distinct attendee IDs across sibling sessions.
 	seen := make(map[string]struct{})
 	for _, sib := range siblings {
 		if sib.ID == session.ID {
@@ -109,9 +149,7 @@ func (s *attendanceService) ensureSessionRoster(
 		}
 	}
 
-	// Create a status row for each attendee in the new session.
 	for attendeeID := range seen {
-		// Skip if a row already exists.
 		existing, err := repos.SessionStatuses.FindByAttendeeSession(ctx, attendeeID, session.ID)
 		if err == nil && existing != nil {
 			continue

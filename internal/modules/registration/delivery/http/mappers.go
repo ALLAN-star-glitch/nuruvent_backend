@@ -84,3 +84,29 @@ func toWaitlistResponse(w *registrationdomain.WaitlistEntry) WaitlistResponse {
 		CreatedAt: w.CreatedAt,
 	}
 }
+
+func toMySessionLinksResponse(r *service.SessionLinksResult) *MySessionLinksResponse {
+	groups := make([]SessionLinkGroupResponse, 0, len(r.Groups))
+	for _, g := range r.Groups {
+		links := make([]SessionLinkResponse, 0, len(g.Links))
+		for _, l := range g.Links {
+			links = append(links, SessionLinkResponse{
+				SessionID:      l.SessionID,
+				SessionTitle:   l.SessionTitle,
+				ScheduledStart: l.ScheduledStart,
+				ScheduledEnd:   l.ScheduledEnd,
+				Platform:       l.Platform,
+				JoinURL:        l.URL,
+				ExpiresAt:      l.ExpiresAt,
+			})
+		}
+		groups = append(groups, SessionLinkGroupResponse{
+			RegistrationID: g.RegistrationID,
+			EventID:        g.EventID,
+			EventName:      g.EventName,
+			EventDate:      g.EventDate,
+			Links:          links,
+		})
+	}
+	return &MySessionLinksResponse{Groups: groups}
+}

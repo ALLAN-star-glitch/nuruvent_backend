@@ -18,4 +18,5 @@ var (
     ErrPricingMismatch          = errors.New("pricing mismatch")
     ErrRegistrableTypeUnknown   = errors.New("unknown registrable type")
     ErrRegistrationIsTerminal   = errors.New("registration is in a terminal state")
+    ErrAuthRequired = errors.New("authentication required for this event")
 )

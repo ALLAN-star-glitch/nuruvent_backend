@@ -822,5 +822,65 @@ func (w *NotificationWorker) HandleRefundIssued(ctx context.Context, task *asynq
 }
 
 
+// ============================================================
+// REGISTRATION HANDLERS
+// ============================================================
+
+// ProcessRegistrationConfirmed implements notificationdomain.TaskProcessor.
+func (w *NotificationWorker) ProcessRegistrationConfirmed(
+	ctx context.Context,
+	data notificationdomain.RegistrationConfirmedTask,
+) error {
+	log.Printf("[NotificationWorker] Processing registration confirmed notification for %s (links=%d)", data.To, len(data.JoinLinks))
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      data.To,
+		Subject: "You're confirmed for " + data.EventName + " - Nuruvent",
+		Type:    notificationdomain.TypeRegistrationConfirmed,
+		Meta: map[string]string{
+			"name":                data.Name,
+			"registration_number": data.RegistrationNumber,
+			"event_name":          data.EventName,
+			"event_id":            data.EventID,
+			"links":               encodeJoinLinksFromTask(data.JoinLinks),
+		},
+	}
+
+	log.Printf("[NotificationWorker] encoded links=%q", channelReq.Meta["links"]) // ← ADD HERE
+
+	if err := w.emailChannel.Send(ctx, channelReq); err != nil {
+		log.Printf("[NotificationWorker] Failed to send registration confirmed to %s: %v", data.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Registration confirmed notification sent to %s", data.To)
+	return nil
+}
+
+// HandleRegistrationConfirmed is the asynq task handler.
+func (w *NotificationWorker) HandleRegistrationConfirmed(ctx context.Context, task *asynq.Task) error {
+	var data notificationdomain.RegistrationConfirmedTask
+	if err := json.Unmarshal(task.Payload(), &data); err != nil {
+		log.Printf("[NotificationWorker] Failed to parse registration confirmed task: %v", err)
+		return err
+	}
+	return w.ProcessRegistrationConfirmed(ctx, data)
+}
+
+// encodeJoinLinksFromTask mirrors encodeJoinLinks in service.go so
+// the worker doesn't import the service package.
+func encodeJoinLinksFromTask(links []notificationdomain.RegistrationJoinLink) string {
+	const (
+		fieldSep = "\x1f"
+		rowSep   = "\x1e"
+	)
+	parts := make([]string, 0, len(links))
+	for _, l := range links {
+		parts = append(parts, l.SessionTitle+fieldSep+l.URL)
+	}
+	return strings.Join(parts, rowSep)
+}
+
+
 // Ensure NotificationWorker implements notificationdomain.TaskProcessor
 var _ notificationdomain.TaskProcessor = (*NotificationWorker)(nil)

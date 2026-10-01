@@ -3,10 +3,11 @@
 package http
 
 import (
+	"strings"
+
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/service"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 )
 
 // JoinHandler handles the public join-link redemption endpoint.
@@ -20,14 +21,16 @@ func NewJoinHandler(svc service.Service) *JoinHandler {
 	return &JoinHandler{svc: svc}
 }
 
+
+
 // RedeemJoinToken handles GET /join/:token.
 //
 // Flow:
 //  1. Extract the raw token from the URL.
 //  2. Redeem it — the service validates, records the join, and
-//     returns the provider redirect URL.
+//     returns the Nuruvent-hosted meeting URL to redirect to.
 //  3. Trigger a status recompute for the affected session.
-//  4. Redirect the browser to the provider URL.
+//  4. Redirect the browser to the meeting page.
 //
 // If anything goes wrong, render a small HTML page explaining the
 // error, rather than a JSON error — the caller is a browser, not an
@@ -40,7 +43,6 @@ func (h *JoinHandler) RedeemJoinToken(c fiber.Ctx) error {
 
 	result, err := h.svc.RedeemJoinToken(c.Context(), rawToken)
 	if err != nil {
-		// Recompute isn't possible because we don't know the session.
 		return renderJoinError(c, friendlyJoinMessage(err), friendlyJoinDetail(err))
 	}
 
@@ -48,7 +50,8 @@ func (h *JoinHandler) RedeemJoinToken(c fiber.Ctx) error {
 	// recompute; the join itself was recorded.
 	_ = h.svc.RecomputeSessionStatuses(c.Context(), result.SessionID)
 
-	// Redirect the browser to the provider's meeting URL.
+	// Redirect the browser to the meeting page. The page handles
+	// platform-specific handoff.
 	if result.RedirectTo == "" {
 		return renderJoinError(c, "no redirect url", "The meeting URL is not available yet. Please contact the host.")
 	}
@@ -84,12 +87,10 @@ func renderJoinError(c fiber.Ctx, title, detail string) error {
 // friendlyJoinMessage maps a domain error to a short user-facing
 // title.
 func friendlyJoinMessage(err error) string {
-	switch {
-	case err == nil:
+	if err == nil {
 		return "Something went wrong"
-	default:
-		return "We couldn't process this link"
 	}
+	return "We couldn't process this link"
 }
 
 // friendlyJoinDetail maps a domain error to a longer user-facing
@@ -98,33 +99,15 @@ func friendlyJoinMessage(err error) string {
 func friendlyJoinDetail(err error) string {
 	msg := err.Error()
 	switch {
-	case contains(msg, "expired"):
+	case strings.Contains(msg, "expired"):
 		return "This link has expired. Please contact the host for a new one."
-	case contains(msg, "revoked"):
+	case strings.Contains(msg, "revoked"):
 		return "This link is no longer valid. Please contact the host for a new one."
-	case contains(msg, "not found"):
+	case strings.Contains(msg, "not found"):
 		return "This link doesn't match any registration. Please check that you copied it correctly."
-	case contains(msg, "cancelled"):
+	case strings.Contains(msg, "cancelled"):
 		return "This session has been cancelled."
 	default:
 		return "The link may be invalid, or the session is no longer available."
 	}
 }
-
-func contains(haystack, needle string) bool {
-	return len(haystack) >= len(needle) &&
-		(haystack == needle || indexOf(haystack, needle) >= 0)
-}
-
-func indexOf(s, sub string) int {
-	for i := 0; i+len(sub) <= len(s); i++ {
-		if s[i:i+len(sub)] == sub {
-			return i
-		}
-	}
-	return -1
-}
-
-// Compile-time guard: the unused response import is kept for
-// consistency with other handlers.
-var _ = response.Success

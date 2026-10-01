@@ -27,13 +27,30 @@ func (s *service) RegisterForEvent(
 	}
 	log.Printf("[registration] STEP 1 OK: registrable resolved")
 
-	// ------------------------------------------------------------
+		// ------------------------------------------------------------
 	// 2. Validate registration is open
 	// ------------------------------------------------------------
 	if !registrable.IsRegistrationOpen() {
 		log.Printf("[registration] STEP 2 FAIL: registration not open for event=%s",
 			cmd.EventID)
 		return nil, registrationdomain.ErrEventNotOpen
+	}
+	log.Printf("[registration] STEP 2 OK: registration is open")
+
+	// ------------------------------------------------------------
+	// 2b. Enforce authentication for events that require it.
+	//
+	// Zoom events require a Nuruvent account: attendance is tracked
+	// via a JWT signed for a specific user, and guests have no
+	// identity to sign.
+	// ------------------------------------------------------------
+	if cmd.UserID == "" && registrable.RequiresAuth() {
+		log.Printf("[registration] STEP 2b FAIL: guest registration not permitted for event=%s",
+			cmd.EventID)
+		return nil, registrationdomain.ErrAuthRequired
+	}
+	if registrable.RequiresAuth() {
+		log.Printf("[registration] STEP 2b OK: authenticated registration (event requires auth)")
 	}
 	log.Printf("[registration] STEP 2 OK: registration is open")
 
@@ -184,14 +201,37 @@ func (s *service) RegisterForEvent(
 	}
 	log.Printf("[registration] STEP 8 OK: persisted, id=%s", reg.ID)
 
-	// ------------------------------------------------------------
+		// ------------------------------------------------------------
 	// 9. Enqueue notifications (best-effort)
+	//
+	// RegistrationCreated fires unconditionally: the attendee gets a
+	// "we've received your registration" message.
+	//
+	// RegistrationConfirmed fires only when the registration is
+	// already confirmed at creation time (free events, zero-total
+	// registrations). Paid registrations transition to confirmed
+	// later, via ConfirmRegistration, which fires this itself.
+	//
+	// At this point the attendance sync has not run, so the payload
+	// carries no join links. For paid events that's fine — the links
+	// go out in the confirmation email sent by ConfirmRegistration.
+	// For free events, syncRegistrationToAttendance runs below and
+	// then a second notification fires with the links populated.
 	// ------------------------------------------------------------
 	if err := s.deps.Notifier.RegistrationCreated(ctx, reg); err != nil {
 		log.Printf("[registration] STEP 9 WARN: RegistrationCreated notifier failed: %v", err)
 	}
 	if reg.Status == registrationdomain.StatusConfirmed {
-		if err := s.deps.Notifier.RegistrationConfirmed(ctx, reg); err != nil {
+		// Sync attendance so free events also get join links in the
+		// confirmation email. Best-effort — failures are logged and
+		// swallowed.
+		s.syncRegistrationToAttendance(ctx, eventReg)
+
+		if err := s.deps.Notifier.RegistrationConfirmed(ctx, registrationdomain.RegistrationConfirmedPayload{
+			Registration: reg,
+			EventID:      eventReg.EventID,
+			JoinLinks:    eventReg.JoinLinks,
+		}); err != nil {
 			log.Printf("[registration] STEP 9 WARN: RegistrationConfirmed notifier failed: %v", err)
 		}
 	}

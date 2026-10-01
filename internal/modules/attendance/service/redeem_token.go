@@ -5,18 +5,30 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"regexp"
+	"strings"
 
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 )
 
-// RedeemJoinToken validates a raw join token, records a join event for
-// the (attendee, session) pair the token belongs to, and returns the
-// session's provider URL for the redirect.
+// RedeemJoinToken validates a raw join token and returns the Nuruvent
+// meeting URL the browser should be redirected to.
 //
-// This is the handler for the public /join/:token endpoint. It must
-// be safe to call multiple times: if the same attendee clicks their
-// link twice, two join records are created. That's the correct
-// behavior — the attendee might have disconnected and rejoined.
+// It does NOT write an attendance record. The click-through only
+// proves the user opened the link; actual presence is captured by the
+// platform's webhook (Zoom) or polling (Google Meet). Writing an
+// attendance row here produced one orphaned row per click — no
+// left_at, no duration — that inflated the session summary and never
+// closed.
+//
+// The `join_tokens.redeemed_at` column (set by FindByHash or a
+// separate MarkRedeemed call — depending on the repository) records
+// that the click happened, for auditing.
+//
+// Safe to call multiple times: each redemption returns the same
+// redirect URL and does not create any side effects beyond the token
+// lookup itself.
 func (s *attendanceService) RedeemJoinToken(
 	ctx context.Context,
 	rawToken string,
@@ -31,13 +43,11 @@ func (s *attendanceService) RedeemJoinToken(
 	var result *RedeemResult
 
 	txErr := s.deps.UnitOfWork.Do(ctx, func(repos attendance.Repositories) error {
-		// 1. Look up the token by hash.
 		token, err := repos.JoinTokens.FindByHash(ctx, hash)
 		if err != nil {
 			return fmt.Errorf("lookup token: %w", err)
 		}
 
-		// 2. Validate the token's state.
 		if !token.IsActive(now) {
 			if token.RevokedAt != nil {
 				return attendance.ErrTokenRevoked
@@ -45,37 +55,27 @@ func (s *attendanceService) RedeemJoinToken(
 			return attendance.ErrTokenExpired
 		}
 
-		// 3. Load the session.
 		session, err := repos.Sessions.FindByID(ctx, token.SessionID)
 		if err != nil {
 			return fmt.Errorf("load session: %w", err)
 		}
 
-		// 4. Guard: session must not be cancelled.
 		if session.Status == attendance.SessionStatusCancelled {
 			return fmt.Errorf("%w: session is cancelled", attendance.ErrTokenRevoked)
 		}
 
-		// 5. Record the join.
-		record, err := attendance.NewAttendanceRecord(
-			s.deps.IDs.NewID(),
-			token.AttendeeID,
-			token.SessionID,
-			now,
-			attendance.SourceJoinLink,
-			now,
-		)
+		// No attendance record is written here. The click-through
+		// is the audit signal, not the attendance signal.
+
+		redirect, err := s.buildJoinRedirect(session)
 		if err != nil {
-			return fmt.Errorf("build record: %w", err)
-		}
-		if err := repos.Records.Create(ctx, record); err != nil {
-			return fmt.Errorf("persist record: %w", err)
+			return err
 		}
 
 		result = &RedeemResult{
 			AttendeeID: token.AttendeeID,
 			SessionID:  token.SessionID,
-			RedirectTo: session.ProviderURL,
+			RedirectTo: redirect,
 		}
 		return nil
 	})
@@ -84,4 +84,81 @@ func (s *attendanceService) RedeemJoinToken(
 	}
 
 	return result, nil
+}
+
+// buildJoinRedirect produces the frontend URL the browser should land
+// on after a successful token redemption.
+//
+// Virtual sessions go to /meeting/:code — the Nuruvent page that
+// hosts the embedded SDK flow. In-person sessions go to the event
+// dashboard, since there's nothing to join remotely.
+//
+// The URL is absolute (scheme + host from AppConfig.PublicURL)
+// because the HTTP handler responds with a 302 and the browser
+// resolves relative Location headers against the request host. The
+// request host is the backend's — not the frontend's — so a relative
+// redirect would land the user on /meeting/... on the backend, where
+// no such route exists.
+//
+// The path segment is the "meeting code" the frontend expects:
+//
+//   - Zoom: the numeric meeting ID (e.g. "71911238429") — already what
+//     provider_meeting_id holds.
+//   - Google Meet: the URL code (e.g. "dwt-neok-pgk"), NOT the space
+//     resource name ("spaces/23_mkbr6Xy4B") that provider_meeting_id
+//     holds. The space name is what Meet's webhook payloads use; the
+//     code is what the frontend embeds.
+func (s *attendanceService) buildJoinRedirect(session *attendance.Session) (string, error) {
+	frontendBase := strings.TrimRight(s.deps.AppConfig.PublicURL, "/")
+	if frontendBase == "" {
+		frontendBase = "http://localhost:3000"
+	}
+
+	eventReturnPath := "/dashboard/events/" + session.External.ID
+
+	if !session.Provider.RequiresMeetingID() {
+		return frontendBase + eventReturnPath, nil
+	}
+
+	code := session.ProviderMeetingID
+	if session.Provider == attendance.ProviderGoogleMeet {
+		if c := meetCodeFromURL(session.ProviderURL); c != "" {
+			code = c
+		}
+	}
+
+	if code == "" {
+		return "", fmt.Errorf(
+			"%w: session has no meeting id for provider %q",
+			attendance.ErrInvalidToken, session.Provider,
+		)
+	}
+
+	params := url.Values{}
+	params.Set("name", session.EventDisplayName)
+	params.Set("host", session.OrganizerDisplayName)
+	params.Set("return", eventReturnPath)
+	params.Set("platform", string(session.Provider))
+
+	return frontendBase + fmt.Sprintf("/meeting/%s?%s",
+		code, params.Encode()), nil
+}
+
+// meetCodeFromURL extracts the meeting code from a Google Meet URL.
+//
+// "https://meet.google.com/dwt-neok-pgk"        → "dwt-neok-pgk"
+// "meet.google.com/abc-defg-hij?authuser=0"     → "abc-defg-hij"
+//
+// Returns "" if the URL doesn't contain a recognizable code.
+var meetCodeRe = regexp.MustCompile(`meet\.google\.com/([a-z]{3}-[a-z]{4}-[a-z]{3})`)
+
+func meetCodeFromURL(u string) string {
+	u = strings.TrimSpace(u)
+	if u == "" {
+		return ""
+	}
+	if m := meetCodeRe.FindStringSubmatch(u); len(m) >= 2 {
+		return m[1]
+	}
+	return ""
 }

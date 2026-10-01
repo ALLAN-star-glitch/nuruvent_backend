@@ -36,7 +36,7 @@ func (s *eventService) CreateEventMeeting(
 		return nil, err
 	}
 
-	if !event.IsVirtual {
+	if !hasVirtualSessions(event) {
 		return nil, domain.ErrEventNotVirtual
 	}
 	if len(event.Schedules) == 0 {
@@ -80,7 +80,7 @@ func (s *eventService) DeleteEventMeeting(
 		return nil, err
 	}
 
-	if !event.IsVirtual {
+	if !hasVirtualSessions(event) {
 		return nil, domain.ErrEventNotVirtual
 	}
 
@@ -150,7 +150,7 @@ func (s *eventService) RegenerateEventMeeting(
 		return nil, err
 	}
 
-	if !event.IsVirtual {
+	if !hasVirtualSessions(event) {
 		return nil, domain.ErrEventNotVirtual
 	}
 	if len(event.Schedules) == 0 {
@@ -223,4 +223,20 @@ func (s *eventService) schedulesWithMeetings(event *domain.Event) []int {
 		out = append(out, i)
 	}
 	return out
+}
+
+// hasVirtualSessions reports whether the event has at least one virtual
+// schedule. This is the source of truth for "can we manage meetings on
+// this event" — the event-level IsVirtual/IsHybrid flags are derived
+// and can lag behind schedule edits.
+func hasVirtualSessions(event *domain.Event) bool {
+	if event == nil {
+		return false
+	}
+	for _, s := range event.Schedules {
+		if s.IsVirtual {
+			return true
+		}
+	}
+	return false
 }

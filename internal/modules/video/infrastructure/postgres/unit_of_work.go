@@ -42,4 +42,4 @@ func (u *UnitOfWork) Do(
 }
 
 // compile-time assertion
-var _ videodomain.UnitOfWork = (*UnitOfWork)(nil)
+var _ videodomain.UnitOfWork = (*UnitOfWork)(nil)   

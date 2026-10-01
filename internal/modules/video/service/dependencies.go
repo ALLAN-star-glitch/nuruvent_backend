@@ -36,6 +36,17 @@ type Dependencies struct {
 	// Platform clients
 	Clients videodomain.ClientRegistry
 
+	// Cross-module
+	//
+	// Attendance is the video module's view of the attendance
+	// service. It is used only by FetchGoogleMeetAttendance, which
+	// hands off fetched participants for the attendance module to
+	// record.
+	//
+	// The interface is defined in attendance_contract.go, in this
+	// same package.
+	Attendance ParticipantRecorder
+
 	// Cross-cutting
 	IDs   *id.UUIDGenerator
 	Clock Clock

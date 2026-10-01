@@ -2,7 +2,10 @@
 
 package registrationdomain
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // AttendanceRegistrar is the registration module's outbound port for
 // syncing attendees into the attendance module.
@@ -39,7 +42,15 @@ type IssueJoinTokensCommand struct {
 }
 
 // JoinLink is a (session title, join URL) pair.
+// JoinLink is a personalized join URL for one session.
+
+
 type JoinLink struct {
-	SessionTitle string
-	URL          string
+    SessionID      string
+    SessionTitle   string
+    ScheduledStart time.Time
+    ScheduledEnd   time.Time
+    Platform       string
+    URL            string
+    ExpiresAt      time.Time
 }

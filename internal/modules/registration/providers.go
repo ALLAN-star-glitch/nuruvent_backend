@@ -6,7 +6,6 @@ import (
 	"github.com/google/wire"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/infrastructure/notifier"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/infrastructure/postgres"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
@@ -28,12 +27,7 @@ var ProviderSet = wire.NewSet(
 		new(*postgres.RegistrationNumberGenerator),
 	),
 
-	notifier.NewNoop,
-	wire.Bind(
-		new(registrationdomain.Notifier),
-		new(*notifier.Noop),
-	),
-
+	
 	
 	
 

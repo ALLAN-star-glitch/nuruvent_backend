@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -26,21 +27,22 @@ func (r *AttendeeRepository) Create(ctx context.Context, a *attendance.Attendee)
 }
 
 func (r *AttendeeRepository) Update(ctx context.Context, a *attendance.Attendee) error {
-	res := r.db.WithContext(ctx).
-		Model(&AttendeeModel{}).
-		Where("id = ?", a.ID).
-		Updates(map[string]any{
-			"display_name": a.DisplayName,
-			"email":        a.Email,
-			"updated_at":   a.UpdatedAt,
-		})
-	if res.Error != nil {
-		return translateError(res.Error, "update attendee", attendance.ErrAttendeeNotFound)
-	}
-	if res.RowsAffected == 0 {
-		return attendance.ErrAttendeeNotFound
-	}
-	return nil
+    res := r.db.WithContext(ctx).
+        Model(&AttendeeModel{}).
+        Where("id = ?", a.ID).
+        Updates(map[string]any{
+            "display_name":        a.DisplayName,
+            "email":               a.Email,
+            "google_meet_user_id": a.GoogleMeetUserID,
+            "updated_at":          time.Now().UTC(),
+        })
+    if res.Error != nil {
+        return translateError(res.Error, "update attendee", attendance.ErrInvalidSession)
+    }
+    if res.RowsAffected == 0 {
+        return attendance.ErrInvalidSession
+    }
+    return nil
 }
 
 func (r *AttendeeRepository) FindByID(ctx context.Context, id string) (*attendance.Attendee, error) {

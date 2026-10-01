@@ -116,6 +116,9 @@ type AppDependencies struct {
 	AttendanceHandler *attendanceHandler.Handlers
 	AttendanceService attendanceService.Service
 
+
+
+
 	// Video Module
 	VideoHandler *videoHandler.Handlers
 	VideoService videoService.Service
@@ -205,9 +208,23 @@ func InitializeApp() (*AppDependencies, error) {
 
 
 
+		NewAttendanceVideoMeetingIDResolver,
+
+
+		// VIDEO
 		NewEventsVideoAdapter,
+		NewVideoAttendanceAdapter,
+
+
+
+		NewRegistrationNotifier,
+
+
+
 
 		provideOrganizerProvider,
+
+
 
 		// ============================================================
 		// FINAL APP DEPENDENCIES

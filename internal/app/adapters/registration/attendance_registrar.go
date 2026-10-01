@@ -47,19 +47,40 @@ func (a *AttendanceRegistrarAdapter) RegisterAttendee(
 	return attendee.ID, nil
 }
 
+// RegisterAttendeeForEvent creates status rows for every session
+// under the event and issues a join token per session.
+//
+// The returned join URLs are discarded here — this port method is
+// used by the registration flow to ensure the attendee is on every
+// roster. Callers that need the URLs use IssueJoinTokens instead.
 func (a *AttendanceRegistrarAdapter) RegisterAttendeeForEvent(
 	ctx context.Context,
 	cmd registrationDomain.RegisterAttendeeForEventCommand,
 ) error {
-	return a.attendance.RegisterAttendeeForExternal(ctx, attendanceService.RegisterAttendeeForExternalCommand{
-		AttendeeID: cmd.AttendeeID,
-		External: attendanceDomain.ExternalRef{
-			Type: "event",
-			ID:   cmd.EventID,
+	_, err := a.attendance.RegisterAttendeeForExternal(
+		ctx,
+		attendanceService.RegisterAttendeeForExternalCommand{
+			AttendeeID: cmd.AttendeeID,
+			External: attendanceDomain.ExternalRef{
+				Type: "event",
+				ID:   cmd.EventID,
+			},
+			PublicBaseURL: a.publicBaseURL,
+			LinkGrace:     24 * time.Hour,
 		},
-	})
+	)
+	if err != nil {
+		return fmt.Errorf("attendance.RegisterAttendeeForExternal: %w", err)
+	}
+	return nil
 }
 
+// IssueJoinTokens issues a join token per session under an event and
+// returns the resulting links.
+//
+// The URL comes from the attendance service's own result rather than
+// string concatenation, so the attendance module owns the URL shape
+// and the caller just consumes it.
 func (a *AttendanceRegistrarAdapter) IssueJoinTokens(
 	ctx context.Context,
 	cmd registrationDomain.IssueJoinTokensCommand,
@@ -74,18 +95,35 @@ func (a *AttendanceRegistrarAdapter) IssueJoinTokens(
 
 	links := make([]registrationDomain.JoinLink, 0, len(sessions))
 	for _, session := range sessions {
-		rawToken, err := a.attendance.IssueJoinToken(ctx, attendanceService.IssueJoinTokenCommand{
-			AttendeeID: cmd.AttendeeID,
-			SessionID:  session.ID,
-			Grace:      24 * time.Hour,
+		// In-person sessions have no remote meeting to join. Skip
+		// them entirely — no token, no link, no error.
+		if !session.Provider.RequiresMeetingID() {
+			continue
+		}
+
+		result, err := a.attendance.IssueJoinToken(ctx, attendanceService.IssueJoinTokenCommand{
+			AttendeeID:    cmd.AttendeeID,
+			SessionID:     session.ID,
+			Grace:         24 * time.Hour,
+			PublicBaseURL: a.publicBaseURL,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("issue join token for session %s: %w", session.ID, err)
 		}
 		links = append(links, registrationDomain.JoinLink{
-			SessionTitle: session.Title,
-			URL:          a.publicBaseURL + "/join/" + rawToken,
+			SessionID:      session.ID,
+			SessionTitle:   session.Title,
+			ScheduledStart: session.ScheduledStart,
+			ScheduledEnd:   session.ScheduledEnd,
+			Platform:       string(session.Provider),
+			URL:            result.JoinURL,
+			ExpiresAt:      result.ExpiresAt,
 		})
 	}
 	return links, nil
 }
+
+
+
+
+

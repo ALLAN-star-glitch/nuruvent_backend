@@ -1,4 +1,3 @@
-
 // internal/modules/video/service/service.go
 
 package service
@@ -18,40 +17,22 @@ type Service interface {
 	// CONNECTION MANAGEMENT
 	// ============================================================
 
-	// BeginConnect starts the OAuth flow for the given user and
-	// platform. Returns the URL the user should be redirected to and
-	// the state that must be persisted (it is — this is informational).
 	BeginConnect(ctx context.Context, cmd BeginConnectCommand) (*ConnectResult, error)
-
-	// HandleCallback is called when the platform redirects back to
-	// Nuruvent. It validates the state, exchanges the code, and
-	// stores the connection. Returns the newly-created connection.
 	HandleCallback(ctx context.Context, cmd CallbackCommand) (*ConnectionResult, error)
-
-	// Disconnect revokes and deletes (soft) the user's connection to
-	// the given platform. Idempotent.
 	Disconnect(ctx context.Context, cmd DisconnectCommand) error
 
 	// ============================================================
 	// CONNECTION QUERIES
 	// ============================================================
 
-	// GetConnection returns the user's active connection for the
-	// given platform.
-	//
-	// Returns ErrConnectionNotFound if none exists.
 	GetConnection(
 		ctx context.Context,
 		userID string,
 		platform videodomain.Platform,
 	) (*videodomain.Connection, error)
 
-	// ListConnections returns all of a user's connections (active
-	// and revoked), newest first.
 	ListConnections(ctx context.Context, userID string) ([]*videodomain.Connection, error)
 
-	// IsConnected reports whether the user has an active connection
-	// for the given platform.
 	IsConnected(
 		ctx context.Context,
 		userID string,
@@ -62,31 +43,69 @@ type Service interface {
 	// MEETINGS
 	// ============================================================
 
-	// CreateMeeting creates a meeting on the connected host's
-	// platform account. Requires an active connection.
 	CreateMeeting(ctx context.Context, cmd CreateMeetingCommand) (*videodomain.Meeting, error)
 
-	// DeleteMeeting removes a meeting from the platform. Best-effort
-	// at the platform; always removes the local record.
+	UpdateMeeting(ctx context.Context, cmd UpdateMeetingCommand) (*videodomain.Meeting, error)
+
 	DeleteMeeting(ctx context.Context, cmd DeleteMeetingCommand) error
 
-	UpdateMeeting(ctx context.Context, cmd UpdateMeetingCommand) (*videodomain.Meeting, error) // ← add
+
+		// FindMeetingIDByProviderMeeting returns the internal ID of the
+	// video meeting identified by (platform, provider meeting code).
+	//
+	// Returns ("", nil) if no meeting matches — that is not an error.
+	// Used by the attendance module (via an adapter) to link attendance
+	// sessions to their underlying video meetings.
+	FindMeetingIDByProviderMeeting(
+		ctx context.Context,
+		provider string,
+		providerMeetingID string,
+	) (string, error)
+
+	// ============================================================
+	// ATTENDANCE
+	// ============================================================
+
+	// FetchGoogleMeetAttendance polls Google Meet for conference
+	// records and participants, and dispatches events to the
+	// attendance module.
+	//
+	// Only supported for google_meet meetings. Zoom attendance
+	// arrives via webhook and does not use this path.
+	FetchGoogleMeetAttendance(
+		ctx context.Context,
+		cmd FetchGoogleMeetAttendanceCommand,
+	) (*FetchGoogleMeetAttendanceResult, error)
+
+	// ============================================================
+	// MEETING SDK
+	// ============================================================
+
+	GenerateMeetingSignature(ctx context.Context, cmd GenerateMeetingSignatureCommand) (*videodomain.MeetingSignature, error)
+
+	FetchMeetingZAK(ctx context.Context, cmd FetchMeetingZAKCommand) (*videodomain.MeetingZAK, error)
+
+	GetMeetingJoinInfo(ctx context.Context, cmd GetMeetingJoinInfoCommand) (*MeetingJoinInfo, error)
 
 	// ============================================================
 	// MAINTENANCE
 	// ============================================================
 
-	// CleanupExpiredOAuthStates removes oauth_state rows past their
-	// expiry window. Called by a background job.
 	CleanupExpiredOAuthStates(ctx context.Context) (int, error)
 
 
+		// LinkParticipant binds a Meet participant's Google user id to a
+	// registered attendee, then re-polls the meeting so the newly-
+	// linked identity is picked up and the join is recorded.
+	LinkParticipant(
+		ctx context.Context,
+		cmd LinkParticipantCommand,
+	) (*FetchGoogleMeetAttendanceResult, error)
 
-
-	GenerateMeetingSignature(ctx context.Context, cmd GenerateMeetingSignatureCommand) (*videodomain.MeetingSignature, error)
-    FetchMeetingZAK(ctx context.Context, cmd FetchMeetingZAKCommand) (*videodomain.MeetingZAK, error)
-
-
-	GetMeetingJoinInfo(ctx context.Context, cmd GetMeetingJoinInfoCommand) (*MeetingJoinInfo, error)
+	// GetUnmatchedParticipants polls the meeting and returns any
+	// participants that couldn't be resolved to a registered attendee.
+	GetUnmatchedParticipants(
+		ctx context.Context,
+		cmd GetUnmatchedParticipantsCommand,
+	) ([]UnmatchedParticipant, error)
 }
-

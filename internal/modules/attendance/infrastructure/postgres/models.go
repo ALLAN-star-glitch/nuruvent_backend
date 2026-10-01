@@ -12,16 +12,15 @@ import (
 
 // AttendeeModel maps to the `attendees` table.
 type AttendeeModel struct {
-	ID           string `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
-	ExternalType string `gorm:"type:varchar(50);not null;index:idx_attendees_external,priority:1"`
-	ExternalID   string `gorm:"type:uuid;not null;index:idx_attendees_external,priority:2"`
-
-	DisplayName string `gorm:"type:varchar(255);not null"`
-	Email       string `gorm:"type:varchar(255);not null;index:idx_attendees_email"`
-
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt gorm.DeletedAt `gorm:"index"`
+    ID               string         `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
+    ExternalType     string         `gorm:"type:varchar(50);not null;index:idx_attendees_external,priority:1"`
+    ExternalID       string         `gorm:"type:uuid;not null;index:idx_attendees_external,priority:2"`
+    DisplayName      string         `gorm:"type:varchar(255);not null"`
+    Email            string         `gorm:"type:varchar(255);not null;index:idx_attendees_email"`
+    GoogleMeetUserID string         `gorm:"type:varchar(255);not null;default:'';index"`
+    CreatedAt        time.Time
+    UpdatedAt        time.Time
+    DeletedAt        gorm.DeletedAt `gorm:"index"`
 }
 
 func (AttendeeModel) TableName() string { return "attendees" }
@@ -49,6 +48,9 @@ type SessionModel struct {
 
 	Status string `gorm:"type:varchar(20);not null;default:'scheduled';index:idx_sessions_status"`
 
+	EventDisplayName     string `gorm:"type:text;not null;default:''"`
+	OrganizerDisplayName string `gorm:"type:text;not null;default:''"`
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
@@ -63,16 +65,28 @@ func (SessionModel) TableName() string { return "sessions" }
 // ============================================================
 
 // JoinTokenModel maps to the `join_tokens` table.
+// JoinTokenModel maps to the `join_tokens` table.
+//
+// A join token binds one (attendee, session) pair to a single-use
+// URL. Redemption — the act of an attendee opening their
+// personalized link — is recorded in RedeemedAt and consulted by
+// the fetch matcher before falling back to display-name matching.
 type JoinTokenModel struct {
-	ID         string `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
-	AttendeeID string `gorm:"type:uuid;not null;index:idx_join_tokens_attendee"`
-	SessionID  string `gorm:"type:uuid;not null;index:idx_join_tokens_session"`
+    ID         string `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
+    AttendeeID string `gorm:"type:uuid;not null;index:idx_join_tokens_attendee"`
+    SessionID  string `gorm:"type:uuid;not null;index:idx_join_tokens_session"`
 
-	TokenHash string `gorm:"type:char(64);not null;uniqueIndex:idx_join_tokens_hash"`
+    TokenHash string `gorm:"type:char(64);not null;uniqueIndex:idx_join_tokens_hash"`
 
-	IssuedAt  time.Time  `gorm:"not null"`
-	ExpiresAt time.Time  `gorm:"not null;index:idx_join_tokens_expires"`
-	RevokedAt *time.Time
+    IssuedAt  time.Time  `gorm:"not null"`
+    ExpiresAt time.Time  `gorm:"not null;index:idx_join_tokens_expires"`
+    RevokedAt *time.Time
+
+    // RedeemedAt is set the first time the token is opened. NULL
+    // means the token has been issued but never used. The fetch
+    // matcher queries tokens by (session_id, redeemed_at) to find
+    // attendees who joined within the window.
+    RedeemedAt *time.Time `gorm:"index:idx_join_tokens_redeemed"`
 }
 
 func (JoinTokenModel) TableName() string { return "join_tokens" }

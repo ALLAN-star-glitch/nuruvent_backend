@@ -46,33 +46,35 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 	// still fails, we can translate the underlying cause into a
 	// user-facing message that explains what to do next.
 	var meetingErr error
-		if err := s.attachVideoMeetings(ctx, event, publishedBy, ""); err != nil {
-			log.Printf("⚠️ video integration on publish: %v", err)
-			meetingErr = err
-		}
+	if err := s.attachVideoMeetings(ctx, event, publishedBy, ""); err != nil {
+		log.Printf("⚠️ video integration on publish: %v", err)
+		meetingErr = err
+	}
 
-		log.Printf("🔎 PUBLISH: meetingErr=%v (nil=%v)", meetingErr, meetingErr == nil)
+	log.Printf("🔎 PUBLISH: meetingErr=%v (nil=%v)", meetingErr, meetingErr == nil)
 
-		if err := event.ValidateForPublish(); err != nil {
-			log.Printf("❌ Publish validation failed: %v", err)
-			log.Printf("🔎 PUBLISH: sending to translator, validationErr=%v meetingErr=%v",
-				err, meetingErr)
-			return nil, s.translatePublishError(err, meetingErr)
-		}
+	if err := event.ValidateForPublish(); err != nil {
+		log.Printf("❌ Publish validation failed: %v", err)
+		log.Printf("🔎 PUBLISH: sending to translator, validationErr=%v meetingErr=%v",
+			err, meetingErr)
+		return nil, s.translatePublishError(err, meetingErr)
+	}
 
-		
 	event.EventStatusID = status.ID
 	if err := s.repo.UpdateEvent(ctx, event); err != nil {
 		log.Printf("❌ Failed to update event: %v", err)
 		return nil, fmt.Errorf("failed to publish event: %w", err)
 	}
 
-	// Reload so DB-assigned schedule IDs are populated on the domain
-	// struct before we mirror schedules into attendance.
+	// Reload the whole event so the returned struct reflects what's
+	// actually in the DB — status, type, category, schedules, and any
+	// DB-assigned IDs. Replacing only Schedules leaves the pre-write
+	// EventStatus on the struct, which is why the response can still
+	// report "draft" after a successful publish.
 	if reloaded, reloadErr := s.repo.GetEventByID(ctx, id); reloadErr == nil && reloaded != nil {
-		event.Schedules = reloaded.Schedules
+		*event = *reloaded
 	} else if reloadErr != nil {
-		log.Printf("⚠️ Could not reload event for attendance sync: %v", reloadErr)
+		log.Printf("⚠️ Could not reload event after publish: %v", reloadErr)
 	}
 
 	// Mirror schedules into the attendance module. Best-effort:
@@ -103,6 +105,15 @@ func (s *eventService) CancelEvent(ctx context.Context, id, cancelledBy string) 
 		return nil, fmt.Errorf("failed to cancel event: %w", err)
 	}
 
+	// Reload so the returned struct carries the DB-fresh status,
+	// type, and category. Without this, event.EventStatus stays as
+	// it was loaded, and the response shows the pre-cancel status.
+	if reloaded, reloadErr := s.repo.GetEventByID(ctx, id); reloadErr == nil && reloaded != nil {
+		*event = *reloaded
+	} else if reloadErr != nil {
+		log.Printf("⚠️ Could not reload event after cancel: %v", reloadErr)
+	}
+
 	log.Printf("✅ Event cancelled: %s by %s", id, cancelledBy)
 	return event, nil
 }
@@ -126,6 +137,14 @@ func (s *eventService) CompleteEvent(ctx context.Context, id string) (*domain.Ev
 
 	if err := s.repo.UpdateEvent(ctx, event); err != nil {
 		return nil, fmt.Errorf("failed to complete event: %w", err)
+	}
+
+	// Reload so the returned struct carries the DB-fresh status,
+	// type, and category.
+	if reloaded, reloadErr := s.repo.GetEventByID(ctx, id); reloadErr == nil && reloaded != nil {
+		*event = *reloaded
+	} else if reloadErr != nil {
+		log.Printf("⚠️ Could not reload event after complete: %v", reloadErr)
 	}
 
 	log.Printf("✅ Event completed: %s", id)
@@ -281,9 +300,3 @@ func (s *eventService) getEventStatusBySlug(ctx context.Context, slug string) (*
 	}
 	return status, nil
 }
-
-
-
-
-
-

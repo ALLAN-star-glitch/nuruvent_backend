@@ -167,6 +167,7 @@ func ProvideVideoDependencies(
 	unitOfWork *videoPostgres.UnitOfWork,
 	connections videodomain.ConnectionRepository,
 	oauthStates videodomain.OAuthStateRepository,
+	attendance videoService.ParticipantRecorder,
 	meetings videodomain.MeetingRepository,
 	clients videodomain.ClientRegistry,
 	ids *id.UUIDGenerator,
@@ -180,8 +181,10 @@ func ProvideVideoDependencies(
 		Clients:     clients,
 		IDs:         ids,
 		Clock:       clock,
+		Attendance: attendance,
 	}
 }
+
 
 // ============================================================
 // MISC

@@ -246,10 +246,20 @@ type EventSchedule struct {
 	ZoomLink string
 	MeetLink string
 
-	// VideoMeetingID references video_meetings.id when the meeting was
-	// created automatically by the video module. Nil for manually-pasted
-	// links and in-person sessions.
-	VideoMeetingID *string
+	// VideoMeetingID is the Nuruvent UUID of the auto-created
+    // meeting for this schedule. Points at video_meetings.id.
+    //
+    // Nil for manual links, in-person schedules, and legacy rows
+    // that predate this column's correct semantics.
+    VideoMeetingID *string
+
+    // VideoMeetingExternalID is the platform-side identifier for the
+    // meeting — "spaces/ot0nSSlGgp4B" for Google Meet, the numeric
+    // meeting ID for Zoom. Matches video_meetings.external_id.
+    //
+    // Populated at creation time. Attendance sync reads this directly
+    // so it never has to re-parse the join URL.
+    VideoMeetingExternalID string
 
 	MaxAttendees *int
 }

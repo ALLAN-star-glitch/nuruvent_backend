@@ -541,10 +541,6 @@ func (s *notificationService) SendNewPersonalAccountNotificationSync(ctx context
 // ============================================================
 
 // SendTeamInviteExistingUser sends a team invitation to an existing user
-// Sent when: User already has a Nuruvent account
-// ✅ NO ROLE - Roles are inherited from account level
-// ✅ NO OTP - User clicks accept link to join
-// ✅ AI-READY - PersonalizedContent field for future AI integration
 func (s *notificationService) SendTeamInviteExistingUser(ctx context.Context, req notificationdomain.SendTeamInviteExistingUserRequest) error {
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
@@ -591,7 +587,6 @@ func (s *notificationService) sendTeamInviteExistingUserSync(ctx context.Context
 		},
 	}
 
-	// ✅ AI-Ready: If personalized content exists, add it to the channel request
 	if req.PersonalizedContent != nil {
 		channelReq.Meta["ai_subject"] = req.PersonalizedContent.Subject
 		channelReq.Meta["ai_greeting"] = req.PersonalizedContent.Greeting
@@ -608,10 +603,6 @@ func (s *notificationService) sendTeamInviteExistingUserSync(ctx context.Context
 }
 
 // SendTeamInviteRegistration sends an invitation to a new user with registration link
-// Sent when: User does NOT have a Nuruvent account
-// ✅ NO ROLE - Roles are inherited from account level
-// ✅ NO OTP - User clicks registration link with token embedded
-// ✅ AI-READY - PersonalizedContent field for future AI integration
 func (s *notificationService) SendTeamInviteRegistration(ctx context.Context, req notificationdomain.SendTeamInviteRegistrationRequest) error {
 	_, err := s.getChannel(notificationdomain.ChannelEmail)
 	if err != nil {
@@ -658,7 +649,6 @@ func (s *notificationService) sendTeamInviteRegistrationSync(ctx context.Context
 		},
 	}
 
-	// ✅ AI-Ready: If personalized content exists, add it to the channel request
 	if req.PersonalizedContent != nil {
 		channelReq.Meta["ai_subject"] = req.PersonalizedContent.Subject
 		channelReq.Meta["ai_greeting"] = req.PersonalizedContent.Greeting
@@ -719,7 +709,6 @@ func (s *notificationService) sendTeamInviteAcceptedSync(ctx context.Context, re
 		},
 	}
 
-	// ✅ AI-Ready: If personalized content exists, add it to the channel request
 	if req.PersonalizedContent != nil {
 		channelReq.Meta["ai_subject"] = req.PersonalizedContent.Subject
 		channelReq.Meta["ai_greeting"] = req.PersonalizedContent.Greeting
@@ -776,7 +765,6 @@ func (s *notificationService) sendTeamInviteDeclinedSync(ctx context.Context, re
 		},
 	}
 
-	// ✅ AI-Ready: If personalized content exists, add it to the channel request
 	if req.PersonalizedContent != nil {
 		channelReq.Meta["ai_subject"] = req.PersonalizedContent.Subject
 		channelReq.Meta["ai_greeting"] = req.PersonalizedContent.Greeting
@@ -786,10 +774,6 @@ func (s *notificationService) sendTeamInviteDeclinedSync(ctx context.Context, re
 	}
 
 	return ch.Send(ctx, channelReq)
-
-
-
-	
 }
 
 // ============================================================
@@ -1068,6 +1052,95 @@ func (s *notificationService) sendRefundIssuedSync(ctx context.Context, req noti
 	}
 
 	return ch.Send(ctx, channelReq)
+}
+
+// ============================================================
+// REGISTRATION NOTIFICATION METHODS
+// ============================================================
+
+// SendRegistrationConfirmed notifies a registrant that their
+// registration is confirmed and delivers their per-session join
+// links.
+func (s *notificationService) SendRegistrationConfirmed(
+	ctx context.Context,
+	req notificationdomain.SendRegistrationConfirmedRequest,
+) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[NotificationService] SendRegistrationConfirmed to=%s joinLinks=%d",
+		req.To, len(req.JoinLinks))
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.RegistrationConfirmedTask{
+			To:                 req.To,
+			Name:               req.Name,
+			RegistrationNumber: req.RegistrationNumber,
+			EventName:          req.EventName,
+			EventID:            req.EventID,
+			JoinLinks:          toNotificationJoinLinks(req.JoinLinks),
+		}
+		if err := s.taskEnqueuer.EnqueueRegistrationConfirmed(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue registration confirmed task: %v, falling back to sync", err)
+			return s.sendRegistrationConfirmedSync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendRegistrationConfirmedSync(ctx, req)
+}
+
+func (s *notificationService) sendRegistrationConfirmedSync(
+	ctx context.Context,
+	req notificationdomain.SendRegistrationConfirmedRequest,
+) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "You're confirmed for " + req.EventName + " - Nuruvent",
+		Type:    notificationdomain.TypeRegistrationConfirmed,
+		Meta: map[string]string{
+			"name":                req.Name,
+			"registration_number": req.RegistrationNumber,
+			"event_name":          req.EventName,
+			"event_id":            req.EventID,
+			"links":               encodeJoinLinks(req.JoinLinks),
+		},
+	}
+
+	return ch.Send(ctx, channelReq)
+}
+
+// toNotificationJoinLinks converts the service-level link type to the
+// domain task type. They're identical today; kept as a helper so the
+// two can diverge without breaking callers.
+func toNotificationJoinLinks(
+	in []notificationdomain.RegistrationJoinLink,
+) []notificationdomain.RegistrationJoinLink {
+	return in
+}
+
+// encodeJoinLinks serializes a slice of join links into a single
+// string the template can decode with the `link_rows` function.
+//
+// Format: "Title1\x1fURL1\x1eTitle2\x1fURL2"
+//   \x1f (unit separator)  — between title and URL
+//   \x1e (record separator) — between rows
+func encodeJoinLinks(links []notificationdomain.RegistrationJoinLink) string {
+	const (
+		fieldSep = "\x1f"
+		rowSep   = "\x1e"
+	)
+	parts := make([]string, 0, len(links))
+	for _, l := range links {
+		parts = append(parts, l.SessionTitle+fieldSep+l.URL)
+	}
+	return strings.Join(parts, rowSep)
 }
 
 // formatAmount converts minor units (int64) to a display string.

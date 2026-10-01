@@ -22,6 +22,7 @@ func RegisterRoutes(
 	// User-scoped routes (authenticated)
 	// ------------------------------------------------------------
 	me := r.Group("/me", authMiddleware)
+	r.Get("/me/session-links", authMiddleware, h.GetMySessionLinks)
 	me.Get("/registrations", h.ListMine)
 
 	// ------------------------------------------------------------

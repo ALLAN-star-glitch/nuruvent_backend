@@ -174,6 +174,15 @@ type NotificationService interface {
 	// SendRefundIssued notifies the payer that a refund has been
 	// processed.
 	SendRefundIssued(ctx context.Context, req SendRefundIssuedRequest) error
+
+	// ============================================================
+	// REGISTRATION NOTIFICATIONS
+	// ============================================================
+
+	// SendRegistrationConfirmed notifies a registrant that their
+	// registration is confirmed and delivers their per-session join
+	// links.
+	SendRegistrationConfirmed(ctx context.Context, req SendRegistrationConfirmedRequest) error
 }
 
 // ============================================================
@@ -404,4 +413,26 @@ type SendRefundIssuedRequest struct {
 	PaymentID         string
 	RefundID          string
 	IsPartial         bool
+}
+
+// ============================================================
+// REGISTRATION NOTIFICATION COMMANDS
+// ============================================================
+
+// SendRegistrationConfirmedRequest - Registration confirmed, with
+// one personalized join link per session.
+type SendRegistrationConfirmedRequest struct {
+	To                 string // Registrant email
+	Name               string // Registrant name
+	RegistrationNumber string
+	EventName          string
+	EventID            string
+	JoinLinks          []RegistrationJoinLink
+}
+
+// RegistrationJoinLink is one session's join URL, as seen by the
+// notification layer.
+type RegistrationJoinLink struct {
+	SessionTitle string
+	URL          string
 }

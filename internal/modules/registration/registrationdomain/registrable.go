@@ -1,5 +1,7 @@
 package registrationdomain
 
+import "time"
+
 // TicketPrice is the server-authoritative price for a single ticket type.
 type TicketPrice struct {
     UnitPrice int64 // minor units
@@ -15,6 +17,8 @@ type Registrable interface {
     ID() string
     Type() string // "event" | "course"
 
+    DisplayName() string   // human-readable name, for emails
+
     // Capacity
     Capacity() int
     CurrentRegistrations() int
@@ -29,6 +33,16 @@ type Registrable interface {
     // Ticket availability & pricing, keyed by ticket_type_id
     TicketAvailability() (map[string]int, error)
     TicketPricing() (map[string]TicketPrice, error)
+
+
+    RequiresAuth() bool
+
+     // Slug returns the URL-friendly identifier of the underlying
+    // entity, for building public links.
+    Slug() string
+
+    // StartDate returns the scheduled start of the underlying entity.
+    StartDate() time.Time
 }
 
 // RegistrableResolver locates a Registrable by type and ID. Implemented at
@@ -36,3 +50,4 @@ type Registrable interface {
 type RegistrableResolver interface {
     Resolve(typeName string, id string) (Registrable, error)
 }
+

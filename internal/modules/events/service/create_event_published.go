@@ -234,6 +234,8 @@ func (s *eventService) buildPublishedEvent(
 		log.Printf("⚠️ video integration: %v", err)
 	}
 
+	normalizeSchedulePlatforms(event.Schedules)
+
 	return event, nil
 }
 

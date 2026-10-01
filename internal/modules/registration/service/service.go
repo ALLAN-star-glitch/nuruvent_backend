@@ -20,6 +20,12 @@ type Service interface {
 	GetByID(ctx context.Context, id, actorID, guestEmail string) (*registrationdomain.EventRegistration, error)
 	ListByEvent(ctx context.Context, eventID, actorID string, f ListFilterInput) ([]*registrationdomain.EventRegistration, int, error)
 	ListByUser(ctx context.Context, userID string, f ListFilterInput) ([]*registrationdomain.EventRegistration, int, error)
+
+
+	// GetMySessionLinks returns one group per confirmed registration,
+// each carrying a fresh personalized join link per session under the
+// event.
+GetMySessionLinks(ctx context.Context, userID string) (*SessionLinksResult, error)
 }
 
 // Dependencies groups the ports the service needs.

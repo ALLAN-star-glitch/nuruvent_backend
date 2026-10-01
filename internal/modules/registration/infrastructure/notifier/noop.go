@@ -20,7 +20,10 @@ func (*Noop) RegistrationCreated(ctx context.Context, r *registrationdomain.Regi
 	return nil
 }
 
-func (*Noop) RegistrationConfirmed(ctx context.Context, r *registrationdomain.Registration) error {
+func (*Noop) RegistrationConfirmed(
+	ctx context.Context,
+	p registrationdomain.RegistrationConfirmedPayload,
+) error {
 	return nil
 }
 

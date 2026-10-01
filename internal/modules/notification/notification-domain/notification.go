@@ -117,6 +117,12 @@ const (
 	TypePaymentFailed    NotificationType = "payment_failed"
 	TypePaymentExpired   NotificationType = "payment_expired"
 	TypeRefundIssued     NotificationType = "refund_issued"
+
+
+		// ============================================================
+	// REGISTRATION NOTIFICATION TYPES
+	// ============================================================
+	TypeRegistrationConfirmed NotificationType = "registration_confirmed"
 )
 
 func (t NotificationType) String() string {

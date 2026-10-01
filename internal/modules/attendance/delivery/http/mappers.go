@@ -4,6 +4,7 @@ package http
 
 import (
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/service"
 )
 
 func toAttendeeResponse(a *attendance.Attendee) *AttendeeResponse {
@@ -37,20 +38,22 @@ func toSessionResponse(s *attendance.Session) *SessionResponse {
 }
 
 func toSessionStatusResponse(s *attendance.AttendeeSessionStatus) *SessionStatusResponse {
-	return &SessionStatusResponse{
-		AttendeeID:           s.AttendeeID,
-		SessionID:            s.SessionID,
-		DerivedStatus:        string(s.DerivedStatus),
-		EffectiveStatus:      string(s.EffectiveStatus()),
-		TotalDurationSeconds: s.TotalDurationSeconds,
-		HostConfirmed:        s.HostConfirmed,
-		ConfirmedStatus:      string(s.ConfirmedStatus),
-		ConfirmedBy:          s.ConfirmedBy,
-		ConfirmedAt:          s.ConfirmedAt,
-		ConfirmReason:        s.ConfirmReason,
-		CertEligible:         s.CertEligible(),
-		LastDerivedAt:        s.LastDerivedAt,
-	}
+    return &SessionStatusResponse{
+        AttendeeID:           s.AttendeeID,
+        SessionID:            s.SessionID,
+        DerivedStatus:        string(s.DerivedStatus),
+        EffectiveStatus:      string(s.EffectiveStatus()),
+        TotalDurationSeconds: s.TotalDurationSeconds,
+        HostConfirmed:        s.HostConfirmed,
+        ConfirmedStatus:      string(s.ConfirmedStatus),
+        ConfirmedBy:          s.ConfirmedBy,
+        ConfirmedAt:          s.ConfirmedAt,
+        ConfirmReason:        s.ConfirmReason,
+        CertEligible:         s.CertEligible(),
+        LastDerivedAt:        s.LastDerivedAt,
+        DisplayName:          s.DisplayName,   // ← add
+        Email:                s.Email,         // ← add
+    }
 }
 
 func toRollupStatusResponse(s *attendance.AttendeeRollupStatus) *RollupStatusResponse {
@@ -65,4 +68,33 @@ func toRollupStatusResponse(s *attendance.AttendeeRollupStatus) *RollupStatusRes
 		TotalDurationSeconds: s.TotalDurationSeconds,
 		LastDerivedAt:        s.LastDerivedAt,
 	}
+}
+
+// ============================================================
+// JOIN LINKS
+// ============================================================
+
+// toAttendeeSessionLinkResponse converts a service-level
+// AttendeeSessionLink to its wire format.
+func toAttendeeSessionLinkResponse(l service.AttendeeSessionLink) AttendeeSessionLinkResponse {
+	return AttendeeSessionLinkResponse{
+		SessionID:   l.SessionID,
+		MeetingCode: l.MeetingCode,
+		Platform:    string(l.Platform),
+		JoinURL:     l.JoinURL,
+		ExpiresAt:   l.ExpiresAt,
+	}
+}
+
+// toAttendeeSessionLinksResponse converts a slice of
+// AttendeeSessionLink. Returns a non-nil empty slice for nil input so
+// the JSON is `[]` rather than `null`.
+func toAttendeeSessionLinksResponse(
+	links []service.AttendeeSessionLink,
+) []AttendeeSessionLinkResponse {
+	out := make([]AttendeeSessionLinkResponse, 0, len(links))
+	for _, l := range links {
+		out = append(out, toAttendeeSessionLinkResponse(l))
+	}
+	return out
 }

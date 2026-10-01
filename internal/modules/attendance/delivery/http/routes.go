@@ -48,7 +48,8 @@ func RegisterRoutes(
 	r.Post("/attendees/:id/register-for-external", authMiddleware, h.Sessions.RegisterAttendeeForExternal)
 	r.Post("/sessions", authMiddleware, h.Sessions.UpsertSession)
 
-	// ---- Host-facing ----
+
+		// ---- Host-facing ----
 	r.Post("/sessions/:id/join-tokens", authMiddleware, h.Sessions.IssueJoinToken)
 	r.Delete("/sessions/:id/join-tokens", authMiddleware, h.Sessions.RevokeJoinTokens)
 
@@ -59,4 +60,11 @@ func RegisterRoutes(
 	r.Post("/sessions/:id/attendance/bulk-confirm", authMiddleware, h.Attendance.BulkConfirm)
 
 	r.Get("/attendees/:id/summary", optionalAuth, h.Attendance.GetAttendeeSummary)
+
+	// ---- Event-facing ----
+
+	// Per-session and total attendance summary for every session
+	// under an event. Used by the event detail page's attendance
+	// card.
+	r.Get("/events/:eventId/summary", authMiddleware, h.Attendance.EventSummary)
 }

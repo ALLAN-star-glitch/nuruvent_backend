@@ -60,11 +60,13 @@ func (p *Provider) Provider() attendance.SessionProvider {
 // ParseWebhook verifies the Zoom signature and translates the payload
 // into a normalized attendance.WebhookEvent.
 //
-// Errors:
-//   - Missing signature headers → ErrInvalidSession wrapped
-//   - Signature mismatch → same
-//   - Timestamp outside the replay window → same
-//   - Unknown event type → same
+// Return contract:
+//
+//   - (event, nil)   → valid event, hand to the service
+//   - (nil, nil)     → recognized envelope but nothing to do (unknown
+//     event type). Ack with 200 so Zoom stops retrying.
+//   - (nil, err)     → rejected. The HTTP handler maps this to 400
+//     except for URL-validation, which has its own path.
 //
 // Zoom's URL validation event (sent once when the subscription is
 // created) is returned as a *URLValidationError. The HTTP handler
@@ -92,31 +94,69 @@ func (p *Provider) ParseWebhook(
 	}
 
 	// 4. Normalize the event type.
+	//
+	// Unknown event types are ACKED, not rejected. Zoom retries
+	// non-2xx deliveries for hours; a 400 on an event we don't care
+	// about turns into a retry storm. Returning (nil, nil) tells the
+	// handler to respond 200 without processing.
 	var eventType attendance.WebhookEventType
 	switch env.Event {
 	case EventParticipantJoined:
 		eventType = attendance.WebhookEventJoined
 	case EventParticipantLeft:
 		eventType = attendance.WebhookEventLeft
+	case EventMeetingStarted:
+		eventType = attendance.WebhookEventStarted
+	case EventMeetingEnded:
+		eventType = attendance.WebhookEventEnded
 	default:
-		return nil, fmt.Errorf("%w: unhandled zoom event %q", attendance.ErrInvalidSession, env.Event)
+		log.Printf("[zoom] unhandled event %q — acking without processing", env.Event)
+		return nil, nil
 	}
 
-	// 5. Validate required fields.
+	// 5. Validate required fields common to every event.
 	if env.Payload.Object.ID == "" {
 		return nil, fmt.Errorf("%w: missing meeting id", attendance.ErrInvalidSession)
 	}
-	if env.Payload.Object.Participant.Email == "" {
-		return nil, fmt.Errorf("%w: missing participant email", attendance.ErrInvalidSession)
+
+	// 6. Participant-scoped fields are only required for join/leave.
+	//
+	// Session-level events (meeting.started, meeting.ended) have no
+	// participant object, so we must not attempt identity resolution
+	// for them — that would synthesize a bogus "zoom-anon-" identity
+	// from empty fields.
+	var identity, participantName string
+	if isParticipantEvent(eventType) {
+		participant := env.Payload.Object.Participant
+
+		// Email is optional in Zoom's payload. It's only present when
+		// the participant is a signed-in Zoom user in the host's org,
+		// or when registration is required. Fall back through
+		// (email → user_id → participant_uuid) so we always have a
+		// stable identifier for the downstream attendance match.
+		identity = strings.ToLower(strings.TrimSpace(participant.Email))
+		if identity == "" && participant.UserID != "" {
+			identity = "zoom-user-" + participant.UserID
+		}
+		if identity == "" && participant.ParticipantUUID != "" {
+			identity = "zoom-anon-" + participant.ParticipantUUID
+		}
+		if identity == "" {
+			return nil, fmt.Errorf("%w: participant has no identifier", attendance.ErrInvalidSession)
+		}
+		participantName = strings.TrimSpace(participant.UserName)
 	}
 
-	// 6. Compute the timestamp.
+	// 7. Compute the timestamp.
 	occurredAt := p.occurredAtFor(env, eventType)
 
-	// 7. Synthesize a stable event ID for dedup. Zoom does not expose
-	//    a per-event ID for participant webhooks; the meeting UUID +
-	//    participant UUID + event type is unique per delivery and
-	//    stable across redeliveries.
+	// 8. Synthesize a stable event ID for dedup.
+	//
+	// Zoom does not expose a per-event ID for participant webhooks.
+	// The meeting UUID + participant UUID + event type is unique per
+	// delivery and stable across redeliveries. For session-level
+	// events the participant UUID is empty, which still produces a
+	// unique hash per (meeting, event type) — correct for dedup.
 	providerEventID := synthesizeEventID(
 		env.Payload.Object.UUID,
 		env.Payload.Object.Participant.ParticipantUUID,
@@ -128,11 +168,19 @@ func (p *Provider) ParseWebhook(
 		ProviderEventID:   providerEventID,
 		ProviderMeetingID: env.Payload.Object.ID,
 		EventType:         eventType,
-		ParticipantEmail:  strings.ToLower(strings.TrimSpace(env.Payload.Object.Participant.Email)),
-		ParticipantName:   strings.TrimSpace(env.Payload.Object.Participant.UserName),
+		ParticipantEmail:  identity,
+		ParticipantName:   participantName,
 		OccurredAt:        occurredAt,
 		Raw:               nil,
 	}, nil
+}
+
+// isParticipantEvent reports whether the normalized event carries
+// participant-level fields. Used to gate participant identity
+// resolution so session-level events don't produce synthetic
+// "zoom-anon-" identities from empty payloads.
+func isParticipantEvent(t attendance.WebhookEventType) bool {
+	return t == attendance.WebhookEventJoined || t == attendance.WebhookEventLeft
 }
 
 // occurredAtFor computes the timestamp for a webhook event.
@@ -206,12 +254,6 @@ func (p *Provider) verifySignature(payload []byte, headers map[string]string) er
 	mac := hmac.New(sha256.New, []byte(p.cfg.SecretToken))
 	mac.Write([]byte(message))
 	expected := "v0=" + hex.EncodeToString(mac.Sum(nil))
-
-	// 🔻 DEBUG — remove after fixing
-	log.Printf("[zoom] SIG DEBUG header=%q expected=%q secret_len=%d",
-		signature, expected, len(p.cfg.SecretToken))
-	log.Printf("[zoom] SIG DEBUG message=%q", message)
-	// 🔺 DEBUG
 
 	if !hmac.Equal([]byte(expected), []byte(signature)) {
 		return fmt.Errorf("%w: zoom signature mismatch", attendance.ErrInvalidSession)

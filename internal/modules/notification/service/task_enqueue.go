@@ -360,5 +360,28 @@ func (e *taskEnqueuer) EnqueueRefundIssued(ctx context.Context, task notificatio
 	return nil
 }
 
+
+// EnqueueRegistrationConfirmed enqueues a registration-confirmed
+// notification carrying the registrant's per-session join links.
+func (e *taskEnqueuer) EnqueueRegistrationConfirmed(
+	ctx context.Context,
+	task notificationdomain.RegistrationConfirmedTask,
+) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing registration confirmed notification for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskRegistrationConfirmed, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue registration confirmed: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Registration confirmed notification enqueued for %s", task.To)
+	return nil
+}
+
 // Ensure taskEnqueuer implements notificationdomain.TaskEnqueuer
 var _ notificationdomain.TaskEnqueuer = (*taskEnqueuer)(nil)

@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/accounts"
+	attendanceadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/attendance"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/auth"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/events"
 	paymentadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/payment"
@@ -29,7 +30,13 @@ import (
 	registrationService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
 	videoService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/videodomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
+
+
+
+	registrationnotifier "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/registration"
+    registrationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 )
 
 // ---- AUTH ADAPTERS ----
@@ -235,10 +242,43 @@ func NewPaymentPricingResolver(
 	return paymentadapters.NewPricingResolver(regRepo)
 }
 
-// NewEventsVideoAdapter wires the events module's VideoMeetingCreator
-// port to the video service.
+// ---- VIDEO ADAPTERS ----
+
 func NewEventsVideoAdapter(
 	videoSvc videoService.Service,
 ) eventsDomain.VideoMeetingCreator {
 	return events.NewVideoAdapter(videoSvc)
+}
+
+// NewVideoAttendanceAdapter wires the video module's
+// ParticipantRecorder port to the attendance service.
+//
+// The video service uses this in FetchGoogleMeetAttendance to hand
+// fetched Google Meet participants to the attendance module for
+// recording.
+func NewVideoAttendanceAdapter(
+	attendanceSvc attendanceService.Service,
+) videoService.ParticipantRecorder {
+	return attendanceadapters.NewAttendanceToVideo(attendanceSvc)
+}
+
+// NewAttendanceVideoMeetingIDResolver wires the attendance module's
+// VideoMeetingIDResolver port to the video service.
+//
+// The attendance service uses this in GetEventAttendanceSummary to
+// resolve each session's underlying video meeting ID, so the
+// frontend can address POST /video/meetings/:id/fetch-attendance.
+func NewAttendanceVideoMeetingIDResolver(
+	meetings videodomain.MeetingRepository,
+) attendanceService.VideoMeetingIDResolver {
+	return attendanceadapters.NewVideoMeetingIDResolver(meetings)
+}
+
+
+
+func NewRegistrationNotifier(
+	notifSvc notificationDomain.NotificationService,
+	users registrationDomain.UserInfoProvider,
+) registrationDomain.Notifier {
+	return registrationnotifier.NewNotifier(notifSvc, users)
 }

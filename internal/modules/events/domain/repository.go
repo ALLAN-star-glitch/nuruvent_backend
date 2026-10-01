@@ -146,6 +146,11 @@ type Repository interface {
 	// The implementation must be safe for concurrent use — the counter is
 	// a hot field and registrations can arrive in parallel.
 	AdjustAttendeeCount(ctx context.Context, eventID string, delta int) error
+
+
+
+	// internal/modules/events/domain/repository.go (interface)
+	ReorderEventSchedules(ctx context.Context, eventID string, orderedIDs []string) error
 }
 
 // ============================================================

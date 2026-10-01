@@ -84,3 +84,5 @@ type JoinInfoResponse struct {
 	ZAK           string `json:"zak,omitempty"`
 	Role          int    `json:"role"`
 }
+
+

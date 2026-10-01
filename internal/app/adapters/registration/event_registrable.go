@@ -28,6 +28,16 @@ func NewEventRegistrable(event *eventsDomain.Event, svc eventsService.Service) *
 func (r *EventRegistrable) ID() string   { return r.event.ID }
 func (r *EventRegistrable) Type() string { return "event" }
 
+// DisplayName returns the human-readable event name for use in emails
+// and confirmation messages. Prefers the display name; falls back to
+// the internal name if display is empty.
+func (r *EventRegistrable) DisplayName() string {
+	if r.event.DisplayName != "" {
+		return r.event.DisplayName
+	}
+	return r.event.Name
+}
+
 func (r *EventRegistrable) Capacity() int {
 	if r.event.Capacity == nil {
 		return math.MaxInt
@@ -78,6 +88,19 @@ func (r *EventRegistrable) RequiresPayment() bool {
 	return !r.event.IsFreeEvent
 }
 
+// RequiresAuth reports whether registration for this event mandates a
+// Nuruvent account. True for Zoom events, because attendance on Zoom
+// is tracked via a JWT signed for a specific user — guests have no
+// identity to sign.
+func (r *EventRegistrable) RequiresAuth() bool {
+	for _, s := range r.event.Schedules {
+		if s.Platform == "zoom" {
+			return true
+		}
+	}
+	return false
+}
+
 func (r *EventRegistrable) AdjustCount(delta int) error {
 	if delta == 0 {
 		return nil
@@ -119,6 +142,16 @@ func (r *EventRegistrable) TicketPricing() (map[string]registrationdomain.Ticket
 
 func toMinorUnits(major float64) int64 {
 	return int64(math.Round(major * 100))
+}
+
+
+
+func (r *EventRegistrable) Slug() string {
+    return r.event.Slug
+}
+
+func (r *EventRegistrable) StartDate() time.Time {
+    return r.event.StartDate
 }
 
 var _ registrationdomain.Registrable = (*EventRegistrable)(nil)

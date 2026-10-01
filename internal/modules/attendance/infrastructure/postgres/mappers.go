@@ -9,26 +9,28 @@ import (
 // ============================================================
 
 func toAttendeeModel(a *attendance.Attendee) *AttendeeModel {
-	return &AttendeeModel{
-		ID:           a.ID,
-		ExternalType: a.External.Type,
-		ExternalID:   a.External.ID,
-		DisplayName:  a.DisplayName,
-		Email:        a.Email,
-		CreatedAt:    a.CreatedAt,
-		UpdatedAt:    a.UpdatedAt,
-	}
+    return &AttendeeModel{
+        ID:               a.ID,
+        ExternalType:     a.External.Type,
+        ExternalID:       a.External.ID,
+        DisplayName:      a.DisplayName,
+        Email:            a.Email,
+        GoogleMeetUserID: a.GoogleMeetUserID,   // NEW
+        CreatedAt:        a.CreatedAt,
+        UpdatedAt:        a.UpdatedAt,
+    }
 }
 
 func toAttendeeDomain(m *AttendeeModel) *attendance.Attendee {
-	return attendance.HydrateAttendee(
-		m.ID,
-		attendance.ExternalRef{Type: m.ExternalType, ID: m.ExternalID},
-		m.DisplayName,
-		m.Email,
-		m.CreatedAt,
-		m.UpdatedAt,
-	)
+    return attendance.HydrateAttendee(
+        m.ID,
+        attendance.ExternalRef{Type: m.ExternalType, ID: m.ExternalID},
+        m.DisplayName,
+        m.Email,
+        m.GoogleMeetUserID,   // NEW
+        m.CreatedAt,
+        m.UpdatedAt,
+    )
 }
 
 // ============================================================
@@ -37,20 +39,22 @@ func toAttendeeDomain(m *AttendeeModel) *attendance.Attendee {
 
 func toSessionModel(s *attendance.Session) *SessionModel {
 	return &SessionModel{
-		ID:                s.ID,
-		ExternalType:      s.External.Type,
-		ExternalID:        s.External.ID,
-		ProviderSessionID: s.ProviderSessionID,
-		Title:             s.Title,
-		ScheduledStart:    s.ScheduledStart,
-		ScheduledEnd:      s.ScheduledEnd,
-		DurationMinutes:   s.DurationMinutes,
-		Provider:          string(s.Provider),
-		ProviderMeetingID: s.ProviderMeetingID,
-		ProviderURL:       s.ProviderURL,
-		Status:            string(s.Status),
-		CreatedAt:         s.CreatedAt,
-		UpdatedAt:         s.UpdatedAt,
+		ID:                   s.ID,
+		ExternalType:         s.External.Type,
+		ExternalID:           s.External.ID,
+		ProviderSessionID:    s.ProviderSessionID,
+		Title:                s.Title,
+		ScheduledStart:       s.ScheduledStart,
+		ScheduledEnd:         s.ScheduledEnd,
+		DurationMinutes:      s.DurationMinutes,
+		Provider:             string(s.Provider),
+		ProviderMeetingID:    s.ProviderMeetingID,
+		ProviderURL:          s.ProviderURL,
+		Status:               string(s.Status),
+		EventDisplayName:     s.EventDisplayName,
+		OrganizerDisplayName: s.OrganizerDisplayName,
+		CreatedAt:            s.CreatedAt,
+		UpdatedAt:            s.UpdatedAt,
 	}
 }
 
@@ -67,6 +71,8 @@ func toSessionDomain(m *SessionModel) *attendance.Session {
 		m.ProviderMeetingID,
 		m.ProviderURL,
 		attendance.SessionStatus(m.Status),
+		m.EventDisplayName,      // ← new
+		m.OrganizerDisplayName,  // ← new
 		m.CreatedAt,
 		m.UpdatedAt,
 	)

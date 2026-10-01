@@ -4,9 +4,11 @@ package zoom
 
 // Zoom event names we handle.
 const (
-	EventEndpointURLValidation = "endpoint.url_validation"
 	EventParticipantJoined     = "meeting.participant_joined"
 	EventParticipantLeft       = "meeting.participant_left"
+	EventMeetingStarted        = "meeting.started"
+	EventMeetingEnded          = "meeting.ended"
+	EventEndpointURLValidation = "endpoint.url_validation"
 )
 
 // webhookEnvelope is the top-level shape of every Zoom webhook

@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 )
@@ -63,6 +64,10 @@ func (s *attendanceService) RecordLeave(
 			// A failed Close is a domain error — the leave time was
 			// rejectable. Log and swallow: an invalid leave should not
 			// break the surrounding operation.
+			log.Printf(
+				"[attendance] RecordLeave: Close rejected record=%s join=%v leave=%v err=%v",
+				open.ID, open.JoinTime, leaveTime, err,
+			)
 			return nil
 		}
 

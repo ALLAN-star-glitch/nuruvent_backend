@@ -117,6 +117,9 @@ type Service interface {
     CreateEventMeeting(ctx context.Context, eventID, userID, platformOverride string) (*domain.Event, error)
 	DeleteEventMeeting(ctx context.Context, eventID, userID string) (*domain.Event, error)
 	RegenerateEventMeeting(ctx context.Context, eventID, userID string) (*domain.Event, error)
+
+	// in the interface
+	ReorderSchedules(ctx context.Context, eventID, userID string, orderedIDs []string) (*domain.Event, error)
 }
 
 // ============================================================

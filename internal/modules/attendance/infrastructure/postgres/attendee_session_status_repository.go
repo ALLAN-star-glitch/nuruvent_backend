@@ -69,16 +69,29 @@ func (r *AttendeeSessionStatusRepository) ListBySession(
 	ctx context.Context,
 	sessionID string,
 ) ([]*attendance.AttendeeSessionStatus, error) {
-	var models []AttendeeSessionStatusModel
+	type row struct {
+		AttendeeSessionStatusModel
+		DisplayName string `gorm:"column:display_name"`
+		Email       string `gorm:"column:email"`
+	}
+
+	var rows []row
 	err := r.db.WithContext(ctx).
-		Where("session_id = ?", sessionID).
-		Find(&models).Error
+		Table("attendee_session_statuses AS ass").
+		Select("ass.*, a.display_name AS display_name, a.email AS email").
+		Joins("JOIN attendees a ON a.id = ass.attendee_id AND a.deleted_at IS NULL").
+		Where("ass.session_id = ?", sessionID).
+		Find(&rows).Error
 	if err != nil {
 		return nil, translateError(err, "list session statuses", attendance.ErrStatusNotFound)
 	}
-	out := make([]*attendance.AttendeeSessionStatus, 0, len(models))
-	for i := range models {
-		out = append(out, toSessionStatusDomain(&models[i]))
+
+	out := make([]*attendance.AttendeeSessionStatus, 0, len(rows))
+	for i := range rows {
+		st := toSessionStatusDomain(&rows[i].AttendeeSessionStatusModel)
+		st.DisplayName = rows[i].DisplayName
+		st.Email = rows[i].Email
+		out = append(out, st)
 	}
 	return out, nil
 }

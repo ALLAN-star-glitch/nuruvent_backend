@@ -159,28 +159,28 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 		schedules := make([]ScheduleDTO, len(event.Schedules))
 		for i, s := range event.Schedules {
 			schedule := ScheduleDTO{
-				ID:            s.ID,
-				SessionName:   s.SessionName,
-				SessionNumber: s.SessionNumber,
-				StartDate:     s.StartDate.Format("2006-01-02"),
-				StartTime:     s.StartTime,
-				EndTime:       s.EndTime,
-				Timezone:      s.Timezone,
-				Location:      s.Location,
-				IsVirtual:     s.IsVirtual,
-				ZoomLink:      s.ZoomLink,
-				MeetLink:      s.MeetLink,
-			}
-			if s.EndDate != nil {
-				schedule.EndDate = s.EndDate.Format("2006-01-02")
-			}
-			if s.VideoMeetingID != nil {
-				schedule.VideoMeetingID = *s.VideoMeetingID
-			}
-			if s.MaxAttendees != nil {
-				schedule.MaxAttendees = *s.MaxAttendees
-			}
-			schedules[i] = schedule
+			ID:                     s.ID,
+			SessionName:            s.SessionName,
+			SessionNumber:          s.SessionNumber,
+			StartDate:              s.StartDate.Format("2006-01-02"),
+			StartTime:              s.StartTime,
+			EndTime:                s.EndTime,
+			Timezone:               s.Timezone,
+			Location:               s.Location,
+			IsVirtual:              s.IsVirtual,
+			Platform:               s.Platform,
+			ZoomLink:               s.ZoomLink,
+			MeetLink:               s.MeetLink,
+			VideoMeetingID:         s.VideoMeetingID,
+			VideoMeetingExternalID: s.VideoMeetingExternalID,
+		}
+		if s.EndDate != nil {
+			schedule.EndDate = s.EndDate.Format("2006-01-02")
+		}
+		if s.MaxAttendees != nil {
+			schedule.MaxAttendees = *s.MaxAttendees
+		}
+		schedules[i] = schedule
 		}
 		resp.Schedules = schedules
 	}

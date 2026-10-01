@@ -83,6 +83,32 @@ func templateFuncMap() template.FuncMap {
 				return role
 			}
 		},
+
+			// link_rows decodes the join-links string into a slice of rows the
+	// template can range over. See SendRegistrationConfirmed for the
+	// encoding.
+	"link_rows": func(raw string) []map[string]string {
+		if raw == "" {
+			return nil
+		}
+		const (
+			fieldSep = "\x1f"
+			rowSep   = "\x1e"
+		)
+		rows := strings.Split(raw, rowSep)
+		out := make([]map[string]string, 0, len(rows))
+		for _, row := range rows {
+			parts := strings.SplitN(row, fieldSep, 2)
+			if len(parts) != 2 {
+				continue
+			}
+			out = append(out, map[string]string{
+				"title": parts[0],
+				"url":   parts[1],
+			})
+		}
+		return out
+	},
 	}
 }
 
@@ -219,6 +245,12 @@ func (c *EmailChannel) getTemplateName(notifType notificationdomain.Notification
 		return "payment-expired"
 	case notificationdomain.TypeRefundIssued:
 		return "refund-issued"
+
+			// ============================================================
+	// REGISTRATION NOTIFICATIONS
+	// ============================================================
+	case notificationdomain.TypeRegistrationConfirmed:
+	return "registration-confirmed"
 
 	default:
 		return "welcome-individual"
@@ -462,7 +494,17 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["payment_id"] = req.Meta["payment_id"]
 		data["refund_id"] = req.Meta["refund_id"]
 		data["is_partial"] = req.Meta["is_partial"]
-	}
+
+
+		case notificationdomain.TypeRegistrationConfirmed:
+		data["name"] = req.Meta["name"]
+		data["registration_number"] = req.Meta["registration_number"]
+		data["event_name"] = req.Meta["event_name"]
+		data["event_id"] = req.Meta["event_id"]
+		data["links"] = req.Meta["links"]
+		}
+
+	
 
 	return data
 }
@@ -744,7 +786,23 @@ func (c *EmailChannel) buildTextVersion(req notificationdomain.ChannelRequest, d
 		text += "\n"
 		text += "Refunds typically appear in your account within 5–10 business days, depending on your provider.\n\n"
 		text += "If you have any questions, reach out to hello@nuruvent.com\n\n"
-	}
+
+
+		case notificationdomain.TypeRegistrationConfirmed:
+		text += "Hello " + data["name"] + ",\n\n"
+		text += "Your registration is confirmed.\n\n"
+		text += "Event: " + data["event_name"] + "\n"
+		text += "Registration: " + data["registration_number"] + "\n\n"
+		text += "Join your sessions using the links below. Use these links — not a shared meeting link — so your attendance is recorded automatically.\n\n"
+		for _, row := range strings.Split(data["links"], "\x1e") {
+			parts := strings.SplitN(row, "\x1f", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			text += "- " + parts[0] + "\n  " + parts[1] + "\n\n"
+		}
+		text += "See you there,\n"
+		}
 
 	text += "\n--\nNuruvent - Light Your Events. Illuminate Your Growth."
 	return text

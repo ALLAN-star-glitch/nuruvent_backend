@@ -2,9 +2,9 @@ package attendancedomain
 
 import "time"
 
-// WebhookEvent is the normalized form of a provider webhook.
-// Providers send wildly different payloads; each provider adapter
-// translates its own into this shape.
+// WebhookEvent is the normalized form of a provider webhook or poll
+// result. Providers send wildly different payloads; each provider
+// adapter translates its own into this shape.
 type WebhookEvent struct {
 	// ProviderName identifies the source provider.
 	ProviderName SessionProvider
@@ -16,13 +16,23 @@ type WebhookEvent struct {
 	// ProviderMeetingID identifies the session.
 	ProviderMeetingID string
 
-	// EventType is "joined" or "left".
+	// EventType is "joined", "left", or "ended".
 	EventType WebhookEventType
 
 	// ParticipantEmail and ParticipantName are used to match the
 	// event to an attendee when the token isn't available.
+	//
+	// ParticipantEmail may be empty when the source platform does
+	// not expose an email (e.g. Google Meet).
 	ParticipantEmail string
 	ParticipantName  string
+
+	// ExternalUserID is the provider's user identifier when the
+	// platform exposes one but not an email. Google Meet uses the
+	// Google user resource name ("users/123456"). Empty for
+	// platforms that supply email (Zoom) or for anonymous
+	// participants.
+	ExternalUserID string
 
 	// OccurredAt is when the event happened at the provider.
 	OccurredAt time.Time
@@ -34,10 +44,15 @@ type WebhookEvent struct {
 type WebhookEventType string
 
 const (
-	WebhookEventJoined WebhookEventType = "joined"
-	WebhookEventLeft   WebhookEventType = "left"
+	WebhookEventJoined  WebhookEventType = "joined"
+	WebhookEventLeft    WebhookEventType = "left"
+	WebhookEventStarted WebhookEventType = "started"
+	WebhookEventEnded   WebhookEventType = "ended"
 )
 
 func (t WebhookEventType) IsValid() bool {
-	return t == WebhookEventJoined || t == WebhookEventLeft
+	return t == WebhookEventJoined ||
+		t == WebhookEventLeft ||
+		t == WebhookEventStarted ||
+		t == WebhookEventEnded
 }

@@ -57,7 +57,18 @@ var (
 var (
 	ErrForbidden    = errors.New("forbidden")
 	ErrUnauthorized = errors.New("unauthorized")
+
+
+
+
+	ErrParticipantUnmatched = errors.New("participant unmatched")
 )
+
+
+
+
+
+
 
 // ============================================================
 // PLATFORM
@@ -101,5 +112,8 @@ var (
 
 	// under VALIDATION
 	ErrInvalidCallback = errors.New("invalid oauth callback")
-)
 
+
+
+	
+)

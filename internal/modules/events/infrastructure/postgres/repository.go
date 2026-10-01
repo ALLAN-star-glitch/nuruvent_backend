@@ -682,7 +682,10 @@ func (r *PostgresRepository) GetAllEventStatuses(ctx context.Context) ([]*domain
 func (r *PostgresRepository) loadChildEntities(ctx context.Context, event *domain.Event) error {
 	// Load schedules
 	var scheduleModels []EventScheduleModel
-	if err := r.db.WithContext(ctx).Where("event_id = ? AND deleted_at IS NULL", event.ID).Find(&scheduleModels).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Where("event_id = ? AND deleted_at IS NULL", event.ID).
+		Order("session_number ASC").
+		Find(&scheduleModels).Error; err != nil {
 		return err
 	}
 	event.Schedules = toDomainSchedules(scheduleModels)
@@ -957,21 +960,23 @@ func (r *PostgresRepository) upsertSchedules(
 		if err := r.db.WithContext(ctx).
 			Model(&EventScheduleModel{}).
 			Where("id = ?", s.ID).
-			Updates(map[string]interface{}{
-				"session_name":     model.SessionName,
-				"session_number":   model.SessionNumber,
-				"start_date":       model.StartDate,
-				"end_date":         model.EndDate,
-				"start_time":       model.StartTime,
-				"end_time":         model.EndTime,
-				"timezone":         model.Timezone,
-				"location":         model.Location,
-				"is_virtual":       model.IsVirtual,
-				"zoom_link":        model.ZoomLink,
-				"meet_link":        model.MeetLink,
-				"video_meeting_id": model.VideoMeetingID,
-				"max_attendees":    model.MaxAttendees,
-				"updated_at":       time.Now().UTC(),
+			Updates(map[string]any{
+				"session_name":              model.SessionName,
+				"session_number":            model.SessionNumber,
+				"start_date":                model.StartDate,
+				"end_date":                  model.EndDate,
+				"start_time":                model.StartTime,
+				"end_time":                  model.EndTime,
+				"timezone":                  model.Timezone,
+				"location":                  model.Location,
+				"is_virtual":                model.IsVirtual,
+				"platform":                  model.Platform,
+				"zoom_link":                 model.ZoomLink,
+				"meet_link":                 model.MeetLink,
+				"video_meeting_id":          model.VideoMeetingID,
+				"video_meeting_external_id": model.VideoMeetingExternalID,
+				"max_attendees":             model.MaxAttendees,
+				"updated_at":                time.Now().UTC(),
 			}).Error; err != nil {
 			return err
 		}
@@ -988,4 +993,37 @@ func containsString(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+// internal/modules/events/infrastructure/postgres/repository.go
+
+// ReorderEventSchedules assigns session_number = 1..N to the given IDs
+// in the order supplied, in a single transaction. IDs not in the list
+// are left untouched (they'll be picked up by mergeSchedules on the
+// next full update).
+func (r *PostgresRepository) ReorderEventSchedules(
+    ctx context.Context,
+    eventID string,
+    orderedIDs []string,
+) error {
+    if len(orderedIDs) == 0 {
+        return nil
+    }
+    return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+        // Two-phase renumber to avoid tripping the unique index while
+        // mid-update. Push everything to negative space first.
+        if err := tx.Model(&EventScheduleModel{}).
+            Where("event_id = ? AND id IN ?", eventID, orderedIDs).
+            Update("session_number", gorm.Expr("-session_number")).Error; err != nil {
+            return err
+        }
+        for i, id := range orderedIDs {
+            if err := tx.Model(&EventScheduleModel{}).
+                Where("event_id = ? AND id = ?", eventID, id).
+                Update("session_number", i+1).Error; err != nil {
+                return err
+            }
+        }
+        return nil
+    })
 }

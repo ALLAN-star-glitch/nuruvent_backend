@@ -108,5 +108,31 @@ func (r *MeetingRepository) FindByExternalID(
 	return toMeetingDomain(&m), nil
 }
 
+
+func (r *MeetingRepository) FindIDByProviderMeeting(
+	ctx context.Context,
+	platform string,
+	providerMeetingID string,
+) (string, error) {
+	if platform == "" || providerMeetingID == "" {
+		return "", nil
+	}
+
+	var id string
+	err := r.db.WithContext(ctx).
+		Model(&VideoMeetingModel{}).
+		Select("id").
+		Where("platform = ? AND external_id = ?", platform, providerMeetingID).
+		Limit(1).
+		Scan(&id).Error
+	if err != nil {
+		return "", translateError(err, "find meeting id by provider code", videodomain.ErrMeetingNotFound)
+	}
+	return id, nil
+}
+
+
+
+
 // compile-time assertion
 var _ videodomain.MeetingRepository = (*MeetingRepository)(nil)

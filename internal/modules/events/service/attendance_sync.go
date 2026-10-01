@@ -1,3 +1,5 @@
+// internal/modules/events/service/attendance_sync.go
+
 package service
 
 import (
@@ -31,8 +33,20 @@ func (s *eventService) syncEventSchedulesToAttendance(
 		return
 	}
 
+	log.Printf("[events] sync START event=%s schedules=%d",
+		event.ID, len(event.Schedules))
+
+	// Resolve the organizer display name once per event — it doesn't
+	// vary by schedule.
+	//
+	// The event loaded by most code paths has Organizer == nil,
+	// because the events repository doesn't eagerly load it. Fall
+	// back to the injected organizer provider, which knows how to
+	// resolve it from the team.
+	organizerName := s.resolveOrganizerForSync(ctx, event)
+
 	for _, schedule := range event.Schedules {
-		cmd, err := buildAttendanceCommand(event, schedule)
+		cmd, err := buildAttendanceCommand(event, schedule, organizerName)
 		if err != nil {
 			log.Printf("[events] skipping attendance sync for schedule %s: %v", schedule.ID, err)
 			continue
@@ -45,11 +59,49 @@ func (s *eventService) syncEventSchedulesToAttendance(
 	}
 }
 
+// resolveOrganizerForSync returns the organizer's display name for an
+// event, preferring what's already on the loaded struct and falling
+// back to the organizer provider.
+//
+// Never returns an error — a missing organizer is not fatal to the
+// sync; the join redirect just carries an empty host param, which
+// the frontend handles gracefully.
+func (s *eventService) resolveOrganizerForSync(
+	ctx context.Context,
+	event *domain.Event,
+) string {
+	// Fast path: already loaded.
+	if name := resolveOrganizerDisplayName(event); name != "" {
+		return name
+	}
+
+	// Slow path: resolve through the provider. This is the same
+	// helper the API handler uses to build the organizer block on
+	// GET responses.
+	info, err := s.getOrganizerInfo(ctx, event)
+	if err != nil {
+		log.Printf("[events] sync: organizer lookup failed event=%s: %v",
+			event.ID, err)
+		return ""
+	}
+	if info == nil {
+		return ""
+	}
+	if strings.TrimSpace(info.DisplayName) != "" {
+		return strings.TrimSpace(info.DisplayName)
+	}
+	return strings.TrimSpace(info.Name)
+}
+
 // buildAttendanceCommand maps one EventSchedule + its parent Event
 // into an AttendanceUpsertSessionCommand.
+//
+// organizerName is resolved once by the caller and passed in — it's
+// the same for every schedule under the event.
 func buildAttendanceCommand(
 	event *domain.Event,
 	schedule domain.EventSchedule,
+	organizerName string,
 ) (domain.AttendanceUpsertSessionCommand, error) {
 	start, end, err := resolveScheduleTimes(schedule)
 	if err != nil {
@@ -59,16 +111,36 @@ func buildAttendanceCommand(
 	provider, meetingID, providerURL := detectProvider(schedule)
 
 	return domain.AttendanceUpsertSessionCommand{
-		ExternalType:      "event",
-		ExternalID:        event.ID,
-		ProviderSessionID: schedule.ID,
-		Title:             composeSessionTitle(event, schedule),
-		ScheduledStart:    start,
-		ScheduledEnd:      end,
-		Provider:          provider,
-		ProviderMeetingID: meetingID,
-		ProviderURL:       providerURL,
+		ExternalType:         "event",
+		ExternalID:           event.ID,
+		ProviderSessionID:    schedule.ID,
+		Title:                composeSessionTitle(event, schedule),
+		ScheduledStart:       start,
+		ScheduledEnd:         end,
+		Provider:             provider,
+		ProviderMeetingID:    meetingID,
+		ProviderURL:          providerURL,
+		EventDisplayName:     event.DisplayName,
+		OrganizerDisplayName: organizerName,
 	}, nil
+}
+
+// resolveOrganizerDisplayName extracts the organizer's display name
+// from the event. Falls back through DisplayName → Name → "" so a
+// partial load never blocks the sync.
+//
+// The event passed to the sync may or may not have the organizer
+// loaded depending on which code path invoked us. When it's nil, we
+// return "" and the redirect URL just carries an empty host param —
+// the frontend already handles that gracefully.
+func resolveOrganizerDisplayName(event *domain.Event) string {
+	if event == nil || event.Organizer == nil {
+		return ""
+	}
+	if strings.TrimSpace(event.Organizer.DisplayName) != "" {
+		return event.Organizer.DisplayName
+	}
+	return strings.TrimSpace(event.Organizer.Name)
 }
 
 // resolveScheduleTimes combines the schedule's date(s) and time(s)
@@ -130,7 +202,6 @@ func parseTimeOfDay(s string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unrecognized time format")
 }
 
-
 // The events module already composes "Session N: Name" on the way in.
 // If SessionName is set, use it as-is — don't prepend the session
 // number again.
@@ -148,25 +219,132 @@ func composeSessionTitle(event *domain.Event, schedule domain.EventSchedule) str
 	return event.Name
 }
 
+// ============================================================
+// PROVIDER DETECTION
+// ============================================================
+
 // detectProvider classifies the schedule into a provider, extracts
 // its meeting ID, and picks the join URL.
+//
+// Priority:
+//
+//  1. The platform external ID we stored at creation time
+//     (VideoMeetingExternalID). This value came from the same
+//     video.CreateMeeting call that persisted video_meetings.external_id,
+//     so it matches by construction. No string parsing needed.
+//
+//  2. Legacy fallback for rows created before the external-ID column
+//     existed: parse the join URL. Rows in this state are also the
+//     ones most likely to produce mismatches, so prefer #1 wherever
+//     possible.
+//
+// Returns ("none", "", "") when no provider can be determined.
 func detectProvider(schedule domain.EventSchedule) (provider, meetingID, providerURL string) {
 	if !schedule.IsVirtual {
 		return "in_person", "", schedule.Location
 	}
 
+	// ── Preferred: the external ID stored at meeting-creation time ──
+	if schedule.VideoMeetingExternalID != "" {
+		platform := schedule.Platform
+		if platform == "" {
+			// Platform is missing on some legacy rows. Infer it from
+			// the external ID shape so downstream code still gets a
+			// sane provider string.
+			if strings.HasPrefix(schedule.VideoMeetingExternalID, "spaces/") {
+				platform = domain.VideoPlatformGoogleMeet
+			} else {
+				platform = domain.VideoPlatformZoom
+			}
+		}
+
+		url := schedule.MeetLink
+		if url == "" {
+			url = schedule.ZoomLink
+		}
+
+		return platform, schedule.VideoMeetingExternalID, url
+	}
+
+	// ── Legacy fallback: parse the URL ──
+	//
+	// Rows here predate video_meeting_external_id. If they were
+	// created through the video module, video_meeting_id holds a
+	// platform code (from the bug this change fixes); otherwise the
+	// link field is the only signal we have.
+	if schedule.VideoMeetingID != nil && *schedule.VideoMeetingID != "" {
+		// The legacy field may hold either:
+		//   - a platform code (e.g. "spaces/xxx", or a Zoom numeric
+		//     ID), for rows created before the column split, or
+		//   - a Nuruvent UUID, for rows created during the brief
+		//     window after the split when the semantics were wrong.
+		//
+		// If it looks like a platform code, use it as-is.
+		legacy := *schedule.VideoMeetingID
+		if isPlatformMeetingCode(legacy) {
+			platform := schedule.Platform
+			if platform == "" {
+				if strings.HasPrefix(legacy, "spaces/") {
+					platform = domain.VideoPlatformGoogleMeet
+				} else {
+					platform = domain.VideoPlatformZoom
+				}
+			}
+			url := schedule.MeetLink
+			if url == "" {
+				url = schedule.ZoomLink
+			}
+			return platform, legacy, url
+		}
+		// Otherwise it's a UUID we can't use — fall through to URL
+		// parsing below.
+	}
+
 	zoom := strings.TrimSpace(schedule.ZoomLink)
 	if zoom != "" {
-		return "zoom", parseZoomMeetingID(zoom), zoom
+		return domain.VideoPlatformZoom, parseZoomMeetingID(zoom), zoom
 	}
 
 	meet := strings.TrimSpace(schedule.MeetLink)
 	if meet != "" {
-		return "google_meet", parseMeetCode(meet), meet
+		return domain.VideoPlatformGoogleMeet, canonicalMeetResourceName(meet), meet
 	}
 
 	return "none", "", ""
 }
+
+// isPlatformMeetingCode reports whether a legacy video_meeting_id
+// value looks like a platform meeting code rather than a Nuruvent
+// UUID.
+//
+// Google Meet codes are "spaces/<id>"; Zoom codes are 9–11 digit
+// numeric strings. Nuruvent UUIDs are 36-character dashed strings.
+func isPlatformMeetingCode(s string) bool {
+	if s == "" {
+		return false
+	}
+	if strings.HasPrefix(s, "spaces/") {
+		return true
+	}
+	// Zoom: all digits, 9–11 characters.
+	if len(s) >= 9 && len(s) <= 11 {
+		allDigits := true
+		for _, r := range s {
+			if r < '0' || r > '9' {
+				allDigits = false
+				break
+			}
+		}
+		if allDigits {
+			return true
+		}
+	}
+	return false
+}
+
+// ============================================================
+// MEETING CODE PARSERS
+// ============================================================
 
 // zoomMeetingIDRe extracts the numeric meeting ID from a Zoom URL.
 var zoomMeetingIDRe = regexp.MustCompile(`/j/(\d{9,11})`)
@@ -182,6 +360,48 @@ func parseZoomMeetingID(link string) string {
 // meetCodeRe extracts the meeting code from a Google Meet URL.
 var meetCodeRe = regexp.MustCompile(`meet\.google\.com/([a-z]{3}-[a-z]{4}-[a-z]{3})`)
 
+// meetBareCodeRe matches a bare Google Meet code like "tbz-qpwt-vni".
+var meetBareCodeRe = regexp.MustCompile(`^[a-z]{3}-[a-z]{4}-[a-z]{3}$`)
+
+// canonicalMeetResourceName converts a Google Meet URL or bare code
+// into the "spaces/<code>" resource name that video_meetings.external_id
+// stores. Google's API always returns the resource-name form, and the
+// attendance module matches sessions to meetings by exact string
+// equality on this value.
+//
+// Returns "" if no code can be extracted.
+//
+// Kept for the legacy fallback path in detectProvider. Once every
+// schedule has VideoMeetingExternalID set, this function is only
+// reachable from migration-era rows.
+func canonicalMeetResourceName(linkOrCode string) string {
+	linkOrCode = strings.TrimSpace(linkOrCode)
+	if linkOrCode == "" {
+		return ""
+	}
+
+	// Already in canonical form.
+	if strings.HasPrefix(linkOrCode, "spaces/") {
+		return linkOrCode
+	}
+
+	// From a full URL.
+	if m := meetCodeRe.FindStringSubmatch(linkOrCode); len(m) >= 2 {
+		return "spaces/" + m[1]
+	}
+
+	// Bare code that matches the Meet format.
+	if meetBareCodeRe.MatchString(linkOrCode) {
+		return "spaces/" + linkOrCode
+	}
+
+	return ""
+}
+
+// parseMeetCode is retained for backwards compatibility with anything
+// that still calls it. New code should use canonicalMeetResourceName
+// (via detectProvider) instead, so the value matches
+// video_meetings.external_id.
 func parseMeetCode(link string) string {
 	m := meetCodeRe.FindStringSubmatch(link)
 	if len(m) < 2 {

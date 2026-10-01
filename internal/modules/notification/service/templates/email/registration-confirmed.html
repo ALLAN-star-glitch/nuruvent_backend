@@ -1,0 +1,50 @@
+{{define "registration-confirmed"}}
+<h1 class="title">You're <span class="highlight">Confirmed</span></h1>
+<p class="subtitle">Your registration is complete</p>
+
+<div class="alert-success">
+    <div class="message">Registration Confirmed</div>
+    <div class="sub">Your session links are below</div>
+</div>
+
+<p class="greeting">Hello <span class="name">{{.name}}</span>,</p>
+<p class="body-text">
+    Your registration for <span class="highlight">{{.event_name}}</span> is confirmed.
+    Join your sessions using the links below.
+</p>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">Event</span>
+        <span class="value">{{.event_name}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Registration Number</span>
+        <span class="value">{{.registration_number}}</span>
+    </div>
+</div>
+
+{{range link_rows .links}}
+<div class="details-box">
+    <div class="row">
+        <span class="label">Session</span>
+        <span class="value">{{.title}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Join Link</span>
+        <span class="value">
+            <a href="{{.url}}" style="color: #1A73E8; text-decoration: none; word-break: break-all;">
+                Join Session →
+            </a>
+        </span>
+    </div>
+    <p class="text-small" style="margin-top: 8px; word-break: break-all;">{{.url}}</p>
+</div>
+{{end}}
+
+<div class="alert-info">
+    <p>Join through these links — not a shared meeting link — so your attendance is recorded automatically.</p>
+</div>
+
+<p class="body-text text-muted text-center">See you there!</p>
+{{end}}

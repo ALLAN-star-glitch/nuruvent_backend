@@ -34,6 +34,11 @@ const (
 	TaskPaymentFailed    = "notification:payment_failed"
 	TaskPaymentExpired   = "notification:payment_expired"
 	TaskRefundIssued     = "notification:refund_issued"
+
+		// ============================================================
+	// REGISTRATION TASKS
+	// ============================================================
+	TaskRegistrationConfirmed = "notification:registration_confirmed"
 )
 
 
@@ -243,3 +248,19 @@ type RefundIssuedTask struct {
 	RefundID          string
 	IsPartial         bool
 }
+
+// ============================================================
+// REGISTRATION TASK STRUCTS
+// ============================================================
+
+// RegistrationConfirmedTask is sent after a paid (or free) registration
+// is confirmed. It carries one personalized join link per session.
+type RegistrationConfirmedTask struct {
+	To                 string                 // Registrant email
+	Name               string                 // Registrant name
+	RegistrationNumber string                 // Human-readable reg number
+	EventName          string                 // For the subject line
+	EventID            string                 // For links back to the dashboard
+	JoinLinks          []RegistrationJoinLink // One per session
+}
+

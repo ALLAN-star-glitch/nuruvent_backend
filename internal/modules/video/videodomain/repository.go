@@ -98,6 +98,17 @@ type MeetingRepository interface {
 	// Delete removes a meeting record. Called when a schedule is
 	// removed and the platform meeting has been deleted.
 	Delete(ctx context.Context, id string) error
+
+
+	// FindIDByProviderMeeting returns the internal meeting ID for a
+	// meeting identified by platform + provider meeting code.
+	//
+	// Returns ("", nil) when no meeting matches — not an error.
+	FindIDByProviderMeeting(
+		ctx context.Context,
+		platform string,
+		providerMeetingID string,
+	) (string, error)
 }
 
 // ============================================================

@@ -31,6 +31,34 @@ type UpsertSessionCommand struct {
 	Provider          attendance.SessionProvider
 	ProviderMeetingID string
 	ProviderURL       string
+
+	// Denormalized from the parent event at sync time. Used to build
+	// the frontend redirect URL on join-token redemption.
+	EventDisplayName     string
+	OrganizerDisplayName string
+}
+
+// RegisterAttendeeForExternalCommand registers an attendee for every
+// session under an external reference.
+//
+// When PublicBaseURL is set, the service issues a fresh join token
+// per session and builds a full join URL from it. The raw token is
+// only available at issue time — it is never persisted, only its
+// hash. The result carries the URLs back to the caller.
+type RegisterAttendeeForExternalCommand struct {
+	AttendeeID string
+	External   attendance.ExternalRef
+
+	// PublicBaseURL is the scheme+host used to build join URLs
+	// ("https://nuruvent.com"). When empty, no URL is built; links
+	// in the result still carry the platform meeting code so the
+	// caller can construct one.
+	PublicBaseURL string
+
+	// LinkGrace is how long after a session ends the issued join
+	// token remains valid. Zero means use the service default
+	// (JoinTokenGrace).
+	LinkGrace time.Duration
 }
 
 // ============================================================
@@ -42,9 +70,15 @@ type UpsertSessionCommand struct {
 type IssueJoinTokenCommand struct {
 	AttendeeID string
 	SessionID  string
+
 	// Grace is how long after the session's scheduled end the token
 	// remains valid. Zero means use the configured default.
 	Grace time.Duration
+
+	// PublicBaseURL, when non-empty, is used to build a full join
+	// URL. When empty, only the raw token is returned and the caller
+	// is responsible for building the URL.
+	PublicBaseURL string
 }
 
 // RevokeJoinTokensCommand revokes all tokens for a
@@ -107,11 +141,50 @@ type BulkConfirmCommand struct {
 // RESULTS
 // ============================================================
 
+// AttendeeSessionLink is one personalized join URL for one
+// (attendee, session) pair. Returned to the caller at registration
+// time so the confirmation email can include it.
+//
+// JoinURL is empty when the command did not carry a PublicBaseURL,
+// or when the session has no provider meeting (in-person sessions).
+// Callers that need a URL can always build one from MeetingCode +
+// Platform.
+type AttendeeSessionLink struct {
+	SessionID   string
+	MeetingCode string // bare platform code, e.g. "abc-defg-hij"
+	Platform    attendance.SessionProvider
+	JoinURL     string // https://nuruvent.com/join/<raw-token>
+	ExpiresAt   time.Time
+}
+
+// RegisterAttendeeForExternalResult is what
+// RegisterAttendeeForExternal returns. The caller uses AttendeeID for
+// later lookups and Links for the confirmation email.
+//
+// Links is empty when the external ref has no sessions.
+type RegisterAttendeeForExternalResult struct {
+	AttendeeID string
+	Links      []AttendeeSessionLink
+}
+
+// IssueJoinTokenResult is what IssueJoinToken returns. The raw token
+// is only available here — it is never persisted, only its hash.
+//
+// JoinURL is set when the command carried a PublicBaseURL.
+type IssueJoinTokenResult struct {
+	RawToken  string
+	ExpiresAt time.Time
+	JoinURL   string // e.g. https://nuruvent.com/join/nrt_abc...
+}
+
 // RedeemResult is the outcome of redeeming a join token.
 type RedeemResult struct {
-	AttendeeID string
-	SessionID  string
-	RedirectTo string // provider URL to redirect the attendee to
+	AttendeeID  string
+	SessionID   string
+	MeetingCode string // bare platform code
+	Platform    attendance.SessionProvider
+	RedeemedAt  time.Time
+	RedirectTo  string // Nuruvent-hosted meeting URL
 }
 
 // AttendeeSummary aggregates an attendee's status across sessions and
@@ -120,12 +193,4 @@ type AttendeeSummary struct {
 	Attendee *attendance.Attendee
 	Statuses []*attendance.AttendeeSessionStatus
 	Rollups  []*attendance.AttendeeRollupStatus
-}
-
-
-// RegisterAttendeeForExternalCommand registers an attendee for every
-// session under an external reference.
-type RegisterAttendeeForExternalCommand struct {
-	AttendeeID string
-	External   attendance.ExternalRef
 }

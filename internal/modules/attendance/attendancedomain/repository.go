@@ -28,6 +28,8 @@ type SessionRepository interface {
 	FindByProviderMeetingID(ctx context.Context, provider SessionProvider, meetingID string) (*Session, error)
 	FindActiveBySchedule(ctx context.Context, before time.Time) ([]*Session, error)
 	FindEndedBefore(ctx context.Context, before time.Time) ([]*Session, error)
+
+   UpdateStatus(ctx context.Context, sessionID string, status SessionStatus) error
 }
 
 // JoinTokenRepository persists join tokens.

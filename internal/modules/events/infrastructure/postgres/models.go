@@ -254,11 +254,8 @@ type EventScheduleModel struct {
 
 	ZoomLink string
 	MeetLink string
-
-	// VideoMeetingID references video_meetings.id when the schedule's
-	// meeting was created automatically by the video module. Null for
-	// manually-pasted links or in-person sessions.
-	VideoMeetingID *string `gorm:"index"`
+    VideoMeetingID         *string `gorm:"type:uuid;column:video_meeting_id"`
+    VideoMeetingExternalID string  `gorm:"type:varchar(255);column:video_meeting_external_id"`
 
 	MaxAttendees *int
 	CreatedAt    time.Time
