@@ -27,9 +27,19 @@ func (s *eventService) syncEventSchedulesToAttendance(
 	event *domain.Event,
 ) {
 	if s.attendance == nil {
-		return // sync not wired (e.g. during early boot or tests)
+		if event != nil {
+			log.Printf("[events] sync SKIP event=%s reason=attendance-nil", event.ID)
+		} else {
+			log.Printf("[events] sync SKIP reason=attendance-nil event=nil")
+		}
+		return
 	}
-	if event == nil || len(event.Schedules) == 0 {
+	if event == nil {
+		log.Printf("[events] sync SKIP reason=event-nil")
+		return
+	}
+	if len(event.Schedules) == 0 {
+		log.Printf("[events] sync SKIP event=%s reason=no-schedules", event.ID)
 		return
 	}
 
@@ -45,18 +55,28 @@ func (s *eventService) syncEventSchedulesToAttendance(
 	// resolve it from the team.
 	organizerName := s.resolveOrganizerForSync(ctx, event)
 
+	var succeeded, failed int
 	for _, schedule := range event.Schedules {
 		cmd, err := buildAttendanceCommand(event, schedule, organizerName)
 		if err != nil {
-			log.Printf("[events] skipping attendance sync for schedule %s: %v", schedule.ID, err)
+			log.Printf("[events] sync SKIP event=%s schedule=%s reason=build-command err=%v",
+				event.ID, schedule.ID, err)
+			failed++
 			continue
 		}
 		if err := s.attendance.UpsertSession(ctx, cmd); err != nil {
-			log.Printf("[events] attendance sync failed for event=%s schedule=%s: %v",
-				event.ID, schedule.ID, err)
-			// Continue — don't fail the caller.
+			log.Printf("[events] sync FAIL event=%s schedule=%s provider=%s provider_session_id=%s err=%v",
+				event.ID, schedule.ID, cmd.Provider, cmd.ProviderSessionID, err)
+			failed++
+			continue
 		}
+		log.Printf("[events] sync OK event=%s schedule=%s provider=%s provider_session_id=%s",
+			event.ID, schedule.ID, cmd.Provider, cmd.ProviderSessionID)
+		succeeded++
 	}
+
+	log.Printf("[events] sync DONE event=%s schedules=%d ok=%d failed=%d",
+		event.ID, len(event.Schedules), succeeded, failed)
 }
 
 // resolveOrganizerForSync returns the organizer's display name for an
