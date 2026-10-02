@@ -37,6 +37,9 @@ import (
 
 	registrationnotifier "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/registration"
     registrationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
+
+
+	attendanceDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 )
 
 // ---- AUTH ADAPTERS ----
@@ -281,4 +284,15 @@ func NewRegistrationNotifier(
 	users registrationDomain.UserInfoProvider,
 ) registrationDomain.Notifier {
 	return registrationnotifier.NewNotifier(notifSvc, users)
+}
+
+// NewAttendancePermissionAdapter bridges auth's PermissionChecker to
+// the attendance module's PermissionChecker port.
+//
+// Used by the cross-event attendee directory to resolve the caller's
+// accounts.
+func NewAttendancePermissionAdapter(
+	permChecker authDomain.PermissionChecker,
+) attendanceDomain.PermissionChecker {
+	return attendanceadapters.NewPermissionCheckerAdapter(permChecker)
 }

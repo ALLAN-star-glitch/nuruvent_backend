@@ -87,6 +87,12 @@ type Dependencies struct {
 	// Policy
 	DerivationPolicy attendance.DerivationPolicy
 
+
+
+	// PermissionChecker resolves the accounts a user belongs to.
+	// Used by the cross-event attendee directory to scope results.
+	PermissionChecker attendance.PermissionChecker
+
 	// Default join token grace period. Applied when a command's Grace
 	// is zero.
 	JoinTokenGrace time.Duration

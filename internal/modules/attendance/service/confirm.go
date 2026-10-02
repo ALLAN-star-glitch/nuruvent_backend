@@ -10,6 +10,8 @@ import (
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 )
 
+
+
 // ConfirmAttendance marks an attendee as confirmed by a host for a
 // given session.
 //

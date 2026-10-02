@@ -168,6 +168,24 @@ RegisterAttendeeForExternal(
 	) (*EventAttendanceSummary, error)
 
 
+		// ============================================================
+	// Attendee directory (event-scoped)
+	// ============================================================
+
+	// ListEventAttendees returns a paginated attendee list for an
+	// event. The caller must have read access to the event.
+	ListEventAttendees(
+		ctx context.Context,
+		cmd ListEventAttendeesCommand,
+	) (*ListEventAttendeesResult, error)
+
+	// GetEventAttendeeDetail returns one attendee's rollup plus their
+	// per-session statuses for an event.
+	GetEventAttendeeDetail(
+		ctx context.Context,
+		cmd GetEventAttendeeDetailCommand,
+	) (*EventAttendeeDetail, error)
+
 
 	// RecordExternalParticipant records a join or leave observed on an
 	// external platform (Google Meet, Teams, etc.).
@@ -179,4 +197,14 @@ RegisterAttendeeForExternal(
 		ctx context.Context,
 		cmd RecordExternalParticipantCommand,
 	) error
+
+
+		// ListAttendees returns a cross-event attendee directory scoped
+	// to the caller's accounts.
+	ListAttendees(
+		ctx context.Context,
+		cmd ListAttendeesCommand,
+	) (*ListAttendeesResult, error)
 }
+
+

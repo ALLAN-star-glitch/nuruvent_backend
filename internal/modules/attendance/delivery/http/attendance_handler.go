@@ -3,6 +3,8 @@
 package http
 
 import (
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -243,9 +245,240 @@ func (h *AttendanceHandler) EventSummary(c fiber.Ctx) error {
 			AttendedCount:      s.AttendedCount,
 			AvgDurationSeconds: s.AvgDurationSeconds,
 			HasAttendanceData:  s.HasAttendanceData,
-			VideoMeetingID: s.VideoMeetingID,
+			VideoMeetingID:     s.VideoMeetingID,
 		})
 	}
 
 	return response.Success(c, "Attendance summary retrieved", out)
+}
+
+// ============================================================
+// EVENT ATTENDEE DIRECTORY
+// ============================================================
+
+// ListEventAttendees handles GET /events/:eventId/attendees.
+func (h *AttendanceHandler) ListEventAttendees(c fiber.Ctx) error {
+	userID := handlerhelper.GetUserIDOptional(c)
+	if userID == "" {
+		return response.Unauthorized(c, "Authentication required", nil)
+	}
+
+	eventID := c.Params("eventId")
+	if eventID == "" {
+		return response.BadRequest(c, "Event ID is required", nil)
+	}
+
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	pageSize, _ := strconv.Atoi(c.Query("page_size", "20"))
+
+	var statuses []string
+	if raw := c.Query("status"); raw != "" {
+		for _, s := range strings.Split(raw, ",") {
+			if t := strings.TrimSpace(s); t != "" {
+				statuses = append(statuses, t)
+			}
+		}
+	}
+
+	res, err := h.svc.ListEventAttendees(c.Context(), service.ListEventAttendeesCommand{
+		UserID:    userID,
+		EventID:   eventID,
+		Search:    c.Query("search"),
+		Statuses:  statuses,
+		SortBy:    c.Query("sort_by", "name"),
+		SortOrder: c.Query("sort_order", "asc"),
+		Page:      page,
+		PageSize:  pageSize,
+	})
+	if err != nil {
+		return mapDomainError(c, err)
+	}
+
+	out := EventAttendeesListResponse{
+		Attendees: make([]EventAttendeeResponse, 0, len(res.Attendees)),
+		Total:     res.Total,
+		Page:      res.Page,
+		PageSize:  res.PageSize,
+	}
+	for _, a := range res.Attendees {
+		out.Attendees = append(out.Attendees, toEventAttendeeResponse(a))
+	}
+
+	return response.Success(c, "Attendees retrieved successfully", out)
+}
+
+// GetEventAttendeeDetail handles GET /events/:eventId/attendees/:attendeeId.
+func (h *AttendanceHandler) GetEventAttendeeDetail(c fiber.Ctx) error {
+	userID := handlerhelper.GetUserIDOptional(c)
+	if userID == "" {
+		return response.Unauthorized(c, "Authentication required", nil)
+	}
+
+	eventID := c.Params("eventId")
+	attendeeID := c.Params("attendeeId")
+	if eventID == "" || attendeeID == "" {
+		return response.BadRequest(c, "Event ID and Attendee ID are required", nil)
+	}
+
+	detail, err := h.svc.GetEventAttendeeDetail(c.Context(), service.GetEventAttendeeDetailCommand{
+		UserID:     userID,
+		EventID:    eventID,
+		AttendeeID: attendeeID,
+	})
+	if err != nil {
+		return mapDomainError(c, err)
+	}
+
+	return response.Success(c, "Attendee retrieved successfully", toEventAttendeeDetailResponse(detail))
+}
+
+
+
+
+// ============================================================
+// EVENT ATTENDEE DIRECTORY — mappers
+// ============================================================
+
+func toEventAttendeeResponse(a *service.EventAttendeeListItem) EventAttendeeResponse {
+	return EventAttendeeResponse{
+		AttendeeID:           a.AttendeeID,
+		DisplayName:          a.DisplayName,
+		Email:                a.Email,
+		EffectiveStatus:      string(a.EffectiveStatus),
+		SessionsTotal:        a.SessionsTotal,
+		SessionsAttended:     a.SessionsAttended,
+		SessionsConfirmed:    a.SessionsConfirmed,
+		TotalDurationSeconds: int64(a.TotalDurationSeconds),
+		RegisteredAt:         a.RegisteredAt.Format(time.RFC3339),
+		LastActivityAt:       a.LastActivityAt.Format(time.RFC3339),
+	}
+}
+
+func toEventAttendeeDetailResponse(d *service.EventAttendeeDetail) EventAttendeeDetailResponse {
+	out := EventAttendeeDetailResponse{
+		EventAttendeeResponse: EventAttendeeResponse{
+			AttendeeID:           d.AttendeeID,
+			DisplayName:          d.DisplayName,
+			Email:                d.Email,
+			EffectiveStatus:      string(d.EffectiveStatus),
+			SessionsTotal:        d.SessionsTotal,
+			SessionsAttended:     d.SessionsAttended,
+			SessionsConfirmed:    d.SessionsConfirmed,
+			TotalDurationSeconds: int64(d.TotalDurationSeconds),
+			RegisteredAt:         d.RegisteredAt.Format(time.RFC3339),
+			LastActivityAt:       d.LastActivityAt.Format(time.RFC3339),
+		},
+		Sessions: make([]EventAttendeeSessionResponse, 0, len(d.Sessions)),
+	}
+	for _, s := range d.Sessions {
+		out.Sessions = append(out.Sessions, EventAttendeeSessionResponse{
+			SessionID:        s.SessionID,
+			Title:            s.Title,
+			Provider:         string(s.Provider),
+			ScheduledStart:   s.ScheduledStart.Format(time.RFC3339),
+			ScheduledEnd:     s.ScheduledEnd.Format(time.RFC3339),
+			DerivedStatus:    string(s.DerivedStatus),
+			HostConfirmed:    s.HostConfirmed,
+			TotalDurationSec: int64(s.TotalDurationSec),
+			LastDerivedAt:    s.LastDerivedAt.Format(time.RFC3339),
+		})
+	}
+	return out
+}
+
+
+
+// ListAttendees handles GET /attendees.
+//
+// Cross-event attendee directory. Scoped to the caller's accounts.
+func (h *AttendanceHandler) ListAttendees(c fiber.Ctx) error {
+	userID := handlerhelper.GetUserIDOptional(c)
+	if userID == "" {
+		return response.Unauthorized(c, "Authentication required", nil)
+	}
+
+	page, _ := strconv.Atoi(c.Query("page", "1"))
+	pageSize, _ := strconv.Atoi(c.Query("page_size", "20"))
+
+	var statuses []string
+	if raw := c.Query("status"); raw != "" {
+		for _, s := range strings.Split(raw, ",") {
+			if t := strings.TrimSpace(s); t != "" {
+				statuses = append(statuses, t)
+			}
+		}
+	}
+
+	res, err := h.svc.ListAttendees(c.Context(), service.ListAttendeesCommand{
+		UserID:    userID,
+		EventID:   c.Query("event_id"),
+		Search:    c.Query("search"),
+		Statuses:  statuses,
+		SortBy:    c.Query("sort_by", "registered_at"),
+		SortOrder: c.Query("sort_order", "desc"),
+		Page:      page,
+		PageSize:  pageSize,
+	})
+	if err != nil {
+		return mapDomainError(c, err)
+	}
+
+	out := CrossEventAttendeesListResponse{
+		Attendees: make([]CrossEventAttendeeResponse, 0, len(res.Attendees)),
+		Total:     res.Total,
+		Page:      res.Page,
+		PageSize:  res.PageSize,
+	}
+	for _, a := range res.Attendees {
+		out.Attendees = append(out.Attendees, toCrossEventAttendeeResponse(a))
+	}
+
+	return response.Success(c, "Attendees retrieved successfully", out)
+}
+
+// ---- DTOs ----
+
+type CrossEventAttendeesListResponse struct {
+	Attendees []CrossEventAttendeeResponse `json:"attendees"`
+	Total     int                          `json:"total"`
+	Page      int                          `json:"page"`
+	PageSize  int                          `json:"page_size"`
+}
+
+type CrossEventAttendeeResponse struct {
+	AttendeeID           string `json:"attendee_id"`
+	DisplayName          string `json:"display_name"`
+	Email                string `json:"email"`
+	EventID              string `json:"event_id"`
+	EventName            string `json:"event_name"`
+	EventSlug            string `json:"event_slug"`
+	EventStartDate       string `json:"event_start_date"`
+	EffectiveStatus      string `json:"effective_status"`
+	SessionsTotal        int    `json:"sessions_total"`
+	SessionsAttended     int    `json:"sessions_attended"`
+	SessionsConfirmed    int    `json:"sessions_confirmed"`
+	TotalDurationSeconds int64  `json:"total_duration_seconds"`
+	RegisteredAt         string `json:"registered_at"`
+	LastActivityAt       string `json:"last_activity_at"`
+}
+
+// ---- Mapper ----
+
+func toCrossEventAttendeeResponse(a *service.CrossEventAttendeeItem) CrossEventAttendeeResponse {
+	return CrossEventAttendeeResponse{
+		AttendeeID:           a.AttendeeID,
+		DisplayName:          a.DisplayName,
+		Email:                a.Email,
+		EventID:              a.EventID,
+		EventName:            a.EventName,
+		EventSlug:            a.EventSlug,
+		EventStartDate:       a.EventStartDate.Format(time.RFC3339),
+		EffectiveStatus:      string(a.EffectiveStatus),
+		SessionsTotal:        a.SessionsTotal,
+		SessionsAttended:     a.SessionsAttended,
+		SessionsConfirmed:    a.SessionsConfirmed,
+		TotalDurationSeconds: a.TotalDurationSeconds,
+		RegisteredAt:         a.RegisteredAt.Format(time.RFC3339),
+		LastActivityAt:       a.LastActivityAt.Format(time.RFC3339),
+	}
 }

@@ -211,6 +211,10 @@ func InitializeApp() (*AppDependencies, error) {
 		NewAttendanceVideoMeetingIDResolver,
 
 
+
+		NewAttendancePermissionAdapter,
+
+
 		// VIDEO
 		NewEventsVideoAdapter,
 		NewVideoAttendanceAdapter,

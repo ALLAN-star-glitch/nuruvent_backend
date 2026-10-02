@@ -94,6 +94,8 @@ func ProvideAttendanceProviders(
 
 // provideAttendanceDependencies assembles service.Dependencies from
 // the wire-bound building blocks.
+// provideAttendanceDependencies assembles service.Dependencies from
+// the wire-bound building blocks.
 func ProvideAttendanceDependencies(
 	unitOfWork *attendancePostgres.UnitOfWork,
 	ids *id.UUIDGenerator,
@@ -101,17 +103,19 @@ func ProvideAttendanceDependencies(
 	publisher *attendancePublisher.LogPublisher,
 	clock *systemClock,
 	providers map[attendance.SessionProvider]attendanceService.ProviderAdapter,
-	videoMeetings attendanceService.VideoMeetingIDResolver, 
+	videoMeetings attendanceService.VideoMeetingIDResolver,
+	permissionChecker attendance.PermissionChecker,
 ) attendanceService.Dependencies {
 	return attendanceService.Dependencies{
-		UnitOfWork:       unitOfWork,
-		Clock:            clock,
-		IDs:              ids,
-		TokenGenerator:   tokens,
-		Publisher:        publisher,
-		Providers:        providers,
-		DerivationPolicy: attendance.DefaultDerivationPolicy(),
-		JoinTokenGrace:   24 * time.Hour,
-		VideoMeetings: videoMeetings,
+		UnitOfWork:        unitOfWork,
+		Clock:             clock,
+		IDs:               ids,
+		TokenGenerator:    tokens,
+		Publisher:         publisher,
+		Providers:         providers,
+		DerivationPolicy:  attendance.DefaultDerivationPolicy(),
+		JoinTokenGrace:    24 * time.Hour,
+		VideoMeetings:     videoMeetings,
+		PermissionChecker: permissionChecker,
 	}
 }

@@ -63,10 +63,18 @@ type AttendeeSessionStatusRepository interface {
 }
 
 // AttendeeRollupStatusRepository persists the roll-up statuses.
+
 type AttendeeRollupStatusRepository interface {
 	Upsert(ctx context.Context, s *AttendeeRollupStatus) error
 	FindByAttendeeExternal(ctx context.Context, attendeeID string, ref ExternalRef) (*AttendeeRollupStatus, error)
 	ListByExternal(ctx context.Context, ref ExternalRef) ([]*AttendeeRollupStatus, error)
+	ListEventAttendees(ctx context.Context, q ListEventAttendeesQuery) (*ListEventAttendeesResult, error)
+	FindEventAttendee(ctx context.Context, eventID, attendeeID string) (*EventAttendeeRow, error)
+
+	// ListAttendees is the cross-event directory. Scoped to the given
+	// account IDs — the caller's accounts. Returns zero rows whe
+	// AccountIDs is empty.
+	ListAttendees(ctx context.Context, q ListAttendeesQuery) (*ListAttendeesResult, error)
 }
 
 // AttendanceOverrideRepository persists the audit trail of manual
@@ -94,4 +102,43 @@ type Repositories struct {
 // UnitOfWork executes a function inside a database transaction.
 type UnitOfWork interface {
 	Do(ctx context.Context, fn func(Repositories) error) error
+}
+
+
+
+
+// ============================================================
+// EVENT ATTENDEE QUERIES
+// ============================================================
+
+type ListEventAttendeesQuery struct {
+	EventID   string
+	Search    string     // matches display_name or email (ILIKE)
+	Statuses  []string   // filter on derived_status; empty = all
+	SortBy    string     // "name" | "registered_at" | "status" | "duration"
+	SortOrder string     // "asc" | "desc"
+	Page      int        // 1-indexed
+	PageSize  int        // clamped server-side
+}
+
+type ListEventAttendeesResult struct {
+	Attendees []*EventAttendeeRow
+	Total     int
+	Page      int
+	PageSize  int
+}
+
+// EventAttendeeRow is the read model for the attendee list and the
+// attendee detail endpoint.
+type EventAttendeeRow struct {
+	AttendeeID            string
+	DisplayName           string
+	Email                 string
+	DerivedStatus         string
+	SessionsTotal         int
+	SessionsAttended      int
+	SessionsConfirmed     int
+	TotalDurationSeconds  int
+	LastDerivedAt         time.Time
+	RegisteredAt          time.Time
 }

@@ -237,3 +237,46 @@ type EventAttendanceSummaryResponse struct {
 	Sessions []SessionAttendanceSummaryResponse `json:"sessions"`
 	Totals   EventAttendanceTotalsResponse      `json:"totals"`
 }
+
+
+// ============================================================
+// EVENT ATTENDEE DIRECTORY — response DTOs
+// ============================================================
+
+type EventAttendeesListResponse struct {
+	Attendees []EventAttendeeResponse `json:"attendees"`
+	Total     int                     `json:"total"`
+	Page      int                     `json:"page"`
+	PageSize  int                     `json:"page_size"`
+}
+
+type EventAttendeeResponse struct {
+	AttendeeID           string `json:"attendee_id"`
+	DisplayName          string `json:"display_name"`
+	Email                string `json:"email"`
+	EffectiveStatus      string `json:"effective_status"`
+	SessionsTotal        int    `json:"sessions_total"`
+	SessionsAttended     int    `json:"sessions_attended"`
+	SessionsConfirmed    int    `json:"sessions_confirmed"`
+	TotalDurationSeconds int64  `json:"total_duration_seconds"`
+	RegisteredAt         string `json:"registered_at"`
+	LastActivityAt       string `json:"last_activity_at"`
+}
+
+
+type EventAttendeeDetailResponse struct {
+	EventAttendeeResponse
+	Sessions []EventAttendeeSessionResponse `json:"sessions"`
+}
+
+type EventAttendeeSessionResponse struct {
+	SessionID        string `json:"session_id"`
+	Title            string `json:"title"`
+	Provider         string `json:"provider"`
+	ScheduledStart   string `json:"scheduled_start"`
+	ScheduledEnd     string `json:"scheduled_end"`
+	DerivedStatus    string `json:"derived_status"`
+	HostConfirmed    bool   `json:"host_confirmed"`
+	TotalDurationSec int64  `json:"total_duration_seconds"`
+	LastDerivedAt    string `json:"last_derived_at"`
+}

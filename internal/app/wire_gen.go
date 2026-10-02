@@ -122,7 +122,8 @@ func InitializeApp() (*AppDependencies, error) {
 	v2 := attendance.ProvideAttendanceProviders(configConfig)
 	meetingRepository := postgres7.NewMeetingRepository(db)
 	videoMeetingIDResolver := NewAttendanceVideoMeetingIDResolver(meetingRepository)
-	dependencies := attendance.ProvideAttendanceDependencies(unitOfWork, uuidGenerator, sha256Generator, logPublisher, systemClock, v2, videoMeetingIDResolver)
+	attendancedomainPermissionChecker := NewAttendancePermissionAdapter(permissionChecker)
+	dependencies := attendance.ProvideAttendanceDependencies(unitOfWork, uuidGenerator, sha256Generator, logPublisher, systemClock, v2, videoMeetingIDResolver, attendancedomainPermissionChecker)
 	service14, err := service6.NewService(dependencies)
 	if err != nil {
 		return nil, err

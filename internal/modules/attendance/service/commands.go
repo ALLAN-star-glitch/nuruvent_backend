@@ -194,3 +194,112 @@ type AttendeeSummary struct {
 	Statuses []*attendance.AttendeeSessionStatus
 	Rollups  []*attendance.AttendeeRollupStatus
 }
+
+
+// ============================================================
+// ATTENDEE DIRECTORY — commands and results
+// ============================================================
+
+type ListEventAttendeesCommand struct {
+	UserID    string
+	EventID   string
+	Search    string
+	Statuses  []string
+	SortBy    string
+	SortOrder string
+	Page      int
+	PageSize  int
+}
+
+type ListEventAttendeesResult struct {
+	Attendees []*EventAttendeeListItem
+	Total     int
+	Page      int
+	PageSize  int
+}
+
+// EventAttendeeListItem is one row in the event attendee list.
+type EventAttendeeListItem struct {
+	AttendeeID           string
+	DisplayName          string
+	Email                string
+	EffectiveStatus      attendance.AttendanceStatus
+	SessionsTotal        int
+	SessionsAttended     int
+	SessionsConfirmed    int
+	TotalDurationSeconds int
+	RegisteredAt         time.Time
+	LastActivityAt       time.Time
+}
+
+type GetEventAttendeeDetailCommand struct {
+	UserID     string
+	EventID    string
+	AttendeeID string
+}
+
+type EventAttendeeDetail struct {
+	AttendeeID           string
+	DisplayName          string
+	Email                string
+	EffectiveStatus      attendance.AttendanceStatus
+	SessionsTotal        int
+	SessionsAttended     int
+	SessionsConfirmed    int
+	TotalDurationSeconds int
+	RegisteredAt         time.Time
+	LastActivityAt       time.Time
+	Sessions             []EventAttendeeSessionDetail
+}
+
+type EventAttendeeSessionDetail struct {
+	SessionID        string
+	Title            string
+	Provider         attendance.SessionProvider
+	ScheduledStart   time.Time
+	ScheduledEnd     time.Time
+	DerivedStatus    attendance.AttendanceStatus
+	HostConfirmed    bool
+	TotalDurationSec int
+	LastDerivedAt    time.Time
+}
+
+
+// ============================================================
+// CROSS-EVENT ATTENDEE DIRECTORY
+// ============================================================
+
+type ListAttendeesCommand struct {
+	UserID    string
+	EventID   string
+	Search    string
+	Statuses  []string
+	SortBy    string
+	SortOrder string
+	Page      int
+	PageSize  int
+}
+
+type ListAttendeesResult struct {
+	Attendees []*CrossEventAttendeeItem
+	Total     int
+	Page      int
+	PageSize  int
+}
+
+type CrossEventAttendeeItem struct {
+	AttendeeID           string
+	DisplayName          string
+	Email                string
+	EventID              string
+	EventName            string
+	EventSlug            string
+	EventStartDate       time.Time
+	EffectiveStatus      attendance.AttendanceStatus
+	SessionsTotal        int
+	SessionsAttended     int
+	SessionsConfirmed    int
+	TotalDurationSeconds int64
+	RegisteredAt         time.Time
+	LastActivityAt       time.Time
+}
