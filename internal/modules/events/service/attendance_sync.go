@@ -197,17 +197,22 @@ func resolveScheduleTimes(schedule domain.EventSchedule) (time.Time, time.Time, 
 	return start, end, nil
 }
 
-// loadLocationOrDefault loads a timezone or falls back to the
-// platform default (Africa/Nairobi).
+// loadLocationOrDefault loads a timezone or falls back to the platform
+// default (Africa/Nairobi), and then to UTC if neither is available.
+//
+// The UTC last resort ensures a missing or invalid tz database can
+// never block attendance sync — a schedule will still be created, just
+// with UTC times, which the host can correct.
 func loadLocationOrDefault(name string) (*time.Location, error) {
-	if strings.TrimSpace(name) == "" {
-		return time.LoadLocation("Africa/Nairobi")
+	if strings.TrimSpace(name) != "" {
+		if loc, err := time.LoadLocation(name); err == nil {
+			return loc, nil
+		}
 	}
-	loc, err := time.LoadLocation(name)
-	if err != nil {
-		return time.LoadLocation("Africa/Nairobi")
+	if loc, err := time.LoadLocation("Africa/Nairobi"); err == nil {
+		return loc, nil
 	}
-	return loc, nil
+	return time.UTC, nil
 }
 
 // parseTimeOfDay parses "HH:MM" or "HH:MM:SS" into a time.Time whose

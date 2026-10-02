@@ -4,6 +4,7 @@ package main
 
 import (
 	"log"
+	_ "time/tzdata" // embed the IANA timezone database in the binary
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
@@ -30,8 +31,6 @@ import (
 // @in header
 // @name Authorization
 // @description Type "Bearer" followed by a space and the JWT token.
-
-// cmd/api/main.go
 
 func main() {
     // 1. Load config
