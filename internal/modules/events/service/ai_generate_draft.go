@@ -19,21 +19,11 @@ import (
 // GENERATE EVENT DRAFT
 // ============================================================
 
-// GenerateEventDraftResult is the payload returned to the caller.
 type GenerateEventDraftResult struct {
 	Draft    *GeneratedEventDraft `json:"draft"`
 	Warnings []string             `json:"warnings"`
 }
 
-// GenerateEventDraft orchestrates the AI generation pipeline.
-//
-//  1. Authorization — same two-tier check as CreateDraft.
-//  2. Shape validation + defaults.
-//  3. Resolve DB context (event type, category, ticket types).
-//  4. Build prompts.
-//  5. Call AI (attempt 1) -> parse -> correct -> check publish-readiness.
-//  6. On validation failure, retry once with a fix prompt.
-//  7. Return draft + warnings, or a structured error.
 func (s *eventService) GenerateEventDraft(
 	ctx context.Context,
 	req GenerateEventDraftRequest,
@@ -43,7 +33,6 @@ func (s *eventService) GenerateEventDraft(
 		return nil, ErrAIDisabled
 	}
 
-	// 0. Authorization — same two-tier check as CreateDraft.
 	if err := s.checkEventCreatePermission(
 		ctx, req.CreatedBy, req.TeamID, req.TeamType, req.AccountID,
 	); err != nil {
@@ -54,26 +43,22 @@ func (s *eventService) GenerateEventDraft(
 	log.Printf("[AI] generate-draft start  event_type=%s prompt_len=%d",
 		req.EventTypeID, len(req.Prompt))
 
-	// 1. Shape validation + defaults.
 	req = applyRequestDefaults(req)
 	if err := validateGenerateEventDraftRequest(req); err != nil {
 		return nil, err
 	}
 
-	// 2. Resolve DB context.
 	pctx, err := s.loadPromptContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. Build prompts.
 	systemPrompt := buildSystemPrompt()
 	userPrompt := buildUserPrompt(req, pctx)
 	cctx := buildCorrectionContext(req, pctx)
 	log.Printf("[AI] prompt built  chars=%d version=%s",
 		len(systemPrompt)+len(userPrompt), PromptVersion)
 
-	// 4. Attempt 1 — a hard parse failure here is fatal (502).
 	draft, warnings, retryErrs, hardErr := s.attemptGenerate(
 		ctx, systemPrompt, userPrompt, cctx,
 	)
@@ -82,17 +67,19 @@ func (s *eventService) GenerateEventDraft(
 		return nil, hardErr
 	}
 
-	// 5. If the first attempt is publishable, return it.
 	if len(retryErrs) == 0 {
-		log.Printf("[AI] generate-draft ok  warnings=%d latency_ms=%d",
-			len(warnings), time.Since(start).Milliseconds())
+		log.Printf("[AI] generate-draft ok  shape=%s schedules=%d warnings=%d latency_ms=%d",
+			draft.Shape(), len(draft.Schedules), len(warnings),
+			time.Since(start).Milliseconds())
 		return &GenerateEventDraftResult{Draft: draft, Warnings: warnings}, nil
 	}
 
-	// 6. Retry once with a fix prompt.
+	// Retry once with a fix prompt that INCLUDES the failed draft.
 	log.Printf("[AI] validation failed  errors=%v retry=true", retryErrs)
 
-	fixPrompt := buildFixPrompt(userPrompt, retryErrs)
+	failedJSON, _ := json.MarshalIndent(draft, "", "  ")
+	fixPrompt := buildFixPrompt(userPrompt, string(failedJSON), retryErrs)
+
 	draft2, warnings2, retryErrs2, hardErr2 := s.attemptGenerate(
 		ctx, systemPrompt, fixPrompt, cctx,
 	)
@@ -101,12 +88,12 @@ func (s *eventService) GenerateEventDraft(
 			[]string{"Retried once after validation failure."},
 			warnings2...,
 		)
-		log.Printf("[AI] generate-draft ok (retry)  warnings=%d latency_ms=%d",
-			len(warnings2), time.Since(start).Milliseconds())
+		log.Printf("[AI] generate-draft ok (retry)  shape=%s schedules=%d warnings=%d latency_ms=%d",
+			draft2.Shape(), len(draft2.Schedules), len(warnings2),
+			time.Since(start).Milliseconds())
 		return &GenerateEventDraftResult{Draft: draft2, Warnings: warnings2}, nil
 	}
 
-	// 7. Both attempts failed — return a structured 422.
 	finalDraft := draft
 	finalErrs := retryErrs
 	if draft2 != nil {
@@ -123,7 +110,7 @@ func (s *eventService) GenerateEventDraft(
 }
 
 // ============================================================
-// ATTEMPT — one full AI + parse + correct + validate cycle
+// ATTEMPT
 // ============================================================
 
 func (s *eventService) attemptGenerate(
@@ -139,7 +126,7 @@ func (s *eventService) attemptGenerate(
 	raw, err := s.aiSvc.GenerateEventDraft(ctx, GenerateEventDraftAIRequest{
 		SystemPrompt: systemPrompt,
 		UserPrompt:   userPrompt,
-		MaxTokens:    3000,
+		MaxTokens:    4096, // raised from 3000 — series drafts are longer
 		Temperature:  0.7,
 	})
 	if err != nil {
@@ -150,13 +137,16 @@ func (s *eventService) attemptGenerate(
 
 	var parsed GeneratedEventDraft
 	if err := json.Unmarshal([]byte(cleaned), &parsed); err != nil {
-		return nil, nil, nil, fmt.Errorf("%w: %v", ErrAIParseFailure, err)
+		// Parse failures are now retryable: return as a validation
+		// error so the caller can retry with the fix prompt, rather
+		// than a fatal 502. If the retry also fails to parse, the
+		// caller surfaces a structured error.
+		return nil, nil, []string{fmt.Sprintf(
+			"response was not valid JSON: %v", err)}, nil
 	}
 
 	corrections, corrErr := applyCorrections(&parsed, cctx)
 	if corrErr != nil {
-		// Correction failure is a validation error, not a parse error.
-		// The retry can fix it.
 		return &parsed, corrections, []string{corrErr.Error()}, nil
 	}
 
@@ -173,7 +163,6 @@ func (s *eventService) loadPromptContext(
 	req GenerateEventDraftRequest,
 ) (*promptContext, error) {
 
-	// Event type — direct lookup exists.
 	et, err := s.repo.GetEventTypeByID(ctx, req.EventTypeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load event type: %w", err)
@@ -191,7 +180,6 @@ func (s *eventService) loadPromptContext(
 		MaxCapacity: req.MaxCapacity,
 	}
 
-	// Category — filter in memory.
 	if req.CategoryID != nil && *req.CategoryID != "" {
 		cats, err := s.repo.GetAllCategories(ctx)
 		if err != nil {
@@ -208,7 +196,6 @@ func (s *eventService) loadPromptContext(
 		}
 	}
 
-	// Ticket types — filter in memory.
 	allTicketTypes, err := s.repo.GetAllTicketTypes(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load ticket types: %w", err)
@@ -232,12 +219,9 @@ func (s *eventService) loadPromptContext(
 // PUBLISH READINESS
 // ============================================================
 
-// checkPublishReadiness returns a list of structural errors that must
-// be resolved before the draft is considered publishable.
 func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 	var errs []string
 
-	// Name.
 	trimmedName := strings.TrimSpace(d.Name)
 	if trimmedName == "" {
 		errs = append(errs, "name is required")
@@ -245,14 +229,12 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 		errs = append(errs, "name must be at least 3 characters")
 	}
 
-	// Description.
 	if len(strings.TrimSpace(d.Description)) < 100 {
 		errs = append(errs, fmt.Sprintf(
 			"description is %d characters — minimum is 100; expand with the agenda, target audience, and outcomes",
 			len(strings.TrimSpace(d.Description))))
 	}
 
-	// Structure.
 	if len(d.Schedules) == 0 {
 		errs = append(errs, "at least one schedule is required")
 	}
@@ -263,6 +245,13 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 		errs = append(errs, "capacity must be at least 1")
 	}
 
+	// Shape contract.
+	shape := d.Shape()
+	if shape == ShapeInvalid {
+		errs = append(errs,
+			"invalid shape: is_recurring=true requires exactly one schedule")
+	}
+
 	// Past-date guard.
 	now := time.Now().UTC()
 	for i, sched := range d.Schedules {
@@ -270,6 +259,28 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 			if start.Before(now) {
 				errs = append(errs, fmt.Sprintf(
 					"schedule %d start_date is in the past", i+1))
+			}
+		}
+	}
+
+	// Series ordering.
+	if shape == ShapeSeries {
+		var prev time.Time
+		for i, sched := range d.Schedules {
+			t, err := time.Parse("2006-01-02", sched.StartDate)
+			if err != nil {
+				continue
+			}
+			if !prev.IsZero() && !t.After(prev) {
+				errs = append(errs, fmt.Sprintf(
+					"series schedules must be in strictly increasing date order (schedule %d out of order)",
+					i+1))
+			}
+			prev = t
+			if sched.SessionNumber != i+1 {
+				errs = append(errs, fmt.Sprintf(
+					"series schedule %d has session_number %d, expected %d",
+					i+1, sched.SessionNumber, i+1))
 			}
 		}
 	}
@@ -287,8 +298,7 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 				for _, day := range d.Recurrence.DaysOfWeek {
 					if !isValidFullWeekday(day) {
 						errs = append(errs, fmt.Sprintf(
-							"invalid weekday %q — use full lowercase name (\"monday\", not \"mon\")",
-							day))
+							"invalid weekday %q — use full lowercase name", day))
 					}
 				}
 			case "monthly":
@@ -298,20 +308,19 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 					errs = append(errs, "monthly recurrence requires day_of_month or week_of_month")
 				}
 			case "daily":
-				// no additional requirement
 			default:
 				errs = append(errs, fmt.Sprintf(
 					"invalid recurrence pattern %q", d.Recurrence.Pattern))
 			}
 
 			if d.Recurrence.EndsOn == nil && d.Recurrence.Occurrences == nil {
-				errs = append(errs, "recurrence requires ends_on or occurrences")
+				errs = append(errs,
+					"recurrence requires ends_on or occurrences — derive it from the prompt")
 			}
 		}
+	} else if d.Recurrence != nil {
+		errs = append(errs, "recurrence must be null when is_recurring is false")
 	}
-
-	// Schedule-level consistency.
-	errs = append(errs, validateScheduleConsistency(d)...)
 
 	return errs
 }
@@ -329,15 +338,24 @@ func buildCorrectionContext(
 		allowed[id] = struct{}{}
 	}
 
+	var minDur, maxDur int
+	if pctx.EventType != nil {
+		minDur = pctx.EventType.MinDuration
+		maxDur = pctx.EventType.MaxDuration
+	}
+
 	return correctionContext{
-		Request:       req,
-		EventTypeID:   pctx.EventType.ID,
-		CategoryID:    req.CategoryID,
-		TicketTypeIDs: allowed,
-		Timezone:      pctx.Timezone,
-		Language:      pctx.Language,
-		MinCapacity:   pctx.MinCapacity,
-		MaxCapacity:   pctx.MaxCapacity,
+		Request:         req,
+		EventTypeID:     pctx.EventType.ID,
+		CategoryID:      req.CategoryID,
+		TicketTypeIDs:   allowed,
+		Timezone:        pctx.Timezone,
+		Language:        pctx.Language,
+		Currency:        pctx.Currency,
+		MinCapacity:     pctx.MinCapacity,
+		MaxCapacity:     pctx.MaxCapacity,
+		EventTypeMinDur: minDur,
+		EventTypeMaxDur: maxDur,
 	}
 }
 
@@ -361,9 +379,8 @@ func applyRequestDefaults(req GenerateEventDraftRequest) GenerateEventDraftReque
 	if req.MaxCapacity == 0 {
 		req.MaxCapacity = 5000
 	}
-	if len(req.TicketTypeIDs) > 10 {
-		req.TicketTypeIDs = req.TicketTypeIDs[:10]
-	}
+	// v9: do NOT silently truncate ticket type IDs here. Validation
+	// below rejects > 10 explicitly.
 	return req
 }
 
@@ -397,8 +414,6 @@ var (
 	ErrTicketTypeNotFound = fmt.Errorf("ticket type not found")
 )
 
-// DraftUnpublishableError carries the details of an AI output that
-// could not be made publishable after the retry attempt.
 type DraftUnpublishableError struct {
 	Reason           string
 	ValidationErrors []string
@@ -409,5 +424,4 @@ func (e *DraftUnpublishableError) Error() string {
 	return fmt.Sprintf("draft unpublishable: %s", e.Reason)
 }
 
-// ensure "errors" package is used (referenced in caller helpers if any).
 var _ = errors.Is

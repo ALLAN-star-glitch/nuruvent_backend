@@ -2,19 +2,22 @@
 
 package service
 
-import "time"
-
 // ============================================================
 // AI OUTPUT DTO
 // ============================================================
 //
-// GeneratedEventDraft is the shape the AI returns. It mirrors the
-// create-event form: identity, discovery, pricing, policy, and ONE
-// canonical schedule.
+// GeneratedEventDraft mirrors the create-event form for the fields
+// the AI is responsible for: identity, discovery, pricing, policy,
+// and the schedule(s).
+//
+// Shape contract:
+//   ONE-OFF   -> len(Schedules) == 1, IsRecurring == false
+//   RECURRING -> len(Schedules) == 1, IsRecurring == true
+//   SERIES    -> len(Schedules) >= 2, IsRecurring == false
 //
 // Event-level timing, venue, virtual/hybrid flags, and meeting links
-// are NOT part of the AI's job. They are derived from schedules by
-// deriveEventFromSchedules when the draft is turned into a real event.
+// are derived downstream from the full schedule list. They are NOT
+// the AI's job.
 
 type GeneratedEventDraft struct {
 	Name               string               `json:"name"`
@@ -22,7 +25,7 @@ type GeneratedEventDraft struct {
 	ShortDescription   string               `json:"short_description"`
 	Tags               []string             `json:"tags"`
 	Language           string               `json:"language"`
-	Schedules          []GeneratedSchedule  `json:"schedules"` // exactly one
+	Schedules          []GeneratedSchedule  `json:"schedules"`
 	IsRecurring        bool                 `json:"is_recurring"`
 	Recurrence         *GeneratedRecurrence `json:"recurrence"`
 	IsFree             bool                 `json:"is_free"`
@@ -34,10 +37,28 @@ type GeneratedEventDraft struct {
 	CertificateEnabled bool                 `json:"certificate_enabled"`
 }
 
-// GeneratedSchedule is a single canonical session. The AI always
-// returns exactly one. If the event repeats, the recurrence block
-// conveys the cadence and this schedule conveys the shape of one
-// occurrence.
+type DraftShape string
+
+const (
+	ShapeInvalid   DraftShape = "invalid"
+	ShapeOneOff    DraftShape = "one_off"
+	ShapeRecurring DraftShape = "recurring"
+	ShapeSeries    DraftShape = "series"
+)
+
+func (d *GeneratedEventDraft) Shape() DraftShape {
+	switch {
+	case d.IsRecurring && len(d.Schedules) == 1:
+		return ShapeRecurring
+	case !d.IsRecurring && len(d.Schedules) == 1:
+		return ShapeOneOff
+	case !d.IsRecurring && len(d.Schedules) >= 2:
+		return ShapeSeries
+	default:
+		return ShapeInvalid
+	}
+}
+
 type GeneratedSchedule struct {
 	StartDate     string `json:"start_date"`
 	StartTime     string `json:"start_time"`
@@ -69,25 +90,16 @@ type GeneratedRecurrence struct {
 	Occurrences *int     `json:"occurrences"`
 }
 
-// ============================================================
-// CORRECTION CONTEXT
-// ============================================================
-
 type correctionContext struct {
-	Request       GenerateEventDraftRequest
-	EventTypeID   string
-	CategoryID    *string
-	TicketTypeIDs map[string]struct{}
-	Timezone      string
-	Language      string
-	MinCapacity   int
-	MaxCapacity   int
+	Request         GenerateEventDraftRequest
+	EventTypeID     string
+	CategoryID      *string
+	TicketTypeIDs   map[string]struct{}
+	Timezone        string
+	Language        string
+	Currency        string
+	MinCapacity     int
+	MaxCapacity     int
+	EventTypeMinDur int
+	EventTypeMaxDur int
 }
-
-
-
-
-// ensure time import is used (GeneratedRecurrence keeps the *string
-// for ends_on, so this file doesn't strictly need time — kept for
-// future timestamp additions).
-var _ = time.Time{}

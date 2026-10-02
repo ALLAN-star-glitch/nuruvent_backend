@@ -10,46 +10,99 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
 
-// ============================================================
-// PROMPT VERSION
-// ============================================================
-
-
-const PromptVersion = "v8"
+const PromptVersion = "v11.1"
 
 // ============================================================
-// SYSTEM PROMPT — v8
+// SYSTEM PROMPT — v11.1
 // ============================================================
 //
-// v8 tightens duration and weekday handling:
-//   - If the prompt states a session duration, end_time must reflect it.
-//   - When is_recurring + weekly, start_date must already fall on one
-//     of the declared weekdays.
+// v11 made the PROMPT the single source of truth for shape.
 //
-// v7 removed all event-level timing, venue, virtual/hybrid flags, and
-// meeting links from the AI's output. Those are derived from schedules
-// by the events service. The AI's job is identity, discovery, pricing,
-// policy, and one canonical schedule.
+// v11.1 removes platform names from the schedule location. Virtual
+// schedules use the label "Virtual". The platform (Google Meet,
+// Zoom, etc.) is decided downstream by the video integration and
+// is never named by the AI.
+//
+// Shape contract:
+//   ONE-OFF   -> schedules: [1],  is_recurring: false, recurrence: null
+//   RECURRING -> schedules: [1],  is_recurring: true,  recurrence: {...}
+//   SERIES    -> schedules: [N],  is_recurring: false, recurrence: null
 
-const systemPromptV8 = `You are an event generator for the Nuruvent events platform.
+const systemPromptV11 = `You are an event generator for the Nuruvent events platform.
 Return ONLY valid JSON. No markdown, no explanations, no commentary.
 
-Schema:
+================================================================
+STEP 1 — DECIDE THE SHAPE
+================================================================
+
+Every event is exactly ONE of three shapes. Decide the shape by
+reading the user's prompt. The prompt is the source of truth.
+
+SHAPE A — ONE-OFF
+  A single dated session.
+  Signals: one date mentioned; no cadence words.
+  Example prompts: "a workshop on Nov 5", "a meetup next Friday".
+  Contract:
+    schedules:    exactly 1 item
+    is_recurring: false
+    recurrence:   null
+
+SHAPE B — RECURRING (a rhythm)
+  The SAME session repeated on a regular cadence.
+  Signals: "every Monday", "weekly", "monthly", "every other
+  Friday", "for N weeks", "each month". Occurrences are
+  interchangeable — deleting one would still leave a valid event.
+  Contract:
+    schedules:    exactly 1 item (the canonical occurrence)
+    is_recurring: true
+    recurrence:   populated
+
+SHAPE C — SERIES (distinct sessions)
+  Multiple DIFFERENT sessions, each with its own date/topic/delivery.
+  Signals: two or more specific calendar dates; different session
+  topics; mixed virtual/in-person sessions; "session 1 ... session 2".
+  Deleting one session would break the event — each is a distinct part.
+  Contract:
+    schedules:    N items (N >= 2), one per session
+    is_recurring: false
+    recurrence:   null
+
+================================================================
+STEP 2 — SHAPE DECISION RULES
+================================================================
+
+- More than one specific calendar date in the prompt -> SERIES,
+  UNLESS the dates follow a fixed cadence ("every Monday").
+- Cadence words ("every X", "weekly", "monthly", "for N weeks")
+  -> RECURRING, even if the prompt names multiple dates.
+- A list of arbitrary dates with no cadence -> SERIES.
+- Do NOT invent a recurrence pattern to cover arbitrary dates.
+  Recurrence is for rhythms; a list of dates is a series.
+- If the user message supplies a recurrence block (toggle was on),
+  that block is authoritative: SHAPE B, echo the values exactly,
+  return exactly 1 schedule.
+- When in doubt between RECURRING and SERIES: if the dates follow a
+  fixed cadence, choose RECURRING; if arbitrary, choose SERIES.
+
+================================================================
+STEP 3 — RETURN THIS JSON
+================================================================
+
 {
-  "name":              string,
-  "description":       string,
-  "short_description": string,
-  "tags":              [string],
-  "language":          string,
-  "schedules":         [Schedule],
-  "is_recurring":      boolean,
-  "recurrence":        Recurrence | null,
-  "is_free":           boolean,
-  "capacity":          number,
-  "tickets":           [Ticket],
-  "visibility":        "public" | "private" | "unlisted",
-  "invite_only":       boolean,
-  "is_featured":       boolean,
+  "name":                string,
+  "description":         string,
+  "short_description":   string,
+  "tags":                [string],
+  "language":            string,
+  "schedules":           [Schedule],
+  "is_recurring":        boolean,
+  "recurrence":          Recurrence | null,
+  "is_free":             boolean,
+  "capacity":            number,
+  "tickets":             [Ticket],
+  "visibility":          "public" | "private" | "unlisted",
+  "invite_only":         boolean,
+  "is_featured":         boolean,
   "certificate_enabled": boolean
 }
 
@@ -60,7 +113,7 @@ Schedule:
   "end_time":       "HH:MM:SS",
   "timezone":       string,
   "session_name":   string,
-  "session_number": 1,
+  "session_number": number,
   "location":       string,
   "is_virtual":     boolean,
   "max_attendees":  number | null
@@ -87,29 +140,70 @@ Recurrence:
   "occurrences":   number | null
 }
 
-Rules:
-- Return EXACTLY ONE schedule. If the event repeats, the recurrence block conveys the cadence and the schedule conveys the shape of a single occurrence.
-- All dates MUST be in the future.
+================================================================
+STEP 4 — FIELD RULES
+================================================================
+
+DATES AND TIMES
+- All dates MUST be in the future. Today's date is given in the
+  user message.
 - Times MUST be valid HH:MM:SS. end_time MUST be > start_time.
-- If the prompt states a session duration (e.g. "90 minutes per session", "2 hours", "1.5 hours"), the schedule's end_time MUST be exactly that duration after start_time. 90 minutes after 18:00 is 19:30, not 18:30.
-- If the prompt implies repetition (e.g. "every Monday", "weekly series", "runs for 6 weeks"), set is_recurring = true and populate recurrence.
-- If is_recurring is true and pattern is "weekly" or "custom", days_of_week MUST contain at least one weekday.
-- Weekday values MUST be full lowercase names: "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday". Never "mon", "tue", "wed", etc.
-- When is_recurring is true and pattern is "weekly", the schedule's start_date MUST already fall on one of the days listed in days_of_week. Choose the earliest such date on or after today.
-- If is_recurring is true and pattern is "monthly", set exactly one of day_of_month or week_of_month.
-- If is_recurring is true, at least one of ends_on or occurrences MUST be set.
-- If the event is a one-off, set is_recurring = false and recurrence = null.
-- is_virtual on the schedule: true if the prompt describes an online, virtual, or Zoom/Meet session. false if the prompt describes an in-person venue. For a hybrid event, at least one session is virtual and at least one is in-person — but since you return exactly one schedule, prefer setting is_virtual = true so the video module can create a Zoom meeting, and use "Hybrid" or "Virtual on Zoom" as the location.
-- location: a short human-readable string. "Virtual on Zoom" for virtual sessions, or the venue name and city for in-person.
+- If the prompt states a session duration ("90 minutes", "2 hours",
+  "1.5 hours", "half a day", "full day"), end_time MUST be exactly
+  that duration after start_time. 90 minutes after 18:00 is 19:30.
+
+SCHEDULES
+- SHAPE A: exactly 1 schedule.
+- SHAPE B: exactly 1 schedule (the canonical occurrence).
+- SHAPE C: N schedules, session_number sequential from 1, dates
+  strictly increasing.
+- Every schedule MUST have a non-empty session_name and location.
+  For virtual sessions use exactly "Virtual". For in-person
+  sessions use the venue name and city. Never name a specific
+  platform (Zoom, Meet, Teams) in the location — the platform is
+  decided downstream.
+- is_virtual per schedule. A single series MAY mix virtual and
+  in-person sessions.
+
+RECURRENCE (only when is_recurring = true)
+- pattern MUST be one of: daily, weekly, monthly, custom.
+- "every N days" -> daily, interval N.
+- "every other Friday" -> weekly, interval 2, days_of_week
+  ["friday"].
+- "twice a week" -> weekly, two weekdays.
+- "every Monday" -> weekly, interval 1, days_of_week ["monday"].
+- Never use pattern "custom" unless the prompt genuinely mixes
+  patterns. Prefer the closest daily/weekly/monthly.
+- Weekdays MUST be full lowercase names: "monday", "tuesday",
+  "wednesday", "thursday", "friday", "saturday", "sunday".
+- When pattern is weekly, the canonical schedule's start_date MUST
+  already fall on one of the days in days_of_week. Choose the
+  earliest such date on or after today.
+- When pattern is monthly, set EXACTLY ONE of day_of_month or
+  week_of_month.
+- At least one of ends_on or occurrences MUST be set when
+  is_recurring = true. Derive it from the prompt. If the prompt
+  says "for 6 weeks", occurrences = 6. If it says "until December
+  15", ends_on = that date.
+- When is_recurring = false, recurrence MUST be null.
+
+TICKETS
+- ticket_type_id MUST be one of the UUIDs in "Available ticket types".
 - capacity MUST be >= sum(ticket.quantity).
-- If is_free is true, all ticket prices MUST be 0.
-- If is_free is false, at least one ticket price MUST be > 0.
-- ticket_type_id MUST be one of the UUIDs in the "Available ticket types" list.
-- description MUST be at least 100 characters (roughly 2-3 sentences). Describe the agenda, who should attend, and what attendees will take away.
-- short_description MUST be one sentence, max 160 characters.
-- Never use pattern "custom" unless the request describes a mix of patterns (e.g. "on the 1st of every month and every Friday"). For a single cadence that doesn't fit daily/weekly/monthly, choose the closest: "every 3 days" -> daily with interval 3; "twice a week" -> weekly with two weekdays; "every other Friday" -> weekly with interval 2.
-- If the prompt includes both a cadence AND a weekday list, prefer "weekly" and put the weekdays in days_of_week. Never combine interval > 1 with a weekday list on "weekly".
-- session_number MUST be 1.`
+- is_free true -> all ticket prices 0. is_free false -> at least one
+  price > 0.
+- Prices in the currency from the user message.
+- Hints: early-bird cheaper than general; vip most expensive.
+
+TEXT
+- description >= 100 chars (aim 150-300). Cover what the event is,
+  the agenda, and outcomes. Flowing prose, not bullets.
+- short_description: one sentence, max 160 chars.
+- tags: 3-8 lowercase, no duplicates.
+
+SESSION NUMBERING
+- SHAPE A and SHAPE B: session_number MUST be 1.
+- SHAPE C: session_number starts at 1 and increments by 1.`
 
 // ============================================================
 // REQUEST DTO
@@ -126,7 +220,9 @@ type GenerateEventDraftRequest struct {
 	MinCapacity   int      `json:"min_capacity,omitempty"`
 	MaxCapacity   int      `json:"max_capacity,omitempty"`
 
-	// Recurrence — when provided, the AI MUST use exactly this pattern.
+	// Recurrence is OPTIONAL. When supplied (toggle was on), it is
+	// authoritative and pins SHAPE B. When nil, the AI infers the
+	// shape from the prompt alone.
 	Recurrence *RecurrenceInput `json:"recurrence,omitempty"`
 
 	CreatedBy string `json:"-"`
@@ -155,7 +251,7 @@ type promptContext struct {
 // ============================================================
 
 func buildSystemPrompt() string {
-	return systemPromptV8
+	return systemPromptV11
 }
 
 func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string {
@@ -169,11 +265,9 @@ func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string 
 	b.WriteString("Generate an event based on this prompt:\n")
 	b.WriteString(fmt.Sprintf("%q\n\n", req.Prompt))
 
-	// If the caller supplied a structured recurrence, pin it.
 	if req.Recurrence != nil {
-		b.WriteString("HARD CONSTRAINT - the recurrence below is FIXED.\n")
-		b.WriteString("Set is_recurring = true and echo these exact values in the `recurrence` object.\n")
-		b.WriteString("Do NOT change the pattern, interval, days_of_week, day_of_month, week_of_month, ends_on, or occurrences.\n")
+		b.WriteString("The user supplied an explicit recurrence (SHAPE B).\n")
+		b.WriteString("Set is_recurring = true, return EXACTLY 1 schedule, and echo these values unchanged:\n")
 		b.WriteString("    pattern:       " + req.Recurrence.Pattern + "\n")
 		if req.Recurrence.Interval > 0 {
 			b.WriteString(fmt.Sprintf("    interval:      %d\n", req.Recurrence.Interval))
@@ -201,13 +295,18 @@ func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string 
 				"    occurrences:   %d\n", *req.Recurrence.Occurrences))
 		}
 		b.WriteString("\n")
+	} else {
+		b.WriteString("No explicit recurrence was supplied. Infer the shape from the prompt:\n")
+		b.WriteString("  - one date -> SHAPE A\n")
+		b.WriteString("  - cadence (\"every X\", \"weekly\", \"for N weeks\") -> SHAPE B\n")
+		b.WriteString("  - multiple specific dates -> SHAPE C\n\n")
 	}
 
 	b.WriteString("Context:\n")
 
 	if pctx.EventType != nil {
 		b.WriteString(fmt.Sprintf(
-			"- Event type: %s (id: %s, min_duration: %d, max_duration: %d)\n",
+			"- Event type: %s (id: %s, min_duration: %d minutes, max_duration: %d minutes)\n",
 			pctx.EventType.DisplayName,
 			pctx.EventType.ID,
 			pctx.EventType.MinDuration,
@@ -236,28 +335,36 @@ func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string 
 	b.WriteString(fmt.Sprintf("- Currency: %s\n", pctx.Currency))
 	b.WriteString(fmt.Sprintf("- Capacity range: %d-%d\n", pctx.MinCapacity, pctx.MaxCapacity))
 
-	b.WriteString("\nReturn the JSON now.\n")
+	b.WriteString("\nDecide the SHAPE first, then return the JSON.\n")
 	return b.String()
 }
 
-func buildFixPrompt(originalPrompt string, errors []string) string {
+func buildFixPrompt(
+	originalUserPrompt string,
+	failedDraftJSON string,
+	errors []string,
+) string {
 	var b strings.Builder
 
-	b.WriteString("The previous draft failed validation with these errors:\n")
+	b.WriteString("Your previous draft failed validation.\n\n")
+	b.WriteString("Validation errors:\n")
 	for _, e := range errors {
 		b.WriteString(fmt.Sprintf("- %s\n", e))
 	}
 
-	for _, e := range errors {
-		if strings.Contains(strings.ToLower(e), "description") {
-			b.WriteString("\nThe description is too short. Expand it to AT LEAST 100 characters")
-			b.WriteString(" (aim for 150-300). Cover these points in order:\n")
-			b.WriteString("  1. What the event is and who it's for.\n")
-			b.WriteString("  2. The agenda - what will be covered or taught.\n")
-			b.WriteString("  3. What attendees will walk away with.\n")
-			b.WriteString("Write it as flowing prose, not a bulleted list.\n")
-			break
-		}
+	lower := strings.ToLower(strings.Join(errors, " | "))
+	if strings.Contains(lower, "description") {
+		b.WriteString("\nThe description is too short. Expand it to AT LEAST 100 characters")
+		b.WriteString(" (aim for 150-300). Cover: what the event is and who it's for, the agenda,")
+		b.WriteString(" and what attendees will take away. Flowing prose, not bullets.\n")
+	}
+	if strings.Contains(lower, "recurrence") || strings.Contains(lower, "weekday") {
+		b.WriteString("\nRe-read the SHAPE rules. Multiple specific dates are SHAPE C (series,")
+		b.WriteString(" is_recurring=false, multiple schedules). Cadence words are SHAPE B.")
+		b.WriteString(" Recurrence needs ends_on or occurrences.\n")
+	}
+	if strings.Contains(lower, "schedule") {
+		b.WriteString("\nRe-read the SHAPE decision. Honour the contract for the chosen shape.\n")
 	}
 
 	b.WriteString(fmt.Sprintf(
@@ -265,11 +372,14 @@ func buildFixPrompt(originalPrompt string, errors []string) string {
 		time.Now().UTC().Format("2006-01-02"),
 	))
 
-	b.WriteString("Regenerate the entire draft, correcting every error.\n")
+	b.WriteString("Here is the draft you produced (invalid):\n```json\n")
+	b.WriteString(failedDraftJSON)
+	b.WriteString("\n```\n\n")
+	b.WriteString("Regenerate the ENTIRE draft, correcting every error.\n")
 	b.WriteString("Keep everything else the same unless required to fix an error.\n")
 	b.WriteString("Return ONLY valid JSON.\n\n")
 	b.WriteString("Original prompt:\n")
-	b.WriteString(originalPrompt)
+	b.WriteString(originalUserPrompt)
 
 	return b.String()
 }
