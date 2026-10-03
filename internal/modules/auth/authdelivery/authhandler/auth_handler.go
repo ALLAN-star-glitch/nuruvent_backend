@@ -47,12 +47,11 @@ func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
 	isProduction := h.config.Environment == "production"
 	isSecure := isProduction
 
+	// api.nuruvent.com and www.nuruvent.com share the registrable
+	// domain nuruvent.com, so this cookie is same-site. Lax is
+	// sufficient, stricter than None, and never blocked by
+	// third-party cookie policies.
 	sameSite := "Lax"
-	if isProduction {
-		sameSite = "None"
-	}
-
-	domain := ""
 
 	c.Cookie(&fiber.Cookie{
 		Name:     "access_token",
@@ -62,11 +61,11 @@ func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
 		Secure:   isSecure,
 		SameSite: sameSite,
 		Path:     "/",
-		Domain:   domain,
+		Domain:   "",
 	})
 
 	log.Printf("🍪 Cookie set: Secure=%v, SameSite=%v, Domain='%s', Environment=%s",
-		isSecure, sameSite, domain, h.config.Environment)
+		isSecure, sameSite, "", h.config.Environment)
 }
 
 func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
@@ -74,11 +73,6 @@ func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
 	isSecure := isProduction
 
 	sameSite := "Lax"
-	if isProduction {
-		sameSite = "None"
-	}
-
-	domain := ""
 
 	c.Cookie(&fiber.Cookie{
 		Name:     "refresh_token",
@@ -88,7 +82,7 @@ func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
 		Secure:   isSecure,
 		SameSite: sameSite,
 		Path:     "/auth/refresh",
-		Domain:   domain,
+		Domain:   "",
 	})
 }
 
@@ -97,11 +91,6 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
 	isSecure := isProduction
 
 	sameSite := "Lax"
-	if isProduction {
-		sameSite = "None"
-	}
-
-	domain := ""
 
 	c.Cookie(&fiber.Cookie{
 		Name:     "access_token",
@@ -111,7 +100,7 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
 		Secure:   isSecure,
 		SameSite: sameSite,
 		Path:     "/",
-		Domain:   domain,
+		Domain:   "",
 	})
 	c.Cookie(&fiber.Cookie{
 		Name:     "refresh_token",
@@ -121,7 +110,7 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
 		Secure:   isSecure,
 		SameSite: sameSite,
 		Path:     "/auth/refresh",
-		Domain:   domain,
+		Domain:   "",
 	})
 }
 
