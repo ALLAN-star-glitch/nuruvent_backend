@@ -105,6 +105,7 @@ func ProvideAttendanceDependencies(
 	providers map[attendance.SessionProvider]attendanceService.ProviderAdapter,
 	videoMeetings attendanceService.VideoMeetingIDResolver,
 	permissionChecker attendance.PermissionChecker,
+	cfg *config.Config,
 ) attendanceService.Dependencies {
 	return attendanceService.Dependencies{
 		UnitOfWork:        unitOfWork,
@@ -117,5 +118,6 @@ func ProvideAttendanceDependencies(
 		JoinTokenGrace:    24 * time.Hour,
 		VideoMeetings:     videoMeetings,
 		PermissionChecker: permissionChecker,
+		AppConfig:         cfg.App,
 	}
 }

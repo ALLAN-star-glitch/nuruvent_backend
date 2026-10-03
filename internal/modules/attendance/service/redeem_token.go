@@ -111,7 +111,10 @@ func (s *attendanceService) RedeemJoinToken(
 func (s *attendanceService) buildJoinRedirect(session *attendance.Session) (string, error) {
 	frontendBase := strings.TrimRight(s.deps.AppConfig.PublicURL, "/")
 	if frontendBase == "" {
-		frontendBase = "http://localhost:3000"
+		return "", fmt.Errorf(
+			"%w: AppConfig.PublicURL is not configured — cannot build join redirect",
+			attendance.ErrInvalidToken,
+		)
 	}
 
 	eventReturnPath := "/dashboard/events/" + session.External.ID
