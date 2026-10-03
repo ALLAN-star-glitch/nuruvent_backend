@@ -33,11 +33,22 @@ func (s *service) syncRegistrationToAttendance(
 		return
 	}
 
+	// Resolve the attendee's phone. Guests have no user record, so
+	// the value stays empty. Authenticated registrations pull the
+	// number from the live user record — this keeps it in sync with
+	// any update the user makes to their profile after registering.
+	phone := s.attendeePhone(ctx, reg)
+
+
+	log.Printf("[reg-sync] %s user=%q phone=%q email=%q",
+    regID, reg.Registration.UserID, phone, email)
+
 	attendeeID, err := s.deps.Attendance.RegisterAttendee(ctx, registrationdomain.RegisterAttendeeForAttendanceCommand{
 		ExternalType: "event_registration",
 		ExternalID:   regID,
 		DisplayName:  displayName,
 		Email:        email,
+		Phone:        phone,
 		Username:     username,
 	})
 	if err != nil {
@@ -109,4 +120,42 @@ func (s *service) attendeeIdentity(
 		log.Printf("[registration] username lookup failed for %s: %v", r.UserID, err)
 	}
 	return name, mail, uname
+}
+
+// attendeePhone resolves the phone number to attach to the attendance
+// record. Guests have none. Authenticated registrations read it from
+// the live user record so post-registration profile updates propagate
+// on the next sync.
+//
+// Missing or failed lookups return "" rather than erroring — the
+// caller's email-based guard is the only hard requirement, and a
+// missing phone shouldn't block attendance tracking.
+func (s *service) attendeePhone(
+	ctx context.Context,
+	reg *registrationdomain.EventRegistration,
+) string {
+	if reg == nil || reg.Registration == nil {
+		return ""
+	}
+	r := reg.Registration
+
+	// Guest path — no user record to look up.
+	if r.GuestEmail != "" {
+		return ""
+	}
+
+	// Authenticated path.
+	if r.UserID == "" {
+		return ""
+	}
+	if s.deps.Users == nil {
+		return ""
+	}
+
+	phone, err := s.deps.Users.GetPhone(ctx, r.UserID)
+	if err != nil {
+		log.Printf("[registration] phone lookup failed for %s: %v", r.UserID, err)
+		return ""
+	}
+	return phone
 }

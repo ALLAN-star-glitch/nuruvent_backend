@@ -35,6 +35,7 @@ type AttendeeSessionStatus struct {
 	// table.
 	DisplayName string
 	Email       string
+	Phone	   string
 	IsHost      bool
 }
 

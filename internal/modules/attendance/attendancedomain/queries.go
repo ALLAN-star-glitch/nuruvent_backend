@@ -49,4 +49,6 @@ type CrossEventAttendeeRow struct {
 	TotalDurationSeconds int64
 	LastDerivedAt        time.Time
 	RegisteredAt         time.Time
+	IsHost               bool   // ← add
+	Phone  string
 }

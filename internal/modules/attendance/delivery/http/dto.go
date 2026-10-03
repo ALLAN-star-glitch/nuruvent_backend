@@ -179,6 +179,7 @@ type SessionStatusResponse struct {
 	LastDerivedAt        time.Time  `json:"last_derived_at"`
 	DisplayName          string     `json:"display_name,omitempty"`
 	Email                string     `json:"email,omitempty"`
+	Phone				string     `json:"phone,omitempty"`
 	IsHost               bool       `json:"is_host"`
 }
 
@@ -262,6 +263,8 @@ type EventAttendeeResponse struct {
 	TotalDurationSeconds int64  `json:"total_duration_seconds"`
 	RegisteredAt         string `json:"registered_at"`
 	LastActivityAt       string `json:"last_activity_at"`
+	IsHost               bool   `json:"is_host"`   // ← add
+	Phone                string `json:"phone"`     // ← add	
 }
 
 
@@ -280,4 +283,23 @@ type EventAttendeeSessionResponse struct {
 	HostConfirmed    bool   `json:"host_confirmed"`
 	TotalDurationSec int64  `json:"total_duration_seconds"`
 	LastDerivedAt    string `json:"last_derived_at"`
+}
+
+type CrossEventAttendeeResponse struct {
+	AttendeeID           string `json:"attendee_id"`
+	DisplayName          string `json:"display_name"`
+	Email                string `json:"email"`
+	EventID              string `json:"event_id"`
+	EventName            string `json:"event_name"`
+	EventSlug            string `json:"event_slug"`
+	EventStartDate       string `json:"event_start_date"`
+	EffectiveStatus      string `json:"effective_status"`
+	SessionsTotal        int    `json:"sessions_total"`
+	SessionsAttended     int    `json:"sessions_attended"`
+	SessionsConfirmed    int    `json:"sessions_confirmed"`
+	TotalDurationSeconds int64  `json:"total_duration_seconds"`
+	RegisteredAt         string `json:"registered_at"`
+	LastActivityAt       string `json:"last_activity_at"`
+	IsHost               bool   `json:"is_host"`   // ← add
+	Phone				string `json:"phone"`     // ← add
 }

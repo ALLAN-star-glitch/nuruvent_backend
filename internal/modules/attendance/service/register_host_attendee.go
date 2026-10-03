@@ -51,6 +51,7 @@ func (s *attendanceService) RegisterHostAttendee(
 				ref,
 				cmd.HostDisplayName,
 				cmd.HostEmail,
+				cmd.HostPhone,
 				cmd.HostUsername,
 				true, // isHost
 				now,

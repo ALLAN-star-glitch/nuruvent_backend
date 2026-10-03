@@ -69,6 +69,7 @@ func (a *AttendanceRegistrarAdapter) RegisterHostAttendee(
 			HostUserID:           cmd.HostUserID,
 			HostDisplayName:      cmd.HostDisplayName,
 			HostEmail:            cmd.HostEmail,
+			HostPhone:            cmd.HostPhone,
 			HostUsername:         cmd.HostUsername,
 			HostGoogleMeetUserID: cmd.HostGoogleMeetUserID,
 		},

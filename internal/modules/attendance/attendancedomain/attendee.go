@@ -20,6 +20,7 @@ type Attendee struct {
 	External         ExternalRef
 	DisplayName      string
 	Email            string
+	Phone            string        // ← add
 	Username         string
 	GoogleMeetUserID string
 	IsHost           bool
@@ -31,7 +32,7 @@ type Attendee struct {
 func NewAttendee(
 	id string,
 	external ExternalRef,
-	displayName, email, username string,
+	displayName, email, phone, username string,
 	isHost bool,
 	now time.Time,
 	googleMeetUserID string,
@@ -60,6 +61,7 @@ func NewAttendee(
 		External:         external,
 		DisplayName:      displayName,
 		Email:            email,
+		Phone:            phone,
 		Username:         strings.TrimSpace(username),
 		GoogleMeetUserID: googleMeetUserID,
 		IsHost:           isHost,
@@ -73,7 +75,7 @@ func NewAttendee(
 func HydrateAttendee(
 	id string,
 	external ExternalRef,
-	displayName, email, username string,
+	displayName, email, phone, username string,
 	isHost bool,
 	googleMeetUserID string,
 	createdAt, updatedAt time.Time,
@@ -83,6 +85,7 @@ func HydrateAttendee(
 		External:         external,
 		DisplayName:      displayName,
 		Email:            email,
+		Phone:            phone,
 		Username:         username,
 		GoogleMeetUserID: googleMeetUserID,
 		IsHost:           isHost,
@@ -95,7 +98,7 @@ func HydrateAttendee(
 //
 // The email rule follows the same logic as NewAttendee: required for
 // registration-based refs, optional for platform observations.
-func (a *Attendee) UpdateProfile(displayName, email string, now time.Time) error {
+func (a *Attendee) UpdateProfile(displayName, email string, phone string, now time.Time) error {
 	displayName = strings.TrimSpace(displayName)
 	if displayName == "" {
 		return fmt.Errorf("%w: display name is required", ErrInvalidAttendee)
@@ -111,6 +114,7 @@ func (a *Attendee) UpdateProfile(displayName, email string, now time.Time) error
 	}
 	a.DisplayName = displayName
 	a.Email = email
+    a.Phone = strings.TrimSpace(phone)
 	a.UpdatedAt = now
 	return nil
 }

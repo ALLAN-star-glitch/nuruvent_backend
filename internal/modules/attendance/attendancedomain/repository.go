@@ -64,7 +64,8 @@ type AttendeeSessionStatusRepository interface {
 }
 
 // AttendeeRollupStatusRepository persists the roll-up statuses.
-
+// The roll-up is the attendee's overall status across all sessions
+// under a given external reference (event, course, etc.).
 type AttendeeRollupStatusRepository interface {
 	Upsert(ctx context.Context, s *AttendeeRollupStatus) error
 	FindByAttendeeExternal(ctx context.Context, attendeeID string, ref ExternalRef) (*AttendeeRollupStatus, error)
@@ -142,4 +143,6 @@ type EventAttendeeRow struct {
 	TotalDurationSeconds  int
 	LastDerivedAt         time.Time
 	RegisteredAt          time.Time
+	IsHost                bool   // ← add
+	Phone  string
 }

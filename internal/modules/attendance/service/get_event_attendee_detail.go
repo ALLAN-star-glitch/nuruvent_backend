@@ -60,6 +60,8 @@ func (s *attendanceService) GetEventAttendeeDetail(
 		AttendeeID:           rollup.AttendeeID,
 		DisplayName:          rollup.DisplayName,
 		Email:                rollup.Email,
+		Phone:                rollup.Phone,
+		IsHost:               rollup.IsHost,
 		EffectiveStatus:      attendance.AttendanceStatus(rollup.DerivedStatus),
 		SessionsTotal:        rollup.SessionsTotal,
 		SessionsAttended:     rollup.SessionsAttended,

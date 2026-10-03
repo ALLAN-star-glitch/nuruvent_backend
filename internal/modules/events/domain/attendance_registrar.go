@@ -69,6 +69,7 @@ type AttendanceRegisterHostCommand struct {
 	HostUserID           string
 	HostDisplayName      string
 	HostEmail            string
+	HostPhone            string   // ← add
 	HostUsername         string
 	HostGoogleMeetUserID string
 }

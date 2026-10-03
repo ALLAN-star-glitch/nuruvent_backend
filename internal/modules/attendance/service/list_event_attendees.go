@@ -55,6 +55,7 @@ func (s *attendanceService) ListEventAttendees(
 			AttendeeID:           a.AttendeeID,
 			DisplayName:          a.DisplayName,
 			Email:                a.Email,
+			Phone:                a.Phone, 
 			EffectiveStatus:      attendance.AttendanceStatus(a.DerivedStatus),
 			SessionsTotal:        a.SessionsTotal,
 			SessionsAttended:     a.SessionsAttended,
@@ -62,6 +63,7 @@ func (s *attendanceService) ListEventAttendees(
 			TotalDurationSeconds: a.TotalDurationSeconds,
 			RegisteredAt:         a.RegisteredAt,
 			LastActivityAt:       a.LastDerivedAt,
+			IsHost:               a.IsHost,
 		})
 	}
 	return out, nil

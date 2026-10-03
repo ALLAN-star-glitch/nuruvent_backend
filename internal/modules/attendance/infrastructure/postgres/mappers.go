@@ -15,6 +15,7 @@ func toAttendeeModel(a *attendance.Attendee) *AttendeeModel {
 		ExternalID:       a.External.ID,
 		DisplayName:      a.DisplayName,
 		Email:            a.Email,
+		Phone:            a.Phone,        // ← add
 		Username:         a.Username,
 		IsHost:           a.IsHost,
 		GoogleMeetUserID: a.GoogleMeetUserID,
@@ -29,6 +30,7 @@ func toAttendeeDomain(m *AttendeeModel) *attendance.Attendee {
 		attendance.ExternalRef{Type: m.ExternalType, ID: m.ExternalID},
 		m.DisplayName,
 		m.Email,
+		m.Phone,                          // ← add
 		m.Username,
 		m.IsHost,
 		m.GoogleMeetUserID,

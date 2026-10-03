@@ -334,60 +334,6 @@ func (h *AttendanceHandler) GetEventAttendeeDetail(c fiber.Ctx) error {
 
 
 
-
-// ============================================================
-// EVENT ATTENDEE DIRECTORY — mappers
-// ============================================================
-
-func toEventAttendeeResponse(a *service.EventAttendeeListItem) EventAttendeeResponse {
-	return EventAttendeeResponse{
-		AttendeeID:           a.AttendeeID,
-		DisplayName:          a.DisplayName,
-		Email:                a.Email,
-		EffectiveStatus:      string(a.EffectiveStatus),
-		SessionsTotal:        a.SessionsTotal,
-		SessionsAttended:     a.SessionsAttended,
-		SessionsConfirmed:    a.SessionsConfirmed,
-		TotalDurationSeconds: int64(a.TotalDurationSeconds),
-		RegisteredAt:         a.RegisteredAt.Format(time.RFC3339),
-		LastActivityAt:       a.LastActivityAt.Format(time.RFC3339),
-	}
-}
-
-func toEventAttendeeDetailResponse(d *service.EventAttendeeDetail) EventAttendeeDetailResponse {
-	out := EventAttendeeDetailResponse{
-		EventAttendeeResponse: EventAttendeeResponse{
-			AttendeeID:           d.AttendeeID,
-			DisplayName:          d.DisplayName,
-			Email:                d.Email,
-			EffectiveStatus:      string(d.EffectiveStatus),
-			SessionsTotal:        d.SessionsTotal,
-			SessionsAttended:     d.SessionsAttended,
-			SessionsConfirmed:    d.SessionsConfirmed,
-			TotalDurationSeconds: int64(d.TotalDurationSeconds),
-			RegisteredAt:         d.RegisteredAt.Format(time.RFC3339),
-			LastActivityAt:       d.LastActivityAt.Format(time.RFC3339),
-		},
-		Sessions: make([]EventAttendeeSessionResponse, 0, len(d.Sessions)),
-	}
-	for _, s := range d.Sessions {
-		out.Sessions = append(out.Sessions, EventAttendeeSessionResponse{
-			SessionID:        s.SessionID,
-			Title:            s.Title,
-			Provider:         string(s.Provider),
-			ScheduledStart:   s.ScheduledStart.Format(time.RFC3339),
-			ScheduledEnd:     s.ScheduledEnd.Format(time.RFC3339),
-			DerivedStatus:    string(s.DerivedStatus),
-			HostConfirmed:    s.HostConfirmed,
-			TotalDurationSec: int64(s.TotalDurationSec),
-			LastDerivedAt:    s.LastDerivedAt.Format(time.RFC3339),
-		})
-	}
-	return out
-}
-
-
-
 // ListAttendees handles GET /attendees.
 //
 // Cross-event attendee directory. Scoped to the caller's accounts.
@@ -445,40 +391,4 @@ type CrossEventAttendeesListResponse struct {
 	PageSize  int                          `json:"page_size"`
 }
 
-type CrossEventAttendeeResponse struct {
-	AttendeeID           string `json:"attendee_id"`
-	DisplayName          string `json:"display_name"`
-	Email                string `json:"email"`
-	EventID              string `json:"event_id"`
-	EventName            string `json:"event_name"`
-	EventSlug            string `json:"event_slug"`
-	EventStartDate       string `json:"event_start_date"`
-	EffectiveStatus      string `json:"effective_status"`
-	SessionsTotal        int    `json:"sessions_total"`
-	SessionsAttended     int    `json:"sessions_attended"`
-	SessionsConfirmed    int    `json:"sessions_confirmed"`
-	TotalDurationSeconds int64  `json:"total_duration_seconds"`
-	RegisteredAt         string `json:"registered_at"`
-	LastActivityAt       string `json:"last_activity_at"`
-}
 
-// ---- Mapper ----
-
-func toCrossEventAttendeeResponse(a *service.CrossEventAttendeeItem) CrossEventAttendeeResponse {
-	return CrossEventAttendeeResponse{
-		AttendeeID:           a.AttendeeID,
-		DisplayName:          a.DisplayName,
-		Email:                a.Email,
-		EventID:              a.EventID,
-		EventName:            a.EventName,
-		EventSlug:            a.EventSlug,
-		EventStartDate:       a.EventStartDate.Format(time.RFC3339),
-		EffectiveStatus:      string(a.EffectiveStatus),
-		SessionsTotal:        a.SessionsTotal,
-		SessionsAttended:     a.SessionsAttended,
-		SessionsConfirmed:    a.SessionsConfirmed,
-		TotalDurationSeconds: a.TotalDurationSeconds,
-		RegisteredAt:         a.RegisteredAt.Format(time.RFC3339),
-		LastActivityAt:       a.LastActivityAt.Format(time.RFC3339),
-	}
-}

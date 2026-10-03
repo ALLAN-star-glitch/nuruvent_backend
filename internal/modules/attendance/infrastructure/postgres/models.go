@@ -12,14 +12,15 @@ import (
 
 // AttendeeModel maps to the `attendees` table.
 type AttendeeModel struct {
-	ID               string         `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
-	ExternalType     string         `gorm:"type:varchar(50);not null;index:idx_attendees_external,priority:1"`
-	ExternalID       string         `gorm:"type:uuid;not null;index:idx_attendees_external,priority:2"`
-	DisplayName      string         `gorm:"type:varchar(255);not null"`
-	Email            string         `gorm:"type:varchar(255);not null;index:idx_attendees_email"`
-	Username         string         `gorm:"type:varchar(255);index:idx_attendees_username"`
-	GoogleMeetUserID string         `gorm:"type:varchar(255);not null;default:'';index"`
-	IsHost           bool           `gorm:"not null;default:false;index"`
+	ID               string `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
+	ExternalType     string `gorm:"type:varchar(50);not null;index:idx_attendees_external,priority:1"`
+	ExternalID       string `gorm:"type:uuid;not null;index:idx_attendees_external,priority:2"`
+	DisplayName      string `gorm:"type:varchar(255);not null"`
+	Email            string `gorm:"type:varchar(255);not null;index:idx_attendees_email"`
+	Phone            string `gorm:"type:varchar(50);not null;default:''"` // ← add
+	Username         string `gorm:"type:varchar(255);index:idx_attendees_username"`
+	GoogleMeetUserID string `gorm:"type:varchar(255);not null;default:'';index"`
+	IsHost           bool   `gorm:"not null;default:false;index"`
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 	DeletedAt        gorm.DeletedAt `gorm:"index"`

@@ -18,6 +18,7 @@ type RegisterAttendeeCommand struct {
 	External    attendance.ExternalRef
 	DisplayName string
 	Email       string
+	Phone 	 string
 	Username    string
 }
 
@@ -60,6 +61,8 @@ type RegisterAttendeeForExternalCommand struct {
 	// token remains valid. Zero means use the service default
 	// (JoinTokenGrace).
 	LinkGrace time.Duration
+	// Phone is not on this command — the attendee already exists.
+	// Phone is set when the attendee is first created.
 }
 
 // ============================================================
@@ -231,6 +234,8 @@ type EventAttendeeListItem struct {
 	TotalDurationSeconds int
 	RegisteredAt         time.Time
 	LastActivityAt       time.Time
+	IsHost               bool   // ← add
+	Phone				string
 }
 
 type GetEventAttendeeDetailCommand struct {
@@ -250,6 +255,8 @@ type EventAttendeeDetail struct {
 	TotalDurationSeconds int
 	RegisteredAt         time.Time
 	LastActivityAt       time.Time
+	IsHost               bool   // ← add
+	Phone				string
 	Sessions             []EventAttendeeSessionDetail
 }
 
@@ -303,6 +310,8 @@ type CrossEventAttendeeItem struct {
 	TotalDurationSeconds int64
 	RegisteredAt         time.Time
 	LastActivityAt       time.Time
+	IsHost               bool   // ← add
+	Phone 				string
 }
 
 
@@ -318,6 +327,7 @@ type RegisterHostAttendeeCommand struct {
 	HostDisplayName string
 	HostEmail       string
 	HostUsername    string
+	HostPhone            string
 
 	// HostGoogleMeetUserID is the host's Google user resource name
 	// ("users/<id>"), pulled from their active video connection at

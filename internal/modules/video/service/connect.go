@@ -78,9 +78,9 @@ func (s *videoService) BeginConnect(
 
 // generateState returns a cryptographically random URL-safe string.
 func generateState() (string, error) {
-	buf := make([]byte, stateByteLen)
-	if _, err := rand.Read(buf); err != nil {
+	buf := make([]byte, stateByteLen) // This is a slice with length 32 bytes... buf is a slice of 32 bytes, which is the length we want for our random state.
+	if _, err := rand.Read(buf); err != nil { // Fill the slice with random bytes. rand.Read returns the number of bytes read and an error. We ignore the number of bytes read because we know it will fill the entire slice, and we only care about the error.
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(buf), nil
+	return base64.RawURLEncoding.EncodeToString(buf), nil // Encode the random bytes as a base64 URL-safe string. We use RawURLEncoding to avoid padding characters, which makes the string shorter and still URL-safe. Padding characters are characters like '=' that are used in standard base64 encoding to make the output length a multiple of 4. RawURLEncoding omits these characters, which is fine for our use case because we don't need the padding for decoding.
 }

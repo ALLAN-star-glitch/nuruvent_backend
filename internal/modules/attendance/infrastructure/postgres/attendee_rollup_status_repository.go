@@ -152,6 +152,7 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 		AttendeeID           string    `gorm:"column:attendee_id"`
 		DisplayName          string    `gorm:"column:display_name"`
 		Email                string    `gorm:"column:email"`
+		Phone                string    `gorm:"column:phone"`
 		DerivedStatus        string    `gorm:"column:derived_status"`
 		SessionsTotal        int       `gorm:"column:sessions_total"`
 		SessionsAttended     int       `gorm:"column:sessions_attended"`
@@ -159,6 +160,7 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 		TotalDurationSeconds int       `gorm:"column:total_duration_seconds"`
 		LastDerivedAt        time.Time `gorm:"column:last_derived_at"`
 		RegisteredAt         time.Time `gorm:"column:registered_at"`
+		IsHost               bool      `gorm:"column:is_host"`
 	}
 
 	var rows []row
@@ -167,13 +169,15 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 			"ars.attendee_id, " +
 				"a.display_name, " +
 				"a.email, " +
+				"a.phone, " +
 				"ars.derived_status, " +
 				"ars.sessions_total, " +
 				"ars.sessions_attended, " +
 				"ars.sessions_confirmed, " +
 				"ars.total_duration_seconds, " +
 				"ars.last_derived_at, " +
-				"a.created_at AS registered_at",
+				"a.created_at AS registered_at, " +
+				"a.is_host",
 		).
 		Order(orderClause).
 		Limit(pageSize).
@@ -189,6 +193,7 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 			AttendeeID:           x.AttendeeID,
 			DisplayName:          x.DisplayName,
 			Email:                x.Email,
+			Phone:                x.Phone,
 			DerivedStatus:        x.DerivedStatus,
 			SessionsTotal:        x.SessionsTotal,
 			SessionsAttended:     x.SessionsAttended,
@@ -196,6 +201,7 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 			TotalDurationSeconds: x.TotalDurationSeconds,
 			LastDerivedAt:        x.LastDerivedAt,
 			RegisteredAt:         x.RegisteredAt,
+			IsHost:               x.IsHost,
 		})
 	}
 
@@ -218,6 +224,7 @@ func (r *AttendeeRollupStatusRepository) FindEventAttendee(
 		AttendeeID           string    `gorm:"column:attendee_id"`
 		DisplayName          string    `gorm:"column:display_name"`
 		Email                string    `gorm:"column:email"`
+		Phone                string    `gorm:"column:phone"`
 		DerivedStatus        string    `gorm:"column:derived_status"`
 		SessionsTotal        int       `gorm:"column:sessions_total"`
 		SessionsAttended     int       `gorm:"column:sessions_attended"`
@@ -225,6 +232,7 @@ func (r *AttendeeRollupStatusRepository) FindEventAttendee(
 		TotalDurationSeconds int       `gorm:"column:total_duration_seconds"`
 		LastDerivedAt        time.Time `gorm:"column:last_derived_at"`
 		RegisteredAt         time.Time `gorm:"column:registered_at"`
+		IsHost               bool      `gorm:"column:is_host"`
 	}
 
 	var x row
@@ -237,13 +245,15 @@ func (r *AttendeeRollupStatusRepository) FindEventAttendee(
 			"ars.attendee_id, " +
 				"a.display_name, " +
 				"a.email, " +
+				"a.phone, " +
 				"ars.derived_status, " +
 				"ars.sessions_total, " +
 				"ars.sessions_attended, " +
 				"ars.sessions_confirmed, " +
 				"ars.total_duration_seconds, " +
 				"ars.last_derived_at, " +
-				"a.created_at AS registered_at",
+				"a.created_at AS registered_at, " +
+				"a.is_host",
 		).
 		Take(&x).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -257,6 +267,7 @@ func (r *AttendeeRollupStatusRepository) FindEventAttendee(
 		AttendeeID:           x.AttendeeID,
 		DisplayName:          x.DisplayName,
 		Email:                x.Email,
+		Phone:                x.Phone,
 		DerivedStatus:        x.DerivedStatus,
 		SessionsTotal:        x.SessionsTotal,
 		SessionsAttended:     x.SessionsAttended,
@@ -264,9 +275,13 @@ func (r *AttendeeRollupStatusRepository) FindEventAttendee(
 		TotalDurationSeconds: x.TotalDurationSeconds,
 		LastDerivedAt:        x.LastDerivedAt,
 		RegisteredAt:         x.RegisteredAt,
+		IsHost:               x.IsHost,
 	}, nil
 }
 
+// ============================================================
+// CROSS-EVENT ATTENDEE LIST
+// ============================================================
 
 // ListAttendees returns a paginated list of attendees across every
 // event owned by any of the caller's accounts.
@@ -347,6 +362,7 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 		AttendeeID           string    `gorm:"column:attendee_id"`
 		DisplayName          string    `gorm:"column:display_name"`
 		Email                string    `gorm:"column:email"`
+		Phone                string    `gorm:"column:phone"`
 		EventID              string    `gorm:"column:event_id"`
 		EventName            string    `gorm:"column:event_name"`
 		EventSlug            string    `gorm:"column:event_slug"`
@@ -358,6 +374,7 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 		TotalDurationSeconds int64     `gorm:"column:total_duration_seconds"`
 		LastDerivedAt        time.Time `gorm:"column:last_derived_at"`
 		RegisteredAt         time.Time `gorm:"column:registered_at"`
+		IsHost               bool      `gorm:"column:is_host"`
 	}
 
 	var rows []row
@@ -366,6 +383,7 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 			"ars.attendee_id, " +
 				"a.display_name, " +
 				"a.email, " +
+				"a.phone, " +
 				"ars.external_id AS event_id, " +
 				"e.display_name AS event_name, " +
 				"e.slug AS event_slug, " +
@@ -376,7 +394,8 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 				"ars.sessions_confirmed, " +
 				"ars.total_duration_seconds, " +
 				"ars.last_derived_at, " +
-				"a.created_at AS registered_at",
+				"a.created_at AS registered_at, " +
+				"a.is_host",
 		).
 		Order(orderClause).
 		Limit(pageSize).
@@ -392,6 +411,7 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 			AttendeeID:           x.AttendeeID,
 			DisplayName:          x.DisplayName,
 			Email:                x.Email,
+			Phone:                x.Phone,
 			EventID:              x.EventID,
 			EventName:            x.EventName,
 			EventSlug:            x.EventSlug,
@@ -403,6 +423,7 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 			TotalDurationSeconds: x.TotalDurationSeconds,
 			LastDerivedAt:        x.LastDerivedAt,
 			RegisteredAt:         x.RegisteredAt,
+			IsHost:               x.IsHost,
 		})
 	}
 
@@ -413,6 +434,10 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 		PageSize:  pageSize,
 	}, nil
 }
+
+// ============================================================
+// ORDER HELPERS
+// ============================================================
 
 // buildCrossEventAttendeeOrderClause maps the API sort field to a
 // safe SQL clause.
@@ -438,14 +463,6 @@ func buildCrossEventAttendeeOrderClause(sortBy, sortOrder string) string {
 	}
 }
 
-// maxInt is a small helper for the empty-account early return.
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // buildAttendeeOrderClause maps the API sort field to a safe SQL
 // clause. Never interpolate user input directly.
 func buildAttendeeOrderClause(sortBy, sortOrder string) string {
@@ -467,6 +484,15 @@ func buildAttendeeOrderClause(sortBy, sortOrder string) string {
 		return "a.display_name ASC"
 	}
 }
+
+// maxInt is a small helper for the empty-account early return.
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 
 // compile-time assertion
 var _ attendance.AttendeeRollupStatusRepository = (*AttendeeRollupStatusRepository)(nil)

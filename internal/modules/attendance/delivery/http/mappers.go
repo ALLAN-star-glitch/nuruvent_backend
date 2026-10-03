@@ -3,6 +3,8 @@
 package http
 
 import (
+	"time"
+
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/service"
 )
@@ -38,23 +40,24 @@ func toSessionResponse(s *attendance.Session) *SessionResponse {
 }
 
 func toSessionStatusResponse(s *attendance.AttendeeSessionStatus) *SessionStatusResponse {
-    return &SessionStatusResponse{
-        AttendeeID:           s.AttendeeID,
-        SessionID:            s.SessionID,
-        DerivedStatus:        string(s.DerivedStatus),
-        EffectiveStatus:      string(s.EffectiveStatus()),
-        TotalDurationSeconds: s.TotalDurationSeconds,
-        HostConfirmed:        s.HostConfirmed,
-        ConfirmedStatus:      string(s.ConfirmedStatus),
-        ConfirmedBy:          s.ConfirmedBy,
-        ConfirmedAt:          s.ConfirmedAt,
-        ConfirmReason:        s.ConfirmReason,
-        CertEligible:         s.CertEligible(),
-        LastDerivedAt:        s.LastDerivedAt,
-        DisplayName:          s.DisplayName,   // ← add
-        Email:                s.Email,         // ← add
+	return &SessionStatusResponse{
+		AttendeeID:           s.AttendeeID,
+		SessionID:            s.SessionID,
+		DerivedStatus:        string(s.DerivedStatus),
+		EffectiveStatus:      string(s.EffectiveStatus()),
+		TotalDurationSeconds: s.TotalDurationSeconds,
+		HostConfirmed:        s.HostConfirmed,
+		ConfirmedStatus:      string(s.ConfirmedStatus),
+		ConfirmedBy:          s.ConfirmedBy,
+		ConfirmedAt:          s.ConfirmedAt,
+		ConfirmReason:        s.ConfirmReason,
+		CertEligible:         s.CertEligible(),
+		LastDerivedAt:        s.LastDerivedAt,
+		DisplayName:          s.DisplayName,
+		Email:                s.Email,
+		Phone:                s.Phone,          // ← add
 		IsHost:               s.IsHost,
-    }
+	}
 }
 
 func toRollupStatusResponse(s *attendance.AttendeeRollupStatus) *RollupStatusResponse {
@@ -98,4 +101,84 @@ func toAttendeeSessionLinksResponse(
 		out = append(out, toAttendeeSessionLinkResponse(l))
 	}
 	return out
+}
+
+// ============================================================
+// EVENT ATTENDEE DIRECTORY
+// ============================================================
+
+func toEventAttendeeResponse(a *service.EventAttendeeListItem) EventAttendeeResponse {
+	return EventAttendeeResponse{
+		AttendeeID:           a.AttendeeID,
+		DisplayName:          a.DisplayName,
+		Email:                a.Email,
+		EffectiveStatus:      string(a.EffectiveStatus),
+		SessionsTotal:        a.SessionsTotal,
+		SessionsAttended:     a.SessionsAttended,
+		SessionsConfirmed:    a.SessionsConfirmed,
+		TotalDurationSeconds: int64(a.TotalDurationSeconds),
+		RegisteredAt:         a.RegisteredAt.Format(time.RFC3339),
+		LastActivityAt:       a.LastActivityAt.Format(time.RFC3339),
+		IsHost:               a.IsHost,
+		Phone:                a.Phone,
+	}
+}
+
+func toEventAttendeeDetailResponse(d *service.EventAttendeeDetail) EventAttendeeDetailResponse {
+	out := EventAttendeeDetailResponse{
+		EventAttendeeResponse: EventAttendeeResponse{
+			AttendeeID:           d.AttendeeID,
+			DisplayName:          d.DisplayName,
+			Email:                d.Email,
+			EffectiveStatus:      string(d.EffectiveStatus),
+			SessionsTotal:        d.SessionsTotal,
+			SessionsAttended:     d.SessionsAttended,
+			SessionsConfirmed:    d.SessionsConfirmed,
+			TotalDurationSeconds: int64(d.TotalDurationSeconds),
+			RegisteredAt:         d.RegisteredAt.Format(time.RFC3339),
+			LastActivityAt:       d.LastActivityAt.Format(time.RFC3339),
+			IsHost:               d.IsHost,
+			Phone: 			  d.Phone,
+		},
+		Sessions: make([]EventAttendeeSessionResponse, 0, len(d.Sessions)),
+	}
+	for _, s := range d.Sessions {
+		out.Sessions = append(out.Sessions, EventAttendeeSessionResponse{
+			SessionID:        s.SessionID,
+			Title:            s.Title,
+			Provider:         string(s.Provider),
+			ScheduledStart:   s.ScheduledStart.Format(time.RFC3339),
+			ScheduledEnd:     s.ScheduledEnd.Format(time.RFC3339),
+			DerivedStatus:    string(s.DerivedStatus),
+			HostConfirmed:    s.HostConfirmed,
+			TotalDurationSec: int64(s.TotalDurationSec),
+			LastDerivedAt:    s.LastDerivedAt.Format(time.RFC3339),
+		})
+	}
+	return out
+}
+
+// ============================================================
+// CROSS-EVENT ATTENDEE DIRECTORY
+// ============================================================
+
+func toCrossEventAttendeeResponse(a *service.CrossEventAttendeeItem) CrossEventAttendeeResponse {
+	return CrossEventAttendeeResponse{
+		AttendeeID:           a.AttendeeID,
+		DisplayName:          a.DisplayName,
+		Email:                a.Email,
+		EventID:              a.EventID,
+		EventName:            a.EventName,
+		EventSlug:            a.EventSlug,
+		EventStartDate:       a.EventStartDate.Format(time.RFC3339),
+		EffectiveStatus:      string(a.EffectiveStatus),
+		SessionsTotal:        a.SessionsTotal,
+		SessionsAttended:     a.SessionsAttended,
+		SessionsConfirmed:    a.SessionsConfirmed,
+		TotalDurationSeconds: a.TotalDurationSeconds,
+		RegisteredAt:         a.RegisteredAt.Format(time.RFC3339),
+		LastActivityAt:       a.LastActivityAt.Format(time.RFC3339),
+		IsHost:               a.IsHost,
+		Phone:                a.Phone,
+	}
 }

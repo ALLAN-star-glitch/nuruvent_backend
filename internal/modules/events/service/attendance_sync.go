@@ -120,6 +120,7 @@ func (s *eventService) registerHostAttendeeForSync(
 			cmd.HostDisplayName = strings.TrimSpace(event.Creator.Name)
 		}
 		cmd.HostEmail = strings.TrimSpace(event.Creator.Email)
+		cmd.HostPhone = strings.TrimSpace(event.Creator.Phone) 
 	    cmd.HostUsername = strings.TrimSpace(event.Creator.Username)
 	}
 	if cmd.HostDisplayName == "" {

@@ -46,6 +46,7 @@ func (s *attendanceService) RegisterAttendee(
 			cmd.External,
 			cmd.DisplayName,
 			cmd.Email,
+			cmd.Phone,
 			cmd.Username,
 			false, // isHost — normal registrations are never hosts
 			now,

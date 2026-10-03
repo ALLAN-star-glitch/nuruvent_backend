@@ -73,13 +73,14 @@ func (r *AttendeeSessionStatusRepository) ListBySession(
 		AttendeeSessionStatusModel
 		DisplayName string `gorm:"column:display_name"`
 		Email       string `gorm:"column:email"`
+	    Phone       string `gorm:"column:phone"`
 		IsHost      bool   `gorm:"column:is_host"`
 	}
 
 	var rows []row
 	err := r.db.WithContext(ctx).
 		Table("attendee_session_statuses AS ass").
-		Select("ass.*, a.display_name AS display_name, a.email AS email, a.is_host AS is_host").
+        Select("ass.*, a.display_name AS display_name, a.email AS email, a.phone AS phone, a.is_host AS is_host").
 		Joins("JOIN attendees a ON a.id = ass.attendee_id AND a.deleted_at IS NULL").
 		Where("ass.session_id = ?", sessionID).
 		Find(&rows).Error
@@ -92,6 +93,7 @@ func (r *AttendeeSessionStatusRepository) ListBySession(
 		st := toSessionStatusDomain(&rows[i].AttendeeSessionStatusModel)
 		st.DisplayName = rows[i].DisplayName
 		st.Email = rows[i].Email
+		st.Phone = rows[i].Phone 
 		st.IsHost = rows[i].IsHost
 		out = append(out, st)
 	}

@@ -11,4 +11,5 @@ import "context"
 type UserInfoProvider interface {
 	GetUserInfo(ctx context.Context, userID string) (displayName, email string, err error)
 	GetUsername(ctx context.Context, userID string) (string, error)
+	GetPhone(ctx context.Context, userID string) (string, error)
 }
