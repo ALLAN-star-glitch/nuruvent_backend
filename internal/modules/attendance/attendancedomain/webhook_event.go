@@ -27,6 +27,20 @@ type WebhookEvent struct {
 	ParticipantEmail string
 	ParticipantName  string
 
+
+
+
+		// ParticipantCustomerKey is the value passed to the Meeting SDK
+	// as `customerKey` on join. Zoom echoes it back in webhooks as
+	// `participant.customer_key`. Nuruvent sets this to the user's
+	// username so the webhook can match the participant to a
+	// registered attendee without exposing the username in the
+	// visible display name.
+	//
+	// Empty when the participant joined via a plain link or when the
+	// provider doesn't support this field.
+	ParticipantCustomerKey string
+
 	// ExternalUserID is the provider's user identifier when the
 	// platform exposes one but not an email. Google Meet uses the
 	// Google user resource name ("users/123456"). Empty for

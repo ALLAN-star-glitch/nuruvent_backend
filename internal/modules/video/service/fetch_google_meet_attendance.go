@@ -119,6 +119,11 @@ func (s *videoService) FetchGoogleMeetAttendance(
 		return result, nil
 	}
 
+	// The host is now registered as an attendee for the event (see
+	// RegisterHostAttendee in the events sync). Their Google user id
+	// is stored on that attendee row, so the normal matcher handles
+	// them like any other participant. No special filtering here.
+
 	for _, rec := range records {
 		participants, err := gm.ListParticipants(ctx, conn, rec.Name)
 		if err != nil {
@@ -322,12 +327,6 @@ type GetUnmatchedParticipantsCommand struct {
 // GetUnmatchedParticipants polls the meeting and returns any
 // participants that couldn't be resolved to a registered attendee.
 //
-// Used by the roster dialog to surface a "link to attendee" UI.
-// Because the poll also records matched joins/leaves as a side
-// effect, the same call doubles as a refresh of the roster state.
-// GetUnmatchedParticipants polls the meeting and returns any
-// participants that couldn't be resolved to a registered attendee.
-//
 // Multiple participation events for the same Google user are
 // collapsed into a single entry — one row per physical Google
 // account, keeping the most recent join/leave window.
@@ -396,3 +395,4 @@ func (s *videoService) GetUnmatchedParticipants(
 
 	return out, nil
 }
+

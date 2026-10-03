@@ -10,15 +10,16 @@ import (
 )
 
 type eventService struct {
-	repo        domain.Repository
-	permChecker domain.PermissionChecker
-	mediaSvc    domain.MediaService
-	userInfo    domain.UserInfoProvider 
-	validator   *validation.Validator
-	organizer domain.OrganizerProvider
-	aiSvc       AIService 
-	attendance  domain.AttendanceRegistrar
-	video       domain.VideoMeetingCreator 
+	repo          domain.Repository
+	permChecker   domain.PermissionChecker
+	mediaSvc      domain.MediaService
+	userInfo      domain.UserInfoProvider
+	validator     *validation.Validator
+	organizer     domain.OrganizerProvider
+	aiSvc         AIService
+	attendance    domain.AttendanceRegistrar
+	video         domain.VideoMeetingCreator
+	videoIdentity domain.VideoIdentityProvider
 }
 
 func NewService(
@@ -27,20 +28,22 @@ func NewService(
 	userInfo domain.UserInfoProvider,
 	mediaSvc domain.MediaService,
 	organizerProvider domain.OrganizerProvider,
-	aiSvc AIService,    
+	aiSvc AIService,
 	attendance domain.AttendanceRegistrar,
-	video domain.VideoMeetingCreator,  
+	video domain.VideoMeetingCreator,
+	videoIdentity domain.VideoIdentityProvider,
 ) Service {
 	return &eventService{
-		repo:        repo,
-		permChecker: permChecker,
-		mediaSvc:    mediaSvc,
-		userInfo: userInfo,
-		validator:   validation.New(),
-		organizer: organizerProvider,
-		aiSvc: aiSvc,
-		attendance:  attendance,
-		video:       video,
+		repo:          repo,
+		permChecker:   permChecker,
+		mediaSvc:      mediaSvc,
+		userInfo:      userInfo,
+		validator:     validation.New(),
+		organizer:     organizerProvider,
+		aiSvc:         aiSvc,
+		attendance:    attendance,
+		video:         video,
+		videoIdentity: videoIdentity,
 	}
 }
 

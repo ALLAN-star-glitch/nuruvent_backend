@@ -207,6 +207,7 @@ type UserModel struct {
 	Slug                string         `gorm:"type:varchar(50);uniqueIndex;not null"`
 	Name                string         `gorm:"type:varchar(100);not null"`
 	DisplayName         string         `gorm:"type:varchar(150)"`
+	Username string `gorm:"column:username"`
 	Email               string         `gorm:"uniqueIndex;not null;size:255"`
 	PasswordHash        string         `gorm:"not null"`
 	Phone               string         `gorm:"size:50"`

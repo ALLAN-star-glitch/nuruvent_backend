@@ -108,4 +108,15 @@ type Service interface {
 		ctx context.Context,
 		cmd GetUnmatchedParticipantsCommand,
 	) ([]UnmatchedParticipant, error)
+
+		// AutoFetchGoogleMeetAttendance runs a background poller that
+	// fetches Google Meet attendance for every meeting whose
+	// scheduled window is currently active.
+	//
+	// Returns when ctx is cancelled. Idempotent — repeated fetches
+	// for the same meeting are deduplicated inside
+	// FetchGoogleMeetAttendance.
+	//
+	// Started once at boot, runs for the process lifetime.
+	AutoFetchGoogleMeetAttendance(ctx context.Context) error
 }

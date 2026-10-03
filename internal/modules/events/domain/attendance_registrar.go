@@ -16,6 +16,11 @@ type AttendanceRegistrar interface {
 	//
 	// Idempotent on (ExternalType, ExternalID, ProviderSessionID).
 	UpsertSession(ctx context.Context, cmd AttendanceUpsertSessionCommand) error
+
+
+		// RegisterHostAttendee creates or updates the host's attendee row
+	// for an event. Idempotent.
+	RegisterHostAttendee(ctx context.Context, cmd AttendanceRegisterHostCommand) error
 }
 
 // AttendanceUpsertSessionCommand carries the minimum data the
@@ -55,4 +60,15 @@ type AttendanceUpsertSessionCommand struct {
 	// join-token redemption (/meeting/:code?...&name=...&host=...).
 	EventDisplayName     string
 	OrganizerDisplayName string
+}
+
+// AttendanceRegisterHostCommand carries the host details the
+// attendance module needs to create the host's attendee row.
+type AttendanceRegisterHostCommand struct {
+	EventID              string
+	HostUserID           string
+	HostDisplayName      string
+	HostEmail            string
+	HostUsername         string
+	HostGoogleMeetUserID string
 }

@@ -10,4 +10,5 @@ import "context"
 // GetUserByID. The registration module never imports auth directly.
 type UserInfoProvider interface {
 	GetUserInfo(ctx context.Context, userID string) (displayName, email string, err error)
+	GetUsername(ctx context.Context, userID string) (string, error)
 }

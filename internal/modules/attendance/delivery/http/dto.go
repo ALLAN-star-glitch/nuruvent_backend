@@ -179,6 +179,7 @@ type SessionStatusResponse struct {
 	LastDerivedAt        time.Time  `json:"last_derived_at"`
 	DisplayName          string     `json:"display_name,omitempty"`
 	Email                string     `json:"email,omitempty"`
+	IsHost               bool       `json:"is_host"`
 }
 
 

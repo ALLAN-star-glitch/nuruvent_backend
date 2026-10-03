@@ -36,3 +36,21 @@ func (a *UserInfoAdapter) GetUserInfo(
 	}
 	return user.Name, user.Email, nil
 }
+
+
+func (a *UserInfoAdapter) GetUsername(
+	ctx context.Context,
+	userID string,
+) (string, error) {
+	if userID == "" {
+		return "", fmt.Errorf("user_id is required")
+	}
+	user, err := a.auth.GetUserByID(ctx, userID)
+	if err != nil {
+		return "", fmt.Errorf("auth.GetUserByID: %w", err)
+	}
+	if user == nil {
+		return "", fmt.Errorf("user %s not found", userID)
+	}
+	return user.Username, nil
+}

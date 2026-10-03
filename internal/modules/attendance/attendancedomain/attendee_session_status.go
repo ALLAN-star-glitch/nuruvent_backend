@@ -23,18 +23,19 @@ type AttendeeSessionStatus struct {
 	TotalDurationSeconds int64
 
 	HostConfirmed   bool
-	ConfirmedStatus AttendanceStatus // "" when no override
+	ConfirmedStatus AttendanceStatus
 	ConfirmedBy     string
 	ConfirmedAt     *time.Time
 	ConfirmReason   string
 
 	LastDerivedAt time.Time
 
-	 // Populated by the repository when the query joins attendees.
-    // Read-only: derived from the attendee row, not stored on this
-    // table.
-    DisplayName string
-    Email       string
+	// Populated by the repository when the query joins attendees.
+	// Read-only: derived from the attendee row, not stored on this
+	// table.
+	DisplayName string
+	Email       string
+	IsHost      bool
 }
 
 // NewAttendeeSessionStatus constructs a fresh status for a

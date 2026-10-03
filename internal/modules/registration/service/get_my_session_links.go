@@ -76,7 +76,7 @@ func (s *service) GetMySessionLinks(
 		// Find or create the attendee for this registration.
 		// RegisterAttendee is idempotent — a repeat call for the
 		// same (external_type, external_id) returns the existing row.
-		displayName, email := s.attendeeIdentity(ctx, reg)
+		displayName, email, username := s.attendeeIdentity(ctx, reg)
 		if email == "" {
 			log.Printf("[session-links] no email for registration %s", reg.Registration.ID)
 			continue
@@ -89,6 +89,7 @@ func (s *service) GetMySessionLinks(
 				ExternalID:   reg.Registration.ID,
 				DisplayName:  displayName,
 				Email:        email,
+				Username:     username,
 			},
 		)
 		if err != nil {

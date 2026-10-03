@@ -18,6 +18,7 @@ type RegisterAttendeeCommand struct {
 	External    attendance.ExternalRef
 	DisplayName string
 	Email       string
+	Username    string
 }
 
 // UpsertSessionCommand creates or updates a session for an external
@@ -302,4 +303,24 @@ type CrossEventAttendeeItem struct {
 	TotalDurationSeconds int64
 	RegisteredAt         time.Time
 	LastActivityAt       time.Time
+}
+
+
+// RegisterHostAttendeeCommand creates or updates an attendee row for
+// the host of an event.
+//
+// Hosts have no registration. Their row is created at event publish
+// time so attendance for the host is tracked like any other
+// participant.
+type RegisterHostAttendeeCommand struct {
+	EventID         string
+	HostUserID      string
+	HostDisplayName string
+	HostEmail       string
+	HostUsername    string
+
+	// HostGoogleMeetUserID is the host's Google user resource name
+	// ("users/<id>"), pulled from their active video connection at
+	// publish time. Empty when the host hasn't connected Google Meet.
+	HostGoogleMeetUserID string
 }

@@ -205,6 +205,17 @@ RegisterAttendeeForExternal(
 		ctx context.Context,
 		cmd ListAttendeesCommand,
 	) (*ListAttendeesResult, error)
+
+
+	// RegisterHostAttendee creates or updates the host's attendee row
+// for an event, and adds a status row for every session under it.
+//
+// Idempotent on (external_type="event_host", external_id=event_id).
+// Safe to call multiple times.
+RegisterHostAttendee(
+	ctx context.Context,
+	cmd RegisterHostAttendeeCommand,
+) error
 }
 
 

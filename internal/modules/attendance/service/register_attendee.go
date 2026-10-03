@@ -41,11 +41,13 @@ func (s *attendanceService) RegisterAttendee(
 		}
 
 		// Build and persist a new attendee.
-		newAttendee, err := attendance.NewAttendee(
+			newAttendee, err := attendance.NewAttendee(
 			s.deps.IDs.NewID(),
 			cmd.External,
 			cmd.DisplayName,
 			cmd.Email,
+			cmd.Username,
+			false, // isHost — normal registrations are never hosts
 			now,
 			"", // googleMeetUserID — populated later on first Meet match
 		)

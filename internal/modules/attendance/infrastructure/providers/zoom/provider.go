@@ -125,7 +125,14 @@ func (p *Provider) ParseWebhook(
 	// participant object, so we must not attempt identity resolution
 	// for them — that would synthesize a bogus "zoom-anon-" identity
 	// from empty fields.
-	var identity, participantName string
+	//
+	// participantCustomerKey is the value we set on the SDK join call
+	// as `customerKey`. Zoom echoes it back in the webhook. It carries
+	// the Nuruvent username, which is the deterministic matching key
+	// for attendance. This is separate from ParticipantName (the
+	// visible display name) so participants see a human name, not a
+	// username.
+	var identity, participantName, participantCustomerKey string
 	if isParticipantEvent(eventType) {
 		participant := env.Payload.Object.Participant
 
@@ -145,6 +152,7 @@ func (p *Provider) ParseWebhook(
 			return nil, fmt.Errorf("%w: participant has no identifier", attendance.ErrInvalidSession)
 		}
 		participantName = strings.TrimSpace(participant.UserName)
+		participantCustomerKey = strings.TrimSpace(participant.CustomerKey)
 	}
 
 	// 7. Compute the timestamp.
@@ -164,14 +172,15 @@ func (p *Provider) ParseWebhook(
 	)
 
 	return &attendance.WebhookEvent{
-		ProviderName:      attendance.ProviderZoom,
-		ProviderEventID:   providerEventID,
-		ProviderMeetingID: env.Payload.Object.ID,
-		EventType:         eventType,
-		ParticipantEmail:  identity,
-		ParticipantName:   participantName,
-		OccurredAt:        occurredAt,
-		Raw:               nil,
+		ProviderName:           attendance.ProviderZoom,
+		ProviderEventID:        providerEventID,
+		ProviderMeetingID:      env.Payload.Object.ID,
+		EventType:              eventType,
+		ParticipantEmail:       identity,
+		ParticipantName:        participantName,
+		ParticipantCustomerKey: participantCustomerKey,
+		OccurredAt:             occurredAt,
+		Raw:                    nil,
 	}, nil
 }
 

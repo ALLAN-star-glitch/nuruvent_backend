@@ -196,6 +196,11 @@ func (s *service) RegisterWithInvitation(
 		return nil, nil, fmt.Errorf("failed to resolve invited account type ID: %w", err)
 	}
 
+	username, err := s.allocateUsername(ctx, invitation.Email)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to allocate username: %w", err)
+	}
+
 	// 5. Build the user entity. Email is marked verified because the
 	//    invitation token was delivered to it.
 	user, err := authdomain.NewUser(
@@ -205,6 +210,9 @@ func (s *service) RegisterWithInvitation(
 		"",
 		accountTypeID,
 	)
+
+	user.Username = username
+
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct user entity: %w", err)
 	}
@@ -368,7 +376,15 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	cleanPhone := sanitizer.Identifier(reqPhone)
 	accountSlug := sanitizer.GenerateSlugFromName(cleanName)
 
+	username, err := s.allocateUsername(ctx, cleanEmail)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to allocate username: %w", err)
+	}
+
 	user, err := authdomain.NewUser(cleanEmail, string(hashedPassword), cleanName, cleanPhone, accountTypeID)
+	user.Username = username
+
+
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct user entity: %w", err)
 	}
@@ -645,4 +661,17 @@ func (s *service) sendWelcomeEmails(ctx context.Context, user *authdomain.User, 
 	}
 
 	return nil
+}
+
+func (s *service) allocateUsername(ctx context.Context, email string) (string, error) {
+	for _, candidate := range authdomain.UsernameCandidates(email) {
+		exists, err := s.repo.UsernameExists(ctx, candidate)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("could not allocate a unique username for %s", email)
 }

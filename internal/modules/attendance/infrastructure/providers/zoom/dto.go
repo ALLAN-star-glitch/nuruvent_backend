@@ -39,6 +39,7 @@ type webhookParticipant struct {
 	UserName        string `json:"user_name"`
 	Email           string `json:"email"`
 	ParticipantUUID string `json:"participant_uuid"`
+	CustomerKey     string `json:"customer_key"`
 	JoinTime        string `json:"join_time"`
 	LeaveTime       string `json:"leave_time"`
 }

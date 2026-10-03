@@ -29,6 +29,7 @@ type RegisterAttendeeForAttendanceCommand struct {
 	ExternalID   string
 	DisplayName  string
 	Email        string
+	Username     string
 }
 
 type RegisterAttendeeForEventCommand struct {

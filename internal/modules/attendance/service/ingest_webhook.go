@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 )
@@ -88,13 +89,20 @@ func (s *attendanceService) ProcessWebhookEvent(
 	}
 
 	// Match the participant to an attendee.
-	attendee, err := s.matchAttendee(ctx, session.ID, event.ParticipantEmail)
+	//
+	// The matching key is the customer key (Nuruvent username) that
+	// the SDK joined with — Zoom echoes it back as customer_key. This
+	// is separate from the display name so participants see a human
+	// name, not a username.
+	attendee, err := s.matchAttendee(ctx, session.ID, event.ParticipantEmail, event.ParticipantCustomerKey)
 	if err != nil {
 		return err
 	}
 	if attendee == nil {
-		log.Printf("[attendance] ingest webhook: unmatched participant provider=%s session=%s email=%q name=%q",
-			provider, session.ID, event.ParticipantEmail, event.ParticipantName)
+		log.Printf(
+			"[attendance] ingest webhook: unmatched participant provider=%s session=%s email=%q name=%q username=%q",
+			provider, session.ID, event.ParticipantEmail, event.ParticipantName, event.ParticipantCustomerKey,
+		)
 		return nil
 	}
 
@@ -219,9 +227,6 @@ func (s *attendanceService) handleMeetingEnded(
 	return nil
 }
 
-
-
-
 // findSessionByProviderMeeting loads a session by provider and meeting
 // ID.
 func (s *attendanceService) findSessionByProviderMeeting(
@@ -242,61 +247,107 @@ func (s *attendanceService) findSessionByProviderMeeting(
 	return session, nil
 }
 
-// matchAttendee finds the attendee registered for a session whose
-// email matches the given address.
+// matchAttendee finds the attendee registered for a session.
 //
-// Returns (nil, nil) if no attendee matches — that's a soft failure
-// (unmatched participant), not an error.
+// Match strategy, in order:
+//
+//   1. Username match — the Zoom Meeting SDK carries the Nuruvent
+//      username as customerKey, which Zoom echoes back in webhooks
+//      as participant.customer_key. Deterministic for anonymous
+//      joins.
+//   2. Email match — exact, case-insensitive. Used for providers
+//      that deliver a real email (Google Meet, Zoom users with a
+//      Zoom account).
+//
+// Returns (nil, nil) for zero or ambiguous matches. That's a soft
+// failure: the participant is logged and skipped, not an error.
 func (s *attendanceService) matchAttendee(
 	ctx context.Context,
 	sessionID string,
 	email string,
+	username string,
 ) (*attendance.Attendee, error) {
-	if email == "" {
-		return nil, nil
-	}
 
 	var matched *attendance.Attendee
 
 	err := s.deps.UnitOfWork.Do(ctx, func(repos attendance.Repositories) error {
+		// --- Attempt 1: username match ---
+		if u := strings.TrimSpace(username); u != "" {
+			candidates, err := repos.Attendees.FindByUsername(ctx, u)
+			if err != nil {
+				return fmt.Errorf("find attendees by username: %w", err)
+			}
+			m, err := pickSessionAttendee(ctx, repos, sessionID, candidates)
+			if err != nil {
+				return err
+			}
+			if m != nil {
+				matched = m
+				return nil
+			}
+		}
+
+		// --- Attempt 2: email match ---
+		if strings.TrimSpace(email) == "" {
+			return nil
+		}
 		candidates, err := repos.Attendees.FindByEmail(ctx, email)
 		if err != nil {
 			return fmt.Errorf("find attendees by email: %w", err)
 		}
-		if len(candidates) == 0 {
-			return nil
+		m, err := pickSessionAttendee(ctx, repos, sessionID, candidates)
+		if err != nil {
+			return err
 		}
-
-		var sessionAttendees []*attendance.Attendee
-		for _, c := range candidates {
-			_, err := repos.SessionStatuses.FindByAttendeeSession(ctx, c.ID, sessionID)
-			if err == nil {
-				sessionAttendees = append(sessionAttendees, c)
-				continue
-			}
-			if errors.Is(err, attendance.ErrStatusNotFound) {
-				continue
-			}
-			return fmt.Errorf("check session registration: %w", err)
-		}
-
-		switch len(sessionAttendees) {
-		case 0:
-			return nil
-		case 1:
-			matched = sessionAttendees[0]
-			return nil
-		default:
-			log.Printf("[attendance] ingest webhook: ambiguous match session=%s email=%q candidates=%d",
-				sessionID, email, len(sessionAttendees))
-			return nil
-		}
+		matched = m
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	return matched, nil
+}
+
+// pickSessionAttendee filters a candidate list down to the single
+// attendee registered for the given session. Returns (nil, nil) for
+// zero or multiple matches.
+func pickSessionAttendee(
+	ctx context.Context,
+	repos attendance.Repositories,
+	sessionID string,
+	candidates []*attendance.Attendee,
+) (*attendance.Attendee, error) {
+
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
+	var sessionAttendees []*attendance.Attendee
+	for _, c := range candidates {
+		_, err := repos.SessionStatuses.FindByAttendeeSession(ctx, c.ID, sessionID)
+		if err == nil {
+			sessionAttendees = append(sessionAttendees, c)
+			continue
+		}
+		if errors.Is(err, attendance.ErrStatusNotFound) {
+			continue
+		}
+		return nil, fmt.Errorf("check session registration: %w", err)
+	}
+
+	switch len(sessionAttendees) {
+	case 0:
+		return nil, nil
+	case 1:
+		return sessionAttendees[0], nil
+	default:
+		log.Printf(
+			"[attendance] ingest webhook: ambiguous match session=%s candidates=%d",
+			sessionID, len(sessionAttendees),
+		)
+		return nil, nil
+	}
 }
 
 // sourceForProvider maps a session provider to the source constant

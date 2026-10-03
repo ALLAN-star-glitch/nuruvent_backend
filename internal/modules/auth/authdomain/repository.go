@@ -94,4 +94,8 @@ type Repository interface {
 
 	IsPlatformAdmin(ctx context.Context, userID string) (bool, error)
 	IsSuperAdmin(ctx context.Context, userID string) (bool, error)
+
+
+
+	UsernameExists(ctx context.Context, username string) (bool, error)
 }

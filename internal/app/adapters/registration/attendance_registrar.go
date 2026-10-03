@@ -40,6 +40,7 @@ func (a *AttendanceRegistrarAdapter) RegisterAttendee(
 		},
 		DisplayName: cmd.DisplayName,
 		Email:       cmd.Email,
+		Username:    cmd.Username,
 	})
 	if err != nil {
 		return "", fmt.Errorf("attendance.RegisterAttendee: %w", err)

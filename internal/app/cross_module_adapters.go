@@ -296,3 +296,16 @@ func NewAttendancePermissionAdapter(
 ) attendanceDomain.PermissionChecker {
 	return attendanceadapters.NewPermissionCheckerAdapter(permChecker)
 }
+
+
+// NewEventsVideoIdentityAdapter bridges the video service to the
+// events domain's VideoIdentityProvider port.
+//
+// Used by the events service at publish time to pre-link the host's
+// Google Meet identity so the first attendance fetch matches without
+// a manual roster link.
+func NewEventsVideoIdentityAdapter(
+	videoSvc videoService.Service,
+) eventsDomain.VideoIdentityProvider {
+	return events.NewVideoIdentityAdapter(videoSvc)
+}

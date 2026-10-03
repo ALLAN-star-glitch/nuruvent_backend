@@ -136,6 +136,7 @@ type UserResponse struct {
 	Slug               string    `json:"slug"`
 	Name               string    `json:"name"`
 	DisplayName        string    `json:"display_name,omitempty"`
+	Username           string    `json:"username"`
 	Email              string    `json:"email"`
 	Phone              string    `json:"phone"`
 	AccountType        string    `json:"account_type"`
@@ -205,6 +206,7 @@ func NewUserResponse(user *authdomain.User, svc service.Service, ctx context.Con
 		Slug:               user.Slug,
 		Name:               user.Name,
 		DisplayName:        user.DisplayName,
+		Username:           user.Username,
 		Email:              user.Email,
 		Phone:              user.Phone,
 		AccountType:        accountType,

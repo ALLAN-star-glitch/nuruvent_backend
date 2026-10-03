@@ -53,6 +53,7 @@ func toSessionStatusResponse(s *attendance.AttendeeSessionStatus) *SessionStatus
         LastDerivedAt:        s.LastDerivedAt,
         DisplayName:          s.DisplayName,   // ← add
         Email:                s.Email,         // ← add
+		IsHost:               s.IsHost,
     }
 }
 

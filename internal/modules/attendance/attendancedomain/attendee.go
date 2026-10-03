@@ -16,20 +16,23 @@ import (
 // identity is a Google user resource ID rather than an email
 // address.
 type Attendee struct {
-	ID          string
-	External    ExternalRef
-	DisplayName   string
-	Email         string
+	ID               string
+	External         ExternalRef
+	DisplayName      string
+	Email            string
+	Username         string
 	GoogleMeetUserID string
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	IsHost           bool
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 // NewAttendee constructs a new attendee with validation.
 func NewAttendee(
 	id string,
 	external ExternalRef,
-	displayName, email string,
+	displayName, email, username string,
+	isHost bool,
 	now time.Time,
 	googleMeetUserID string,
 ) (*Attendee, error) {
@@ -53,34 +56,39 @@ func NewAttendee(
 		}
 	}
 	return &Attendee{
-		ID:          id,
-		External:    external,
-		DisplayName: displayName,
-		Email:       email,
+		ID:               id,
+		External:         external,
+		DisplayName:      displayName,
+		Email:            email,
+		Username:         strings.TrimSpace(username),
 		GoogleMeetUserID: googleMeetUserID,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		IsHost:           isHost,
+		CreatedAt:        now,
+		UpdatedAt:        now,
 	}, nil
 }
 
 // HydrateAttendee reconstructs an attendee from persistence without
 // re-validating.
 func HydrateAttendee(
-    id string,
-    external ExternalRef,
-    displayName, email string,
-    googleMeetUserID string,   // NEW
-    createdAt, updatedAt time.Time,
+	id string,
+	external ExternalRef,
+	displayName, email, username string,
+	isHost bool,
+	googleMeetUserID string,
+	createdAt, updatedAt time.Time,
 ) *Attendee {
-    return &Attendee{
-        ID:               id,
-        External:         external,
-        DisplayName:      displayName,
-        Email:            email,
-        GoogleMeetUserID: googleMeetUserID,
-        CreatedAt:        createdAt,
-        UpdatedAt:        updatedAt,
-    }
+	return &Attendee{
+		ID:               id,
+		External:         external,
+		DisplayName:      displayName,
+		Email:            email,
+		Username:         username,
+		GoogleMeetUserID: googleMeetUserID,
+		IsHost:           isHost,
+		CreatedAt:        createdAt,
+		UpdatedAt:        updatedAt,
+	}
 }
 
 // UpdateProfile updates mutable fields and stamps UpdatedAt.

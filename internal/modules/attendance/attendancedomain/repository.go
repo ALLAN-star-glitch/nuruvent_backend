@@ -16,6 +16,7 @@ type AttendeeRepository interface {
 	FindByID(ctx context.Context, id string) (*Attendee, error)
 	FindByExternalRef(ctx context.Context, ref ExternalRef) (*Attendee, error)
 	FindByEmail(ctx context.Context, email string) ([]*Attendee, error)
+	FindByUsername(ctx context.Context, username string) ([]*Attendee, error)
 }
 
 // SessionRepository persists sessions.

@@ -30,6 +30,12 @@ type Config struct {
 	Groq        GroqConfig
 	OpenRouter  OpenRouterConfig
 	NuruOnboardingNoticeEmails NuruventOnboardingNoticeEmails
+
+	// AutoFetchMeetAttendance enables the background poller that
+	// fetches Google Meet attendance for live meetings. Off by
+	// default; enable per environment with
+	// AUTO_FETCH_MEET_ATTENDANCE=true.
+	AutoFetchMeetAttendance bool
 }
 
 // ============================================================
@@ -337,6 +343,8 @@ func Load() *Config {
 		cfg.Database.SSLMode = getEnv("DB_SSL_MODE", "disable")
 		log.Println("✅ Using individual DB fields for database connection")
 	}
+
+	cfg.AutoFetchMeetAttendance = getEnvBool("AUTO_FETCH_MEET_ATTENDANCE", false)
 
 	return cfg
 }

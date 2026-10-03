@@ -147,7 +147,8 @@ func InitializeApp() (*AppDependencies, error) {
 		return nil, err
 	}
 	videoMeetingCreator := NewEventsVideoAdapter(service15)
-	service16 := service8.NewService(repository2, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider, serviceAIService, attendanceRegistrar, videoMeetingCreator)
+	videoIdentityProvider := NewEventsVideoIdentityAdapter(service15)
+	service16 := service8.NewService(repository2, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider, serviceAIService, attendanceRegistrar, videoMeetingCreator, videoIdentityProvider)
 	authHandler := authhandler.NewAuthHandler(service11, configConfig)
 	accountHandler := handler.NewAccountHandler(service13)
 	teamHandler := handler2.NewTeamHandler(serviceService)

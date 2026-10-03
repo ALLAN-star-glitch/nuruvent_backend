@@ -109,6 +109,18 @@ type MeetingRepository interface {
 		platform string,
 		providerMeetingID string,
 	) (string, error)
+
+
+		// ListActiveGoogleMeetMeetings returns every Google Meet meeting
+	// whose scheduled window overlaps the given range.
+	//
+	// Used by the background attendance poller. Range is typically
+	// [now - grace, now + grace] so sessions that have just started or
+	// are about to end are included.
+	ListActiveGoogleMeetMeetings(
+		ctx context.Context,
+		from, to time.Time,
+	) ([]*Meeting, error)
 }
 
 // ============================================================

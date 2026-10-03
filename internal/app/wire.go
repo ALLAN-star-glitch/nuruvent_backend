@@ -215,6 +215,9 @@ func InitializeApp() (*AppDependencies, error) {
 		NewAttendancePermissionAdapter,
 
 
+		NewEventsVideoIdentityAdapter,
+
+
 		// VIDEO
 		NewEventsVideoAdapter,
 		NewVideoAttendanceAdapter,

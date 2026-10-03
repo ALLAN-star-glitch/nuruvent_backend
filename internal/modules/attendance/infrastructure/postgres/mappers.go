@@ -9,28 +9,32 @@ import (
 // ============================================================
 
 func toAttendeeModel(a *attendance.Attendee) *AttendeeModel {
-    return &AttendeeModel{
-        ID:               a.ID,
-        ExternalType:     a.External.Type,
-        ExternalID:       a.External.ID,
-        DisplayName:      a.DisplayName,
-        Email:            a.Email,
-        GoogleMeetUserID: a.GoogleMeetUserID,   // NEW
-        CreatedAt:        a.CreatedAt,
-        UpdatedAt:        a.UpdatedAt,
-    }
+	return &AttendeeModel{
+		ID:               a.ID,
+		ExternalType:     a.External.Type,
+		ExternalID:       a.External.ID,
+		DisplayName:      a.DisplayName,
+		Email:            a.Email,
+		Username:         a.Username,
+		IsHost:           a.IsHost,
+		GoogleMeetUserID: a.GoogleMeetUserID,
+		CreatedAt:        a.CreatedAt,
+		UpdatedAt:        a.UpdatedAt,
+	}
 }
 
 func toAttendeeDomain(m *AttendeeModel) *attendance.Attendee {
-    return attendance.HydrateAttendee(
-        m.ID,
-        attendance.ExternalRef{Type: m.ExternalType, ID: m.ExternalID},
-        m.DisplayName,
-        m.Email,
-        m.GoogleMeetUserID,   // NEW
-        m.CreatedAt,
-        m.UpdatedAt,
-    )
+	return attendance.HydrateAttendee(
+		m.ID,
+		attendance.ExternalRef{Type: m.ExternalType, ID: m.ExternalID},
+		m.DisplayName,
+		m.Email,
+		m.Username,
+		m.IsHost,
+		m.GoogleMeetUserID,
+		m.CreatedAt,
+		m.UpdatedAt,
+	)
 }
 
 // ============================================================

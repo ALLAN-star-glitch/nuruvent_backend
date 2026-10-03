@@ -5,6 +5,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -129,6 +130,39 @@ func (r *MeetingRepository) FindIDByProviderMeeting(
 		return "", translateError(err, "find meeting id by provider code", videodomain.ErrMeetingNotFound)
 	}
 	return id, nil
+}
+
+// ListActiveGoogleMeetMeetings returns every Google Meet meeting
+// whose scheduled window overlaps [from, to].
+//
+// Overlap is computed as:
+//
+//	start_time <= to
+//	  AND start_time + duration_sec >= from
+//
+// The duration_sec column stores the meeting's planned length, not
+// its actual runtime. That's fine for the poller: we only need to
+// know whether the meeting is expected to be live right now.
+func (r *MeetingRepository) ListActiveGoogleMeetMeetings(
+	ctx context.Context,
+	from, to time.Time,
+) ([]*videodomain.Meeting, error) {
+	var models []VideoMeetingModel
+	err := r.db.WithContext(ctx).
+		Where("platform = ?", string(videodomain.PlatformGoogleMeet)).
+		Where("start_time <= ?", to).
+		Where("start_time + (duration_sec || ' seconds')::interval >= ?", from).
+		Order("start_time ASC").
+		Find(&models).Error
+	if err != nil {
+		return nil, translateError(err, "list active meet meetings", videodomain.ErrMeetingNotFound)
+	}
+
+	out := make([]*videodomain.Meeting, 0, len(models))
+	for i := range models {
+		out = append(out, toMeetingDomain(&models[i]))
+	}
+	return out, nil
 }
 
 

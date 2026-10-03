@@ -674,3 +674,11 @@ func (r *PostgresRepository) IsSuperAdmin(ctx context.Context, userID string) (b
 	}
 	return count > 0, nil
 }
+
+func (r *PostgresRepository) UsernameExists(ctx context.Context, username string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&UserModel{}).
+		Where("username = ?", username).
+		Count(&count).Error
+	return count > 0, err
+}

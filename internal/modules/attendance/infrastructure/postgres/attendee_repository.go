@@ -86,6 +86,26 @@ func (r *AttendeeRepository) FindByEmail(ctx context.Context, email string) ([]*
 	return out, nil
 }
 
+
+
+func (r *AttendeeRepository) FindByUsername(
+	ctx context.Context,
+	username string,
+) ([]*attendance.Attendee, error) {
+	var models []AttendeeModel
+	err := r.db.WithContext(ctx).
+		Where("username = ? AND deleted_at IS NULL", username).
+		Find(&models).Error
+	if err != nil {
+		return nil, translateError(err, "find attendees by username", attendance.ErrAttendeeNotFound)
+	}
+	out := make([]*attendance.Attendee, 0, len(models))
+	for i := range models {
+		out = append(out, toAttendeeDomain(&models[i]))
+	}
+	return out, nil
+}
+
 // compile-time assertion
 var _ attendance.AttendeeRepository = (*AttendeeRepository)(nil)
 

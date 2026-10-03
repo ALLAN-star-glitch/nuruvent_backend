@@ -129,13 +129,23 @@ func (s *attendanceService) GetEventAttendanceSummary(
 			withDur  int
 		)
 
-		for _, st := range statuses {
-			row.RegisteredCount++
+				for _, st := range statuses {
+			// Hosts appear in the session roster but are not
+			// "registered attendees" — exclude from RegisteredCount
+			// and from UniqueAttendees (audience size). They do
+			// count toward AttendedCount and average duration, since
+			// they were in the room.
+			if !st.IsHost {
+				row.RegisteredCount++
+			}
 
 			if st.DerivedStatus != attendance.StatusRegistered {
 				attended++
-				uniqueAttendees[st.AttendeeID] = struct{}{}
+				if !st.IsHost {
+					uniqueAttendees[st.AttendeeID] = struct{}{}
+				}
 			}
+
 			if st.TotalDurationSeconds > 0 {
 				totalDur += st.TotalDurationSeconds
 				withDur++

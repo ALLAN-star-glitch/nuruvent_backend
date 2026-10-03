@@ -45,6 +45,7 @@ type UserInfo struct {
 	ID          string
 	Name        string
 	DisplayName string
+	Username    string
 	Email       string
 	Phone       string
 	AvatarURL   string

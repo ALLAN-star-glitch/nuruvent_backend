@@ -54,3 +54,26 @@ func (a *AttendanceRegistrarAdapter) UpsertSession(
 	}
 	return nil
 }
+
+
+// RegisterHostAttendee forwards the host attendee registration to
+// the attendance service.
+func (a *AttendanceRegistrarAdapter) RegisterHostAttendee(
+	ctx context.Context,
+	cmd eventsDomain.AttendanceRegisterHostCommand,
+) error {
+	if err := a.attendance.RegisterHostAttendee(
+		ctx,
+		attendanceService.RegisterHostAttendeeCommand{
+			EventID:              cmd.EventID,
+			HostUserID:           cmd.HostUserID,
+			HostDisplayName:      cmd.HostDisplayName,
+			HostEmail:            cmd.HostEmail,
+			HostUsername:         cmd.HostUsername,
+			HostGoogleMeetUserID: cmd.HostGoogleMeetUserID,
+		},
+	); err != nil {
+		return fmt.Errorf("attendance.RegisterHostAttendee: %w", err)
+	}
+	return nil
+}

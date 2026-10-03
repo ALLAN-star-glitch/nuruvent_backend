@@ -76,7 +76,88 @@ func (s *eventService) syncEventSchedulesToAttendance(
 	}
 
 	log.Printf("[events] sync DONE event=%s schedules=%d ok=%d failed=%d",
+	
 		event.ID, len(event.Schedules), succeeded, failed)
+
+
+		// Register the host as an attendee for the event. Runs after the
+	// schedules are mirrored so the host's session-status rows find
+	// sessions to attach to.
+	s.registerHostAttendeeForSync(ctx, event)
+}
+
+
+
+
+
+// registerHostAttendeeForSync creates or updates the host's attendee
+// row in the attendance module.
+//
+// Best-effort, same as the schedule sync: a failure here does not
+// fail the caller. The host's attendance will be missing until a
+// later sync succeeds.
+func (s *eventService) registerHostAttendeeForSync(
+	ctx context.Context,
+	event *domain.Event,
+) {
+	if s.attendance == nil {
+		return
+	}
+	if event == nil || event.CreatedBy == "" {
+		return
+	}
+
+	cmd := domain.AttendanceRegisterHostCommand{
+		EventID:    event.ID,
+		HostUserID: event.CreatedBy,
+	}
+
+	// Resolve the host's display name and email. Same helper the
+	// organizer lookup uses.
+	if event.Creator != nil {
+		cmd.HostDisplayName = strings.TrimSpace(event.Creator.DisplayName)
+		if cmd.HostDisplayName == "" {
+			cmd.HostDisplayName = strings.TrimSpace(event.Creator.Name)
+		}
+		cmd.HostEmail = strings.TrimSpace(event.Creator.Email)
+	    cmd.HostUsername = strings.TrimSpace(event.Creator.Username)
+	}
+	if cmd.HostDisplayName == "" {
+		cmd.HostDisplayName = s.resolveOrganizerForSync(ctx, event)
+	}
+	if cmd.HostDisplayName == "" {
+		cmd.HostDisplayName = "Host"
+	}
+
+	// Resolve the host's Google Meet user id from their active
+	// connection so the first Meet fetch matches without a manual
+	// roster link. Zoom is handled by username (HostUsername), so no
+	// platform id is needed there.
+	if s.videoIdentity != nil {
+		if id, err := s.videoIdentity.ExternalUserIDForPlatform(
+			ctx, event.CreatedBy, "google_meet",
+		); err != nil {
+			log.Printf(
+				"[events] register host: resolve google_meet id user=%s err=%v",
+				event.CreatedBy, err,
+			)
+		} else if id != "" {
+			cmd.HostGoogleMeetUserID = id
+		}
+	}
+
+	if err := s.attendance.RegisterHostAttendee(ctx, cmd); err != nil {
+		log.Printf(
+			"[events] register host attendee FAIL event=%s host=%s err=%v",
+			event.ID, event.CreatedBy, err,
+		)
+		return
+	}
+
+	log.Printf(
+		"[events] register host attendee OK event=%s host=%s google_meet_id=%q",
+		event.ID, event.CreatedBy, cmd.HostGoogleMeetUserID,
+	)
 }
 
 // resolveOrganizerForSync returns the organizer's display name for an
@@ -434,3 +515,4 @@ func parseMeetCode(link string) string {
 	}
 	return m[1]
 }
+

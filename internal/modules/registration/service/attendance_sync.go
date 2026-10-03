@@ -27,7 +27,7 @@ func (s *service) syncRegistrationToAttendance(
 
 	regID := reg.Registration.ID
 
-	displayName, email := s.attendeeIdentity(ctx, reg)
+	displayName, email, username := s.attendeeIdentity(ctx, reg)
 	if email == "" {
 		log.Printf("[registration] skipping attendance sync: no email for registration %s", regID)
 		return
@@ -38,6 +38,7 @@ func (s *service) syncRegistrationToAttendance(
 		ExternalID:   regID,
 		DisplayName:  displayName,
 		Email:        email,
+		Username:     username,
 	})
 	if err != nil {
 		log.Printf("[registration] attendance.RegisterAttendee failed for %s: %v", regID, err)
@@ -70,9 +71,9 @@ func (s *service) syncRegistrationToAttendance(
 func (s *service) attendeeIdentity(
 	ctx context.Context,
 	reg *registrationdomain.EventRegistration,
-) (displayName, email string) {
+) (displayName, email, username string) {
 	if reg == nil || reg.Registration == nil {
-		return "", ""
+		return "", "", ""
 	}
 	r := reg.Registration
 
@@ -82,23 +83,30 @@ func (s *service) attendeeIdentity(
 		if name == "" {
 			name = r.GuestEmail
 		}
-		return name, r.GuestEmail
+		return name, r.GuestEmail, ""
 	}
 
 	// Authenticated path.
 	if r.UserID == "" {
-		return "", ""
+		return "", "", ""
 	}
 	if s.deps.Users == nil {
-		return "", ""
+		return "", "", ""
 	}
 	name, mail, err := s.deps.Users.GetUserInfo(ctx, r.UserID)
 	if err != nil {
 		log.Printf("[registration] user lookup failed for %s: %v", r.UserID, err)
-		return "", ""
+		return "", "", ""
 	}
 	if name == "" {
 		name = mail
 	}
-	return name, mail
+	// Username lookup — see step 4 below for the port change.
+	uname := ""
+	if u, err := s.deps.Users.GetUsername(ctx, r.UserID); err == nil {
+		uname = u
+	} else {
+		log.Printf("[registration] username lookup failed for %s: %v", r.UserID, err)
+	}
+	return name, mail, uname
 }
