@@ -3,85 +3,122 @@
 package authmiddleware
 
 import (
+	"context"
+	"log"
 	"strings"
+	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 
 	"github.com/gofiber/fiber/v3"
 )
 
-// AuthMiddleware validates JWT from cookie or Authorization header.
-func AuthMiddleware(tokenService authdomain.TokenService) fiber.Handler {
+// ============================================================
+// TYPES
+// ============================================================
+
+// UserValidator reports whether a user ID corresponds to a live,
+// active user. The middleware calls this after every successful JWT
+// validation to catch ghost sessions (deleted users, DB resets,
+// cross-environment tokens).
+//
+// It returns (true, nil) for a valid user, (false, nil) for a user
+// that no longer exists, and (false, err) on infrastructure errors.
+type UserValidator func(ctx context.Context, userID string) (bool, error)
+
+// ============================================================
+// AUTH MIDDLEWARE
+// ============================================================
+
+// AuthMiddleware validates JWT from cookie or Authorization header
+// and verifies that the subject (user) still exists.
+//
+// If the token is structurally valid but references a user that no
+// longer exists (deleted, DB reset, or issued by a different
+// environment), the middleware clears the auth cookies and returns
+// 401 so the frontend can force a re-login.
+func AuthMiddleware(
+	tokenService authdomain.TokenService,
+	validateUser UserValidator,
+	cfg *config.Config,
+) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		var tokenString string
-
-		tokenCookie := c.Cookies("access_token")
-		if tokenCookie != "" {
-			tokenString = tokenCookie
-		} else {
-			authHeader := c.Get("Authorization")
-			if authHeader != "" {
-				parts := strings.Split(authHeader, " ")
-				if len(parts) == 2 && parts[0] == "Bearer" {
-					tokenString = parts[1]
-				}
-			}
-		}
-
+		tokenString := extractToken(c)
 		if tokenString == "" {
 			return response.Unauthorized(c, "Authentication required", nil)
 		}
 
 		tokenCtx, err := tokenService.ValidateToken(tokenString)
 		if err != nil {
+			// Structurally invalid or expired — no DB hit needed.
 			return response.Unauthorized(c, "Invalid or expired token", nil)
 		}
 
-		// Store all user context from token.
+		// ---- Verify the user still exists in the current DB ----
+		//
+		// Prevents "ghost sessions": JWTs referencing users that were
+		// deleted, soft-deleted, or never existed in this database.
+		ok, err := validateUser(c.Context(), tokenCtx.UserID)
+		if err != nil {
+			log.Printf("⚠️  Auth: user validation error for subject %q: %v",
+				tokenCtx.UserID, err)
+			// Fail closed on infrastructure errors — treat as unauthenticated.
+			clearAuthCookies(c, cfg)
+			return response.Unauthorized(c, "Session expired. Please log in again.", nil)
+		}
+		if !ok {
+			log.Printf("⚠️  Auth rejected: JWT subject %q no longer exists or is inactive",
+				tokenCtx.UserID)
+			clearAuthCookies(c, cfg)
+			return response.Unauthorized(c, "Session expired. Please log in again.", nil)
+		}
+
+		// ---- Populate request context ----
 		c.Locals(authdomain.ContextKeyUserID, tokenCtx.UserID)
 		c.Locals(authdomain.ContextKeyUserRole, tokenCtx.Role)
 		c.Locals(authdomain.ContextKeyUserEmail, tokenCtx.Email)
 		c.Locals(authdomain.ContextKeyUserName, tokenCtx.DisplayName)
 
-		// Store account context (authoritative for authz).
 		c.Locals(authdomain.ContextKeyAccountID, tokenCtx.AccountID)
 		c.Locals(authdomain.ContextKeyAccountType, tokenCtx.AccountTypeSlug)
 
-		// Store team context (informational only — NOT used for authz).
 		c.Locals(authdomain.ContextKeyTeamID, tokenCtx.TeamID)
 		c.Locals(authdomain.ContextKeyTeamType, tokenCtx.TeamTypeSlug)
 
-		// Domain is set by authorization middleware based on the request path.
-		// Do NOT set it here.
 		return c.Next()
 	}
 }
 
-// OptionalAuthMiddleware validates JWT if present but doesn't require it.
-func OptionalAuthMiddleware(tokenService authdomain.TokenService) fiber.Handler {
+// ============================================================
+// OPTIONAL AUTH MIDDLEWARE
+// ============================================================
+
+// OptionalAuthMiddleware validates JWT if present but doesn't require
+// it. A stale token is treated as "not authenticated" — cookies are
+// cleared and the request continues anonymously.
+func OptionalAuthMiddleware(
+	tokenService authdomain.TokenService,
+	validateUser UserValidator,
+	cfg *config.Config,
+) fiber.Handler {
 	return func(c fiber.Ctx) error {
-		var tokenString string
-
-		tokenCookie := c.Cookies("access_token")
-		if tokenCookie != "" {
-			tokenString = tokenCookie
-		} else {
-			authHeader := c.Get("Authorization")
-			if authHeader != "" {
-				parts := strings.Split(authHeader, " ")
-				if len(parts) == 2 && parts[0] == "Bearer" {
-					tokenString = parts[1]
-				}
-			}
-		}
-
+		tokenString := extractToken(c)
 		if tokenString == "" {
 			return c.Next()
 		}
 
 		tokenCtx, err := tokenService.ValidateToken(tokenString)
 		if err != nil {
+			return c.Next()
+		}
+
+		ok, err := validateUser(c.Context(), tokenCtx.UserID)
+		if err != nil || !ok {
+			log.Printf("⚠️  Optional auth: JWT subject %q no longer valid, proceeding anonymous",
+				tokenCtx.UserID)
+			clearAuthCookies(c, cfg)
 			return c.Next()
 		}
 
@@ -101,7 +138,52 @@ func OptionalAuthMiddleware(tokenService authdomain.TokenService) fiber.Handler 
 }
 
 // ============================================================
-// HELPER FUNCTIONS TO EXTRACT CONTEXT VALUES
+// HELPERS
+// ============================================================
+
+// extractToken pulls the JWT from the access_token cookie (preferred)
+// or the Authorization header as a Bearer fallback.
+func extractToken(c fiber.Ctx) string {
+	if cookie := c.Cookies("access_token"); cookie != "" {
+		return cookie
+	}
+	authHeader := c.Get("Authorization")
+	if authHeader == "" {
+		return ""
+	}
+	parts := strings.SplitN(authHeader, " ", 2)
+	if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+		return parts[1]
+	}
+	return ""
+}
+
+// clearAuthCookies expires both auth cookies on the current response.
+func clearAuthCookies(c fiber.Ctx, cfg *config.Config) {
+	secure := cfg.Environment == "production"
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		HTTPOnly: true,
+		Secure:   secure,
+		SameSite: "Lax",
+		Path:     "/",
+	})
+	c.Cookie(&fiber.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		Expires:  time.Now().Add(-time.Hour),
+		HTTPOnly: true,
+		Secure:   secure,
+		SameSite: "Lax",
+		Path:     "/auth/refresh",
+	})
+}
+
+// ============================================================
+// CONTEXT ACCESSORS
 // ============================================================
 
 // GetUserID extracts the user ID from the context.
@@ -214,15 +296,15 @@ func GetUser(c fiber.Ctx) *authdomain.TokenContext {
 	}
 
 	return &authdomain.TokenContext{
-		UserID:        userID,
-		Role:          GetUserRole(c),
-		Email:         GetUserEmail(c),
-		DisplayName:   GetUserName(c),
-		AccountID:     GetAccountID(c),
-		TeamID:        GetTeamID(c),
-		TeamTypeSlug:  GetTeamType(c),
-		IsVerified:    false,
-		IsActive:      true,
+		UserID:       userID,
+		Role:         GetUserRole(c),
+		Email:        GetUserEmail(c),
+		DisplayName:  GetUserName(c),
+		AccountID:    GetAccountID(c),
+		TeamID:       GetTeamID(c),
+		TeamTypeSlug: GetTeamType(c),
+		IsVerified:   false,
+		IsActive:     true,
 	}
 }
 

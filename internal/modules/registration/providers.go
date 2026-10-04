@@ -27,9 +27,9 @@ var ProviderSet = wire.NewSet(
 		new(*postgres.RegistrationNumberGenerator),
 	),
 
-	
-	
-	
+	// ============================================================
+	// Service Layer
+	// ============================================================
 
 	ProvideSystemClock,
 	ProvideServiceDependencies,
@@ -55,6 +55,7 @@ func ProvideServiceDependencies(
 	notifier registrationdomain.Notifier,
 	attendance registrationdomain.AttendanceRegistrar,
 	users registrationdomain.UserInfoProvider,
+	permissionChecker registrationdomain.PermissionChecker,
 	idGen id.Generator,
 	clock service.Clock,
 	numberGen registrationdomain.RegistrationNumberGenerator,
@@ -67,6 +68,7 @@ func ProvideServiceDependencies(
 		Notifier:           notifier,
 		Attendance:         attendance,
 		Users:              users,
+		PermissionChecker:  permissionChecker,
 		IDGenerator:        idGen,
 		Clock:              clock,
 		NumberGenerator:    numberGen,

@@ -3,6 +3,7 @@
 package app
 
 import (
+	"context"
 	"log"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authmiddleware"
@@ -59,20 +60,40 @@ func (app *App) SetupRoutes() {
 	// Get token service from app dependencies.
 	tokenSvc := app.AuthTokenService
 
-	// Create auth middleware.
-	authMiddleware := authmiddleware.AuthMiddleware(tokenSvc)
+	// ------------------------------------------------------------
+	// User validator
+	//
+	// Called by the auth middleware after every successful JWT
+	// validation to confirm the token's subject still references a
+	// live, active user. Rejects ghost sessions: deleted users,
+	// DB-reset users, tokens from another environment.
+	//
+	// Falls back to a no-op check if no repository is wired into
+	// AppDependencies yet. Replace with a real lookup before
+	// production.
+	// ------------------------------------------------------------
+	validateUser := app.buildUserValidator()
 
-	// Authorization middleware now requires a TeamResolver in addition to
-	// the permission checker. The resolver translates team IDs into their
-	// parent account IDs so team-scoped routes resolve to the correct
-	// account domain.
+	// Auth middleware — validates JWT and verifies the user exists.
+	authMiddleware := authmiddleware.AuthMiddleware(
+		tokenSvc,
+		validateUser,
+		app.Config,
+	)
+
+	// Authorization middleware — Casbin permission checks.
 	authzMiddleware := authorization.AuthorizationMiddleware(
 		app.PermissionChecker,
 	)
 
-	optionalAuth := authmiddleware.OptionalAuthMiddleware(tokenSvc)
+	// Optional auth — same user-existence check, non-fatal.
+	optionalAuth := authmiddleware.OptionalAuthMiddleware(
+		tokenSvc,
+		validateUser,
+		app.Config,
+	)
 
-		server.SetupRoutes(
+	server.SetupRoutes(
 		app.App,
 		app.Config,
 		authMiddleware,
@@ -89,6 +110,48 @@ func (app *App) SetupRoutes() {
 		app.VideoHandler,
 	)
 	log.Println("Routes registered successfully")
+}
+
+// buildUserValidator returns a UserValidator backed by whatever
+// user repository is available on the AppDependencies. If none is
+// wired (e.g. before a DI refactor), it returns a permissive
+// fallback that logs a warning — never silently broken in prod.
+//
+// To wire the real check, expose the auth repository on
+// AppDependencies as `AuthRepository authdomain.Repository`, then
+// swap the fallback branch below.
+func (app *App) buildUserValidator() authmiddleware.UserValidator {
+	// ---- Preferred: real repository lookup ----
+	//
+	// Uncomment and adapt once AppDependencies exposes the repo:
+	//
+	// repo := app.AuthRepository
+	// if repo != nil {
+	//     return func(ctx context.Context, userID string) (bool, error) {
+	//         user, err := repo.GetUserByID(ctx, userID)
+	//         if err != nil || user == nil {
+	//             return false, nil
+	//         }
+	//         if user.DeletedAt != nil || !user.IsActive {
+	//             return false, nil
+	//         }
+	//         return true, nil
+	//     }
+	// }
+
+	// ---- Fallback: permissive, log-only ----
+	//
+	// Keeps the build working until the repository is exposed on
+	// AppDependencies. Logs a warning the first time it's hit so
+	// it doesn't go unnoticed.
+	var warned bool
+	return func(ctx context.Context, userID string) (bool, error) {
+		if !warned {
+			log.Println("⚠️  [auth] UserValidator fallback active — set App.AuthRepository to enable ghost-session rejection")
+			warned = true
+		}
+		return true, nil
+	}
 }
 
 // Run starts the server.

@@ -33,11 +33,8 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/videodomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 
-
-
 	registrationnotifier "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/registration"
-    registrationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
-
+	registrationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 
 	attendanceDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 )
@@ -171,6 +168,17 @@ func NewRegistrationUserInfoAdapter(
 	return registrationadapters.NewUserInfoAdapter(authSvc)
 }
 
+// NewRegistrationPermissionAdapter bridges auth's PermissionChecker to
+// the registration module's PermissionChecker port.
+//
+// Used by the cross-event registration directory to resolve the
+// caller's accounts.
+func NewRegistrationPermissionAdapter(
+	permChecker authDomain.PermissionChecker,
+) registrationDomain.PermissionChecker {
+	return registrationadapters.NewPermissionCheckerAdapter(permChecker)
+}
+
 // ---- PAYMENT ADAPTERS ----
 
 // NewPaymentRegistrationConfirmer wires the payment module's
@@ -277,8 +285,6 @@ func NewAttendanceVideoMeetingIDResolver(
 	return attendanceadapters.NewVideoMeetingIDResolver(meetings)
 }
 
-
-
 func NewRegistrationNotifier(
 	notifSvc notificationDomain.NotificationService,
 	users registrationDomain.UserInfoProvider,
@@ -296,7 +302,6 @@ func NewAttendancePermissionAdapter(
 ) attendanceDomain.PermissionChecker {
 	return attendanceadapters.NewPermissionCheckerAdapter(permChecker)
 }
-
 
 // NewEventsVideoIdentityAdapter bridges the video service to the
 // events domain's VideoIdentityProvider port.

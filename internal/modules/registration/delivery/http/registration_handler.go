@@ -131,18 +131,80 @@ func (h *Handler) ListMine(c fiber.Ctx) error {
 		return response.Unauthorized(c, "Authentication required", nil)
 	}
 
-	filter := service.ListFilterInput{
-		Statuses: parseCSV(c.Query("status")),
-		Page:     parseQueryInt(c, "page", 1),
-		PageSize: parseQueryInt(c, "page_size", 20),
-	}
-
-	regs, total, err := h.svc.ListByUser(c.Context(), userID, filter)
+	res, err := h.svc.ListMineRegistrations(c.Context(), service.ListMineRegistrationsCommand{
+		UserID:    userID,
+		EventID:   c.Query("event_id"),
+		Search:    c.Query("search"),
+		Statuses:  parseCSV(c.Query("status")),
+		SortBy:    c.Query("sort_by", "created_at"),
+		SortOrder: c.Query("sort_order", "desc"),
+		Page:      parseQueryInt(c, "page", 1),
+		PageSize:  parseQueryInt(c, "page_size", 20),
+	})
 	if err != nil {
 		return mapDomainError(c, err)
 	}
 
-	return response.Success(c, "Registrations retrieved successfully", toListResponse(regs, total, filter))
+	out := CrossEventRegistrationListResponse{
+		Registrations: make([]CrossEventRegistrationResponse, 0, len(res.Registrations)),
+		Total:         res.Total,
+		Page:          res.Page,
+		PageSize:      res.PageSize,
+	}
+	for _, r := range res.Registrations {
+		out.Registrations = append(out.Registrations, toCrossEventRegistrationResponse(r))
+	}
+
+	return response.Success(c, "Registrations retrieved successfully", out)
+}
+
+// ListAllRegistrations handles GET /registrations.
+//
+// Cross-event organizer view. Returns registrations across every
+// event owned by any account the caller belongs to.
+//
+// Query params:
+//   page        — 1-indexed (default 1)
+//   page_size   — rows per page (default 20, max 100)
+//   event_id    — optional; filter to one event
+//   search      — optional; matches attendee name or email
+//   status      — optional; comma-separated status slugs
+//   sort_by     — created_at | attendee_name | event_name | status
+//   sort_order  — asc | desc
+func (h *Handler) ListAllRegistrations(c fiber.Ctx) error {
+	userID := handlerhelper.GetUserIDOptional(c)
+	if userID == "" {
+		return response.Unauthorized(c, "Authentication required", nil)
+	}
+
+	res, err := h.svc.ListAllRegistrations(c.Context(), service.ListAllRegistrationsCommand{
+		UserID:    userID,
+		EventID:   c.Query("event_id"),
+		Search:    c.Query("search"),
+		Statuses:  parseCSV(c.Query("status")),
+		SortBy:    c.Query("sort_by", "created_at"),
+		SortOrder: c.Query("sort_order", "desc"),
+		Page:      parseQueryInt(c, "page", 1),
+		PageSize:  parseQueryInt(c, "page_size", 20),
+	})
+	if err != nil {
+		return mapDomainError(c, err)
+	}
+
+	out := CrossEventRegistrationListResponse{
+		Registrations: make([]CrossEventRegistrationResponse, 0, len(res.Registrations)),
+		Total:         res.Total,
+		Page:          res.Page,
+		PageSize:      res.PageSize,
+	}
+	for _, r := range res.Registrations {
+		out.Registrations = append(
+			out.Registrations,
+			toCrossEventRegistrationResponse(r),
+		)
+	}
+
+	return response.Success(c, "Registrations retrieved successfully", out)
 }
 
 // ============================================================

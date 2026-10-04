@@ -217,6 +217,8 @@ func InitializeApp() (*AppDependencies, error) {
 
 		NewEventsVideoIdentityAdapter,
 
+		NewRegistrationPermissionAdapter,
+
 
 		// VIDEO
 		NewEventsVideoAdapter,

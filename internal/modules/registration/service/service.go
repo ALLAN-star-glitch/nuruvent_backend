@@ -26,6 +26,22 @@ type Service interface {
 // each carrying a fresh personalized join link per session under the
 // event.
 GetMySessionLinks(ctx context.Context, userID string) (*SessionLinksResult, error)
+
+// ListMineRegistrations returns the caller's own registrations across
+// every event they've registered for.
+ListMineRegistrations(
+	ctx context.Context,
+	cmd ListMineRegistrationsCommand,
+) (*ListMineRegistrationsResult, error)
+
+
+// ListAllRegistrations returns registrations across every event
+	// owned by any account the caller belongs to. Empty result if the
+	// caller has no accounts.
+	ListAllRegistrations(
+		ctx context.Context,
+		cmd ListAllRegistrationsCommand,
+	) (*ListAllRegistrationsResult, error)
 }
 
 // Dependencies groups the ports the service needs.
@@ -38,8 +54,9 @@ type Dependencies struct {
 	IDGenerator        id.Generator  // ← from shared
 	Clock              Clock         // ← stays local (service-specific)
 	NumberGenerator    registrationdomain.RegistrationNumberGenerator
-	Users      registrationdomain.UserInfoProvider   // 👈 new
-	Attendance registrationdomain.AttendanceRegistrar // 👈 new
+	Users              registrationdomain.UserInfoProvider
+	Attendance         registrationdomain.AttendanceRegistrar
+	PermissionChecker  registrationdomain.PermissionChecker
 }
 
 // Clock abstracts time.Now so tests can control time.

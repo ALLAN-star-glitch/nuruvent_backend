@@ -160,6 +160,74 @@ migrate-reset:
 	fi
 	goose -dir $(MIGRATION_DIR) postgres "$(DB_URL)" reset
 
+
+# Add near the top with other DB config
+RENDER_DB_HOST ?= dpg-davtea3tqb8s73do7l80-a.oregon-postgres.render.com
+RENDER_DB_USER ?= nuruvent_user
+RENDER_DB_NAME ?= nuruvent_dbv4
+RENDER_DB_PASSWORD ?= 
+RENDER_DB_URL = postgresql://$(RENDER_DB_USER):$(RENDER_DB_PASSWORD)@$(RENDER_DB_HOST)/$(RENDER_DB_NAME)
+RENDER_DB_ADMIN_URL = postgresql://$(RENDER_DB_USER):$(RENDER_DB_PASSWORD)@$(RENDER_DB_HOST)/postgres?sslmode=require
+
+.PHONY: db-reset-render migrate-up-render db-shell-render
+
+
+
+
+
+# ---- Render DB config ----
+RENDER_DB_HOST     ?= dpg-davtea3tqb8s73do7l80-a.oregon-postgres.render.com
+RENDER_DB_USER     ?= nuruvent_dbv4_user
+RENDER_DB_NAME     ?= nuruvent_dbv4
+RENDER_DB_PASSWORD ?=
+RENDER_DB_SSLMODE  ?= require
+
+RENDER_DB_URL       = postgresql://$(RENDER_DB_USER):$(RENDER_DB_PASSWORD)@$(RENDER_DB_HOST)/$(RENDER_DB_NAME)?sslmode=$(RENDER_DB_SSLMODE)
+RENDER_DB_ADMIN_URL = postgresql://$(RENDER_DB_USER):$(RENDER_DB_PASSWORD)@$(RENDER_DB_HOST)/postgres?sslmode=$(RENDER_DB_SSLMODE)
+
+.PHONY: db-render-drop db-render-reset migrate-up-render migrate-status-render render_seed
+
+db-render-drop:
+	@if [ -z "$(RENDER_DB_PASSWORD)" ]; then echo "❌ RENDER_DB_PASSWORD env var required"; exit 1; fi
+	@echo "⚠️  ⚠️  ⚠️  DANGEROUS COMMAND  ⚠️  ⚠️  ⚠️"
+	@echo "This will DROP the ENTIRE Render database: $(RENDER_DB_NAME)"
+	@read -p "Type $(RENDER_DB_NAME) to confirm: " confirm; \
+	if [ "$$confirm" != "$(RENDER_DB_NAME)" ]; then echo "Cancelled"; exit 1; fi
+	@read -p "Type YES to confirm: " confirm2; \
+	if [ "$$confirm2" != "YES" ]; then echo "Cancelled"; exit 1; fi
+	@echo "Terminating connections..."
+	docker exec -it $(DB_CONTAINER) psql "$(RENDER_DB_ADMIN_URL)" -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '$(RENDER_DB_NAME)' AND pid <> pg_backend_pid();"
+	@echo "Dropping..."
+	docker exec -it $(DB_CONTAINER) psql "$(RENDER_DB_ADMIN_URL)" -c "DROP DATABASE IF EXISTS $(RENDER_DB_NAME);"
+	@echo "✅ Render database $(RENDER_DB_NAME) dropped"
+
+db-render-reset: db-render-drop
+	@if [ -z "$(RENDER_DB_PASSWORD)" ]; then echo "❌ RENDER_DB_PASSWORD env var required"; exit 1; fi
+	@echo "Recreating $(RENDER_DB_NAME)..."
+	docker exec -it $(DB_CONTAINER) psql "$(RENDER_DB_ADMIN_URL)" -c "CREATE DATABASE $(RENDER_DB_NAME);"
+	@echo "✅ Render database recreated"
+	@echo "Running migrations..."
+	@$(MAKE) migrate-up-render
+	@echo "Running seeders..."
+	@$(MAKE) render_seed
+	@echo "✅ Render database reset complete"
+
+migrate-up-render:
+	@if [ -z "$(RENDER_DB_PASSWORD)" ]; then echo "❌ RENDER_DB_PASSWORD env var required"; exit 1; fi
+	goose -dir $(MIGRATION_DIR) postgres "$(RENDER_DB_URL)" up
+
+migrate-status-render:
+	@if [ -z "$(RENDER_DB_PASSWORD)" ]; then echo "❌ RENDER_DB_PASSWORD env var required"; exit 1; fi
+	goose -dir $(MIGRATION_DIR) postgres "$(RENDER_DB_URL)" status
+	
+render_seed:
+	@if [ -z "$(RENDER_DB_PASSWORD)" ]; then echo "❌ RENDER_DB_PASSWORD env var required"; exit 1; fi
+	@echo "🌱 Running seeders against Render..."
+	DATABASE_URL="$(RENDER_DB_URL)" \
+	go run $(GOFLAGS) cmd/seed/main.go -env=production
+
+
+
 # ================================================
 # SEEDERS (with -mod=mod to ignore vendor)
 # ================================================

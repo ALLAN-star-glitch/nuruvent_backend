@@ -24,6 +24,52 @@ type TicketSelectionRequest struct {
 
 
 
+// ============================================================
+// CROSS-EVENT REGISTRATION LIST
+// ============================================================
+
+// CrossEventRegistrationResponse is one row in the cross-event
+// registration list. Flat shape — each field maps to a table column
+// on the frontend. Richer nested data (selections, pricing) is
+// available via GET /registrations/:id.
+type CrossEventRegistrationResponse struct {
+	ID                 string    `json:"id"`
+	RegistrationNumber string    `json:"registration_number"`
+	Status             string    `json:"status"`
+	StatusLabel        string    `json:"status_label"`
+	AttendeeName       string    `json:"attendee_name"`
+	Email              string    `json:"email"`
+	Phone              string    `json:"phone,omitempty"`
+	IsGuest            bool      `json:"is_guest"`
+	UserID             string    `json:"user_id,omitempty"`
+	EventID            string    `json:"event_id"`
+	EventName          string    `json:"event_name"`
+	EventStartDate     string    `json:"event_start_date,omitempty"`
+	EventImageURL string `json:"event_image_url,omitempty"` 
+
+	// Event format / location
+	IsVirtual        bool   `json:"is_virtual"`
+	IsHybrid         bool   `json:"is_hybrid"`
+	VenueName        string `json:"venue_name,omitempty"`
+	VenueAddress     string `json:"venue_address,omitempty"`
+	VenueCity        string `json:"venue_city,omitempty"`
+	VenueCountry     string `json:"venue_country,omitempty"`
+	InPersonLocation string `json:"in_person_location,omitempty"`
+
+	TicketName string    `json:"ticket_name,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// CrossEventRegistrationListResponse is the paginated envelope.
+type CrossEventRegistrationListResponse struct {
+	Registrations []CrossEventRegistrationResponse `json:"registrations"`
+	Total         int                              `json:"total"`
+	Page          int                              `json:"page"`
+	PageSize      int                              `json:"page_size"`
+}
+
+
+
 
 
 

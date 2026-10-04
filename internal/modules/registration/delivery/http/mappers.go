@@ -3,6 +3,8 @@
 package http
 
 import (
+	"time"
+
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 )
@@ -109,4 +111,49 @@ func toMySessionLinksResponse(r *service.SessionLinksResult) *MySessionLinksResp
 		})
 	}
 	return &MySessionLinksResponse{Groups: groups}
+}
+
+// toCrossEventRegistrationResponse flattens an EventRegistration into
+// the cross-event list row shape. Event name/date and ticket name are
+// populated by the service-layer read model; if they're empty here,
+// the frontend shows a placeholder.
+func toCrossEventRegistrationResponse(
+    r *registrationdomain.CrossEventRegistrationRow,
+) CrossEventRegistrationResponse {
+    statusSlug := string(r.Status)
+    statusLabel := statusSlug
+    if info, ok := registrationdomain.GetRegistrationStatusInfo(r.Status); ok {
+        statusLabel = info.DisplayName
+    }
+    return CrossEventRegistrationResponse{
+        ID:                 r.ID,
+        RegistrationNumber: r.RegistrationNumber,
+        Status:             statusSlug,
+        StatusLabel:        statusLabel,
+        AttendeeName:       r.AttendeeName,
+        Email:              r.Email,
+        Phone:              r.Phone,
+        IsGuest:            r.IsGuest,
+        UserID:             r.UserID,
+        EventID:            r.EventID,
+        EventName:          r.EventName,
+        EventStartDate:     formatTimeOrEmpty(r.EventStartDate),
+		EventImageURL:      r.EventImageURL, 
+        TicketName:         r.TicketName,
+        CreatedAt:          r.CreatedAt,
+		IsVirtual:        r.IsVirtual,
+		IsHybrid:         r.IsHybrid,
+		VenueName:        r.VenueName,
+		VenueAddress:     r.VenueAddress,
+		VenueCity:        r.VenueCity,
+		VenueCountry:     r.VenueCountry,
+		InPersonLocation: r.InPersonLocation,
+    }
+}
+
+func formatTimeOrEmpty(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339)
 }

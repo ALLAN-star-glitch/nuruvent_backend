@@ -1,5 +1,7 @@
 package service
 
+import "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
+
 // RegisterCommand is the input for RegisterForEvent.
 type RegisterCommand struct {
     EventID   string
@@ -42,4 +44,49 @@ type ListFilterInput struct {
     Statuses []string
     Page     int
     PageSize int
+}
+
+
+// ListAllRegistrationsCommand is the input for the cross-event
+// registration list.
+type ListAllRegistrationsCommand struct {
+	UserID    string
+	EventID   string
+	Search    string
+	Statuses  []string
+	SortBy    string
+	SortOrder string
+	Page      int
+	PageSize  int
+}
+
+// ListAllRegistrationsResult is the output. Registrations is always
+// non-nil so JSON marshals as [] rather than null.
+type ListAllRegistrationsResult struct {
+    Registrations []*registrationdomain.CrossEventRegistrationRow
+    Total         int
+    Page          int
+    PageSize      int
+}
+
+// ListMineRegistrationsCommand is the input for the current user's
+// own registration list.
+type ListMineRegistrationsCommand struct {
+	UserID    string
+	EventID   string
+	Search    string
+	Statuses  []string
+	SortBy    string
+	SortOrder string
+	Page      int
+	PageSize  int
+}
+
+// ListMineRegistrationsResult is the output. Registrations is always
+// non-nil so JSON marshals as [].
+type ListMineRegistrationsResult struct {
+	Registrations []*registrationdomain.CrossEventRegistrationRow
+	Total         int
+	Page          int
+	PageSize      int
 }
