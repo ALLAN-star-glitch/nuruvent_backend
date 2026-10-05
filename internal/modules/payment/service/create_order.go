@@ -24,17 +24,19 @@ const DefaultOrderTTL = 30 * time.Minute
 //
 // Steps:
 //  1. Resolve the registration's pricing via the cross-module port.
+//  1b. Resolve the billed account (immutable ownership snapshot).
 //  2. Enforce ownership (authenticated actor or matching guest email).
 //  3. Inside a transaction:
 //     a. Check for an existing pending order for the same
 //        registration. If one exists, return it (idempotent).
-//     b. Build the Order entity from the pricing snapshot.
+//     b. Build the Order entity from the pricing snapshot, with the
+//        billed account and platform fee rate snapshotted onto it.
 //     c. Persist it.
 //  4. Return it.
 //
 // The client supplies only the registration ID. All pricing, items,
-// and identity come from the registration — the client cannot
-// influence the order amount.
+// identity, and billing come from the registration — the client
+// cannot influence the order amount or its fee.
 //
 // Concurrency: the duplicate check and the insert share a single
 // transaction, so two concurrent requests for the same registration
@@ -67,6 +69,30 @@ func (s *service) CreateOrder(
 	}
 	if pricing == nil {
 		return nil, fmt.Errorf("registration pricing not found for %s", cmd.RegistrationID)
+	}
+
+	// ------------------------------------------------------------
+	// 1b. Resolve the billed account.
+	//
+	//     This is the ownership snapshot: the account that receives
+	//     the net proceeds of any payment for this order. Captured
+	//     once, here, so later changes to event ownership don't
+	//     rewrite history.
+	//
+	//     Also a cross-module read, done outside the transaction for
+	//     the same reason as pricing.
+	// ------------------------------------------------------------
+	billedAccountID, err := s.deps.RegistrationBilling.ResolveBilledAccount(
+		ctx, cmd.RegistrationID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("resolve billed account: %w", err)
+	}
+	if billedAccountID == "" {
+		return nil, fmt.Errorf(
+			"billed account not found for registration %s",
+			cmd.RegistrationID,
+		)
 	}
 
 	// ------------------------------------------------------------
@@ -122,6 +148,8 @@ func (s *service) CreateOrder(
 			order_items,
 			DefaultOrderTTL,
 			now,
+			billedAccountID,
+			s.deps.Config.PaymentBilling.PlatformFeeRate,
 		)
 		if err != nil {
 			return err

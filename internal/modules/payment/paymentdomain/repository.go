@@ -68,6 +68,10 @@ type PaymentRepository interface {
 	// FindByOrderID returns all payments (any state) for an order.
 	// Used for retry history and reporting.
 	FindByOrderID(ctx context.Context, orderID string) ([]*Payment, error)
+
+
+ListForAccount(ctx context.Context, f ListPaymentsFilter) ([]*PaymentListRow, int, error)
+AggregateForAccount(ctx context.Context, f ListPaymentsFilter) (*PaymentStats, error)
 }
 
 // ============================================================

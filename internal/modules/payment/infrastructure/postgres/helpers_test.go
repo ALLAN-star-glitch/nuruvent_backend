@@ -15,6 +15,17 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
 )
 
+// TestBilledAccountID is a deterministic account UUID used by every
+// order fixture. The test DB is expected to contain this account — see
+// testmain_test.go for the seed. Using a fixed ID instead of a random
+// one keeps the fixtures simple and lets the FK constraint on
+// orders.billed_account_id resolve cleanly.
+const TestBilledAccountID = "00000000-0000-0000-0000-000000000001"
+
+// TestPlatformFeeRate is the platform fee rate used by every order
+// fixture. Matches the config default (4.5%).
+const TestPlatformFeeRate = 0.045
+
 // errRollbackForTest is a sentinel used to trigger rollback of the
 // per-test transaction. Every test that uses withTx rolls back so no
 // state leaks between tests.
@@ -39,6 +50,10 @@ func withTx(t *testing.T, db *gorm.DB, fn func(tx *gorm.DB)) {
 // ============================================================
 
 // newOrderFixture builds a valid Order for tests.
+//
+// BilledAccountID is set to TestBilledAccountID so the FK constraint
+// on orders.billed_account_id resolves against the seeded account in
+// testmain_test.go.
 func newOrderFixture(t *testing.T, opts ...func(*paymentdomain.Order)) *paymentdomain.Order {
 	t.Helper()
 
@@ -62,6 +77,8 @@ func newOrderFixture(t *testing.T, opts ...func(*paymentdomain.Order)) *paymentd
 		items,
 		30*time.Minute,
 		now,
+		TestBilledAccountID,   // ← new
+		TestPlatformFeeRate,   // ← new
 	)
 	require.NoError(t, err)
 
@@ -97,7 +114,7 @@ func newPaymentFixture(t *testing.T, orderID string, opts ...func(*paymentdomain
 
 // newRefundFixture builds a valid Refund for tests.
 func newRefundFixture(t *testing.T, paymentID string, opts ...func(*paymentdomain.Refund)) *paymentdomain.Refund {
-	t.Helper() // Teslls Go this is a helper
+	t.Helper()
 
 	now := time.Now().UTC().Truncate(time.Second)
 	r, err := paymentdomain.NewRefund(

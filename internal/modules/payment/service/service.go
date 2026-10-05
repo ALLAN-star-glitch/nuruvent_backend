@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/id"
 )
 
@@ -27,6 +28,10 @@ type Service interface {
 	FailPayment(ctx context.Context, paymentID, reason string) error
 	Refund(ctx context.Context, cmd RefundCommand) error
 	HandleWebhook(ctx context.Context, provider string, payload []byte, headers map[string]string) error
+
+	// Ledger / reporting
+	ListPayments(ctx context.Context, cmd ListPaymentsCommand) (*ListPaymentsResult, error)
+	GetPaymentStats(ctx context.Context, cmd PaymentStatsCommand) (*paymentdomain.PaymentStats, error)
 }
 
 // ============================================================
@@ -48,7 +53,13 @@ type Dependencies struct {
 
 	// Cross-module
 	Registrations       paymentdomain.RegistrationConfirmer
-	RegistrationPricing paymentdomain.RegistrationPricingResolver   // ← add
+	RegistrationPricing paymentdomain.RegistrationPricingResolver
+	RegistrationBilling paymentdomain.RegistrationBillingResolver
+
+	// Config carries the platform fee model. The rate is read at order
+	// creation time and snapshotted onto each order, so later config
+	// changes don't rewrite historical attribution.
+	Config *config.Config
 
 	// Utilities
 	IDGenerator id.Generator

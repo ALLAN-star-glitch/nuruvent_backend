@@ -72,3 +72,28 @@ type RegistrationPricingItem struct {
 type RegistrationPricingResolver interface {
 	ResolvePricing(ctx context.Context, registrationID string) (*RegistrationPricing, error)
 }
+
+
+// ============================================================
+// BILLING RESOLVER
+// ============================================================
+
+// RegistrationBillingResolver resolves the account that owns the event
+// behind a registration. Used at order creation to snapshot the billed
+// account onto the order.
+//
+// The ownership chain is:
+//
+//     registration → event_registration → event → team → account
+//
+// Returns an error if the chain is broken (event unassigned from a
+// team, team soft-deleted) or the registration doesn't exist. The
+// payment service treats those as fatal — an order cannot be created
+// without a billed account.
+//
+// Implementation lives in the composition layer (internal/app/adapters/
+// payment/) and delegates to the registration module's service. The
+// payment module never imports the registration module directly.
+type RegistrationBillingResolver interface {
+	ResolveBilledAccount(ctx context.Context, registrationID string) (string, error)
+}

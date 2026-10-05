@@ -11,6 +11,11 @@ import (
 // ============================================================
 
 // toOrderDomain converts an OrderModel to a domain Order.
+// ============================================================
+// ORDER
+// ============================================================
+
+// toOrderDomain converts an OrderModel to a domain Order.
 func toOrderDomain(m *OrderModel) (*paymentdomain.Order, error) {
 	items, err := toOrderItemsDomain(m.Items)
 	if err != nil {
@@ -38,26 +43,36 @@ func toOrderDomain(m *OrderModel) (*paymentdomain.Order, error) {
 		m.UpdatedAt,
 		m.PaidAt,
 		m.CancelledAt,
+		m.BilledAccountID,
+		m.PlatformFeeRate,
+		m.SettledAt,
+		derefString(m.PayoutRef),
 	), nil
 }
 
 // toOrderModel converts a domain Order to an OrderModel.
 func toOrderModel(o *paymentdomain.Order) *OrderModel {
 	model := &OrderModel{
-		ID:             o.ID,
-		RegistrationID: o.RegistrationID,
-		UserID:         nullableString(o.UserID),
-		GuestEmail:     nullableString(o.GuestEmail),
-		Currency:       o.Currency,
-		Subtotal:       o.Subtotal,
-		DiscountTotal:  o.DiscountTotal,
-		TotalAmount:    o.TotalAmount,
-		Status:         string(o.Status),
-		ExpiresAt:      o.ExpiresAt,
-		PaidAt:         o.PaidAt,
-		CancelledAt:    o.CancelledAt,
-		CreatedAt:      o.CreatedAt,
-		UpdatedAt:      o.UpdatedAt,
+		ID:              o.ID,
+		RegistrationID:  o.RegistrationID,
+		UserID:          nullableString(o.UserID),
+		GuestEmail:      nullableString(o.GuestEmail),
+		Currency:        o.Currency,
+		Subtotal:        o.Subtotal,
+		DiscountTotal:   o.DiscountTotal,
+		TotalAmount:     o.TotalAmount,
+		Status:          string(o.Status),
+		ExpiresAt:       o.ExpiresAt,
+		PaidAt:          o.PaidAt,
+		CancelledAt:     o.CancelledAt,
+		CreatedAt:       o.CreatedAt,
+		UpdatedAt:       o.UpdatedAt,
+
+		// Billing
+		BilledAccountID: o.BilledAccountID,
+		PlatformFeeRate: o.PlatformFeeRate,
+		SettledAt:       o.SettledAt,
+		PayoutRef:       nullableString(o.PayoutRef),
 	}
 
 	if len(o.Items) > 0 {
@@ -66,6 +81,8 @@ func toOrderModel(o *paymentdomain.Order) *OrderModel {
 
 	return model
 }
+
+
 
 // ============================================================
 // ORDER ITEM

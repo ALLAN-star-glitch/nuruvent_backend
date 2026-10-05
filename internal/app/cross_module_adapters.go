@@ -314,3 +314,11 @@ func NewEventsVideoIdentityAdapter(
 ) eventsDomain.VideoIdentityProvider {
 	return events.NewVideoIdentityAdapter(videoSvc)
 }
+
+// NewPaymentBillingResolver wires the payment module's
+// RegistrationBillingResolver port to the registration service.
+func NewPaymentBillingResolver(
+    regSvc registrationService.Service,
+) paymentdomain.RegistrationBillingResolver {
+    return paymentadapters.NewBillingResolver(regSvc)
+}

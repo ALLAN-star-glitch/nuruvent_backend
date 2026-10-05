@@ -642,3 +642,42 @@ func buildListMineOrderClause(sortBy, sortOrder string) string {
 		return "r.created_at DESC"
 	}
 }
+
+
+// ResolveBilledAccount returns the account that owns the event behind
+// the given registration.
+//
+// Uses raw SQL deliberately — GORM's Table().Select().Scan() chain
+// has silently dropped aliased columns on this codebase before.
+func (r *EventRegistrationRepository) ResolveBilledAccount(
+    ctx context.Context,
+    registrationID string,
+) (string, error) {
+    if registrationID == "" {
+        return "", fmt.Errorf("registration id is required")
+    }
+
+    var accountID string
+    err := r.db.WithContext(ctx).
+        Raw(`
+            SELECT t.account_id
+            FROM registrations r
+            JOIN event_registrations er ON er.registration_id = r.id
+            JOIN events e               ON e.id = er.event_id
+            JOIN teams  t               ON t.id = e.team_id
+            WHERE r.id = ?
+              AND r.deleted_at IS NULL
+              AND e.deleted_at IS NULL
+              AND t.deleted_at IS NULL
+            LIMIT 1
+        `, registrationID).
+        Scan(&accountID).Error
+
+    if err != nil {
+        return "", fmt.Errorf("resolve billed account: %w", err)
+    }
+    if accountID == "" {
+        return "", fmt.Errorf("no account found for registration %s", registrationID)
+    }
+    return accountID, nil
+}

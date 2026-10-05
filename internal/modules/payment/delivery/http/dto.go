@@ -108,3 +108,105 @@ type OrderItemResponse struct {
 	Discount     int64  `json:"discount"`   // minor units
 	LineTotal    int64  `json:"line_total"` // minor units
 }
+
+
+
+// ============================================================
+// LIST PAYMENTS
+// ============================================================
+
+// ListPaymentsQuery captures the query parameters accepted by
+// GET /payments. All fields are optional except the implicit account
+// scope, which comes from the authenticated user's JWT.
+type ListPaymentsQuery struct {
+	Page     int    `query:"page"`
+	PageSize int    `query:"page_size"`
+	Search   string `query:"search"`
+	Status   string `query:"status"`
+	Method   string `query:"method"`
+	EventID  string `query:"event_id"`
+	SortBy   string `query:"sort_by"`
+	SortOrder string `query:"sort_order"`
+
+	// Date range — ISO 8601 date or RFC3339 timestamp, parsed in the
+	// handler. Kept as strings here so binding is trivial and
+	// validation errors are explicit.
+	DateFrom string `query:"date_from"`
+	DateTo   string `query:"date_to"`
+}
+
+// PaymentListItemResponse is one row in the payments ledger.
+//
+// Amounts are in minor units. The frontend divides by 100 for
+// display. Currency is included so the frontend can format with the
+// right symbol and locale.
+type PaymentListItemResponse struct {
+	ID                string `json:"id"`
+	OrderID           string `json:"order_id"`
+	RegistrationID    string `json:"registration_id"`
+	RegistrationNumber string `json:"registration_number,omitempty"`
+
+	// Attendee
+	AttendeeName  string `json:"attendee_name"`
+	AttendeeEmail string `json:"attendee_email"`
+	AttendeePhone string `json:"attendee_phone,omitempty"`
+
+	// Event
+	EventID        string `json:"event_id"`
+	EventTitle     string `json:"event_title"`
+	EventStartDate string `json:"event_start_date,omitempty"`
+	EventImageURL  string `json:"event_image_url,omitempty"`
+
+	// Payment
+	Amount            int64  `json:"amount"`
+	Currency          string `json:"currency"`
+	PlatformFee       int64  `json:"platform_fee"`
+	ProcessingFee     int64  `json:"processing_fee"`
+	NetToOrganizer    int64  `json:"net_to_organizer"`
+	PlatformFeeRate   float64 `json:"platform_fee_rate"`
+	ProcessingFeeRate float64 `json:"processing_fee_rate"`
+
+	Status          string `json:"status"`
+	StatusLabel     string `json:"status_label"`
+	Provider        string `json:"provider"`
+	Method          string `json:"method"`
+	MethodLabel     string `json:"method_label"`
+	TransactionID   string `json:"transaction_id,omitempty"`
+
+	// Timing
+	InitiatedAt string `json:"initiated_at"`
+	CompletedAt string `json:"completed_at,omitempty"`
+	CreatedAt   string `json:"created_at"`
+}
+
+// ListPaymentsResponse is the envelope returned by GET /payments.
+type ListPaymentsResponse struct {
+	Payments []PaymentListItemResponse `json:"payments"`
+	Total    int                       `json:"total"`
+	Page     int                       `json:"page"`
+	PageSize int                       `json:"page_size"`
+}
+
+// ============================================================
+// PAYMENT STATS
+// ============================================================
+
+// PaymentStatsQuery captures the query parameters accepted by
+// GET /payments/stats. Same filters as the list endpoint minus
+// pagination and search.
+type PaymentStatsQuery struct {
+	EventID  string `query:"event_id"`
+	DateFrom string `query:"date_from"`
+	DateTo   string `query:"date_to"`
+}
+
+// PaymentStatsResponse is the aggregate summary.
+type PaymentStatsResponse struct {
+	TotalRevenue        int64            `json:"total_revenue"`
+	TotalPlatformFees   int64            `json:"total_platform_fees"`
+	TotalProcessingFees int64            `json:"total_processing_fees"`
+	TotalNet            int64            `json:"total_net"`
+	TransactionCount    int64            `json:"transaction_count"`
+	Currency            string           `json:"currency"`
+	ByStatus            map[string]int64 `json:"by_status"`
+}

@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+// Test defaults — used by every NewOrder call so the fee-model
+// additions don't clutter each test.
+const (
+	testBilledAccountID = "acct-1"
+	testPlatformFeeRate = 0.045
+)
+
 // ============================================================
 // CONSTRUCTION
 // ============================================================
@@ -26,6 +33,7 @@ func TestNewOrder(t *testing.T) {
 			"order-1", "reg-1",
 			"user-1", "", "KES",
 			items, ttl, now,
+			testBilledAccountID, testPlatformFeeRate,
 		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -45,6 +53,12 @@ func TestNewOrder(t *testing.T) {
 		if !o.ExpiresAt.Equal(now.Add(ttl)) {
 			t.Errorf("expires_at: got %v, want %v", o.ExpiresAt, now.Add(ttl))
 		}
+		if o.BilledAccountID != testBilledAccountID {
+			t.Errorf("billed_account_id: got %q, want %q", o.BilledAccountID, testBilledAccountID)
+		}
+		if o.PlatformFeeRate != testPlatformFeeRate {
+			t.Errorf("platform_fee_rate: got %v, want %v", o.PlatformFeeRate, testPlatformFeeRate)
+		}
 	})
 
 	t.Run("valid guest", func(t *testing.T) {
@@ -52,6 +66,7 @@ func TestNewOrder(t *testing.T) {
 			"order-1", "reg-1",
 			"", "guest@example.com", "KES",
 			items, ttl, now,
+			testBilledAccountID, testPlatformFeeRate,
 		)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -62,51 +77,93 @@ func TestNewOrder(t *testing.T) {
 	})
 
 	t.Run("rejects empty id", func(t *testing.T) {
-		_, err := NewOrder("", "reg-1", "user-1", "", "KES", items, ttl, now)
+		_, err := NewOrder("", "reg-1", "user-1", "", "KES", items, ttl, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("rejects empty registration id", func(t *testing.T) {
-		_, err := NewOrder("order-1", "", "user-1", "", "KES", items, ttl, now)
+		_, err := NewOrder("order-1", "", "user-1", "", "KES", items, ttl, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if err == nil {
 			t.Fatal("expected error")
 		}
 	})
 
 	t.Run("rejects no identity", func(t *testing.T) {
-		_, err := NewOrder("order-1", "reg-1", "", "", "KES", items, ttl, now)
+		_, err := NewOrder("order-1", "reg-1", "", "", "KES", items, ttl, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if !errors.Is(err, ErrIdentityRequired) {
 			t.Fatalf("expected ErrIdentityRequired, got %v", err)
 		}
 	})
 
 	t.Run("rejects both identities", func(t *testing.T) {
-		_, err := NewOrder("order-1", "reg-1", "user-1", "guest@example.com", "KES", items, ttl, now)
+		_, err := NewOrder("order-1", "reg-1", "user-1", "guest@example.com", "KES", items, ttl, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if !errors.Is(err, ErrIdentityRequired) {
 			t.Fatalf("expected ErrIdentityRequired, got %v", err)
 		}
 	})
 
 	t.Run("rejects empty currency", func(t *testing.T) {
-		_, err := NewOrder("order-1", "reg-1", "user-1", "", "", items, ttl, now)
+		_, err := NewOrder("order-1", "reg-1", "user-1", "", "", items, ttl, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if !errors.Is(err, ErrInvalidCurrency) {
 			t.Fatalf("expected ErrInvalidCurrency, got %v", err)
 		}
 	})
 
 	t.Run("rejects empty items", func(t *testing.T) {
-		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", nil, ttl, now)
+		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", nil, ttl, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if !errors.Is(err, ErrInvalidAmount) {
 			t.Fatalf("expected ErrInvalidAmount, got %v", err)
 		}
 	})
 
 	t.Run("rejects non-positive ttl", func(t *testing.T) {
-		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", items, 0, now)
+		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", items, 0, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if err == nil {
 			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("rejects empty billed account id", func(t *testing.T) {
+		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", items, ttl, now,
+			"", testPlatformFeeRate)
+		if err == nil {
+			t.Fatal("expected error for empty billed account id")
+		}
+	})
+
+	t.Run("rejects negative platform fee rate", func(t *testing.T) {
+		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", items, ttl, now,
+			testBilledAccountID, -0.01)
+		if err == nil {
+			t.Fatal("expected error for negative platform fee rate")
+		}
+	})
+
+	t.Run("rejects platform fee rate above 1", func(t *testing.T) {
+		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", items, ttl, now,
+			testBilledAccountID, 1.01)
+		if err == nil {
+			t.Fatal("expected error for platform fee rate above 1")
+		}
+	})
+
+	t.Run("accepts boundary platform fee rates", func(t *testing.T) {
+		if _, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", items, ttl, now,
+			testBilledAccountID, 0.0); err != nil {
+			t.Errorf("0.0 should be accepted: %v", err)
+		}
+		if _, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", items, ttl, now,
+			testBilledAccountID, 1.0); err != nil {
+			t.Errorf("1.0 should be accepted: %v", err)
 		}
 	})
 
@@ -114,7 +171,8 @@ func TestNewOrder(t *testing.T) {
 		bad := []OrderItem{
 			{TicketTypeID: "tkt-1", Quantity: 0, UnitPrice: 100, LineTotal: 0},
 		}
-		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", bad, ttl, now)
+		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", bad, ttl, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if !errors.Is(err, ErrInvalidAmount) {
 			t.Fatalf("expected ErrInvalidAmount, got %v", err)
 		}
@@ -124,7 +182,8 @@ func TestNewOrder(t *testing.T) {
 		bad := []OrderItem{
 			{TicketTypeID: "", Quantity: 1, UnitPrice: 100, LineTotal: 100},
 		}
-		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", bad, ttl, now)
+		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", bad, ttl, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if !errors.Is(err, ErrInvalidAmount) {
 			t.Fatalf("expected ErrInvalidAmount, got %v", err)
 		}
@@ -134,18 +193,19 @@ func TestNewOrder(t *testing.T) {
 		bad := []OrderItem{
 			{TicketTypeID: "tkt-1", Quantity: 1, UnitPrice: 100, Discount: 200, LineTotal: 0},
 		}
-		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", bad, ttl, now)
+		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", bad, ttl, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if !errors.Is(err, ErrInvalidAmount) {
 			t.Fatalf("expected ErrInvalidAmount, got %v", err)
 		}
 	})
 
 	t.Run("rejects item with inconsistent line total", func(t *testing.T) {
-		// unit_price * quantity - discount != line_total
 		bad := []OrderItem{
 			{TicketTypeID: "tkt-1", Quantity: 2, UnitPrice: 100, Discount: 0, LineTotal: 999},
 		}
-		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", bad, ttl, now)
+		_, err := NewOrder("order-1", "reg-1", "user-1", "", "KES", bad, ttl, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if !errors.Is(err, ErrInvalidAmount) {
 			t.Fatalf("expected ErrInvalidAmount, got %v", err)
 		}
@@ -331,7 +391,8 @@ func TestOrder_Queries(t *testing.T) {
 	t.Run("IsGuest", func(t *testing.T) {
 		o, _ := NewOrder("order-1", "reg-1", "", "g@example.com", "KES",
 			[]OrderItem{{TicketTypeID: "tkt-1", Quantity: 1, UnitPrice: 100, LineTotal: 100}},
-			30*time.Minute, now)
+			30*time.Minute, now,
+			testBilledAccountID, testPlatformFeeRate)
 		if !o.IsGuest() {
 			t.Error("expected IsGuest true")
 		}
@@ -350,6 +411,44 @@ func TestOrder_Queries(t *testing.T) {
 }
 
 // ============================================================
+// BILLING QUERIES
+// ============================================================
+
+func TestOrder_BillingQueries(t *testing.T) {
+	now := time.Date(2026, 9, 22, 10, 0, 0, 0, time.UTC)
+
+	t.Run("PlatformFee truncates toward zero", func(t *testing.T) {
+		// 100000 * 0.045 = 4500.0000 → 4500
+		o := newTestOrderWithTotal(t, now, 1000_00, 0.045)
+		if got := o.PlatformFee(); got != 45_00 {
+			t.Errorf("PlatformFee: got %d, want %d", got, 45_00)
+		}
+	})
+
+	t.Run("PlatformFee handles fractional pennies", func(t *testing.T) {
+		// 999 * 0.045 = 44.955 → 44
+		o := newTestOrderWithTotal(t, now, 999, 0.045)
+		if got := o.PlatformFee(); got != 44 {
+			t.Errorf("PlatformFee: got %d, want 44", got)
+		}
+	})
+
+	t.Run("NetToOrganizer is total minus platform fee", func(t *testing.T) {
+		o := newTestOrderWithTotal(t, now, 1000_00, 0.045)
+		if got := o.NetToOrganizer(); got != 955_00 {
+			t.Errorf("NetToOrganizer: got %d, want %d", got, 955_00)
+		}
+	})
+
+	t.Run("IsSettled defaults to false", func(t *testing.T) {
+		o := newTestOrder(t, now)
+		if o.IsSettled() {
+			t.Error("new order should not be settled")
+		}
+	})
+}
+
+// ============================================================
 // HELPERS
 // ============================================================
 
@@ -363,9 +462,40 @@ func newTestOrder(t *testing.T, now time.Time) *Order {
 		"order-1", "reg-1",
 		"user-1", "", "KES",
 		items, 30*time.Minute, now,
+		testBilledAccountID, testPlatformFeeRate,
 	)
 	if err != nil {
 		t.Fatalf("newTestOrder: %v", err)
+	}
+	return o
+}
+
+// newTestOrderWithTotal builds a single-item order whose TotalAmount
+// equals the given amount (in minor units) with the given platform
+// fee rate. Used by the billing-query tests.
+func newTestOrderWithTotal(
+	t *testing.T,
+	now time.Time,
+	totalAmount int64,
+	platformFeeRate float64,
+) *Order {
+	t.Helper()
+	items := []OrderItem{
+		{
+			TicketTypeID: "tkt-1",
+			Quantity:     1,
+			UnitPrice:    totalAmount,
+			LineTotal:    totalAmount,
+		},
+	}
+	o, err := NewOrder(
+		"order-1", "reg-1",
+		"user-1", "", "KES",
+		items, 30*time.Minute, now,
+		testBilledAccountID, platformFeeRate,
+	)
+	if err != nil {
+		t.Fatalf("newTestOrderWithTotal: %v", err)
 	}
 	return o
 }

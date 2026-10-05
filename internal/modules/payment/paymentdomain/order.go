@@ -35,10 +35,34 @@ type Order struct {
 	UpdatedAt  time.Time
 	PaidAt     *time.Time
 	CancelledAt *time.Time
+
+	// ------------------------------------------------------------
+	// Billing — frozen at order creation.
+	//
+	// BilledAccountID is the account that receives the net proceeds
+	// of any payment for this order. Resolved once from the event's
+	// ownership chain (registration → event → team → account) and
+	// never updated, so later changes to event ownership do not
+	// rewrite historical attribution.
+	//
+	// PlatformFeeRate is Nuruvent's cut, snapshotted at creation so
+	// historical reports are immune to later pricing changes.
+	//
+	// SettledAt and PayoutRef are written only by the payout workflow
+	// (manual today; automated later). They stay nil/empty until the
+	// organizer's net earnings have been disbursed.
+	// ------------------------------------------------------------
+	BilledAccountID string
+	PlatformFeeRate float64
+	SettledAt       *time.Time
+	PayoutRef       string
 }
 
 // NewOrder constructs an order from a set of items. Status is always
 // OrderStatusPending; the caller sets ExpiresAt via ttl.
+//
+// billedAccountID and platformFeeRate are snapshotted onto the order
+// here and never change afterwards.
 func NewOrder(
 	id string,
 	registrationID string,
@@ -48,6 +72,8 @@ func NewOrder(
 	items []OrderItem,
 	ttl time.Duration,
 	now time.Time,
+	billedAccountID string,
+	platformFeeRate float64,
 ) (*Order, error) {
 	if id == "" {
 		return nil, fmt.Errorf("order id is required")
@@ -75,6 +101,17 @@ func NewOrder(
 		return nil, fmt.Errorf("order ttl must be positive")
 	}
 
+	// Billing invariants.
+	if billedAccountID == "" {
+		return nil, fmt.Errorf("billed account id is required")
+	}
+	if platformFeeRate < 0 || platformFeeRate > 1 {
+		return nil, fmt.Errorf(
+			"platform fee rate must be in [0, 1], got %v",
+			platformFeeRate,
+		)
+	}
+
 	// Validate items and compute totals.
 	var subtotal, discount int64
 	for i, it := range items {
@@ -94,19 +131,21 @@ func NewOrder(
 	}
 
 	return &Order{
-		ID:             id,
-		RegistrationID: registrationID,
-		UserID:         userID,
-		GuestEmail:     guestEmail,
-		Currency:       currency,
-		Items:          items,
-		Subtotal:       subtotal,
-		DiscountTotal:  discount,
-		TotalAmount:    total,
-		Status:         OrderStatusPending,
-		ExpiresAt:      now.Add(ttl),
-		CreatedAt:      now,
-		UpdatedAt:      now,
+		ID:              id,
+		RegistrationID:  registrationID,
+		UserID:          userID,
+		GuestEmail:      guestEmail,
+		Currency:        currency,
+		Items:           items,
+		Subtotal:        subtotal,
+		DiscountTotal:   discount,
+		TotalAmount:     total,
+		Status:          OrderStatusPending,
+		ExpiresAt:       now.Add(ttl),
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		BilledAccountID: billedAccountID,
+		PlatformFeeRate: platformFeeRate,
 	}, nil
 }
 
@@ -119,23 +158,31 @@ func HydrateOrder(
 	status OrderStatus,
 	expiresAt, createdAt, updatedAt time.Time,
 	paidAt, cancelledAt *time.Time,
+	billedAccountID string,
+	platformFeeRate float64,
+	settledAt *time.Time,
+	payoutRef string,
 ) *Order {
 	return &Order{
-		ID:             id,
-		RegistrationID: registrationID,
-		UserID:         userID,
-		GuestEmail:     guestEmail,
-		Currency:       currency,
-		Items:          items,
-		Subtotal:       subtotal,
-		DiscountTotal:  discountTotal,
-		TotalAmount:    totalAmount,
-		Status:         status,
-		ExpiresAt:      expiresAt,
-		CreatedAt:      createdAt,
-		UpdatedAt:      updatedAt,
-		PaidAt:         paidAt,
-		CancelledAt:    cancelledAt,
+		ID:              id,
+		RegistrationID:  registrationID,
+		UserID:          userID,
+		GuestEmail:      guestEmail,
+		Currency:        currency,
+		Items:           items,
+		Subtotal:        subtotal,
+		DiscountTotal:   discountTotal,
+		TotalAmount:     totalAmount,
+		Status:          status,
+		ExpiresAt:       expiresAt,
+		CreatedAt:       createdAt,
+		UpdatedAt:       updatedAt,
+		PaidAt:          paidAt,
+		CancelledAt:     cancelledAt,
+		BilledAccountID: billedAccountID,
+		PlatformFeeRate: platformFeeRate,
+		SettledAt:       settledAt,
+		PayoutRef:       payoutRef,
 	}
 }
 
@@ -237,6 +284,35 @@ func (o *Order) TotalQuantity() int {
 		n += it.Quantity
 	}
 	return n
+}
+
+// ============================================================
+// BILLING QUERIES
+// ============================================================
+
+// PlatformFee returns Nuruvent's cut of the order total, in minor
+// units, using the rate snapshotted at creation.
+//
+// The multiplication promotes to float64, and the conversion back to
+// int64 truncates toward zero. That matches how the SQL aggregates
+// compute the same value — no drift between in-memory and DB.
+func (o *Order) PlatformFee() int64 {
+	return int64(float64(o.TotalAmount) * o.PlatformFeeRate)
+}
+
+// NetToOrganizer returns the amount owed to the billed account before
+// payment-processing fees, in minor units. Processing fees are
+// recorded on the payment (they depend on the method chosen at
+// checkout) and are subtracted separately when computing the final
+// disbursement.
+func (o *Order) NetToOrganizer() int64 {
+	return o.TotalAmount - o.PlatformFee()
+}
+
+// IsSettled reports whether the organizer's net earnings for this
+// order have been disbursed.
+func (o *Order) IsSettled() bool {
+	return o.SettledAt != nil
 }
 
 // ============================================================

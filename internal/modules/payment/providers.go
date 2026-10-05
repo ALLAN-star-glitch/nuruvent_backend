@@ -10,6 +10,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/providers/paystack"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/id"
 )
 
@@ -18,9 +19,10 @@ import (
 // The provider registry and the notifier are NOT provided here —
 // they come from the app's composition layer:
 //
-//   - NewPaymentProviderRegistry  → paymentdomain.ProviderRegistry
-//   - NewPaymentNotifier          → paymentdomain.Notifier
-//   - NewPaymentUserEmailResolver → paymentdomain.UserEmailResolver
+//   - NewPaymentProviderRegistry   → paymentdomain.ProviderRegistry
+//   - NewPaymentNotifier           → paymentdomain.Notifier
+//   - NewPaymentUserEmailResolver  → paymentdomain.UserEmailResolver
+//   - NewPaymentBillingResolver    → paymentdomain.RegistrationBillingResolver
 //
 // The module depends on those interfaces; the app chooses which
 // implementations to inject.
@@ -92,13 +94,14 @@ var ProviderSet = wire.NewSet(
 // DEPENDENCY ASSEMBLY
 // ============================================================
 
-// provideServiceDependencies assembles the service.Dependencies struct
+// ProvideServiceDependencies assembles the service.Dependencies struct
 // from individually-provided ports.
 //
 // Every parameter is an interface, not a concrete type. Wire resolves
 // the interface from whichever provider was registered — the module's
 // own provider set for repositories and utilities, or the app's
-// cross-module adapters for the notifier and the registry.
+// cross-module adapters for the notifier, registry, and billing
+// resolver.
 func ProvideServiceDependencies(
 	orders paymentdomain.OrderRepository,
 	payments paymentdomain.PaymentRepository,
@@ -111,6 +114,9 @@ func ProvideServiceDependencies(
 
 	registrations paymentdomain.RegistrationConfirmer,
 	registrationPricing paymentdomain.RegistrationPricingResolver,
+	registrationBilling paymentdomain.RegistrationBillingResolver,
+
+	cfg *config.Config,
 
 	idGen id.Generator,
 	clock service.Clock,
@@ -127,13 +133,16 @@ func ProvideServiceDependencies(
 
 		Registrations:       registrations,
 		RegistrationPricing: registrationPricing,
+		RegistrationBilling: registrationBilling,
+
+		Config: cfg,
 
 		IDGenerator: idGen,
 		Clock:       clock,
 	}
 }
 
-// provideSystemClock provides the Clock implementation.
+// ProvideSystemClock provides the Clock implementation.
 func ProvideSystemClock() *service.SystemClock {
 	return &service.SystemClock{}
 }

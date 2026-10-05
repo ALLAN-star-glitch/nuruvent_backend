@@ -220,6 +220,8 @@ func InitializeApp() (*AppDependencies, error) {
 		NewRegistrationPermissionAdapter,
 
 
+		NewPaymentBillingResolver,
+
 		// VIDEO
 		NewEventsVideoAdapter,
 		NewVideoAttendanceAdapter,

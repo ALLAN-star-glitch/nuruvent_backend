@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
 // ============================================================
@@ -78,7 +79,11 @@ type fakePaymentRepository struct {
 	findByIDFunc                func(ctx context.Context, id string) (*paymentdomain.Payment, error)
 	findByProviderReferenceFunc func(ctx context.Context, provider, ref string) (*paymentdomain.Payment, error)
 	findByIdempotencyKeyFunc    func(ctx context.Context, orderID, key string) (*paymentdomain.Payment, error)
-	findPendingByOrderFunc      func(ctx context.Context, orderID string) (*paymentdomain.Payment, error)  // ← ADD
+	findPendingByOrderFunc      func(ctx context.Context, orderID string) (*paymentdomain.Payment, error)
+
+	// Ledger reads — used by the payments page.
+	listForAccountFunc      func(ctx context.Context, f paymentdomain.ListPaymentsFilter) ([]*paymentdomain.PaymentListRow, int, error)
+	aggregateForAccountFunc func(ctx context.Context, f paymentdomain.ListPaymentsFilter) (*paymentdomain.PaymentStats, error)
 
 	mu      sync.Mutex
 	created []*paymentdomain.Payment
@@ -126,8 +131,6 @@ func (f *fakePaymentRepository) FindByIdempotencyKey(ctx context.Context, orderI
 	return nil, paymentdomain.ErrPaymentNotFound
 }
 
-// FindPendingByOrder returns the current pending payment for an order,
-// if any. Default: no pending payment (fresh order).
 func (f *fakePaymentRepository) FindPendingByOrder(ctx context.Context, orderID string) (*paymentdomain.Payment, error) {
 	if f.findPendingByOrderFunc != nil {
 		return f.findPendingByOrderFunc(ctx, orderID)
@@ -141,6 +144,28 @@ func (f *fakePaymentRepository) FindPendingExpired(ctx context.Context, before t
 
 func (f *fakePaymentRepository) FindByOrderID(ctx context.Context, orderID string) ([]*paymentdomain.Payment, error) {
 	return nil, nil
+}
+
+func (f *fakePaymentRepository) ListForAccount(
+	ctx context.Context,
+	filter paymentdomain.ListPaymentsFilter,
+) ([]*paymentdomain.PaymentListRow, int, error) {
+	if f.listForAccountFunc != nil {
+		return f.listForAccountFunc(ctx, filter)
+	}
+	return nil, 0, nil
+}
+
+func (f *fakePaymentRepository) AggregateForAccount(
+	ctx context.Context,
+	filter paymentdomain.ListPaymentsFilter,
+) (*paymentdomain.PaymentStats, error) {
+	if f.aggregateForAccountFunc != nil {
+		return f.aggregateForAccountFunc(ctx, filter)
+	}
+	return &paymentdomain.PaymentStats{
+		ByStatus: map[string]int64{},
+	}, nil
 }
 
 // ============================================================
@@ -406,6 +431,27 @@ func (f *fakeRegistrationConfirmer) ExpirePending(ctx context.Context, regID str
 }
 
 // ============================================================
+// REGISTRATION BILLING RESOLVER FAKE
+// ============================================================
+
+// fakeRegistrationBillingResolver satisfies
+// paymentdomain.RegistrationBillingResolver. Default returns a stable
+// account ID so tests that don't care about billing still pass.
+type fakeRegistrationBillingResolver struct {
+	resolveFunc func(ctx context.Context, regID string) (string, error)
+}
+
+func (f *fakeRegistrationBillingResolver) ResolveBilledAccount(
+	ctx context.Context,
+	regID string,
+) (string, error) {
+	if f.resolveFunc != nil {
+		return f.resolveFunc(ctx, regID)
+	}
+	return "acct-test-1", nil
+}
+
+// ============================================================
 // UNIT OF WORK FAKE
 // ============================================================
 
@@ -469,15 +515,17 @@ func newTestService(t *testing.T, customize func(*Dependencies)) (Service, *Depe
 	t.Helper()
 
 	deps := &Dependencies{
-		Orders:        &fakeOrderRepository{},
-		Payments:      &fakePaymentRepository{},
-		Refunds:       &fakeRefundRepository{},
-		Webhooks:      &fakeWebhookEventRepository{},
-		Providers:     &fakeProviderRegistry{},
-		Notifier:      &fakeNotifier{},
-		Registrations: &fakeRegistrationConfirmer{},
-		IDGenerator:   newFixedIDGenerator("id-1", "id-2", "id-3", "id-4", "id-5"),
-		Clock:         newFixedClock(),
+		Orders:              &fakeOrderRepository{},
+		Payments:            &fakePaymentRepository{},
+		Refunds:             &fakeRefundRepository{},
+		Webhooks:            &fakeWebhookEventRepository{},
+		Providers:           &fakeProviderRegistry{},
+		Notifier:            &fakeNotifier{},
+		Registrations:       &fakeRegistrationConfirmer{},
+		RegistrationBilling: &fakeRegistrationBillingResolver{},
+		Config:              testConfig(),
+		IDGenerator:         newFixedIDGenerator("id-1", "id-2", "id-3", "id-4", "id-5"),
+		Clock:               newFixedClock(),
 	}
 	deps.UnitOfWork = &fakeUnitOfWork{deps: deps}
 
@@ -486,6 +534,20 @@ func newTestService(t *testing.T, customize func(*Dependencies)) (Service, *Depe
 	}
 
 	return New(*deps), deps
+}
+
+// testConfig returns a Config with the fee rates the tests expect.
+// The only field actually used by the service is PaymentBilling, but
+// the zero values are harmless for the rest.
+func testConfig() *config.Config {
+	return &config.Config{
+		PaymentBilling: config.PaymentBillingConfig{
+			PlatformFeeRate:            0.045,
+			ProcessingFeeRateMpesa:     0.035,
+			ProcessingFeeRateCardLocal: 0.035,
+			ProcessingFeeRateCardIntl:  0.045,
+		},
+	}
 }
 
 // ============================================================
@@ -514,6 +576,8 @@ func newPendingOrder(t *testing.T) *paymentdomain.Order {
 		items,
 		30*time.Minute,
 		now,
+		"acct-1",   // billedAccountID
+		0.045,      // platformFeeRate
 	)
 	if err != nil {
 		t.Fatalf("newPendingOrder: %v", err)

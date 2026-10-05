@@ -34,6 +34,11 @@ type fakeService struct {
 	refundFunc        func(ctx context.Context, cmd service.RefundCommand) error
 	handleWebhookFunc func(ctx context.Context, provider string, payload []byte, headers map[string]string) error
 	getPaymentFunc    func(ctx context.Context, paymentID string) (*paymentdomain.Payment, error)
+
+
+	listPaymentsFunc     func(ctx context.Context, cmd service.ListPaymentsCommand) (*service.ListPaymentsResult, error)
+	getPaymentStatsFunc  func(ctx context.Context, cmd service.PaymentStatsCommand) (*paymentdomain.PaymentStats, error)
+
 }
 
 
@@ -409,6 +414,33 @@ func TestHandler_FlutterwaveWebhook_EmptyBody(t *testing.T) {
 	if resp.StatusCode != 400 {
 		t.Fatalf("status: got %d, want 400", resp.StatusCode)
 	}
+}
+
+func (f *fakeService) ListPayments(
+	ctx context.Context,
+	cmd service.ListPaymentsCommand,
+) (*service.ListPaymentsResult, error) {
+	if f.listPaymentsFunc != nil {
+		return f.listPaymentsFunc(ctx, cmd)
+	}
+	return &service.ListPaymentsResult{
+		Payments: []*paymentdomain.PaymentListRow{},
+		Total:    0,
+		Page:     1,
+		PageSize: 20,
+	}, nil
+}
+
+func (f *fakeService) GetPaymentStats(
+	ctx context.Context,
+	cmd service.PaymentStatsCommand,
+) (*paymentdomain.PaymentStats, error) {
+	if f.getPaymentStatsFunc != nil {
+		return f.getPaymentStatsFunc(ctx, cmd)
+	}
+	return &paymentdomain.PaymentStats{
+		ByStatus: map[string]int64{},
+	}, nil
 }
 
 // Silence unused import for errors.

@@ -21,6 +21,11 @@ type Service interface {
 	ListByEvent(ctx context.Context, eventID, actorID string, f ListFilterInput) ([]*registrationdomain.EventRegistration, int, error)
 	ListByUser(ctx context.Context, userID string, f ListFilterInput) ([]*registrationdomain.EventRegistration, int, error)
 
+		// internal/modules/registration/service/service.go
+	ResolveBilledAccount(ctx context.Context, registrationID string) (string, error)
+
+	
+
 
 	// GetMySessionLinks returns one group per confirmed registration,
 // each carrying a fresh personalized join link per session under the

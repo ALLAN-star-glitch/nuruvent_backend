@@ -2,7 +2,11 @@
 
 package service
 
-import "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
+import (
+	"time"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
+)
 
 // ============================================================
 // INITIATE
@@ -104,4 +108,59 @@ type CreateOrderCommand struct {
 	// If neither is set, the request is rejected as unauthorized.
 	ActorID    string
 	GuestEmail string
+}
+
+
+// ============================================================
+// READ / LEDGER
+// ============================================================
+
+// ListPaymentsCommand is the input for ListPayments.
+//
+// BilledAccountID is required — the ledger is always scoped to one
+// account. The HTTP handler resolves it from the JWT's
+// active_account_id. Empty value returns an empty result.
+//
+// DateFrom and DateTo are inclusive bounds on payment.created_at.
+type ListPaymentsCommand struct {
+	BilledAccountID string
+
+	Page     int
+	PageSize int
+
+	Search  string
+	Status  string
+	Method  string
+	EventID string
+
+	DateFrom *time.Time
+	DateTo   *time.Time
+
+	SortBy    string
+	SortOrder string
+}
+
+// PaymentStatsCommand is the input for GetPaymentStats.
+//
+// Same filter shape as ListPaymentsCommand minus pagination and
+// search — stats are aggregate, not per-row.
+type PaymentStatsCommand struct {
+	BilledAccountID string
+
+	EventID  string
+	DateFrom *time.Time
+	DateTo   *time.Time
+}
+
+
+
+// ListPaymentsResult is the output of ListPayments.
+//
+// Payments is always non-nil so the JSON marshals as [] rather than
+// null when the account has no payments.
+type ListPaymentsResult struct {
+	Payments []*paymentdomain.PaymentListRow
+	Total    int
+	Page     int
+	PageSize int
 }

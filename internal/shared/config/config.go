@@ -31,11 +31,52 @@ type Config struct {
 	OpenRouter  OpenRouterConfig
 	NuruOnboardingNoticeEmails NuruventOnboardingNoticeEmails
 
+	// PaymentBilling holds the platform's fee model.
+	PaymentBilling PaymentBillingConfig
+
 	// AutoFetchMeetAttendance enables the background poller that
 	// fetches Google Meet attendance for live meetings. Off by
 	// default; enable per environment with
 	// AUTO_FETCH_MEET_ATTENDANCE=true.
 	AutoFetchMeetAttendance bool
+}
+
+// ============================================================
+// PAYMENT BILLING
+// ============================================================
+
+// PaymentBillingConfig holds the platform's fee model.
+//
+// Fee model:
+//   Nuruvent takes a platform fee on every successful payment.
+//   The payment provider charges a processing fee on top.
+//   Both are snapshotted at different points:
+//     - Platform rate   → on orders, at creation time
+//     - Processing rate → on payments, at initiation time
+//
+// All rates are decimal fractions (0.045 = 4.5%).
+//
+// On a KES 1,000 M-Pesa ticket:
+//   amount           = 100000  (minor units)
+//   platform_fee     =   4500  (4.5%)
+//   processing_fee   =   3500  (3.5%)
+//   net_to_organizer =  92000
+//
+// Override via env vars:
+//   PAYMENT_PLATFORM_FEE_RATE               (default 0.045)
+//   PAYMENT_PROCESSING_FEE_RATE_MPESA       (default 0.035)
+//   PAYMENT_PROCESSING_FEE_RATE_CARD_LOCAL  (default 0.035)
+//   PAYMENT_PROCESSING_FEE_RATE_CARD_INTL   (default 0.045)
+type PaymentBillingConfig struct {
+	// PlatformFeeRate is Nuruvent's cut of every successful payment.
+	PlatformFeeRate float64
+
+	// ProcessingFeeRates are the provider's rates, keyed by payment
+	// method / card type. The provider adapter picks the right rate
+	// at initiation and the value is snapshotted onto the payment.
+	ProcessingFeeRateMpesa     float64
+	ProcessingFeeRateCardLocal float64
+	ProcessingFeeRateCardIntl  float64
 }
 
 // ============================================================
@@ -273,6 +314,12 @@ func Load() *Config {
 			BaseURL:   getEnv("PAYSTACK_BASE_URL", "https://api.paystack.co"),
 			Enabled:   getEnvBool("PAYSTACK_ENABLED", false),
 		},
+		PaymentBilling: PaymentBillingConfig{
+			PlatformFeeRate:            getEnvFloat("PAYMENT_PLATFORM_FEE_RATE", 0.045),
+			ProcessingFeeRateMpesa:     getEnvFloat("PAYMENT_PROCESSING_FEE_RATE_MPESA", 0.035),
+			ProcessingFeeRateCardLocal: getEnvFloat("PAYMENT_PROCESSING_FEE_RATE_CARD_LOCAL", 0.035),
+			ProcessingFeeRateCardIntl:  getEnvFloat("PAYMENT_PROCESSING_FEE_RATE_CARD_INTL", 0.045),
+		},
 		Zoom: ZoomConfig{
 			SecretToken: getEnv("ZOOM_SECRET_TOKEN", ""),
 			Enabled:     getEnvBool("ZOOM_ENABLED", false),
@@ -391,4 +438,17 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 		}
 	}
 	return defaultValue
+}
+
+// getEnvFloat reads a float64 from the environment. Returns fallback
+// if the variable is unset or not parseable. Used for payment rates
+// where precision matters (0.045 = 4.5%).
+func getEnvFloat(key string, fallback float64) float64 {
+	if value := os.Getenv(key); value != "" {
+		parsed, err := strconv.ParseFloat(value, 64)
+		if err == nil {
+			return parsed
+		}
+	}
+	return fallback
 }

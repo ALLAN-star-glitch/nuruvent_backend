@@ -83,6 +83,13 @@ ListMine(
 	ctx context.Context,
 	f ListMineFilter,
 ) ([]*CrossEventRegistrationRow, int, error)
+
+
+
+   // Returns ErrRegistrationNotFound if the registration doesn't exist,
+    // or a specific ErrBilledAccountUnresolved if the chain is broken
+    // (event unassigned from a team, team soft-deleted).
+    ResolveBilledAccount(ctx context.Context, registrationID string) (string, error)
 }
 
 // WaitlistRepository persists waitlist entries.
