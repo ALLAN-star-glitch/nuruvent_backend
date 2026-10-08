@@ -24,6 +24,13 @@ func (s *service) LoginUser(ctx context.Context, email, password, ipAddress, use
 		return nil, "", authdomain.ErrInvalidCredentials
 	}
 
+	// Guest accounts have no password. Reject early so the frontend
+	// can route them to the "set password" flow instead of showing
+	// a generic "invalid credentials" message.
+	if !user.CanLoginWithPassword() {
+		return nil, "", authdomain.ErrGuestPasswordLogin
+	}
+
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
 		return nil, "", authdomain.ErrInvalidCredentials
 	}

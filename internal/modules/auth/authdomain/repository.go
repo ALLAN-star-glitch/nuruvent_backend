@@ -98,4 +98,25 @@ type Repository interface {
 
 
 	UsernameExists(ctx context.Context, username string) (bool, error)
+
+	// ============================================================
+// WORKSPACE PROVISIONING
+// ============================================================
+
+// ProvisionUserAccount creates the personal account and the
+// account_member row (owner/admin) for the given user.
+//
+// It does NOT create a personal team — team creation belongs to the
+// team module and is orchestrated by the service layer (see
+// auth/service/guest.go and auth/service/registration.go).
+//
+// Idempotent: if the user already belongs to any account, that
+// account's ID is returned and nothing new is written.
+//
+// Runs inside the caller's transaction if one is active (see
+// WithTransaction).
+ProvisionUserAccount(ctx context.Context, user *User) (string, error)
+
+
+	
 }

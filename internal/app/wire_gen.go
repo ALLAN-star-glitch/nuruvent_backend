@@ -123,7 +123,9 @@ func InitializeApp() (*AppDependencies, error) {
 	meetingRepository := postgres7.NewMeetingRepository(db)
 	videoMeetingIDResolver := NewAttendanceVideoMeetingIDResolver(meetingRepository)
 	attendancedomainPermissionChecker := NewAttendancePermissionAdapter(permissionChecker)
-	dependencies := attendance.ProvideAttendanceDependencies(unitOfWork, uuidGenerator, sha256Generator, logPublisher, systemClock, v2, videoMeetingIDResolver, attendancedomainPermissionChecker, configConfig)
+	eventRegistrationRepository := postgres8.NewEventRegistrationRepository(db)
+	registrationLookup := NewAttendanceRegistrationLookup(eventRegistrationRepository)
+	dependencies := attendance.ProvideAttendanceDependencies(unitOfWork, uuidGenerator, sha256Generator, logPublisher, systemClock, v2, videoMeetingIDResolver, attendancedomainPermissionChecker, registrationLookup, configConfig)
 	service14, err := service6.NewService(dependencies)
 	if err != nil {
 		return nil, err
@@ -154,7 +156,6 @@ func InitializeApp() (*AppDependencies, error) {
 	teamHandler := handler2.NewTeamHandler(serviceService)
 	eventHandler := eventhandler.NewEventHandler(service16)
 	registrationRepository := postgres8.NewRegistrationRepository(db)
-	eventRegistrationRepository := postgres8.NewEventRegistrationRepository(db)
 	waitlistRepository := postgres8.NewWaitlistRepository(db)
 	registrableResolver := NewRegistrableResolver(service16)
 	registrationdomainUserInfoProvider := NewRegistrationUserInfoAdapter(service11)
@@ -185,7 +186,8 @@ func InitializeApp() (*AppDependencies, error) {
 	service18 := service10.New(dependencies3)
 	handler3 := http2.NewHandler(service18)
 	orderHandler := http2.NewOrderHandler(service18)
-	handlers := http3.NewHandlers(service14, v2)
+	authSessionIssuer := NewAttendanceAuthSessionIssuer(service11)
+	handlers := http3.NewHandlers(service14, v2, authSessionIssuer)
 	httpHandlers := http4.NewHandlers(service15)
 	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service11, tokenService, service13, serviceService, service16, service12, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker, httpHandler, service17, handler3, orderHandler, service18, handlers, service14, httpHandlers, service15)
 	return appDependencies, nil

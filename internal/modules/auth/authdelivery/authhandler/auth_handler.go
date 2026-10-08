@@ -72,16 +72,14 @@ func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
 	isProduction := h.config.Environment == "production"
 	isSecure := isProduction
 
-	sameSite := "Lax"
-
 	c.Cookie(&fiber.Cookie{
 		Name:     "refresh_token",
 		Value:    token,
 		Expires:  time.Now().Add(h.config.JWT.RefreshExpiration),
 		HTTPOnly: true,
 		Secure:   isSecure,
-		SameSite: sameSite,
-		Path:     "/auth/refresh",
+		SameSite: "Lax",
+		Path:     "/api/v1/auth/refresh",   // ← must match the real route prefix
 		Domain:   "",
 	})
 }
@@ -109,10 +107,11 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
 		HTTPOnly: true,
 		Secure:   isSecure,
 		SameSite: sameSite,
-		Path:     "/auth/refresh",
+		Path:     "/api/v1/auth/refresh",
 		Domain:   "",
 	})
 }
+
 
 func (h *AuthHandler) getRefreshTokenFromCookie(c fiber.Ctx) (string, error) {
 	token := c.Cookies("refresh_token")
@@ -517,15 +516,20 @@ func (h *AuthHandler) Login(c fiber.Ctx) error {
 	userAgent := c.Get("User-Agent")
 
 	user, _, err := h.service.LoginUser(c.Context(), req.Email, req.Password, ipAddress, userAgent)
-	if err != nil {
-		if errors.Is(err, authdomain.ErrInvalidCredentials) {
-			return response.Unauthorized(c, "Invalid credentials", nil)
-		}
-		if errors.Is(err, authdomain.ErrUserInactive) {
-			return response.Unauthorized(c, "Account is inactive", nil)
-		}
-		return response.InternalError(c, "Login failed", fiber.Map{"error": err.Error()})
+if err != nil {
+	if errors.Is(err, authdomain.ErrGuestPasswordLogin) {
+		return response.Conflict(c,
+			"This account has no password. Use the link in your email to sign in, or reset your password.",
+			fiber.Map{"reason": "guest_account"})
 	}
+	if errors.Is(err, authdomain.ErrInvalidCredentials) {
+		return response.Unauthorized(c, "Invalid credentials", nil)
+	}
+	if errors.Is(err, authdomain.ErrUserInactive) {
+		return response.Unauthorized(c, "Account is inactive", nil)
+	}
+	return response.InternalError(c, "Login failed", fiber.Map{"error": err.Error()})
+}
 
 	return response.Success(c, "2FA verification required", TwoFactorResponse{
 		Requires2FA: true,

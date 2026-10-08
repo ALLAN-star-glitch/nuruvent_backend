@@ -3,25 +3,33 @@
 package http
 
 import (
+
+	"log"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 
+	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/service"
 )
 
 // JoinHandler handles the public join-link redemption endpoint.
 //
-// No authentication — the token is the credential.
+// No authentication — the token is the credential. But when the token
+// resolves to a user, we issue a short-lived session cookie so guests
+// land on the meeting page authenticated (required for the Zoom SDK).
 type JoinHandler struct {
-	svc service.Service
+	svc  service.Service
+	auth attendance.AuthSessionIssuer
 }
 
-func NewJoinHandler(svc service.Service) *JoinHandler {
-	return &JoinHandler{svc: svc}
+func NewJoinHandler(
+	svc service.Service,
+	auth attendance.AuthSessionIssuer,
+) *JoinHandler {
+	return &JoinHandler{svc: svc, auth: auth}
 }
-
-
 
 // RedeemJoinToken handles GET /join/:token.
 //
@@ -30,7 +38,10 @@ func NewJoinHandler(svc service.Service) *JoinHandler {
 //  2. Redeem it — the service validates, records the join, and
 //     returns the Nuruvent-hosted meeting URL to redirect to.
 //  3. Trigger a status recompute for the affected session.
-//  4. Redirect the browser to the meeting page.
+//  4. If the token carries a user and the caller has no session yet,
+//     issue a short-lived auth cookie so the meeting page knows who
+//     they are.
+//  5. Redirect the browser to the meeting page.
 //
 // If anything goes wrong, render a small HTML page explaining the
 // error, rather than a JSON error — the caller is a browser, not an
@@ -50,6 +61,28 @@ func (h *JoinHandler) RedeemJoinToken(c fiber.Ctx) error {
 	// recompute; the join itself was recorded.
 	_ = h.svc.RecomputeSessionStatuses(c.Context(), result.SessionID)
 
+	// Issue a session cookie for the user behind the token — but only
+	// when the caller doesn't already have one. Regular users who are
+	// already logged in keep their existing session; guests get a new
+	// short-lived one so the meeting page treats them as authenticated.
+	if result.UserID != "" && c.Cookies("access_token") == "" && h.auth != nil {
+		const guestTTL = 4 * time.Hour
+
+		token, expiresAt, err := h.auth.IssueSessionForUser(
+			c.Context(),
+			result.UserID,
+			guestTTL,
+		)
+		if err != nil {
+			// Non-fatal — the meeting page still loads, but the SDK
+			// may prompt for sign-in. Log and continue.
+			log.Printf("[join] issue guest session failed user=%s err=%v",
+				result.UserID, err)
+		} else {
+			setSessionCookie(c, token, expiresAt)
+		}
+	}
+
 	// Redirect the browser to the meeting page. The page handles
 	// platform-specific handoff.
 	if result.RedirectTo == "" {
@@ -57,6 +90,36 @@ func (h *JoinHandler) RedeemJoinToken(c fiber.Ctx) error {
 	}
 	return c.Redirect().To(result.RedirectTo)
 }
+
+// ============================================================
+// COOKIE HELPER
+// ============================================================
+
+// setSessionCookie writes the auth cookie in the same shape the auth
+// handler uses, so the frontend and the middleware accept it without
+// special-casing.
+//
+// Domain is left empty — the cookie is scoped to the exact host that
+// served the join link. This matches what the auth handler does.
+func setSessionCookie(c fiber.Ctx, token string, expiresAt time.Time) {
+	isSecure := c.Protocol() == "https" ||
+		c.Get("X-Forwarded-Proto") == "https"
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "access_token",
+		Value:    token,
+		Expires:  expiresAt,
+		HTTPOnly: true,
+		Secure:   isSecure,
+		SameSite: "Lax",
+		Path:     "/",
+		Domain:   "",
+	})
+}
+
+// ============================================================
+// ERROR RENDERING
+// ============================================================
 
 // renderJoinError renders a minimal HTML page for join failures.
 // Browsers don't render JSON usefully.

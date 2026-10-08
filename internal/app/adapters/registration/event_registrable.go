@@ -88,19 +88,6 @@ func (r *EventRegistrable) RequiresPayment() bool {
 	return !r.event.IsFreeEvent
 }
 
-// RequiresAuth reports whether registration for this event mandates a
-// Nuruvent account. True for Zoom events, because attendance on Zoom
-// is tracked via a JWT signed for a specific user — guests have no
-// identity to sign.
-func (r *EventRegistrable) RequiresAuth() bool {
-	for _, s := range r.event.Schedules {
-		if s.Platform == "zoom" {
-			return true
-		}
-	}
-	return false
-}
-
 func (r *EventRegistrable) AdjustCount(delta int) error {
 	if delta == 0 {
 		return nil

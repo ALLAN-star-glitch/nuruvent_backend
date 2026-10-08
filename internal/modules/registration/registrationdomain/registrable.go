@@ -34,9 +34,6 @@ type Registrable interface {
     TicketAvailability() (map[string]int, error)
     TicketPricing() (map[string]TicketPrice, error)
 
-
-    RequiresAuth() bool
-
      // Slug returns the URL-friendly identifier of the underlying
     // entity, for building public links.
     Slug() string

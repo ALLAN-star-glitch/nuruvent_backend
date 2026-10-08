@@ -13,6 +13,8 @@ var (
 	ErrUserInactive      = errors.New("user is inactive")
 	ErrUserAlreadyActive = errors.New("user already active")
 	ErrUserNotVerified   = errors.New("user email not verified")
+
+	
 )
 
 // Account type errors
@@ -97,6 +99,9 @@ var (
 
 
 
+
+
+
 // ============================================================
 // DEPRECATED: Keep for backward compatibility
 // ============================================================
@@ -132,4 +137,15 @@ var (
 	ErrAccountMemberExists    = errors.New("account member already exists")
 	ErrInvalidAccountMember   = errors.New("invalid account member")
 	ErrAccountMemberNotActive = errors.New("account member is not active")
+)
+
+
+var (
+
+
+	// ErrGuestPasswordLogin is returned when a guest user (auto-created
+	// via event registration) tries to log in with a password. Guests
+	// have no password; they authenticate via a join link or by
+	// setting a password through the forgot-password flow.
+	ErrGuestPasswordLogin = errors.New("this account has no password; use the link from your email to sign in, or reset your password")
 )

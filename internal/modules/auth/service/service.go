@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	authdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
@@ -136,6 +137,12 @@ type Service interface {
 	GetAccountIDByUserID(ctx context.Context, userID string) (string, error)
 
 	AddAccountMember(ctx context.Context, accountID, userID, role string) error
+
+
+	FindOrCreateGuestByEmail(ctx context.Context, email, name, phone string) (*authdomain.User, error)
+
+
+	IssueSessionForUser(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error)
 }
 
 // ============================================================

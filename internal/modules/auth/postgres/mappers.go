@@ -14,71 +14,73 @@ import (
 // USER MAPPERS
 // ============================================================
 
-func ToUserModel(user *authdomain.User) *UserModel {
-	if user == nil {
-		return nil
-	}
+ func ToUserModel(user *authdomain.User) *UserModel {
+ 	if user == nil {
+ 		return nil
+ 	}
+ 
+ 	var professionalTypeID *string
+ 	if user.ProfessionalTypeID != nil {
+ 		professionalTypeID = user.ProfessionalTypeID
+ 	}
+ 
+ 	return &UserModel{
+ 		ID:                 user.ID,
+ 		Slug:               user.Slug,
+ 		Name:               user.Name,
+ 		DisplayName:        user.DisplayName,
+ 		Username:           user.Username,
+ 		Email:              user.Email,
+ 		PasswordHash:       user.PasswordHash,
+ 		Phone:              user.Phone,
+ 		AccountTypeID:      user.AccountTypeID,
+ 		ProfessionalTypeID: professionalTypeID,
+ 		EmailVerified:      user.EmailVerified,
+ 		EmailVerifiedAt:    user.EmailVerifiedAt,
+ 		IdentityVerified:   user.IdentityVerified,
+ 		IdentityVerifiedAt: user.IdentityVerifiedAt,
+ 		PhoneVerified:      user.PhoneVerified,
+ 		PhoneVerifiedAt:    user.PhoneVerifiedAt,
+ 		IsActive:           user.IsActive,
+		IsGuest:            user.IsGuest,
+ 		CreatedAt:          user.CreatedAt,
+ 		UpdatedAt:          user.UpdatedAt,
+ 	}
+ }
 
-	var professionalTypeID *string
-	if user.ProfessionalTypeID != nil {
-		professionalTypeID = user.ProfessionalTypeID
-	}
-
-	return &UserModel{
-		ID:                 user.ID,
-		Slug:               user.Slug,
-		Name:               user.Name,
-		DisplayName:        user.DisplayName,
-		Username:           user.Username,
-		Email:              user.Email,
-		PasswordHash:       user.PasswordHash,
-		Phone:              user.Phone,
-		AccountTypeID:      user.AccountTypeID,
-		ProfessionalTypeID: professionalTypeID,
-		EmailVerified:      user.EmailVerified,
-		EmailVerifiedAt:    user.EmailVerifiedAt,
-		IdentityVerified:   user.IdentityVerified,
-		IdentityVerifiedAt: user.IdentityVerifiedAt,
-		PhoneVerified:      user.PhoneVerified,
-		PhoneVerifiedAt:    user.PhoneVerifiedAt,
-		IsActive:           user.IsActive,
-		CreatedAt:          user.CreatedAt,
-		UpdatedAt:          user.UpdatedAt,
-	}
-}
-
-func ToAuthDomainUser(model *UserModel) *authdomain.User {
-	if model == nil {
-		return nil
-	}
-
-	var professionalTypeID *string
-	if model.ProfessionalTypeID != nil {
-		professionalTypeID = model.ProfessionalTypeID
-	}
-
-	return &authdomain.User{
-		ID:                 model.ID,
-		Slug:               model.Slug,
-		Name:               model.Name,
-		DisplayName:        model.DisplayName,
-		Username:           model.Username,
-		Email:              model.Email,
-		PasswordHash:       model.PasswordHash,
-		Phone:              model.Phone,
-		AccountTypeID:      model.AccountTypeID,
-		ProfessionalTypeID: professionalTypeID,
-		EmailVerified:      model.EmailVerified,
-		EmailVerifiedAt:    model.EmailVerifiedAt,
-		IdentityVerified:   model.IdentityVerified,
-		IdentityVerifiedAt: model.IdentityVerifiedAt,
-		PhoneVerified:      model.PhoneVerified,
-		PhoneVerifiedAt:    model.PhoneVerifiedAt,
-		IsActive:           model.IsActive,
-		CreatedAt:          model.CreatedAt,
-		UpdatedAt:          model.UpdatedAt,
-	}
-}
+ func ToAuthDomainUser(model *UserModel) *authdomain.User {
+ 	if model == nil {
+ 		return nil
+ 	}
+ 
+ 	var professionalTypeID *string
+ 	if model.ProfessionalTypeID != nil {
+ 		professionalTypeID = model.ProfessionalTypeID
+ 	}
+ 
+ 	return &authdomain.User{
+ 		ID:                 model.ID,
+ 		Slug:               model.Slug,
+ 		Name:               model.Name,
+ 		DisplayName:        model.DisplayName,
+ 		Username:           model.Username,
+ 		Email:              model.Email,
+ 		PasswordHash:       model.PasswordHash,
+ 		Phone:              model.Phone,
+ 		AccountTypeID:      model.AccountTypeID,
+ 		ProfessionalTypeID: professionalTypeID,
+ 		EmailVerified:      model.EmailVerified,
+ 		EmailVerifiedAt:    model.EmailVerifiedAt,
+ 		IdentityVerified:   model.IdentityVerified,
+ 		IdentityVerifiedAt: model.IdentityVerifiedAt,
+ 		PhoneVerified:      model.PhoneVerified,
+ 		PhoneVerifiedAt:    model.PhoneVerifiedAt,
+ 		IsActive:           model.IsActive,
+		IsGuest:            model.IsGuest,
+ 		CreatedAt:          model.CreatedAt,
+ 		UpdatedAt:          model.UpdatedAt,
+ 	}
+ }
 
 // ============================================================
 // ACCOUNT MAPPERS

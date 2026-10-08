@@ -185,10 +185,11 @@ type IssueJoinTokenResult struct {
 type RedeemResult struct {
 	AttendeeID  string
 	SessionID   string
-	MeetingCode string // bare platform code
+	MeetingCode string
 	Platform    attendance.SessionProvider
 	RedeemedAt  time.Time
-	RedirectTo  string // Nuruvent-hosted meeting URL
+	RedirectTo  string
+	UserID      string // ← NEW: user behind the attendee, empty if none
 }
 
 // AttendeeSummary aggregates an attendee's status across sessions and

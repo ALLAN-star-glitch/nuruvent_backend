@@ -21,12 +21,13 @@ type Handlers struct {
 func NewHandlers(
 	svc service.Service,
 	providers map[attendance.SessionProvider]service.ProviderAdapter,
+	authIssuer attendance.AuthSessionIssuer,
 ) *Handlers {
 	return &Handlers{
 		Sessions:   NewSessionHandler(svc),
 		Attendance: NewAttendanceHandler(svc),
 		Webhooks:   NewWebhookHandler(svc, providers),
-		Join:       NewJoinHandler(svc),
+		Join:       NewJoinHandler(svc, authIssuer),
 	}
 }
 
@@ -61,18 +62,8 @@ func RegisterRoutes(
 	r.Get("/attendees/:id/summary", optionalAuth, h.Attendance.GetAttendeeSummary)
 
 	// ---- Event-facing ----
-
-	// Per-session and total attendance summary for every session
-	// under an event. Used by the event detail page's attendance
-	// card.
 	r.Get("/events/:eventId/summary", authMiddleware, h.Attendance.EventSummary)
-
-	// Event attendee directory. Paginated, filterable list of
-	// attendees for one event, backed by attendee_rollup_statuses.
-	// Powers the attendees page and the drill-in detail view.
 	r.Get("/events/:eventId/attendees", authMiddleware, h.Attendance.ListEventAttendees)
 	r.Get("/events/:eventId/attendees/:attendeeId", authMiddleware, h.Attendance.GetEventAttendeeDetail)
-		// Cross-event attendee directory. Scoped to the caller's
-	// accounts. Supports ?event_id= to filter to one event.
 	r.Get("/attendees", authMiddleware, h.Attendance.ListAttendees)
 }

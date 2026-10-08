@@ -18,6 +18,34 @@ func (s *service) RegisterForEvent(
 		cmd.UserID, cmd.EventID, len(cmd.Selections))
 
 	// ------------------------------------------------------------
+	// 0. Resolve guest identity to a user.
+	//
+	// A guest registration carries name/email/phone but no user_id.
+	// We create (or find) a lightweight user for them so every
+	// registration has a user_id — required by the Zoom SDK and the
+	// attendance pipeline. The domain enforces mutually exclusive
+	// identity (user_id OR guest details, never both), so we clear
+	// the guest fields after resolving.
+	// ------------------------------------------------------------
+	if cmd.UserID == "" && cmd.Guest != nil && cmd.Guest.Email != "" {
+		guestUserID, err := s.deps.Users.FindOrCreateGuestByEmail(
+			ctx,
+			cmd.Guest.Email,
+			cmd.Guest.Name,
+			cmd.Guest.Phone,
+		)
+		if err != nil {
+			log.Printf("[registration] STEP 0 FAIL: resolve guest user: %v", err)
+			return nil, fmt.Errorf("resolve guest user: %w", err)
+		}
+
+		cmd.UserID = guestUserID
+		cmd.Guest = nil
+
+		log.Printf("[registration] STEP 0 OK: guest resolved to user=%s", cmd.UserID)
+	}
+
+	// ------------------------------------------------------------
 	// 1. Resolve the registrable
 	// ------------------------------------------------------------
 	registrable, err := s.deps.Registrables.Resolve("event", cmd.EventID)
@@ -27,30 +55,13 @@ func (s *service) RegisterForEvent(
 	}
 	log.Printf("[registration] STEP 1 OK: registrable resolved")
 
-		// ------------------------------------------------------------
+	// ------------------------------------------------------------
 	// 2. Validate registration is open
 	// ------------------------------------------------------------
 	if !registrable.IsRegistrationOpen() {
 		log.Printf("[registration] STEP 2 FAIL: registration not open for event=%s",
 			cmd.EventID)
 		return nil, registrationdomain.ErrEventNotOpen
-	}
-	log.Printf("[registration] STEP 2 OK: registration is open")
-
-	// ------------------------------------------------------------
-	// 2b. Enforce authentication for events that require it.
-	//
-	// Zoom events require a Nuruvent account: attendance is tracked
-	// via a JWT signed for a specific user, and guests have no
-	// identity to sign.
-	// ------------------------------------------------------------
-	if cmd.UserID == "" && registrable.RequiresAuth() {
-		log.Printf("[registration] STEP 2b FAIL: guest registration not permitted for event=%s",
-			cmd.EventID)
-		return nil, registrationdomain.ErrAuthRequired
-	}
-	if registrable.RequiresAuth() {
-		log.Printf("[registration] STEP 2b OK: authenticated registration (event requires auth)")
 	}
 	log.Printf("[registration] STEP 2 OK: registration is open")
 
@@ -201,7 +212,7 @@ func (s *service) RegisterForEvent(
 	}
 	log.Printf("[registration] STEP 8 OK: persisted, id=%s", reg.ID)
 
-		// ------------------------------------------------------------
+	// ------------------------------------------------------------
 	// 9. Enqueue notifications (best-effort)
 	//
 	// RegistrationCreated fires unconditionally: the attendee gets a

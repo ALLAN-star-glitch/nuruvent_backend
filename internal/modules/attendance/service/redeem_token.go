@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"regexp"
 	"strings"
@@ -64,8 +65,26 @@ func (s *attendanceService) RedeemJoinToken(
 			return fmt.Errorf("%w: session is cancelled", attendance.ErrTokenRevoked)
 		}
 
-		// No attendance record is written here. The click-through
-		// is the audit signal, not the attendance signal.
+		// Resolve the user behind the attendee. The attendee's external
+		// ref points at the registration; the registration holds the
+		// user_id. This is what the join handler needs to authenticate
+		// guests — no-op for real users who already have a cookie.
+		var userID string
+		if token.AttendeeID != "" && s.deps.Registrations != nil {
+			attendee, aerr := repos.Attendees.FindByID(ctx, token.AttendeeID)
+			if aerr != nil {
+				log.Printf("[attendance] redeem: load attendee failed id=%s err=%v",
+					token.AttendeeID, aerr)
+			} else if attendee != nil && attendee.External.Type == "event_registration" {
+				uid, rerr := s.deps.Registrations.GetUserIDByRegistrationID(ctx, attendee.External.ID)
+				if rerr != nil {
+					log.Printf("[attendance] redeem: lookup registration user failed reg=%s err=%v",
+						attendee.External.ID, rerr)
+				} else {
+					userID = uid
+				}
+			}
+		}
 
 		redirect, err := s.buildJoinRedirect(session)
 		if err != nil {
@@ -75,7 +94,10 @@ func (s *attendanceService) RedeemJoinToken(
 		result = &RedeemResult{
 			AttendeeID: token.AttendeeID,
 			SessionID:  token.SessionID,
+			Platform:   session.Provider,
+			RedeemedAt: now,
 			RedirectTo: redirect,
+			UserID:     userID,
 		}
 		return nil
 	})

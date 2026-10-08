@@ -303,6 +303,19 @@ func NewAttendancePermissionAdapter(
 	return attendanceadapters.NewPermissionCheckerAdapter(permChecker)
 }
 
+// NewAttendanceRegistrationLookup wires the attendance module's
+// RegistrationLookup port to the registration service.
+//
+// Used by the join handler when a guest redeems a join token, so the
+// handler can resolve the Nuruvent user behind the registration and
+// issue a session cookie for them before redirecting to the meeting.
+func NewAttendanceRegistrationLookup(
+	eventRegs registrationDomain.EventRegistrationRepository,
+) attendanceDomain.RegistrationLookup {
+	return attendanceadapters.NewRegistrationLookupAdapter(eventRegs)
+}
+
+
 // NewEventsVideoIdentityAdapter bridges the video service to the
 // events domain's VideoIdentityProvider port.
 //
@@ -321,4 +334,10 @@ func NewPaymentBillingResolver(
     regSvc registrationService.Service,
 ) paymentdomain.RegistrationBillingResolver {
     return paymentadapters.NewBillingResolver(regSvc)
+}
+
+func NewAttendanceAuthSessionIssuer(
+	authSvc authService.Service,
+) attendanceDomain.AuthSessionIssuer {
+	return attendanceadapters.NewAuthSessionIssuerAdapter(authSvc)
 }

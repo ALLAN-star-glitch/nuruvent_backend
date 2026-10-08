@@ -222,6 +222,10 @@ func InitializeApp() (*AppDependencies, error) {
 
 		NewPaymentBillingResolver,
 
+		NewAttendanceRegistrationLookup,
+
+		NewAttendanceAuthSessionIssuer,
+
 		// VIDEO
 		NewEventsVideoAdapter,
 		NewVideoAttendanceAdapter,

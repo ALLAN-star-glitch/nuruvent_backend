@@ -202,86 +202,91 @@ func (m *InstitutionTypeModel) FromDomain(it *authdomain.InstitutionType) {
 // USER MODEL
 // ============================================================
 
-type UserModel struct {
-	ID                  string         `gorm:"primaryKey;default:gen_random_uuid()"`
-	Slug                string         `gorm:"type:varchar(50);uniqueIndex;not null"`
-	Name                string         `gorm:"type:varchar(100);not null"`
-	DisplayName         string         `gorm:"type:varchar(150)"`
-	Username string `gorm:"column:username"`
-	Email               string         `gorm:"uniqueIndex;not null;size:255"`
-	PasswordHash        string         `gorm:"not null"`
-	Phone               string         `gorm:"size:50"`
-	AccountTypeID       string         `gorm:"type:uuid;index;not null"`
-	ProfessionalTypeID  *string        `gorm:"type:uuid;index"`
-	EmailVerified       bool           `gorm:"default:false"`
-	EmailVerifiedAt     *time.Time
-	IdentityVerified    bool           `gorm:"default:false"`
-	IdentityVerifiedAt  *time.Time
-	PhoneVerified       bool           `gorm:"default:false"`
-	PhoneVerifiedAt     *time.Time
-	IsActive            bool           `gorm:"default:true"`
-	CreatedAt           time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
-	UpdatedAt           time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
-	DeletedAt           gorm.DeletedAt `gorm:"index"`
-}
+ type UserModel struct {
+ 	ID                  string         `gorm:"primaryKey;default:gen_random_uuid()"`
+ 	Slug                string         `gorm:"type:varchar(50);uniqueIndex;not null"`
+ 	Name                string         `gorm:"type:varchar(100);not null"`
+ 	DisplayName         string         `gorm:"type:varchar(150)"`
+ 	Username string `gorm:"column:username"`
+ 	Email               string         `gorm:"uniqueIndex;not null;size:255"`
+ 	PasswordHash        string         `gorm:"not null"`
+ 	Phone               string         `gorm:"size:50"`
+ 	AccountTypeID       string         `gorm:"type:uuid;index;not null"`
+ 	ProfessionalTypeID  *string        `gorm:"type:uuid;index"`
+ 	EmailVerified       bool           `gorm:"default:false"`
+ 	EmailVerifiedAt     *time.Time
+ 	IdentityVerified    bool           `gorm:"default:false"`
+ 	IdentityVerifiedAt  *time.Time
+ 	PhoneVerified       bool           `gorm:"default:false"`
+ 	PhoneVerifiedAt     *time.Time
+ 	IsActive            bool           `gorm:"default:true"`
+	IsGuest             bool           `gorm:"column:is_guest;not null;default:false"`
+ 	CreatedAt           time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+ 	UpdatedAt           time.Time      `gorm:"default:CURRENT_TIMESTAMP"`
+ 	DeletedAt           gorm.DeletedAt `gorm:"index"`
+ }
 
 func (UserModel) TableName() string {
 	return "users"
 }
 
-func (m *UserModel) ToDomain() *authdomain.User {
-	if m == nil {
-		return nil
-	}
-	return &authdomain.User{
-		ID:                  m.ID,
-		Slug:                m.Slug,
-		Name:                m.Name,
-		DisplayName:         m.DisplayName,
-		Email:               m.Email,
-		PasswordHash:        m.PasswordHash,
-		Phone:               m.Phone,
-		AccountTypeID:       m.AccountTypeID,
-		ProfessionalTypeID:  m.ProfessionalTypeID,
-		EmailVerified:       m.EmailVerified,
-		EmailVerifiedAt:     m.EmailVerifiedAt,
-		IdentityVerified:    m.IdentityVerified,
-		IdentityVerifiedAt:  m.IdentityVerifiedAt,
-		PhoneVerified:       m.PhoneVerified,
-		PhoneVerifiedAt:     m.PhoneVerifiedAt,
-		IsActive:            m.IsActive,
-		CreatedAt:           m.CreatedAt,
-		UpdatedAt:           m.UpdatedAt,
-		DeletedAt:           &m.DeletedAt.Time,
-	}
-}
+ func (m *UserModel) ToDomain() *authdomain.User {
+ 	if m == nil {
+ 		return nil
+ 	}
+ 	return &authdomain.User{
+ 		ID:                  m.ID,
+ 		Slug:                m.Slug,
+ 		Name:                m.Name,
+ 		DisplayName:         m.DisplayName,
+		Username:            m.Username,
+ 		Email:               m.Email,
+ 		PasswordHash:        m.PasswordHash,
+ 		Phone:               m.Phone,
+ 		AccountTypeID:       m.AccountTypeID,
+ 		ProfessionalTypeID:  m.ProfessionalTypeID,
+ 		EmailVerified:       m.EmailVerified,
+ 		EmailVerifiedAt:     m.EmailVerifiedAt,
+ 		IdentityVerified:    m.IdentityVerified,
+ 		IdentityVerifiedAt:  m.IdentityVerifiedAt,
+ 		PhoneVerified:       m.PhoneVerified,
+ 		PhoneVerifiedAt:     m.PhoneVerifiedAt,
+ 		IsActive:            m.IsActive,
+		IsGuest:             m.IsGuest,
+ 		CreatedAt:           m.CreatedAt,
+ 		UpdatedAt:           m.UpdatedAt,
+ 		DeletedAt:           &m.DeletedAt.Time,
+ 	}
+ }
 
-func (m *UserModel) FromDomain(user *authdomain.User) {
-	if user == nil {
-		return
-	}
-	m.ID = user.ID
-	m.Slug = user.Slug
-	m.Name = user.Name
-	m.DisplayName = user.DisplayName
-	m.Email = user.Email
-	m.PasswordHash = user.PasswordHash
-	m.Phone = user.Phone
-	m.AccountTypeID = user.AccountTypeID
-	m.ProfessionalTypeID = user.ProfessionalTypeID
-	m.EmailVerified = user.EmailVerified
-	m.EmailVerifiedAt = user.EmailVerifiedAt
-	m.IdentityVerified = user.IdentityVerified
-	m.IdentityVerifiedAt = user.IdentityVerifiedAt
-	m.PhoneVerified = user.PhoneVerified
-	m.PhoneVerifiedAt = user.PhoneVerifiedAt
-	m.IsActive = user.IsActive
-	m.CreatedAt = user.CreatedAt
-	m.UpdatedAt = user.UpdatedAt
-	if user.DeletedAt != nil {
-		m.DeletedAt = gorm.DeletedAt{Time: *user.DeletedAt, Valid: true}
-	}
-}
+ func (m *UserModel) FromDomain(user *authdomain.User) {
+ 	if user == nil {
+ 		return
+ 	}
+ 	m.ID = user.ID
+ 	m.Slug = user.Slug
+ 	m.Name = user.Name
+ 	m.DisplayName = user.DisplayName
+	m.Username = user.Username
+ 	m.Email = user.Email
+ 	m.PasswordHash = user.PasswordHash
+ 	m.Phone = user.Phone
+ 	m.AccountTypeID = user.AccountTypeID
+ 	m.ProfessionalTypeID = user.ProfessionalTypeID
+ 	m.EmailVerified = user.EmailVerified
+ 	m.EmailVerifiedAt = user.EmailVerifiedAt
+ 	m.IdentityVerified = user.IdentityVerified
+ 	m.IdentityVerifiedAt = user.IdentityVerifiedAt
+ 	m.PhoneVerified = user.PhoneVerified
+ 	m.PhoneVerifiedAt = user.PhoneVerifiedAt
+ 	m.IsActive = user.IsActive
+	m.IsGuest = user.IsGuest
+ 	m.CreatedAt = user.CreatedAt
+ 	m.UpdatedAt = user.UpdatedAt
+ 	if user.DeletedAt != nil {
+ 		m.DeletedAt = gorm.DeletedAt{Time: *user.DeletedAt, Valid: true}
+ 	}
+ }
 
 // ============================================================
 // ACCOUNT MODEL

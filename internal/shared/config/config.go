@@ -289,8 +289,8 @@ func Load() *Config {
 		},
 		JWT: JWTConfig{
 			Secret:            getEnv("JWT_SECRET", "change-this-in-production"),
-			AccessExpiration:  getEnvDuration("JWT_ACCESS_EXPIRATION", 24*time.Hour),
-			RefreshExpiration: getEnvDuration("JWT_REFRESH_EXPIRATION", 168*time.Hour),
+			AccessExpiration:  getEnvDuration("JWT_ACCESS_EXPIRATION", 15*time.Minute),
+			RefreshExpiration: getEnvDuration("JWT_REFRESH_EXPIRATION", 7*24*time.Hour),
 		},
 		Email: EmailConfig{
 			APIKey: getEnv("EMAIL_API_KEY", ""),

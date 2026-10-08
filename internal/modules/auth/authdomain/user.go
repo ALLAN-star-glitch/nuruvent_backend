@@ -18,10 +18,10 @@ type User struct {
 	Email          string
 	PasswordHash   string
 	Phone          string
-	AccountTypeID  string  // ✅ Only keep this - references account_types table
+	AccountTypeID  string
 	ProfessionalTypeID *string
 	InstitutionID  *string
-	
+
 	// Verification fields
 	EmailVerified     bool
 	EmailVerifiedAt   *time.Time
@@ -29,13 +29,13 @@ type User struct {
 	PhoneVerifiedAt   *time.Time
 	IdentityVerified  bool
 	IdentityVerifiedAt *time.Time
-	
+
 	// Status
 	IsActive  bool
+	IsGuest   bool // ← NEW: lightweight identity, no password
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time
-
 
 	Username string
 }
@@ -73,6 +73,8 @@ func NewUser(email, passwordHash, name, phone, accountTypeID string) (*User, err
 		UpdatedAt:      now,
 	}, nil
 }
+
+
 
 // ============================================================
 // ACCOUNT TYPE HELPERS
@@ -291,4 +293,13 @@ func (u *User) Restore() {
 // slugify generates a slug from a name
 func slugify(name string) string {
 	return "user-" + uuid.New().String()[:8]
+}
+
+
+
+// CanLoginWithPassword reports whether this user can authenticate
+// using a password. Guest users have no password hash and must
+// authenticate via a join link or by setting a password first.
+func (u *User) CanLoginWithPassword() bool {
+	return !u.IsGuest && u.PasswordHash != ""
 }

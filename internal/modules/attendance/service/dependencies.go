@@ -102,6 +102,9 @@ type Dependencies struct {
 	// AppConfig carries the frontend base URL used to build absolute
 	// redirect URLs on join-token redemption. See buildJoinRedirect.
 	AppConfig config.AppConfig
+
+
+	Registrations attendance.RegistrationLookup 
 }
 
 // URLValidator is an optional interface a ProviderAdapter may

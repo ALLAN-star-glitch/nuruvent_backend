@@ -73,3 +73,28 @@ func (a *UserInfoAdapter) GetPhone(
 	}
 	return strings.TrimSpace(user.Phone), nil
 }
+
+
+
+// FindOrCreateGuestByEmail returns the user ID for the given email,
+// creating a lightweight guest user if none exists. Implements the
+// registration module's UserInfoProvider port.
+func (a *UserInfoAdapter) FindOrCreateGuestByEmail(
+	ctx context.Context,
+	email string,
+	name string,
+	phone string,
+) (string, error) {
+	if strings.TrimSpace(email) == "" {
+		return "", fmt.Errorf("email is required")
+	}
+
+	user, err := a.auth.FindOrCreateGuestByEmail(ctx, email, name, phone)
+	if err != nil {
+		return "", fmt.Errorf("auth.FindOrCreateGuestByEmail: %w", err)
+	}
+	if user == nil {
+		return "", fmt.Errorf("guest user creation returned nil")
+	}
+	return user.ID, nil
+}

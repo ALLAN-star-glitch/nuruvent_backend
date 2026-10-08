@@ -29,7 +29,6 @@ var ProviderSet = wire.NewSet(
 	attendancePostgres.NewAttendeeRollupStatusRepository,
 	attendancePostgres.NewAttendanceOverrideRepository,
 	attendancePostgres.NewUnitOfWork,
-	
 
 	// Cross-cutting adapters
 	attendanceToken.NewSHA256Generator,
@@ -50,7 +49,7 @@ var ProviderSet = wire.NewSet(
 	attendanceHandler.NewSessionHandler,
 	attendanceHandler.NewAttendanceHandler,
 	attendanceHandler.NewWebhookHandler,
-	attendanceHandler.NewJoinHandler,
+	// attendanceHandler.NewJoinHandler, // built inside NewHandlers
 	attendanceHandler.NewHandlers,
 )
 
@@ -58,14 +57,10 @@ var ProviderSet = wire.NewSet(
 // CLOCK
 // ============================================================
 
-// systemClock implements attendanceService.Clock by delegating to
-// time.Now.
 type systemClock struct{}
 
 func (systemClock) Now() time.Time { return time.Now().UTC() }
 
-// newSystemClock constructs the concrete clock. The ProviderSet binds
-// *systemClock to the attendanceService.Clock interface.
 func NewSystemClock() *systemClock {
 	return &systemClock{}
 }
@@ -74,8 +69,6 @@ func NewSystemClock() *systemClock {
 // VIDEO PROVIDERS
 // ============================================================
 
-// provideAttendanceProviders builds the map of video-platform
-// adapters.
 func ProvideAttendanceProviders(
 	cfg *config.Config,
 ) map[attendance.SessionProvider]attendanceService.ProviderAdapter {
@@ -92,10 +85,6 @@ func ProvideAttendanceProviders(
 // SERVICE DEPENDENCIES
 // ============================================================
 
-// provideAttendanceDependencies assembles service.Dependencies from
-// the wire-bound building blocks.
-// provideAttendanceDependencies assembles service.Dependencies from
-// the wire-bound building blocks.
 func ProvideAttendanceDependencies(
 	unitOfWork *attendancePostgres.UnitOfWork,
 	ids *id.UUIDGenerator,
@@ -105,6 +94,7 @@ func ProvideAttendanceDependencies(
 	providers map[attendance.SessionProvider]attendanceService.ProviderAdapter,
 	videoMeetings attendanceService.VideoMeetingIDResolver,
 	permissionChecker attendance.PermissionChecker,
+	regLookup attendance.RegistrationLookup,
 	cfg *config.Config,
 ) attendanceService.Dependencies {
 	return attendanceService.Dependencies{
@@ -118,6 +108,7 @@ func ProvideAttendanceDependencies(
 		JoinTokenGrace:    24 * time.Hour,
 		VideoMeetings:     videoMeetings,
 		PermissionChecker: permissionChecker,
+		Registrations:     regLookup,
 		AppConfig:         cfg.App,
 	}
 }

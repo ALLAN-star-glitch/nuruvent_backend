@@ -21,6 +21,7 @@ type Account struct {
 	AccountTypeID     string  // References account_types table (personal/institution)
 	InstitutionTypeID *string // References institution_types table (company/institute/etc.) - NULL for personal
 	Status            string
+	IsActive          bool // mirrors accounts.is_active in DB; used by GORM + queries
 	LogoURL           string
 	Website           string
 	Description       string
@@ -42,6 +43,9 @@ const (
 	AccountStatusInactive  = "inactive"
 )
 
+// ============================================================
+// CONSTRUCTORS
+// ============================================================
 
 // NewAccount creates a new account
 func NewAccount(name, displayName, slug, email, phone, accountTypeID, createdBy string) (*Account, error) {
@@ -66,6 +70,7 @@ func NewAccount(name, displayName, slug, email, phone, accountTypeID, createdBy 
 		AccountTypeID:     accountTypeID,
 		InstitutionTypeID: nil, // Will be set later for institution accounts
 		Status:            AccountStatusActive,
+		IsActive:          true,
 		CreatedBy:         createdBy,
 		CreatedAt:         now,
 		UpdatedAt:         now,
@@ -192,23 +197,32 @@ func (a *Account) UpdateSubscriptionPlan(plan string) {
 // Suspend suspends the account
 func (a *Account) Suspend() {
 	a.Status = AccountStatusSuspended
+	a.IsActive = false
 	a.UpdatedAt = time.Now()
 }
 
 // Activate activates the account
 func (a *Account) Activate() {
 	a.Status = AccountStatusActive
+	a.IsActive = true
 	a.UpdatedAt = time.Now()
 }
 
 // Deactivate deactivates the account
 func (a *Account) Deactivate() {
 	a.Status = AccountStatusInactive
+	a.IsActive = false
 	a.UpdatedAt = time.Now()
 }
 
-// IsActive checks if the account is active
-func (a *Account) IsActive() bool {
+// IsActiveStatus returns true if the account status is "active".
+//
+// Renamed from IsActive() because IsActive is now a field on the
+// struct (mirroring the accounts.is_active DB column). Callers that
+// used `account.IsActive()` as a method should migrate to either:
+//   - `account.IsActive`         (field — checks DB flag)
+//   - `account.IsActiveStatus()` (method — checks status string)
+func (a *Account) IsActiveStatus() bool {
 	return a.Status == AccountStatusActive
 }
 
@@ -231,6 +245,7 @@ func (a *Account) SoftDelete() {
 	now := time.Now()
 	a.DeletedAt = &now
 	a.Status = AccountStatusInactive
+	a.IsActive = false
 	a.UpdatedAt = now
 }
 
@@ -238,5 +253,6 @@ func (a *Account) SoftDelete() {
 func (a *Account) Restore() {
 	a.DeletedAt = nil
 	a.Status = AccountStatusActive
+	a.IsActive = true
 	a.UpdatedAt = time.Now()
 }

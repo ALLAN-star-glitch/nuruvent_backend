@@ -4,32 +4,143 @@ package postgres
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
+	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 )
 
 // ============================================================
 // POSTGRES REPOSITORY - Implements authdomain.Repository
+//
+// Scope: users, account_types, institution_types, professional_types,
+// refresh_tokens, accounts, account_members, platform admin checks.
+//
+// This repository does NOT know about teams. Team creation is
+// orchestrated by the service layer (see auth/service/guest.go and
+// auth/service/registration.go), which calls TeamService after the
+// account-layer transaction commits.
 // ============================================================
 
 type PostgresRepository struct {
 	db *gorm.DB
 }
 
-func (r *PostgresRepository) WithTransaction(ctx context.Context, fn func(txCtx context.Context) error) error {
+func NewPostgresRepository(db *gorm.DB) authdomain.Repository {
+	return &PostgresRepository{db: db}
+}
+
+func (r *PostgresRepository) WithTransaction(
+	ctx context.Context,
+	fn func(txCtx context.Context) error,
+) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Pass the transaction DB handle into context so subsequent repo calls use it
 		txCtx := context.WithValue(ctx, "tx_db", tx)
 		return fn(txCtx)
 	})
 }
 
-func NewPostgresRepository(db *gorm.DB) authdomain.Repository {
-	return &PostgresRepository{db: db}
+// dbFromCtx returns the transaction handle stored by WithTransaction,
+// or the base DB handle if no transaction is active.
+func (r *PostgresRepository) dbFromCtx(ctx context.Context) *gorm.DB {
+	if tx, ok := ctx.Value("tx_db").(*gorm.DB); ok && tx != nil {
+		return tx
+	}
+	return r.db
+}
+
+// ============================================================
+// WORKSPACE PROVISIONING (account-layer only)
+// ============================================================
+
+// ProvisionUserAccount creates the personal account + account_member
+// (owner/admin) for the given user.
+//
+// It does NOT create a personal team. Team creation belongs to the
+// team module and is orchestrated by the service layer, exactly like
+// VerifyOTPAndCreateUser does today.
+//
+// Idempotent: if the user already belongs to any account, that
+// account's ID is returned and nothing new is created.
+//
+// Runs inside the caller's transaction if one is active (see
+// dbFromCtx). Otherwise it runs directly on the base DB handle.
+func (r *PostgresRepository) ProvisionUserAccount(
+	ctx context.Context,
+	user *authdomain.User,
+) (string, error) {
+	if user == nil {
+		return "", fmt.Errorf("user is nil")
+	}
+	if user.ID == "" {
+		return "", fmt.Errorf("user ID is required")
+	}
+
+	db := r.dbFromCtx(ctx)
+
+	// Idempotency: any existing account membership for this user wins.
+	var existing AccountMemberModel
+	err := db.WithContext(ctx).
+		Where("user_id = ? AND deleted_at IS NULL", user.ID).
+		Order("created_at ASC").
+		First(&existing).Error
+	if err == nil {
+		return existing.AccountID, nil
+	}
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", fmt.Errorf("check existing membership: %w", err)
+	}
+
+	now := time.Now()
+
+	// 1. Personal account
+	account := &authdomain.Account{
+		ID:            newUUID(),
+		Name:          fallbackName(user.Name) + "'s Account",
+		DisplayName:   fallbackName(user.Name),
+		Slug:          "acct-" + strings.ToLower(randomShortID(10)),
+		Email:         user.Email,
+		Phone:         user.Phone,
+		AccountTypeID: user.AccountTypeID,
+		Status:        authdomain.AccountStatusActive,
+		IsActive:      true,
+		CreatedBy:     user.ID,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	accountModel := AccountModel{}
+	accountModel.FromDomain(account)
+	if err := db.WithContext(ctx).Create(&accountModel).Error; err != nil {
+		return "", fmt.Errorf("create account: %w", err)
+	}
+
+	// 2. Account member (owner/admin). This is what GetAccountsByUserID
+	//    reads, and what the events service implicitly depends on through
+	//    the account → team → member chain.
+	member := &authdomain.AccountMember{
+		ID:        newUUID(),
+		AccountID: account.ID,
+		UserID:    user.ID,
+		Role:      authdomain.RoleAccountAdmin.String(),
+		IsActive:  true,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	memberModel := AccountMemberModel{}
+	memberModel.FromDomain(member)
+	if err := db.WithContext(ctx).Create(&memberModel).Error; err != nil {
+		return "", fmt.Errorf("create account member: %w", err)
+	}
+
+	return account.ID, nil
 }
 
 // ============================================================
@@ -195,7 +306,6 @@ func (r *PostgresRepository) ListInstitutionTypes(ctx context.Context) ([]*authd
 	if err != nil {
 		return nil, err
 	}
-
 	types := make([]*authdomain.InstitutionType, len(models))
 	for i, model := range models {
 		types[i] = ToAuthDomainInstitutionType(&model)
@@ -252,7 +362,6 @@ func (r *PostgresRepository) ListProfessionalTypes(ctx context.Context) ([]*auth
 	if err != nil {
 		return nil, err
 	}
-
 	types := make([]*authdomain.ProfessionalType, len(models))
 	for i, model := range models {
 		types[i] = ToAuthDomainProfessionalType(&model)
@@ -300,18 +409,15 @@ func (r *PostgresRepository) UpdateRefreshTokenContext(ctx context.Context, toke
 	updates := map[string]interface{}{
 		"updated_at": time.Now(),
 	}
-
 	if userAgent != "" {
 		updates["user_agent"] = userAgent
 	}
 	if ipAddress != "" {
 		updates["ip_address"] = ipAddress
 	}
-
 	if len(updates) == 0 {
 		return nil
 	}
-
 	return r.db.WithContext(ctx).Model(&RefreshTokenModel{}).
 		Where("token = ?", token).
 		Updates(updates).Error
@@ -325,12 +431,12 @@ func (r *PostgresRepository) AccountExists(ctx context.Context, id string) (bool
 	if id == "" {
 		return false, fmt.Errorf("account ID is required")
 	}
-
 	var count int64
-	if err := r.db.WithContext(ctx).Model(&AccountModel{}).Where("id = ? AND deleted_at IS NULL", id).Count(&count).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&AccountModel{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Count(&count).Error; err != nil {
 		return false, fmt.Errorf("failed to check account existence: %w", err)
 	}
-
 	return count > 0, nil
 }
 
@@ -338,14 +444,11 @@ func (r *PostgresRepository) CreateAccount(ctx context.Context, account *authdom
 	if account == nil {
 		return fmt.Errorf("account is nil")
 	}
-
 	model := AccountModel{}
 	model.FromDomain(account)
-
 	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
 		return fmt.Errorf("failed to create account: %w", err)
 	}
-
 	return nil
 }
 
@@ -353,15 +456,15 @@ func (r *PostgresRepository) GetAccountByID(ctx context.Context, id string) (*au
 	if id == "" {
 		return nil, authdomain.ErrAccountNotFound
 	}
-
 	var model AccountModel
-	if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Where("id = ? AND deleted_at IS NULL", id).
+		First(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, authdomain.ErrAccountNotFound
 		}
 		return nil, fmt.Errorf("failed to get account: %w", err)
 	}
-
 	return model.ToDomain(), nil
 }
 
@@ -369,15 +472,15 @@ func (r *PostgresRepository) GetAccountByEmail(ctx context.Context, email string
 	if email == "" {
 		return nil, fmt.Errorf("email is required")
 	}
-
 	var model AccountModel
-	if err := r.db.WithContext(ctx).Where("email = ? AND deleted_at IS NULL", email).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Where("email = ? AND deleted_at IS NULL", email).
+		First(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, authdomain.ErrAccountNotFound
 		}
 		return nil, fmt.Errorf("failed to get account by email: %w", err)
 	}
-
 	return model.ToDomain(), nil
 }
 
@@ -385,15 +488,15 @@ func (r *PostgresRepository) GetAccountBySlug(ctx context.Context, slug string) 
 	if slug == "" {
 		return nil, fmt.Errorf("slug is required")
 	}
-
 	var model AccountModel
-	if err := r.db.WithContext(ctx).Where("slug = ? AND deleted_at IS NULL", slug).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Where("slug = ? AND deleted_at IS NULL", slug).
+		First(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, authdomain.ErrAccountNotFound
 		}
 		return nil, fmt.Errorf("failed to get account by slug: %w", err)
 	}
-
 	return model.ToDomain(), nil
 }
 
@@ -401,7 +504,6 @@ func (r *PostgresRepository) GetAccountsByUserID(ctx context.Context, userID str
 	if userID == "" {
 		return nil, fmt.Errorf("user ID is required")
 	}
-
 	var models []AccountModel
 	if err := r.db.WithContext(ctx).
 		Joins("INNER JOIN account_members ON account_members.account_id = accounts.id").
@@ -409,7 +511,6 @@ func (r *PostgresRepository) GetAccountsByUserID(ctx context.Context, userID str
 		Find(&models).Error; err != nil {
 		return nil, fmt.Errorf("failed to get accounts by user: %w", err)
 	}
-
 	accounts := make([]*authdomain.Account, len(models))
 	for i, model := range models {
 		accounts[i] = model.ToDomain()
@@ -424,14 +525,11 @@ func (r *PostgresRepository) UpdateAccount(ctx context.Context, account *authdom
 	if account.ID == "" {
 		return authdomain.ErrAccountNotFound
 	}
-
 	model := AccountModel{}
 	model.FromDomain(account)
-
 	if err := r.db.WithContext(ctx).Save(&model).Error; err != nil {
 		return fmt.Errorf("failed to update account: %w", err)
 	}
-
 	return nil
 }
 
@@ -439,17 +537,15 @@ func (r *PostgresRepository) DeleteAccount(ctx context.Context, id string) error
 	if id == "" {
 		return authdomain.ErrAccountNotFound
 	}
-
-	// Soft delete
-	result := r.db.WithContext(ctx).Model(&AccountModel{}).Where("id = ?", id).Update("deleted_at", time.Now())
+	result := r.db.WithContext(ctx).Model(&AccountModel{}).
+		Where("id = ?", id).
+		Update("deleted_at", time.Now())
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete account: %w", result.Error)
 	}
-
 	if result.RowsAffected == 0 {
 		return authdomain.ErrAccountNotFound
 	}
-
 	return nil
 }
 
@@ -461,14 +557,11 @@ func (r *PostgresRepository) CreateAccountMember(ctx context.Context, member *au
 	if member == nil {
 		return fmt.Errorf("member is nil")
 	}
-
 	model := AccountMemberModel{}
 	model.FromDomain(member)
-
 	if err := r.db.WithContext(ctx).Create(&model).Error; err != nil {
 		return fmt.Errorf("failed to create account member: %w", err)
 	}
-
 	return nil
 }
 
@@ -476,23 +569,24 @@ func (r *PostgresRepository) GetAccountMemberByID(ctx context.Context, id string
 	if id == "" {
 		return nil, fmt.Errorf("member ID is required")
 	}
-
 	var model AccountMemberModel
-	if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", id).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Where("id = ? AND deleted_at IS NULL", id).
+		First(&model).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, authdomain.ErrAccountMemberNotFound
 		}
 		return nil, fmt.Errorf("failed to get account member: %w", err)
 	}
-
 	return model.ToDomain(), nil
 }
 
-func (r *PostgresRepository) GetAccountMemberByAccountAndUser(ctx context.Context, accountID string, userID string) (*authdomain.AccountMember, error) {
+func (r *PostgresRepository) GetAccountMemberByAccountAndUser(
+	ctx context.Context, accountID, userID string,
+) (*authdomain.AccountMember, error) {
 	if accountID == "" || userID == "" {
 		return nil, fmt.Errorf("account ID and user ID are required")
 	}
-
 	var model AccountMemberModel
 	if err := r.db.WithContext(ctx).
 		Where("account_id = ? AND user_id = ? AND deleted_at IS NULL", accountID, userID).
@@ -502,7 +596,6 @@ func (r *PostgresRepository) GetAccountMemberByAccountAndUser(ctx context.Contex
 		}
 		return nil, fmt.Errorf("failed to get account member: %w", err)
 	}
-
 	return model.ToDomain(), nil
 }
 
@@ -510,14 +603,12 @@ func (r *PostgresRepository) GetAccountMembersByAccount(ctx context.Context, acc
 	if accountID == "" {
 		return nil, fmt.Errorf("account ID is required")
 	}
-
 	var models []AccountMemberModel
 	if err := r.db.WithContext(ctx).
 		Where("account_id = ? AND deleted_at IS NULL", accountID).
 		Find(&models).Error; err != nil {
 		return nil, fmt.Errorf("failed to get account members: %w", err)
 	}
-
 	members := make([]*authdomain.AccountMember, len(models))
 	for i, model := range models {
 		members[i] = model.ToDomain()
@@ -529,14 +620,12 @@ func (r *PostgresRepository) GetAccountMembersByUser(ctx context.Context, userID
 	if userID == "" {
 		return nil, fmt.Errorf("user ID is required")
 	}
-
 	var models []AccountMemberModel
 	if err := r.db.WithContext(ctx).
 		Where("user_id = ? AND deleted_at IS NULL", userID).
 		Find(&models).Error; err != nil {
 		return nil, fmt.Errorf("failed to get account memberships: %w", err)
 	}
-
 	members := make([]*authdomain.AccountMember, len(models))
 	for i, model := range models {
 		members[i] = model.ToDomain()
@@ -551,35 +640,27 @@ func (r *PostgresRepository) UpdateAccountMember(ctx context.Context, member *au
 	if member.ID == "" {
 		return authdomain.ErrAccountMemberNotFound
 	}
-
 	model := AccountMemberModel{}
 	model.FromDomain(member)
-
 	if err := r.db.WithContext(ctx).Save(&model).Error; err != nil {
 		return fmt.Errorf("failed to update account member: %w", err)
 	}
-
 	return nil
 }
 
-func (r *PostgresRepository) DeleteAccountMember(ctx context.Context, accountID string, userID string) error {
+func (r *PostgresRepository) DeleteAccountMember(ctx context.Context, accountID, userID string) error {
 	if accountID == "" || userID == "" {
 		return fmt.Errorf("account ID and user ID are required")
 	}
-
-	// Soft delete
 	result := r.db.WithContext(ctx).Model(&AccountMemberModel{}).
 		Where("account_id = ? AND user_id = ?", accountID, userID).
 		Update("deleted_at", time.Now())
-
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete account member: %w", result.Error)
 	}
-
 	if result.RowsAffected == 0 {
 		return authdomain.ErrAccountMemberNotFound
 	}
-
 	return nil
 }
 
@@ -587,48 +668,44 @@ func (r *PostgresRepository) DeleteAccountMember(ctx context.Context, accountID 
 // ACCOUNT MEMBER CHECK OPERATIONS
 // ============================================================
 
-func (r *PostgresRepository) IsAccountMember(ctx context.Context, accountID string, userID string) (bool, error) {
+func (r *PostgresRepository) IsAccountMember(ctx context.Context, accountID, userID string) (bool, error) {
 	if accountID == "" || userID == "" {
 		return false, fmt.Errorf("account ID and user ID are required")
 	}
-
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&AccountMemberModel{}).
 		Where("account_id = ? AND user_id = ? AND deleted_at IS NULL", accountID, userID).
 		Count(&count).Error; err != nil {
 		return false, fmt.Errorf("failed to check account membership: %w", err)
 	}
-
 	return count > 0, nil
 }
 
-func (r *PostgresRepository) IsAccountAdmin(ctx context.Context, accountID string, userID string) (bool, error) {
+func (r *PostgresRepository) IsAccountAdmin(ctx context.Context, accountID, userID string) (bool, error) {
 	if accountID == "" || userID == "" {
 		return false, fmt.Errorf("account ID and user ID are required")
 	}
-
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&AccountMemberModel{}).
-		Where("account_id = ? AND user_id = ? AND role = ? AND deleted_at IS NULL", accountID, userID, authdomain.RoleAccountAdmin.String()).
+		Where("account_id = ? AND user_id = ? AND role = ? AND deleted_at IS NULL",
+			accountID, userID, authdomain.RoleAccountAdmin.String()).
 		Count(&count).Error; err != nil {
 		return false, fmt.Errorf("failed to check account admin: %w", err)
 	}
-
 	return count > 0, nil
 }
 
-func (r *PostgresRepository) IsAccountTrainer(ctx context.Context, accountID string, userID string) (bool, error) {
+func (r *PostgresRepository) IsAccountTrainer(ctx context.Context, accountID, userID string) (bool, error) {
 	if accountID == "" || userID == "" {
 		return false, fmt.Errorf("account ID and user ID are required")
 	}
-
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&AccountMemberModel{}).
-		Where("account_id = ? AND user_id = ? AND role = ? AND deleted_at IS NULL", accountID, userID, authdomain.RoleTrainer.String()).
+		Where("account_id = ? AND user_id = ? AND role = ? AND deleted_at IS NULL",
+			accountID, userID, authdomain.RoleTrainer.String()).
 		Count(&count).Error; err != nil {
 		return false, fmt.Errorf("failed to check account trainer: %w", err)
 	}
-
 	return count > 0, nil
 }
 
@@ -636,14 +713,12 @@ func (r *PostgresRepository) CountAccountMembers(ctx context.Context, accountID 
 	if accountID == "" {
 		return 0, fmt.Errorf("account ID is required")
 	}
-
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&AccountMemberModel{}).
 		Where("account_id = ? AND deleted_at IS NULL", accountID).
 		Count(&count).Error; err != nil {
 		return 0, fmt.Errorf("failed to count account members: %w", err)
 	}
-
 	return count, nil
 }
 
@@ -681,4 +756,42 @@ func (r *PostgresRepository) UsernameExists(ctx context.Context, username string
 		Where("username = ?", username).
 		Count(&count).Error
 	return count > 0, err
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+func randomShortID(n int) string {
+	const charset = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		idx, _ := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
+		b[i] = charset[idx.Int64()]
+	}
+	return string(b)
+}
+
+func newUUID() string {
+	return uuid.New().String()
+}
+
+func fallbackName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "Guest"
+	}
+	return name
+}
+
+func isUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505"
+	}
+	return strings.Contains(err.Error(), "SQLSTATE 23505") ||
+		strings.Contains(err.Error(), "duplicate key value")
 }
