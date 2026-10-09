@@ -6,40 +6,45 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
-
-// RegisterRoutes registers all team routes
+// RegisterRoutes registers all team routes.
 func (h *TeamHandler) RegisterRoutes(
 	router fiber.Router,
 	authMiddleware fiber.Handler,
 	authzMiddleware fiber.Handler,
+	optionalAuth fiber.Handler,
 ) {
 	// ============================================================
-	// PUBLIC ROUTES (No auth required)
+	// PUBLIC / OPTIONAL-AUTH ROUTES
+	//
+	// Invitation accept/decline must accept both anonymous and
+	// authenticated callers:
+	//
+	//   - Existing user, already signed in → optionalAuth populates the
+	//     user ID; the service matches it against the invitation email.
+	//   - New user (never signed up) → optionalAuth finds no token, the
+	//     request proceeds anonymous; the handler/service creates the
+	//     user from the request body using the invitation's email.
+	//
+	// Static "invitations/..." segments MUST be registered before any
+	// dynamic /:id route in this file, otherwise the router would
+	// capture "invitations" as the team ID.
 	// ============================================================
 	public := router.Group("/teams")
 	{
 		public.Get("/invitations/validate", h.ValidateInvitation)
+		public.Post("/invitations/accept", optionalAuth, h.AcceptInvitation)
+		public.Post("/invitations/decline", optionalAuth, h.DeclineInvitation)
 	}
 
 	// ============================================================
-	// PROTECTED ROUTES (Auth required)
+	// PROTECTED ROUTES (auth required)
 	// ============================================================
 	protected := router.Group("/teams")
 	protected.Use(authMiddleware)
 	{
-		// ============================================================
-		// INVITATION LIFECYCLE — invitee-side (accept/decline)
-		//
-		// These require only authMiddleware: the invitee has no
-		// permissions on the team yet, so authzMiddleware has nothing to
-		// check. The service validates the token, matches the invitation
-		// email against the authenticated user, and writes the memberships.
-		//
-		// Registered before the /:id/... routes so the literal
-		// "invitations" segment is never captured as a team ID.
-		// ============================================================
-		protected.Post("/personal",    authzMiddleware, h.CreatePersonalTeam)
-        protected.Post("/institution", authzMiddleware, h.CreateInstitutionTeam)
+		// ---- Personal / institution team creation ----
+		protected.Post("/personal", authzMiddleware, h.CreatePersonalTeam)
+		protected.Post("/institution", authzMiddleware, h.CreateInstitutionTeam)
 
 		// ============================================================
 		// TEAM OPERATIONS
@@ -52,7 +57,6 @@ func (h *TeamHandler) RegisterRoutes(
 
 		// ============================================================
 		// MEMBER OPERATIONS
-		// ✅ REMOVED: UpdateMemberRole - roles are managed at account level
 		// ============================================================
 		protected.Get("/:id/members", authzMiddleware, h.GetTeamMembers)
 		protected.Post("/:id/members", authzMiddleware, h.AddMember)
@@ -60,8 +64,7 @@ func (h *TeamHandler) RegisterRoutes(
 		protected.Post("/:id/leave", authzMiddleware, h.LeaveTeam)
 
 		// ============================================================
-		// INVITATION OPERATIONS — admin-side (invite/list/resend)
-		// ✅ REMOVED: Role from invitations - roles are inherited from account
+		// INVITATION OPERATIONS — admin side
 		// ============================================================
 		protected.Post("/:id/invitations", authzMiddleware, h.InviteMember)
 		protected.Get("/:id/invitations", authzMiddleware, h.GetTeamInvitations)

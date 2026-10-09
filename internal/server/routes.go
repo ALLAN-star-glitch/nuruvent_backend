@@ -63,8 +63,10 @@ func SetupRoutes(
 	// GETs so private-event visibility rules can apply.
 	eventsHandler.RegisterRoutes(api, authMiddleware, authzMiddleware, optionalAuth)
 
-	// Team routes
-	teamHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
+	// Team routes — optionalAuth lets invitation accept/decline work
+	// for both anonymous (new user) and authenticated (existing user)
+	// callers.
+	teamHandler.RegisterRoutes(api, authMiddleware, authzMiddleware, optionalAuth)
 
 	// Account routes
 	accountHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
