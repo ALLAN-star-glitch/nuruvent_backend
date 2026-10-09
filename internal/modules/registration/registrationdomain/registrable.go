@@ -1,6 +1,9 @@
 package registrationdomain
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 // TicketPrice is the server-authoritative price for a single ticket type.
 type TicketPrice struct {
@@ -45,6 +48,6 @@ type Registrable interface {
 // RegistrableResolver locates a Registrable by type and ID. Implemented at
 // the composition root so registration doesn't import events directly.
 type RegistrableResolver interface {
-    Resolve(typeName string, id string) (Registrable, error)
+    Resolve(ctx context.Context, typeName string, id string) (Registrable, error)
 }
 

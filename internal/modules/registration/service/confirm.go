@@ -46,7 +46,7 @@ func (s *service) ConfirmRegistration(ctx context.Context, registrationID string
 	// Adjust the event counter. Best-effort — a failure here does NOT
 	// roll back the confirmation, because the registration itself is
 	// the source of truth. Drift is reconciled by a background job.
-	registrable, err := s.deps.Registrables.Resolve("event", eventReg.EventID)
+	registrable, err := s.deps.Registrables.Resolve(ctx, "event", eventReg.EventID)
 	if err != nil {
 		log.Printf("[confirm] resolve event %s: %v", eventReg.EventID, err)
 		return nil

@@ -48,7 +48,7 @@ func (s *service) RegisterForEvent(
 	// ------------------------------------------------------------
 	// 1. Resolve the registrable
 	// ------------------------------------------------------------
-	registrable, err := s.deps.Registrables.Resolve("event", cmd.EventID)
+	registrable, err := s.deps.Registrables.Resolve(ctx, "event", cmd.EventID)
 	if err != nil {
 		log.Printf("[registration] STEP 1 FAIL: resolve event: %v", err)
 		return nil, fmt.Errorf("resolve event: %w", err)

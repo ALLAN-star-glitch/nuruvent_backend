@@ -20,6 +20,7 @@ type eventService struct {
 	attendance    domain.AttendanceRegistrar
 	video         domain.VideoMeetingCreator
 	videoIdentity domain.VideoIdentityProvider
+	teamMembership domain.TeamMembershipChecker
 }
 
 func NewService(
@@ -32,18 +33,20 @@ func NewService(
 	attendance domain.AttendanceRegistrar,
 	video domain.VideoMeetingCreator,
 	videoIdentity domain.VideoIdentityProvider,
+	teamMembership domain.TeamMembershipChecker,
 ) Service {
 	return &eventService{
-		repo:          repo,
-		permChecker:   permChecker,
-		mediaSvc:      mediaSvc,
-		userInfo:      userInfo,
-		validator:     validation.New(),
-		organizer:     organizerProvider,
-		aiSvc:         aiSvc,
-		attendance:    attendance,
-		video:         video,
-		videoIdentity: videoIdentity,
+		repo:           repo,
+		permChecker:    permChecker,
+		mediaSvc:       mediaSvc,
+		userInfo:       userInfo,
+		validator:      validation.New(),
+		organizer:      organizerProvider,
+		aiSvc:          aiSvc,
+		attendance:     attendance,
+		video:          video,
+		videoIdentity:  videoIdentity,
+		teamMembership: teamMembership,
 	}
 }
 

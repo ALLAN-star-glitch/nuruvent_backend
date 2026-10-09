@@ -30,7 +30,7 @@ func NewHandler(svc service.Service) *Handler {
 
 // RegisterForEvent handles POST /events/:id/register
 func (h *Handler) RegisterForEvent(c fiber.Ctx) error {
-	log.Println("[registration] ENTER RegisterForEvent") 
+	log.Println("[registration] ENTER RegisterForEvent")
 	eventID := c.Params("id")
 	if eventID == "" {
 		return response.BadRequest(c, "Event ID is required", nil)
@@ -68,7 +68,12 @@ func (h *Handler) RegisterForEvent(c fiber.Ctx) error {
 		}
 	}
 
-	reg, err := h.svc.RegisterForEvent(c.Context(), cmd)
+	// Enriched context carries userID / teamID / teamType / accountID
+	// into downstream services (events, tickets, etc.) so private-event
+	// visibility rules apply correctly.
+	ctx := handlerhelper.EnrichUserContext(c)
+
+	reg, err := h.svc.RegisterForEvent(ctx, cmd)
 	if err != nil {
 		return mapDomainError(c, err)
 	}
@@ -82,23 +87,25 @@ func (h *Handler) RegisterForEvent(c fiber.Ctx) error {
 
 // GetByID handles GET /registrations/:id
 func (h *Handler) GetByID(c fiber.Ctx) error {
-    id := c.Params("id")
-    if id == "" {
-        return response.BadRequest(c, "Registration ID is required", nil)
-    }
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c, "Registration ID is required", nil)
+	}
 
-    // The frontend can supply an email for guest registrations.
-    // The service verifies it matches the stored guest_email.
-    guestEmail := c.Query("email")
+	// The frontend can supply an email for guest registrations.
+	// The service verifies it matches the stored guest_email.
+	guestEmail := c.Query("email")
 
-    actorID := handlerhelper.GetUserIDOptional(c)
+	actorID := handlerhelper.GetUserIDOptional(c)
 
-    er, err := h.svc.GetByID(c.Context(), id, actorID, guestEmail)
-    if err != nil {
-        return mapDomainError(c, err)
-    }
+	ctx := handlerhelper.EnrichUserContext(c)
 
-    return response.Success(c, "Registration retrieved successfully", toRegistrationResponse(er))
+	er, err := h.svc.GetByID(ctx, id, actorID, guestEmail)
+	if err != nil {
+		return mapDomainError(c, err)
+	}
+
+	return response.Success(c, "Registration retrieved successfully", toRegistrationResponse(er))
 }
 
 // ListByEvent handles GET /events/:id/registrations
@@ -116,7 +123,9 @@ func (h *Handler) ListByEvent(c fiber.Ctx) error {
 		PageSize: parseQueryInt(c, "page_size", 20),
 	}
 
-	regs, total, err := h.svc.ListByEvent(c.Context(), eventID, actorID, filter)
+	ctx := handlerhelper.EnrichUserContext(c)
+
+	regs, total, err := h.svc.ListByEvent(ctx, eventID, actorID, filter)
 	if err != nil {
 		return mapDomainError(c, err)
 	}
@@ -131,7 +140,9 @@ func (h *Handler) ListMine(c fiber.Ctx) error {
 		return response.Unauthorized(c, "Authentication required", nil)
 	}
 
-	res, err := h.svc.ListMineRegistrations(c.Context(), service.ListMineRegistrationsCommand{
+	ctx := handlerhelper.EnrichUserContext(c)
+
+	res, err := h.svc.ListMineRegistrations(ctx, service.ListMineRegistrationsCommand{
 		UserID:    userID,
 		EventID:   c.Query("event_id"),
 		Search:    c.Query("search"),
@@ -177,7 +188,9 @@ func (h *Handler) ListAllRegistrations(c fiber.Ctx) error {
 		return response.Unauthorized(c, "Authentication required", nil)
 	}
 
-	res, err := h.svc.ListAllRegistrations(c.Context(), service.ListAllRegistrationsCommand{
+	ctx := handlerhelper.EnrichUserContext(c)
+
+	res, err := h.svc.ListAllRegistrations(ctx, service.ListAllRegistrationsCommand{
 		UserID:    userID,
 		EventID:   c.Query("event_id"),
 		Search:    c.Query("search"),
@@ -232,7 +245,9 @@ func (h *Handler) Cancel(c fiber.Ctx) error {
 		Reason:         body.Reason,
 	}
 
-	if err := h.svc.CancelRegistration(c.Context(), cmd); err != nil {
+	ctx := handlerhelper.EnrichUserContext(c)
+
+	if err := h.svc.CancelRegistration(ctx, cmd); err != nil {
 		return mapDomainError(c, err)
 	}
 
@@ -271,7 +286,9 @@ func (h *Handler) JoinWaitlist(c fiber.Ctx) error {
 		}
 	}
 
-	entry, err := h.svc.JoinWaitlist(c.Context(), cmd)
+	ctx := handlerhelper.EnrichUserContext(c)
+
+	entry, err := h.svc.JoinWaitlist(ctx, cmd)
 	if err != nil {
 		return mapDomainError(c, err)
 	}
@@ -287,7 +304,9 @@ func (h *Handler) PromoteFromWaitlist(c fiber.Ctx) error {
 		return response.BadRequest(c, "Event ID is required", nil)
 	}
 
-	reg, err := h.svc.PromoteFromWaitlist(c.Context(), eventID)
+	ctx := handlerhelper.EnrichUserContext(c)
+
+	reg, err := h.svc.PromoteFromWaitlist(ctx, eventID)
 	if err != nil {
 		return mapDomainError(c, err)
 	}
@@ -353,10 +372,13 @@ func (h *Handler) GetMySessionLinks(c fiber.Ctx) error {
 		return response.Unauthorized(c, "Authentication required", nil)
 	}
 
-	result, err := h.svc.GetMySessionLinks(c.Context(), userID)
+	ctx := handlerhelper.EnrichUserContext(c)
+
+	result, err := h.svc.GetMySessionLinks(ctx, userID)
 	if err != nil {
 		return mapDomainError(c, err)
 	}
+	
 
 	return response.Success(c, "Session links retrieved", toMySessionLinksResponse(result))
 }

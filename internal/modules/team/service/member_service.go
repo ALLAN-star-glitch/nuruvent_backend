@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 
@@ -362,3 +363,28 @@ func (s *teamService) GetUserInstitutionTeamIDs(ctx context.Context, userID stri
 	return teamIDs, nil
 }
 
+// IsTeamMember returns true if the user is an active member of the team.
+//
+// No authorization is performed — this is a data lookup used by other
+// modules (e.g. events) that gate access on team membership.
+func (s *teamService) IsTeamMember(
+	ctx context.Context,
+	teamID, userID string,
+) (bool, error) {
+	if teamID == "" || userID == "" {
+		return false, nil
+	}
+
+	member, err := s.repo.GetMemberByTeamAndUser(ctx, teamID, userID)
+	if err != nil {
+		// A "not found" error is expected and returns false.
+		if errors.Is(err, teamdomain.ErrMemberNotFound) {
+			return false, nil
+		}
+		return false, fmt.Errorf("team membership lookup: %w", err)
+	}
+	if member == nil {
+		return false, nil
+	}
+	return member.IsActive, nil
+}

@@ -23,10 +23,17 @@ func NewRegistrableResolver(events eventsService.Service) *RegistrableResolver {
 
 // Resolve returns a Registrable for the given type and ID.
 // Currently only "event" is supported.
-func (r *RegistrableResolver) Resolve(typeName, id string) (registrationdomain.Registrable, error) {
+//
+// ctx MUST be the request-scoped context — it carries the caller's
+// identity (userID, teamID, accountID) that the events module needs
+// to enforce private-event visibility rules.
+func (r *RegistrableResolver) Resolve(
+	ctx context.Context,
+	typeName, id string,
+) (registrationdomain.Registrable, error) {
 	switch typeName {
 	case "event":
-		event, err := r.events.GetEventByID(context.Background(), id)
+		event, err := r.events.GetEventByID(ctx, id)
 		if err != nil {
 			return nil, fmt.Errorf("fetch event: %w", err)
 		}

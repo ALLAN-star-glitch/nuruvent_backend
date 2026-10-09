@@ -58,7 +58,7 @@ func (s *service) CancelRegistration(ctx context.Context, cmd CancelCommand) err
 	// Adjust the event counter — best-effort. Failure must NOT roll back
 	// the cancellation; the counter is a derived value.
 	if wasConfirmed {
-		registrable, err := s.deps.Registrables.Resolve("event", eventReg.EventID)
+		registrable, err := s.deps.Registrables.Resolve(ctx, "event", eventReg.EventID)
 		if err != nil {
 			log.Printf("[cancel] resolve event %s: %v", eventReg.EventID, err)
 		} else if err := registrable.AdjustCount(-eventReg.TotalQuantity()); err != nil {

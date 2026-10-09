@@ -350,3 +350,13 @@ func NewEventsReader(
 ) attendanceDomain.EventsReader {
 	return attendanceadapters.NewEventsReaderAdapter(holder.Resolver())
 }
+
+// NewEventsTeamMembershipAdapter bridges the team service to the events
+// module's TeamMembershipChecker port.
+//
+// Used by the events service to gate private events to team members.
+func NewEventsTeamMembershipAdapter(
+	teamSvc teamService.Service,
+) eventsDomain.TeamMembershipChecker {
+	return events.NewTeamMembershipAdapter(teamSvc)
+}

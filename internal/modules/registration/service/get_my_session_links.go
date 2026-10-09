@@ -67,7 +67,7 @@ func (s *service) GetMySessionLinks(
 		}
 
 		// Resolve the event for the display name and slug.
-		registrable, err := s.deps.Registrables.Resolve("event", reg.EventID)
+		registrable, err := s.deps.Registrables.Resolve(ctx, "event", reg.EventID)
 		if err != nil {
 			log.Printf("[session-links] resolve event %s: %v", reg.EventID, err)
 			continue

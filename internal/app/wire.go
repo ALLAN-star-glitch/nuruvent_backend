@@ -242,6 +242,8 @@ func InitializeApp() (*AppDependencies, error) {
 
 		attendanceadapters.NewEventsServiceHolder,
         NewEventsReader,
+
+		NewEventsTeamMembershipAdapter,
 	
 
 

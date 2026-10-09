@@ -59,8 +59,9 @@ func SetupRoutes(
 	// Auth routes (public + protected)
 	authHandler.RegisterRoutes(api, authMiddleware)
 
-	// Events routes
-	eventsHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
+	// Events routes — optionalAuth populates user context for public
+	// GETs so private-event visibility rules can apply.
+	eventsHandler.RegisterRoutes(api, authMiddleware, authzMiddleware, optionalAuth)
 
 	// Team routes
 	teamHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
@@ -93,7 +94,6 @@ func healthCheck(c fiber.Ctx) error {
 		"status": "ok",
 		"time":   time.Now().UTC(),
 	})
-	
 }
 
 func welcome(c fiber.Ctx) error {
@@ -102,8 +102,4 @@ func welcome(c fiber.Ctx) error {
 		"version": "1.0.0",
 		"status":  "running",
 	})
-
-
-	
-
 }

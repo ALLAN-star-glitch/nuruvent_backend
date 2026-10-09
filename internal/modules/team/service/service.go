@@ -113,6 +113,12 @@ type Service interface {
 	// GetUserInstitutionTeamDomains returns the account domains for the
 	// institution teams the user belongs to (deduplicated).
 	GetUserInstitutionTeamDomains(ctx context.Context, userID string) ([]string, error)
+
+		// IsTeamMember returns true if the given user is an active member
+	// of the given team. Lightweight — does not authorize the caller,
+	// does not paginate. Used by other modules that need to gate
+	// access on team membership.
+	IsTeamMember(ctx context.Context, teamID, userID string) (bool, error)
 }
 
 // ============================================================

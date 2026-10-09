@@ -8,77 +8,92 @@ func (h *EventHandler) RegisterRoutes(
 	router fiber.Router,
 	authMiddleware fiber.Handler,
 	authzMiddleware fiber.Handler,
+	optionalAuthMiddleware fiber.Handler,
 ) {
 	// ============================================================
-	// PUBLIC ROUTES
+	// IMPORTANT: static segments must be registered BEFORE any
+	// dynamic /:id route, otherwise /events/me, /events/search,
+	// /events/upcoming etc. will be swallowed by /events/:id.
 	// ============================================================
-	public := router.Group("/events")
-	{
-		public.Get("/upcoming", h.GetUpcomingEvents)
-		public.Get("/past", h.GetPastEvents)
-		public.Get("/search", h.SearchEvents)
-		public.Get("/types", h.GetEventTypes)
-		public.Get("/statuses", h.GetEventStatuses)
-		public.Get("/categories", h.GetCategories)
-		public.Get("/ticket-types", h.GetTicketTypes)
-		public.Get("/slug/:slug", h.GetEventBySlug)
-		public.Get("/type/:type", h.GetEventsByType)
-		public.Get("/", h.ListEvents)
-		public.Get("/:id<guid>", h.GetEvent)
-	}
 
-	// ============================================================
-	// PROTECTED EVENT ROUTES
-	// ============================================================
+	events := router.Group("/events")
+
+	// ------------------------------------------------------------
+	// PUBLIC STATIC ROUTES
 	//
-	// Auth is applied PER-ROUTE. Do NOT use protected.Use(...) here —
-	// group-level middleware applies by path prefix and would intercept
-	// /events/:id/register and other cross-module routes.
-	protected := router.Group("/events")
+	// These endpoints are publicly reachable, but they behave
+	// differently for authenticated callers (private events,
+	// creator info, own-draft visibility). OptionalAuth populates
+	// the context when a token is present, and silently falls
+	// through to anonymous otherwise.
+	// ------------------------------------------------------------
+	events.Get("/upcoming", optionalAuthMiddleware, h.GetUpcomingEvents)
+	events.Get("/past", optionalAuthMiddleware, h.GetPastEvents)
+	events.Get("/search", optionalAuthMiddleware, h.SearchEvents)
+	events.Get("/types", h.GetEventTypes)
+	events.Get("/statuses", h.GetEventStatuses)
+	events.Get("/categories", h.GetCategories)
+	events.Get("/ticket-types", h.GetTicketTypes)
+	events.Get("/slug/:slug", optionalAuthMiddleware, h.GetEventBySlug)
+	events.Get("/type/:type", optionalAuthMiddleware, h.GetEventsByType)
+	events.Get("/", optionalAuthMiddleware, h.ListEvents)
+
+	
+	// ------------------------------------------------------------
+	// PROTECTED STATIC ROUTES (must come before /:id)
+	// ------------------------------------------------------------
+	events.Get("/me", authMiddleware, authzMiddleware, h.ListUserEvents)
+	events.Get("/me/search", authMiddleware, authzMiddleware, h.SearchEvents)
+
+	events.Post("/", authMiddleware, authzMiddleware, h.CreateEvent)
+	events.Post("/draft", authMiddleware, authzMiddleware, h.CreateEventDraft)
+	events.Post("/ai/generate-draft", authMiddleware, authzMiddleware, h.GenerateEventDraft)
+
+	// ---- Bulk operations ----
+	bulk := events.Group("/bulk")
 	{
-		// ---- User-scoped listings ----
-		protected.Get("/me", authMiddleware, authzMiddleware, h.ListUserEvents)
-		protected.Get("/me/search", authMiddleware, authzMiddleware, h.SearchEvents)
-
-		// ---- Create ----
-		protected.Post("/", authMiddleware, authzMiddleware, h.CreateEvent)
-		protected.Post("/draft", authMiddleware, authzMiddleware, h.CreateEventDraft)
-		protected.Post("/ai/generate-draft", authMiddleware, authzMiddleware, h.GenerateEventDraft)
-
-		// ---- Bulk operations ----
-		bulk := protected.Group("/bulk")
-		{
-			bulk.Delete("/", authMiddleware, authzMiddleware, h.BulkDeleteEvents)
-			bulk.Delete("/permanent", authMiddleware, authzMiddleware, h.BulkPermanentlyDeleteEvents)
-			bulk.Post("/restore", authMiddleware, authzMiddleware, h.BulkRestoreEvents)
-			bulk.Post("/publish", authMiddleware, authzMiddleware, h.BulkPublishEvents)
-			bulk.Post("/cancel", authMiddleware, authzMiddleware, h.BulkCancelEvents)
-			bulk.Post("/complete", authMiddleware, authzMiddleware, h.BulkCompleteEvents)
-			bulk.Post("/duplicate", authMiddleware, authzMiddleware, h.BulkDuplicateEvents)
-			bulk.Delete("/media", authMiddleware, authzMiddleware, h.BulkDeleteEventMedia)
-		}
-
-	// ---- Single-event mutations ----
-	protected.Put("/:id<guid>", authMiddleware, authzMiddleware, h.UpdateEvent)
-	protected.Delete("/:id<guid>", authMiddleware, authzMiddleware, h.DeleteEvent)
-	protected.Delete("/:id<guid>/permanent", authMiddleware, authzMiddleware, h.PermanentlyDeleteEvent)
-	protected.Post("/:id<guid>/restore", authMiddleware, authzMiddleware, h.RestoreEvent)
-	protected.Post("/:id<guid>/publish", authMiddleware, authzMiddleware, h.PublishEvent)
-	protected.Post("/:id<guid>/cancel", authMiddleware, authzMiddleware, h.CancelEvent)
-	protected.Post("/:id<guid>/complete", authMiddleware, authzMiddleware, h.CompleteEvent)
-	protected.Post("/:id<guid>/duplicate", authMiddleware, authzMiddleware, h.DuplicateEvent)
-	protected.Post("/:id<guid>/schedules/reorder", authMiddleware, authzMiddleware, h.ReorderSchedules)  // ← add this
-
-		// ---- Meeting management ----
-		protected.Post("/:id<guid>/meeting", authMiddleware, authzMiddleware, h.CreateMeeting)
-		protected.Delete("/:id<guid>/meeting", authMiddleware, authzMiddleware, h.DeleteMeeting)
-		protected.Post("/:id<guid>/meeting/regenerate", authMiddleware, authzMiddleware, h.RegenerateMeeting)
-
-		// ---- Media ----
-		protected.Post("/:id<guid>/image", authMiddleware, authzMiddleware, h.UploadEventImage)
-		protected.Post("/:id<guid>/certificate", authMiddleware, authzMiddleware, h.UploadCertificateTemplate)
-		protected.Delete("/:id<guid>/image", authMiddleware, authzMiddleware, h.DeleteEventImage)
-		protected.Delete("/:id<guid>/certificate", authMiddleware, authzMiddleware, h.DeleteEventCertificate)
-		protected.Delete("/:id<guid>/media", authMiddleware, authzMiddleware, h.DeleteAllEventMedia)
+		bulk.Delete("/", authMiddleware, authzMiddleware, h.BulkDeleteEvents)
+		bulk.Delete("/permanent", authMiddleware, authzMiddleware, h.BulkPermanentlyDeleteEvents)
+		bulk.Post("/restore", authMiddleware, authzMiddleware, h.BulkRestoreEvents)
+		bulk.Post("/publish", authMiddleware, authzMiddleware, h.BulkPublishEvents)
+		bulk.Post("/cancel", authMiddleware, authzMiddleware, h.BulkCancelEvents)
+		bulk.Post("/complete", authMiddleware, authzMiddleware, h.BulkCompleteEvents)
+		bulk.Post("/duplicate", authMiddleware, authzMiddleware, h.BulkDuplicateEvents)
+		bulk.Delete("/media", authMiddleware, authzMiddleware, h.BulkDeleteEventMedia)
 	}
+
+	// ------------------------------------------------------------
+	// SINGLE-EVENT MUTATIONS (dynamic /:id — protected only)
+	// ------------------------------------------------------------
+	events.Put("/:id", authMiddleware, authzMiddleware, h.UpdateEvent)
+	events.Delete("/:id", authMiddleware, authzMiddleware, h.DeleteEvent)
+	events.Delete("/:id/permanent", authMiddleware, authzMiddleware, h.PermanentlyDeleteEvent)
+	events.Post("/:id/restore", authMiddleware, authzMiddleware, h.RestoreEvent)
+	events.Post("/:id/publish", authMiddleware, authzMiddleware, h.PublishEvent)
+	events.Post("/:id/cancel", authMiddleware, authzMiddleware, h.CancelEvent)
+	events.Post("/:id/complete", authMiddleware, authzMiddleware, h.CompleteEvent)
+	events.Post("/:id/duplicate", authMiddleware, authzMiddleware, h.DuplicateEvent)
+	events.Post("/:id/schedules/reorder", authMiddleware, authzMiddleware, h.ReorderSchedules)
+
+	// ---- Meeting management ----
+	events.Post("/:id/meeting", authMiddleware, authzMiddleware, h.CreateMeeting)
+	events.Delete("/:id/meeting", authMiddleware, authzMiddleware, h.DeleteMeeting)
+	events.Post("/:id/meeting/regenerate", authMiddleware, authzMiddleware, h.RegenerateMeeting)
+
+	// ---- Media ----
+	events.Post("/:id/image", authMiddleware, authzMiddleware, h.UploadEventImage)
+	events.Post("/:id/certificate", authMiddleware, authzMiddleware, h.UploadCertificateTemplate)
+	events.Delete("/:id/image", authMiddleware, authzMiddleware, h.DeleteEventImage)
+	events.Delete("/:id/certificate", authMiddleware, authzMiddleware, h.DeleteEventCertificate)
+	events.Delete("/:id/media", authMiddleware, authzMiddleware, h.DeleteAllEventMedia)
+
+	// ------------------------------------------------------------
+	// PUBLIC DYNAMIC ROUTE — LAST
+	//
+	// GET /events/:id must accept both anonymous and authenticated
+	// callers. Anonymous → public/unlisted events only.
+	// Authenticated → also private events where the user is the
+	// creator or a team member.
+	// ------------------------------------------------------------
+	events.Get("/:id", optionalAuthMiddleware, h.GetEvent)
 }

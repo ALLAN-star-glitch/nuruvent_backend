@@ -127,6 +127,9 @@ type Service interface {
 	// scope cross-module data by team without touching the events
 	// schema directly.
 	ListEventIDsByTeam(ctx context.Context, userID, teamID string) ([]string, error)
+
+
+	
 }
 
 // ============================================================

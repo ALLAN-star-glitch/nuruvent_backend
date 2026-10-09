@@ -14,7 +14,7 @@ func (s *service) JoinWaitlist(
 ) (*registrationdomain.WaitlistEntry, error) {
     now := s.deps.Clock.Now()
 
-    registrable, err := s.deps.Registrables.Resolve("event", cmd.EventID)
+    registrable, err := s.deps.Registrables.Resolve(ctx, "event", cmd.EventID)
     if err != nil {
         return nil, fmt.Errorf("resolve event: %w", err)
     }
