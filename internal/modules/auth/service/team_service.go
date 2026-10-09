@@ -18,12 +18,15 @@ type TeamService interface {
 	// TEAM CREATION
 	// ============================================================
 
-	// CreatePersonalTeam creates a personal team for the given user.
+	// CreatePersonalTeam creates a personal team for the given user in the
+	// given account.
 	//
-	// No role parameter: roles are assigned at the ACCOUNT level and
-	// inherited by every team under that account. The team service does
-	// not touch Casbin.
-	CreatePersonalTeam(ctx context.Context, userID, userName string) (*TeamInfo, error)
+	// displayName is the user-supplied label. Empty falls back to a
+	// generated default ("<userName>'s Personal Team").
+	CreatePersonalTeam(
+		ctx context.Context,
+		userID, userName, accountID, displayName string,
+	) (*TeamInfo, error)
 
 	// CreateInstitutionTeam creates an institution team under the given account.
 	//

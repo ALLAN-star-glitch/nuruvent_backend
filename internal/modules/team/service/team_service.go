@@ -10,6 +10,7 @@ import (
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/teamdomain"
+	
 )
 
 // TeamService implements the Service interface.
@@ -38,64 +39,58 @@ func NewTeamService(
 	}
 }
 
-// ============================================================
-// ============================================================
-// TEAM OPERATIONS
-// ============================================================
+// CreatePersonalTeam creates a personal team under the given account.
 //
-// POST-REVAMP: teams are NOT authorization domains. Every team-scoped
-// permission check is performed against the team's parent ACCOUNT domain:
+// Authorization: the caller must hold `team:create` on the target
+// account's domain.
 //
-//     accountdomain.AccountDomain(team.AccountID)
+// There is no uniqueness constraint. A user may create any number of
+// personal teams, in any account they have access to. "Personal" is a
+// team type (single-owner workspace), not a singleton lifecycle.
+// CreatePersonalTeam creates a personal team under the given account.
 //
-// Team membership is stored as data (team_members). We do not write to
-// Casbin for team membership changes.
+// Authorization: the caller must hold `team:create` on the target
+// account's domain.
 //
-// Creating a team does not touch Casbin. The creator's account role
-// already covers the new team.
-
-// CreatePersonalTeam creates a personal team for a user.
+// There is no uniqueness constraint on the concept of "personal team".
+// A user may create any number of them, in any account they have
+// access to. "Personal" is a team type (single-owner workspace), not
+// a singleton lifecycle.
 //
-// No permission check: users implicitly have access to their own personal
-// account and its teams. The caller is the user themselves.
-//
-// Roles are not assigned at team creation. The user's account role
-// (assigned during registration) already covers this team. No Casbin
-// writes happen here.
-func (s *teamService) CreatePersonalTeam(ctx context.Context, userID, userName string) (*teamdomain.Team, error) {
+// displayName is what the user sees. name and slug are generated to
+// keep the (account_id, name) and (slug) unique constraints happy.
+func (s *teamService) CreatePersonalTeam(
+	ctx context.Context,
+	userID, userName, accountID, displayName string,
+) (*teamdomain.Team, error) {
 	if userID == "" {
 		return nil, fmt.Errorf("user ID is required")
 	}
 	if userName == "" {
 		return nil, fmt.Errorf("user name is required")
 	}
+	if accountID == "" {
+		return nil, fmt.Errorf("account ID is required")
+	}
 
-	log.Printf("[CreatePersonalTeam] Creating personal team for user: %s", userID)
+	log.Printf("[CreatePersonalTeam] user=%s account=%s", userID, accountID)
 
-	// Check if personal team already exists
-	teams, err := s.repo.GetTeamsByUserID(ctx, userID)
+	accountDomain := accountdomain.AccountDomain(accountID)
+	if accountDomain == "" {
+		return nil, fmt.Errorf("invalid account ID: %q", accountID)
+	}
+
+	allowed, err := s.casbinSvc.CanCreateTeam(ctx, userID, accountDomain)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check existing teams: %w", err)
+		return nil, fmt.Errorf("permission check failed: %w", err)
 	}
-	for _, team := range teams {
-		if team.IsPersonal() {
-			log.Printf("[CreatePersonalTeam] Personal team already exists for user: %s", userID)
-			return nil, teamdomain.ErrTeamAlreadyExists
-		}
+	if !allowed {
+		return nil, teamdomain.ErrPermissionDenied
 	}
 
-	user, err := s.authSvc.GetUserByIDWithAccount(ctx, userID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get user: %w", err)
-	}
-	if user == nil {
-		return nil, fmt.Errorf("user not found")
-	}
-	if user.AccountID == "" {
-		return nil, fmt.Errorf("user has no account ID")
-	}
-
-	team, err := teamdomain.NewPersonalTeamWithAccount(userID, userName, user.AccountID)
+	team, err := teamdomain.NewPersonalTeamWithAccount(
+		userID, userName, accountID, displayName,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -112,10 +107,10 @@ func (s *teamService) CreatePersonalTeam(ctx context.Context, userID, userName s
 		return nil, fmt.Errorf("failed to add user to personal team: %w", err)
 	}
 
-	// NO Casbin writes. The user's account role already covers this team.
-
-	log.Printf("✅ Personal team created for user: %s (Team ID: %s, AccountID: %s)",
-		userID, team.ID, team.AccountID)
+	log.Printf(
+		"✅ Personal team created: user=%s account=%s team=%s",
+		userID, accountID, team.ID,
+	)
 	return team, nil
 }
 

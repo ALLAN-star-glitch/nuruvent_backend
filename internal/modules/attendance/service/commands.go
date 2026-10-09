@@ -281,6 +281,8 @@ type EventAttendeeSessionDetail struct {
 type ListAttendeesCommand struct {
 	UserID    string
 	EventID   string
+	TeamID    string  // ← NEW
+	Scope     string  // ← NEW: "team" | "personal" | ""
 	Search    string
 	Statuses  []string
 	SortBy    string

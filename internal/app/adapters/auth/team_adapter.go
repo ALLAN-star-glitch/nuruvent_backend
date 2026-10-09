@@ -112,8 +112,16 @@ func (a *TeamAdapter) GetAccountByTeamID(ctx context.Context, teamID string) (*a
 }
 
 // CreatePersonalTeam creates a personal team for a user
-func (a *TeamAdapter) CreatePersonalTeam(ctx context.Context, userID string, userName string) (*authService.TeamInfo, error) {
-	team, err := a.teamSvc.CreatePersonalTeam(ctx, userID, userName)
+func (a *TeamAdapter) CreatePersonalTeam(
+	ctx context.Context,
+	userID string,
+	userName string,
+	accountID string,
+	displayName string,
+) (*authService.TeamInfo, error) {
+	team, err := a.teamSvc.CreatePersonalTeam(
+		ctx, userID, userName, accountID, displayName,
+	)
 	if err != nil {
 		return nil, err
 	}

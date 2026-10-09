@@ -341,3 +341,12 @@ func NewAttendanceAuthSessionIssuer(
 ) attendanceDomain.AuthSessionIssuer {
 	return attendanceadapters.NewAuthSessionIssuerAdapter(authSvc)
 }
+
+// NewEventsReader wires the attendance module's EventsReader port to
+// the events service via a lazy holder — breaks the wire-time cycle
+// (video → attendance → events → video).
+func NewEventsReader(
+	holder *attendanceadapters.EventsServiceHolder,
+) attendanceDomain.EventsReader {
+	return attendanceadapters.NewEventsReaderAdapter(holder.Resolver())
+}

@@ -46,16 +46,20 @@ func (s *service) FindOrCreateGuestByEmail(
 	name string,
 	phone string,
 ) (*authdomain.User, error) {
-	user, err := s.CreateGuestUser(ctx, email, name, phone)
+	user, accountID, err := s.CreateGuestUser(ctx, email, name, phone)
 	if err != nil {
 		return nil, err
 	}
 
 	// Personal team via the team module. Same posture as
 	// VerifyOTPAndCreateUser → createAndAddToPersonalTeam.
-	if err := s.createAndAddToPersonalTeam(ctx, user.ID, user.Name); err != nil {
-		log.Printf("[FindOrCreateGuestByEmail] ⚠️ failed to create personal team for guest %s: %v",
-			user.ID, err)
+	if accountID != "" {
+		if err := s.createAndAddToPersonalTeam(ctx, user.ID, user.Name, accountID); err != nil {
+			log.Printf("[FindOrCreateGuestByEmail] ⚠️ failed to create personal team for guest %s: %v",
+				user.ID, err)
+		}
+	} else {
+		log.Printf("[FindOrCreateGuestByEmail] ⚠️ guest %s has no account, skipping team", user.ID)
 	}
 
 	return user, nil
@@ -70,6 +74,10 @@ func (s *service) FindOrCreateGuestByEmail(
 // guest registration should call FindOrCreateGuestByEmail instead so
 // the user ends up fully provisioned.
 //
+// Returns the account ID that was provisioned (or, for idempotent
+// hits and races, an empty string — the caller should not attempt
+// team creation in those cases).
+//
 // Idempotent: if the email already belongs to any user, that user is
 // returned unchanged and nothing new is written.
 func (s *service) CreateGuestUser(
@@ -77,32 +85,32 @@ func (s *service) CreateGuestUser(
 	email string,
 	name string,
 	phone string,
-) (*authdomain.User, error) {
+) (*authdomain.User, string, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
 	if email == "" {
-		return nil, fmt.Errorf("email is required")
+		return nil, "", fmt.Errorf("email is required")
 	}
 
 	// 1. Existing user wins — no creation, no provisioning.
 	existing, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, fmt.Errorf("lookup user by email: %w", err)
+		return nil, "", fmt.Errorf("lookup user by email: %w", err)
 	}
 	if existing != nil {
-		return existing, nil
+		return existing, "", nil
 	}
 
 	// 2. Resolve personal account type.
 	accountType, err := s.repo.GetAccountTypeBySlug(ctx, types.AccountTypePersonalSlug)
 	if err != nil || accountType == nil {
-		return nil, fmt.Errorf("resolve personal account type: %w", err)
+		return nil, "", fmt.Errorf("resolve personal account type: %w", err)
 	}
 
 	// 3. Allocate a unique username (reuses the same helper used by
 	//    RegisterWithInvitation and VerifyOTPAndCreateUser).
 	username, err := s.allocateUsername(ctx, email)
 	if err != nil {
-		return nil, fmt.Errorf("allocate username: %w", err)
+		return nil, "", fmt.Errorf("allocate username: %w", err)
 	}
 
 	// 4. Build the guest entity.
@@ -129,6 +137,7 @@ func (s *service) CreateGuestUser(
 	// 5. Persist user + account + account_member in one transaction.
 	//    Team creation happens outside (see FindOrCreateGuestByEmail),
 	//    matching the existing signup flow.
+	var accountID string
 	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
 		if err := s.repo.CreateUser(txCtx, guest); err != nil {
 			if isUniqueViolation(err) {
@@ -137,31 +146,34 @@ func (s *service) CreateGuestUser(
 			return fmt.Errorf("create guest user: %w", err)
 		}
 
-		if _, err := s.repo.ProvisionUserAccount(txCtx, guest); err != nil {
+		acctID, err := s.repo.ProvisionUserAccount(txCtx, guest)
+		if err != nil {
 			return err
 		}
+		accountID = acctID
 
 		return nil
 	})
 
 	// 6. Race: another request created this email first. Re-fetch and
 	//    return the winner. Do NOT run team provisioning here — the
-	//    other request is responsible for the full workspace.
+	//    other request is responsible for the full workspace, and we
+	//    don't have the account ID.
 	if errors.Is(err, errGuestRace) {
 		raced, err2 := s.repo.GetUserByEmail(ctx, email)
 		if err2 != nil {
-			return nil, fmt.Errorf("guest race: failed to re-fetch user: %w", err2)
+			return nil, "", fmt.Errorf("guest race: failed to re-fetch user: %w", err2)
 		}
 		if raced == nil {
-			return nil, fmt.Errorf("guest race: user disappeared after unique violation")
+			return nil, "", fmt.Errorf("guest race: user disappeared after unique violation")
 		}
-		return raced, nil
+		return raced, "", nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return guest, nil
+	return guest, accountID, nil
 }
 
 // ============================================================

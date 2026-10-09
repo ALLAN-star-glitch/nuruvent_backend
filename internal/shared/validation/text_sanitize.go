@@ -28,14 +28,12 @@ func (s Sanitize) Name(name string) string {
 	name = strings.TrimSpace(name)
 	reg := regexp.MustCompile(`[^a-zA-Z0-9\s\-']`)
 	name = reg.ReplaceAllString(name, "")
-	
-	// Replace spaces with underscores
+
 	name = strings.ReplaceAll(name, " ", "_")
-	
-	// Collapse multiple underscores
+
 	underscoreReg := regexp.MustCompile(`_+`)
 	name = underscoreReg.ReplaceAllString(name, "_")
-	
+
 	name = strings.ToLower(name)
 	name = strings.Trim(name, "_")
 
@@ -47,23 +45,19 @@ func (s Sanitize) Name(name string) string {
 
 // DisplayName sanitizes a display name - PRESERVES emojis and special characters
 // Only removes control characters and trims spaces
-// Use cases: Event display names, Certificate titles, User display names (what users see)
+// Use cases: Event display names, Certificate titles, User display names
 func (s Sanitize) DisplayName(name string) string {
 	if name == "" {
 		return ""
 	}
 
-	// ✅ Only trim spaces - DO NOT remove emojis or special characters
-	name = strings.TrimSpace(name)
-	
-	// ✅ Collapse multiple spaces into one
-	spaceReg := regexp.MustCompile(`\s+`)
-	name = spaceReg.ReplaceAllString(name, " ")
-	
-	// ✅ Trim again
 	name = strings.TrimSpace(name)
 
-	// Limit length
+	spaceReg := regexp.MustCompile(`\s+`)
+	name = spaceReg.ReplaceAllString(name, " ")
+
+	name = strings.TrimSpace(name)
+
 	if len(name) > 200 {
 		name = name[:200]
 	}
@@ -91,30 +85,20 @@ func (s Sanitize) Description(description string) string {
 }
 
 // Slug generates a URL-friendly slug with hyphens
-// Examples: "Tertiary Green" -> "tertiary-green", "Event 2024" -> "event-2024"
 func (s Sanitize) Slug(text string) string {
 	if text == "" {
 		return "untitled"
 	}
 
-	// Convert to lowercase
 	slug := strings.ToLower(text)
-
-	// Replace spaces with hyphens
 	slug = strings.ReplaceAll(slug, " ", "-")
-
-	// Replace underscores with hyphens (for consistency)
 	slug = strings.ReplaceAll(slug, "_", "-")
 
-	// Remove special characters (keep only letters, numbers, and hyphens)
 	reg := regexp.MustCompile(`[^a-z0-9\-]`)
 	slug = reg.ReplaceAllString(slug, "")
 
-	// Collapse multiple hyphens into one
 	hyphenReg := regexp.MustCompile(`\-+`)
 	slug = hyphenReg.ReplaceAllString(slug, "-")
-
-	// Trim hyphens from start and end
 	slug = strings.Trim(slug, "-")
 
 	if slug == "" {
@@ -127,47 +111,30 @@ func (s Sanitize) Slug(text string) string {
 }
 
 // GenerateSlugFromName generates a slug from a name with proper hyphenation
-// This is the recommended method for generating slugs for events, categories, etc.
-// Examples: 
-//   - "Tertiary Green" -> "tertiary-green"
-//   - "Nuruvent Conference 2024" -> "nuruvent-conference-2024"
-//   - "Workshop: Advanced Go" -> "workshop-advanced-go"
 func (s Sanitize) GenerateSlugFromName(name string) string {
 	if name == "" {
 		return "untitled"
 	}
 
-	// Trim spaces
 	slug := strings.TrimSpace(name)
-
-	// Convert to lowercase
 	slug = strings.ToLower(slug)
 
-	// Replace common separators with spaces
 	slug = strings.ReplaceAll(slug, "-", " ")
 	slug = strings.ReplaceAll(slug, "_", " ")
 	slug = strings.ReplaceAll(slug, ":", " ")
 	slug = strings.ReplaceAll(slug, "|", " ")
 
-	// Remove special characters but keep letters, numbers, and spaces
 	reg := regexp.MustCompile(`[^a-z0-9\s]`)
 	slug = reg.ReplaceAllString(slug, "")
 
-	// Collapse multiple spaces
 	spaceReg := regexp.MustCompile(`\s+`)
 	slug = spaceReg.ReplaceAllString(slug, " ")
-
-	// Trim spaces
 	slug = strings.TrimSpace(slug)
 
-	// Replace spaces with hyphens
 	slug = strings.ReplaceAll(slug, " ", "-")
 
-	// Collapse multiple hyphens
 	hyphenReg := regexp.MustCompile(`\-+`)
 	slug = hyphenReg.ReplaceAllString(slug, "-")
-
-	// Trim hyphens from start and end
 	slug = strings.Trim(slug, "-")
 
 	if slug == "" {
@@ -179,20 +146,16 @@ func (s Sanitize) GenerateSlugFromName(name string) string {
 	return slug
 }
 
-// ✅ NEW: GenerateUniqueSlug generates a unique slug with a counter suffix if needed
-// This should be used when creating or updating entities that require unique slugs
-// The checker function should return true if the slug already exists
+// GenerateUniqueSlug generates a unique slug with a counter suffix if needed
 func (s Sanitize) GenerateUniqueSlug(baseSlug string, excludeID string, existsFunc func(slug string, excludeID string) bool) string {
 	if baseSlug == "" {
 		baseSlug = "untitled"
 	}
 
-	// Check if the base slug already exists
 	if !existsFunc(baseSlug, excludeID) {
 		return baseSlug
 	}
 
-	// Try with counter
 	maxAttempts := 100
 	for i := 1; i <= maxAttempts; i++ {
 		candidate := fmt.Sprintf("%s-%d", baseSlug, i)
@@ -201,13 +164,11 @@ func (s Sanitize) GenerateUniqueSlug(baseSlug string, excludeID string, existsFu
 		}
 	}
 
-	// Fallback: use timestamp
 	timestamp := time.Now().UnixNano() % 100000
 	return fmt.Sprintf("%s-%d", baseSlug, timestamp)
 }
 
-// ✅ NEW: GenerateUniqueSlugWithTimestamp generates a unique slug with timestamp suffix
-// Simpler version that just adds a timestamp to ensure uniqueness
+// GenerateUniqueSlugWithTimestamp generates a unique slug with timestamp suffix
 func (s Sanitize) GenerateUniqueSlugWithTimestamp(baseSlug string) string {
 	if baseSlug == "" {
 		baseSlug = "untitled"
@@ -216,18 +177,16 @@ func (s Sanitize) GenerateUniqueSlugWithTimestamp(baseSlug string) string {
 	return fmt.Sprintf("%s-%d", baseSlug, timestamp)
 }
 
-// ✅ NEW: GenerateUniqueSlugWithRandom generates a unique slug with random suffix
+// GenerateUniqueSlugWithRandom generates a unique slug with random suffix
 func (s Sanitize) GenerateUniqueSlugWithRandom(baseSlug string) string {
 	if baseSlug == "" {
 		baseSlug = "untitled"
 	}
-	// Use a short random string
 	randStr := fmt.Sprintf("%d", time.Now().UnixNano()%10000)
 	return fmt.Sprintf("%s-%d", baseSlug, randStr)
 }
 
 // GenerateSlugWithID generates a slug with an ID suffix
-// Example: "tertiary-green-123"
 func (s Sanitize) GenerateSlugWithID(name string, id string) string {
 	baseSlug := s.GenerateSlugFromName(name)
 	if id == "" {
@@ -237,8 +196,6 @@ func (s Sanitize) GenerateSlugWithID(name string, id string) string {
 }
 
 // GenerateColorSlug generates a slug for color names
-// Specifically for color-based slugs like "tertiary-green", "primary-blue"
-// Examples: "Tertiary Green" -> "tertiary-green", "Primary Blue" -> "primary-blue"
 func (s Sanitize) GenerateColorSlug(colorName string) string {
 	if colorName == "" {
 		return "unknown-color"
@@ -247,15 +204,13 @@ func (s Sanitize) GenerateColorSlug(colorName string) string {
 	slug := strings.ToLower(colorName)
 	slug = strings.ReplaceAll(slug, " ", "-")
 	slug = strings.ReplaceAll(slug, "_", "-")
-	
-	// Remove special characters
+
 	reg := regexp.MustCompile(`[^a-z0-9\-]`)
 	slug = reg.ReplaceAllString(slug, "")
-	
-	// Collapse multiple hyphens
+
 	hyphenReg := regexp.MustCompile(`\-+`)
 	slug = hyphenReg.ReplaceAllString(slug, "-")
-	
+
 	slug = strings.Trim(slug, "-")
 
 	if slug == "" {
@@ -265,6 +220,12 @@ func (s Sanitize) GenerateColorSlug(colorName string) string {
 }
 
 // Identifier sanitizes text for identifiers (lowercase, underscores)
+//
+// Keeps: lowercase letters, numbers, hyphens, underscores.
+//
+// WARNING: This strips `@`, `.`, `+`, and other syntax characters.
+// NEVER use Identifier for emails or phone numbers — use Email or Phone.
+// Identifier is for usernames, slugs, and machine-readable keys only.
 func (s Sanitize) Identifier(text string) string {
 	if text == "" {
 		return ""
@@ -282,6 +243,65 @@ func (s Sanitize) Identifier(text string) string {
 		identifier = identifier[:100]
 	}
 	return identifier
+}
+
+// ============================================================
+// EMAIL AND PHONE SANITIZATION
+// ============================================================
+//
+// These are intentionally permissive. They preserve syntax characters
+// (@, ., +, -, _) because stripping them corrupts the value.
+//
+// Deep format validation happens in the Email/Phone validators
+// (validator.Email / validator.Phone in the handler layer), not here.
+
+// Email performs minimal sanitization on an email address.
+//
+// - Trims leading and trailing whitespace
+// - Lowercases the entire string
+// - Removes internal whitespace (spaces are never valid in an email)
+//
+// Does NOT strip `@`, `.`, `+`, `-`, or `_`.
+func (s Sanitize) Email(email string) string {
+	if email == "" {
+		return ""
+	}
+
+	email = strings.TrimSpace(email)
+	email = strings.ToLower(email)
+
+	// Remove any internal whitespace.
+	spaceReg := regexp.MustCompile(`\s+`)
+	email = spaceReg.ReplaceAllString(email, "")
+
+	if len(email) > 254 {
+		email = email[:254]
+	}
+	return email
+}
+
+// Phone performs minimal sanitization on a phone number.
+//
+// - Trims leading and trailing whitespace
+// - Removes whitespace and common formatting characters (parentheses, dashes)
+// - PRESERVES a leading `+` for E.164 numbers
+//
+// Deep format validation happens in the Phone validator.
+func (s Sanitize) Phone(phone string) string {
+	if phone == "" {
+		return ""
+	}
+
+	phone = strings.TrimSpace(phone)
+
+	// Remove whitespace, parentheses, and dashes — but keep `+`.
+	cleaner := regexp.MustCompile(`[\s()\-]`)
+	phone = cleaner.ReplaceAllString(phone, "")
+
+	if len(phone) > 20 {
+		phone = phone[:20]
+	}
+	return phone
 }
 
 // ============================================================
@@ -382,4 +402,31 @@ func (s Sanitize) DefaultDisplayName() string {
 // DefaultSlug returns a default slug
 func (s Sanitize) DefaultSlug() string {
 	return "untitled"
+}
+
+
+
+// URL performs minimal sanitization on a URL.
+//
+// - Trims leading and trailing whitespace
+// - Ensures a scheme exists (prepends https:// if missing)
+//
+// Preserves `:`, `/`, `.`, `?`, `=`, `&`, `#`, `-`, `_`.
+// Deep format validation happens in the URL validator.
+func (s Sanitize) URL(url string) string {
+	if url == "" {
+		return ""
+	}
+
+	url = strings.TrimSpace(url)
+
+	// If no scheme, default to https://
+	if !strings.Contains(url, "://") {
+		url = "https://" + url
+	}
+
+	if len(url) > 500 {
+		url = url[:500]
+	}
+	return url
 }

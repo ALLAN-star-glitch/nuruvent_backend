@@ -132,6 +132,16 @@ func (e *Enforcer) Enforce(userID string, domain string, resource string, action
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
+	// Guard: an empty subject is never authorized.
+	// Callers must pass the authenticated user's ID. This prevents
+	// accidental grants if a service forgets to propagate the user
+	// into the request context.
+	if userID == "" {
+		log.Printf("⚠️  ENFORCE: denied — empty subject (dom=%q obj=%q act=%q)",
+			domain, resource, action)
+		return false, nil
+	}
+
 	if e.IsSuperAdmin(userID) {
 		log.Printf("🔍 ENFORCE: super_admin bypass for %s", userID)
 		return true, nil
@@ -142,10 +152,25 @@ func (e *Enforcer) Enforce(userID string, domain string, resource string, action
 		userID, domain, resource, action, result, err)
 	return result, err
 }
-
 func (e *Enforcer) BatchEnforce(requests [][]interface{}) ([]bool, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
+
+	// Guard each request's subject.
+	for i, req := range requests {
+		if len(req) < 1 {
+			return nil, fmt.Errorf("BatchEnforce: request %d missing subject", i)
+		}
+		if sub, ok := req[0].(string); !ok || sub == "" {
+			log.Printf("⚠️  BATCH ENFORCE: denied — empty subject at request %d", i)
+			// Deny by returning a slice with false for this entry.
+			// (Simplest safe behavior: refuse the whole batch.)
+			return nil, fmt.Errorf("BatchEnforce: empty subject at request %d", i)
+		}
+	}
+
+
+	
 	return e.Enforcer.BatchEnforce(requests)
 }
 

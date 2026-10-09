@@ -70,8 +70,12 @@ type ProviderAdapter interface {
 // ============================================================
 
 type Dependencies struct {
+
+	EventsReader  attendance.EventsReader
 	// Persistence
 	UnitOfWork attendance.UnitOfWork
+
+
 
 	// Cross-cutting
 	Clock          Clock

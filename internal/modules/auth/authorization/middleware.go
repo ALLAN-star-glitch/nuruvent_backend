@@ -145,13 +145,16 @@ func isInstitutionLogoRequest(c fiber.Ctx) bool {
 	return strings.Contains(path, "/institutions/") && strings.Contains(path, "/logo")
 }
 
-// isSelfServiceListAccounts matches GET /api/v1/accounts (the list endpoint).
+// isSelfServiceListAccounts matches GET endpoints that return the
+// caller's own accounts. Covers both the top-level alias and the
+// canonical /users/me/accounts route.
 func isSelfServiceListAccounts(c fiber.Ctx) bool {
 	if c.Method() != http.MethodGet {
 		return false
 	}
 	path := strings.TrimSuffix(c.Path(), "/")
-	return path == "/api/v1/accounts"
+	return path == "/api/v1/accounts" ||
+		path == "/api/v1/users/me/accounts"
 }
 
 // isSelfServiceCreateAccount matches POST /api/v1/accounts/personal and
@@ -413,6 +416,18 @@ func getResourceFromRequest(c fiber.Ctx) string {
 	return ""
 }
 
+// userSubResource resolves the concrete resource for a path that
+// contains "users" or "user". It looks at the segment immediately after
+// the user identifier and, when relevant, the segment after that.
+//
+// Examples:
+//
+//	/users/me/profile       → profile
+//	/users/me/avatar        → profile
+//	/users/me/accounts      → account     (self-service list)
+//	/users/me/events        → event
+//	/users/<id>/profile     → profile
+//	/users/<id>/profiles    → profile
 func userSubResource(segments []string, i int) string {
 	if i+1 >= len(segments) {
 		return ""
@@ -423,6 +438,14 @@ func userSubResource(segments []string, i int) string {
 		return authdomain.ResourceProfile.String()
 	case next == "avatar":
 		return authdomain.ResourceProfile.String()
+	case next == "accounts":
+		// /users/me/accounts is the caller's own account list. The
+		// request is about accounts, not about the user record, so
+		// resolve to the account resource. The endpoint is also
+		// explicitly bypassed by isSelfServiceListAccounts.
+		return authdomain.ResourceAccount.String()
+	case next == "events":
+		return authdomain.ResourceEvent.String()
 	case i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event"):
 		return authdomain.ResourceEvent.String()
 	case i+2 < len(segments) && segments[i+2] == "profiles":

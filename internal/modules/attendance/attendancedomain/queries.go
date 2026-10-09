@@ -13,12 +13,13 @@ import "time"
 // the service is responsible for refusing to call the repo when the
 // caller has no accounts.
 type ListAttendeesQuery struct {
-	AccountIDs []string
-	EventID    string   // optional: filter to one event
-	Search     string   // optional: ILIKE on display_name/email
-	Statuses   []string // optional: filter on derived_status
-	SortBy     string   // "name" | "event" | "registered_at" | "status" | "duration"
-	SortOrder  string   // "asc" | "desc"
+	AccountIDs []string  // caller's account scope (security boundary)
+	EventIDs   []string  // optional team filter (UX filter)
+	EventID    string
+	Search     string
+	Statuses   []string
+	SortBy     string
+	SortOrder  string
 	Page       int
 	PageSize   int
 }

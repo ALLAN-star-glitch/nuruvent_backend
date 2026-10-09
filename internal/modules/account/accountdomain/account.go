@@ -6,8 +6,8 @@ import (
     "errors"
     "time"
 
-    "github.com/google/uuid"
     "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/validation"
+    "github.com/google/uuid"
 )
 
 // Account represents a personal or institution account
@@ -29,7 +29,7 @@ type Account struct {
     Country       string
     KYCStatus     string
     CreatedBy     string
-    IsActive       bool
+    IsActive      bool
     CreatedAt     time.Time
     UpdatedAt     time.Time
     DeletedAt     *time.Time
@@ -50,17 +50,21 @@ const (
 
 // KYC status constants
 const (
-    KYCStatusPending    = "pending"
-    KYCStatusSubmitted  = "submitted"
-    KYCStatusVerified   = "verified"
-    KYCStatusRejected   = "rejected"
+    KYCStatusPending     = "pending"
+    KYCStatusSubmitted   = "submitted"
+    KYCStatusVerified    = "verified"
+    KYCStatusRejected    = "rejected"
     KYCStatusNotRequired = "not_required"
 )
+
+// ============================================================
+// CONSTRUCTORS
+// ============================================================
 
 // NewPersonalAccount creates a new personal account
 func NewPersonalAccount(name, email, phone, createdBy string, accountTypeID string) (*Account, error) {
     sanitizer := validation.Sanitize{}
-    
+
     if name == "" {
         return nil, errors.New("name is required")
     }
@@ -71,11 +75,15 @@ func NewPersonalAccount(name, email, phone, createdBy string, accountTypeID stri
         return nil, errors.New("account type is required")
     }
 
-    // Sanitize fields
+    // Sanitize fields.
+    //
+    // Email uses Sanitize.Email, not Sanitize.Identifier — Identifier
+    // strips `@` and `.` and would corrupt the address.
     cleanName := sanitizer.DisplayName(name)
     displayName := cleanName
     slug := sanitizer.GenerateSlugFromName(cleanName)
-    cleanEmail := sanitizer.Identifier(email)
+    cleanEmail := sanitizer.Email(email)
+    cleanPhone := sanitizer.Phone(phone)
 
     now := time.Now()
     return &Account{
@@ -85,7 +93,7 @@ func NewPersonalAccount(name, email, phone, createdBy string, accountTypeID stri
         Slug:          slug,
         Type:          AccountTypePersonal,
         Email:         cleanEmail,
-        Phone:         phone,
+        Phone:         cleanPhone,
         AccountTypeID: accountTypeID,
         Status:        AccountStatusActive,
         KYCStatus:     KYCStatusNotRequired,
@@ -98,7 +106,7 @@ func NewPersonalAccount(name, email, phone, createdBy string, accountTypeID stri
 // NewInstitutionAccount creates a new institution account
 func NewInstitutionAccount(name, email, phone, website, description, createdBy string, accountTypeID string) (*Account, error) {
     sanitizer := validation.Sanitize{}
-    
+
     if name == "" {
         return nil, errors.New("institution name is required")
     }
@@ -109,12 +117,14 @@ func NewInstitutionAccount(name, email, phone, website, description, createdBy s
         return nil, errors.New("account type is required")
     }
 
-    // Sanitize fields
+    // Sanitize fields. Email and URL have dedicated sanitizers that
+    // preserve their syntax characters.
     cleanName := sanitizer.DisplayName(name)
     displayName := cleanName
     slug := sanitizer.GenerateSlugFromName(cleanName)
-    cleanEmail := sanitizer.Identifier(email)
-    cleanWebsite := sanitizer.Identifier(website)
+    cleanEmail := sanitizer.Email(email)
+    cleanPhone := sanitizer.Phone(phone)
+    cleanWebsite := sanitizer.URL(website)
     cleanDescription := sanitizer.Description(description)
 
     now := time.Now()
@@ -125,7 +135,7 @@ func NewInstitutionAccount(name, email, phone, website, description, createdBy s
         Slug:          slug,
         Type:          AccountTypeInstitution,
         Email:         cleanEmail,
-        Phone:         phone,
+        Phone:         cleanPhone,
         AccountTypeID: accountTypeID,
         Status:        AccountStatusActive,
         KYCStatus:     KYCStatusPending,
@@ -138,23 +148,31 @@ func NewInstitutionAccount(name, email, phone, website, description, createdBy s
     }, nil
 }
 
-// Update updates the account with new values
+// ============================================================
+// UPDATE
+// ============================================================
+
+// Update updates the account with new values.
+//
+// Only non-empty fields are applied. Email, phone, and website use
+// their dedicated sanitizers (Email / Phone / URL) so syntax characters
+// are preserved.
 func (a *Account) Update(name, email, phone, website, description, logoURL, address, city, country string) {
     sanitizer := validation.Sanitize{}
-    
+
     if name != "" {
         a.Name = sanitizer.DisplayName(name)
         a.DisplayName = a.Name
         a.Slug = sanitizer.GenerateSlugFromName(a.Name)
     }
     if email != "" {
-        a.Email = sanitizer.Identifier(email)
+        a.Email = sanitizer.Email(email)
     }
     if phone != "" {
-        a.Phone = phone
+        a.Phone = sanitizer.Phone(phone)
     }
     if website != "" {
-        a.Website = sanitizer.Identifier(website)
+        a.Website = sanitizer.URL(website)
     }
     if description != "" {
         a.Description = sanitizer.Description(description)
@@ -173,6 +191,10 @@ func (a *Account) Update(name, email, phone, website, description, logoURL, addr
     }
     a.UpdatedAt = time.Now()
 }
+
+// ============================================================
+// STATUS
+// ============================================================
 
 // UpdateStatus updates the account status
 func (a *Account) UpdateStatus(status string) error {
@@ -224,6 +246,10 @@ func (a *Account) Deactivate() {
     a.UpdatedAt = time.Now()
 }
 
+// ============================================================
+// TYPE CHECKS
+// ============================================================
+
 // IsPersonal checks if the account is a personal account
 func (a *Account) IsPersonal() bool {
     return a.Type == AccountTypePersonal
@@ -234,7 +260,7 @@ func (a *Account) IsInstitution() bool {
     return a.Type == AccountTypeInstitution
 }
 
-// IsActive checks if the account is active
+// IsAccountActive checks if the account is active
 func (a *Account) IsAccountActive() bool {
     return a.Status == AccountStatusActive
 }

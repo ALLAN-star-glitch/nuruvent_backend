@@ -330,8 +330,9 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 		)
 
 	// --- Event filter ---
-	if q.EventID != "" {
-		base = base.Where("ars.external_id = ?", q.EventID)
+	// --- Team filter (event IDs resolved by the service) ---
+	if len(q.EventIDs) > 0 {
+		base = base.Where("ars.external_id IN ?", q.EventIDs)
 	}
 
 	// --- Search ---

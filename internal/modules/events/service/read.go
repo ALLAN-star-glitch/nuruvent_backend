@@ -81,6 +81,7 @@ func (s *eventService) GetEventBySlug(ctx context.Context, slug string) (*domain
 	return event, nil
 }
 
+
 // ListEvents lists events with filters.
 func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters) ([]*domain.Event, int64, error) {
 	userID := s.getUserIDFromContext(ctx)
@@ -102,7 +103,12 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 		if err != nil {
 			return nil, 0, err
 		}
-		if accountID != "" {
+
+		if accountID == "" {
+			return nil, 0, domain.ErrForbidden
+		}
+
+		{
 			accountDomain := domain.AccountDomain(accountID)
 
 			canReadAll, err := s.permChecker.CanReadAllEvents(ctx, userID, accountDomain)
@@ -116,17 +122,24 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 					return nil, 0, fmt.Errorf("permission check failed: %w", err)
 				}
 				if !canReadOwn {
-					return nil, 0, errors.New("insufficient permissions to view events")
+					return nil, 0, domain.ErrForbidden
 				}
 				filters.UserID = userID
 			}
 		}
 	}
 
+	// Normalize: prefer the string TeamID; fall back to the object's ID
+	// so callers that pass Team: { ID: ... } still filter correctly.
+	effectiveTeamID := filters.TeamID
+	if effectiveTeamID == "" {
+		effectiveTeamID = filters.Team.ID
+	}
+
 	domainFilters := domain.ListEventsFilters{
 		Team:           filters.Team,
 		Account:        filters.Account,
-		TeamID:         filters.TeamID,
+		TeamID:         effectiveTeamID,   // ← FIXED
 		UserID:         filters.UserID,
 		EventTypeID:    filters.EventTypeID,
 		EventStatusID:  filters.EventStatusID,
@@ -140,8 +153,8 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 		Visibility:     domain.Visibility(filters.Visibility),
 	}
 
-	log.Printf("🔍 DOMAIN FILTERS: IncludeDeleted=%v, OnlyDeleted=%v",
-		domainFilters.IncludeDeleted, domainFilters.OnlyDeleted)
+	log.Printf("🔍 DOMAIN FILTERS: IncludeDeleted=%v, OnlyDeleted=%v, TeamID=%s",
+		domainFilters.IncludeDeleted, domainFilters.OnlyDeleted, domainFilters.TeamID)
 
 	events, total, err := s.repo.ListEvents(ctx, domainFilters)
 	if err != nil {
@@ -170,7 +183,6 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 
 	return filteredEvents, total, nil
 }
-
 // GetEventsByType retrieves events by event type slug.
 func (s *eventService) GetEventsByType(ctx context.Context, eventTypeSlug string, page, pageSize int) ([]*domain.Event, int64, error) {
 	if eventTypeSlug == "" {
@@ -543,4 +555,60 @@ func (s *eventService) AdjustAttendeeCount(ctx context.Context, eventID string, 
 		return nil
 	}
 	return s.repo.AdjustAttendeeCount(ctx, eventID, delta)
+}
+
+
+func (s *eventService) ListEventIDsByTeam(
+	ctx context.Context,
+	userID string,
+	teamID string,
+) ([]string, error) {
+	if teamID == "" || userID == "" {
+		return []string{}, nil
+	}
+
+	// Resolve the team's parent account.
+	accountID, err := s.repo.AccountIDForTeam(ctx, teamID)
+	if err != nil {
+		return nil, fmt.Errorf("resolve team account: %w", err)
+	}
+	if accountID == "" {
+		return nil, domain.ErrForbidden
+	}
+
+	// Authorize the caller against that account.
+	accountDomain := domain.AccountDomain(accountID)
+	canReadAll, err := s.permChecker.CanReadAllEvents(ctx, userID, accountDomain)
+	if err != nil {
+		return nil, fmt.Errorf("permission check failed: %w", err)
+	}
+	if !canReadAll {
+		canReadOwn, err := s.permChecker.CanReadOwnEvents(ctx, userID, accountDomain)
+		if err != nil {
+			return nil, fmt.Errorf("permission check failed: %w", err)
+		}
+		if !canReadOwn {
+			return nil, domain.ErrForbidden
+		}
+	}
+
+	// Authorized. Fetch the event IDs.
+	events, _, err := s.repo.ListEvents(ctx, domain.ListEventsFilters{
+		TeamID: teamID,
+		Limit:  1000,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("[ListEventIDsByTeam] user=%s team=%s → %d events",
+		userID, teamID, len(events))
+
+	ids := make([]string, 0, len(events))
+	for _, e := range events {
+		if e != nil {
+			ids = append(ids, e.ID)
+		}
+	}
+	return ids, nil
 }

@@ -95,6 +95,7 @@ func ProvideAttendanceDependencies(
 	videoMeetings attendanceService.VideoMeetingIDResolver,
 	permissionChecker attendance.PermissionChecker,
 	regLookup attendance.RegistrationLookup,
+	eventsReader attendance.EventsReader,   // ← NEW
 	cfg *config.Config,
 ) attendanceService.Dependencies {
 	return attendanceService.Dependencies{
@@ -109,6 +110,7 @@ func ProvideAttendanceDependencies(
 		VideoMeetings:     videoMeetings,
 		PermissionChecker: permissionChecker,
 		Registrations:     regLookup,
+		EventsReader:      eventsReader,   // ← NEW
 		AppConfig:         cfg.App,
 	}
 }

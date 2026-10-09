@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	// Auth Module
+	attendanceadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/attendance"
 	authHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
@@ -133,6 +134,7 @@ func provideAppDependencies(
 	attendanceSvc attendanceService.Service,
 	videoHndlr *videoHandler.Handlers,
 	videoSvc videoService.Service,
+	eventsServiceHolder *attendanceadapters.EventsServiceHolder,
 ) *AppDependencies {
 	return &AppDependencies{
 		Config:                    cfg,
@@ -169,5 +171,6 @@ func provideAppDependencies(
 		AttendanceService:         attendanceSvc,
 		VideoHandler:              videoHndlr,
 		VideoService:              videoSvc,
+		EventsServiceHolder: eventsServiceHolder,
 	}
 }

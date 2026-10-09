@@ -25,6 +25,9 @@ func NewApp() (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Populate the lazy resolver now that wire has built the full graph.
+   deps.EventsServiceHolder.Set(deps.EventsService)
 	log.Println("✅ Application dependencies initialized successfully")
 
 	// Add CORS middleware to the Fiber app.

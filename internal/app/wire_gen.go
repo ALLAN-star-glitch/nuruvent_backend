@@ -7,6 +7,7 @@
 package app
 
 import (
+	attendance2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/attendance"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	postgres3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/infrastructure/postgres"
@@ -125,7 +126,9 @@ func InitializeApp() (*AppDependencies, error) {
 	attendancedomainPermissionChecker := NewAttendancePermissionAdapter(permissionChecker)
 	eventRegistrationRepository := postgres8.NewEventRegistrationRepository(db)
 	registrationLookup := NewAttendanceRegistrationLookup(eventRegistrationRepository)
-	dependencies := attendance.ProvideAttendanceDependencies(unitOfWork, uuidGenerator, sha256Generator, logPublisher, systemClock, v2, videoMeetingIDResolver, attendancedomainPermissionChecker, registrationLookup, configConfig)
+	eventsServiceHolder := attendance2.NewEventsServiceHolder()
+	eventsReader := NewEventsReader(eventsServiceHolder)
+	dependencies := attendance.ProvideAttendanceDependencies(unitOfWork, uuidGenerator, sha256Generator, logPublisher, systemClock, v2, videoMeetingIDResolver, attendancedomainPermissionChecker, registrationLookup, eventsReader, configConfig)
 	service14, err := service6.NewService(dependencies)
 	if err != nil {
 		return nil, err
@@ -189,7 +192,7 @@ func InitializeApp() (*AppDependencies, error) {
 	authSessionIssuer := NewAttendanceAuthSessionIssuer(service11)
 	handlers := http3.NewHandlers(service14, v2, authSessionIssuer)
 	httpHandlers := http4.NewHandlers(service15)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service11, tokenService, service13, serviceService, service16, service12, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker, httpHandler, service17, handler3, orderHandler, service18, handlers, service14, httpHandlers, service15)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service11, tokenService, service13, serviceService, service16, service12, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker, httpHandler, service17, handler3, orderHandler, service18, handlers, service14, httpHandlers, service15, eventsServiceHolder)
 	return appDependencies, nil
 }
 
@@ -238,4 +241,6 @@ type AppDependencies struct {
 	// Video Module
 	VideoHandler *http4.Handlers
 	VideoService service7.Service
+
+	EventsServiceHolder *attendance2.EventsServiceHolder
 }

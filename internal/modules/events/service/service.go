@@ -120,6 +120,13 @@ type Service interface {
 
 	// in the interface
 	ReorderSchedules(ctx context.Context, eventID, userID string, orderedIDs []string) (*domain.Event, error)
+
+
+		// ListEventIDsByTeam returns every event ID belonging to a team.
+	// Used by other modules (attendance, registration) that need to
+	// scope cross-module data by team without touching the events
+	// schema directly.
+	ListEventIDsByTeam(ctx context.Context, userID, teamID string) ([]string, error)
 }
 
 // ============================================================

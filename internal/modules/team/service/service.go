@@ -21,12 +21,19 @@ type Service interface {
 	// TEAM OPERATIONS
 	// ============================================================
 
-	// CreatePersonalTeam creates a personal team for the given user.
+		// CreatePersonalTeam creates a personal team under the given account.
 	//
 	// No role parameter: roles are assigned at the ACCOUNT level and
 	// inherited by every team under that account. The team service does
 	// not touch Casbin.
-	CreatePersonalTeam(ctx context.Context, userID, userName string) (*teamdomain.Team, error)
+	//
+	// The caller must already hold `team:create` on the target account.
+	// A user may have at most one personal team per account; the check
+	// is per-account, not per-user.
+	CreatePersonalTeam(
+		ctx context.Context,
+		userID, userName, accountID, displayName string,
+	) (*teamdomain.Team, error)
 
 	// CreateInstitutionTeam creates an institution team under the given account.
 	//

@@ -70,6 +70,9 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
+
+
+	attendanceadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/attendance"
 )
 
 // ============================================================
@@ -122,6 +125,9 @@ type AppDependencies struct {
 	// Video Module
 	VideoHandler *videoHandler.Handlers
 	VideoService videoService.Service
+
+
+	EventsServiceHolder *attendanceadapters.EventsServiceHolder
 }
 
 // ============================================================
@@ -233,6 +239,10 @@ func InitializeApp() (*AppDependencies, error) {
 
 
 		NewRegistrationNotifier,
+
+		attendanceadapters.NewEventsServiceHolder,
+        NewEventsReader,
+	
 
 
 

@@ -354,10 +354,11 @@ func (h *AttendanceHandler) ListAttendees(c fiber.Ctx) error {
 			}
 		}
 	}
-
 	res, err := h.svc.ListAttendees(c.Context(), service.ListAttendeesCommand{
 		UserID:    userID,
 		EventID:   c.Query("event_id"),
+		TeamID:    c.Query("team_id"),   // ← NEW
+		Scope:     c.Query("scope"),      // ← NEW
 		Search:    c.Query("search"),
 		Statuses:  statuses,
 		SortBy:    c.Query("sort_by", "registered_at"),

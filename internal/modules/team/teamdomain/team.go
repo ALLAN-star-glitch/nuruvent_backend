@@ -4,6 +4,7 @@ package teamdomain
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -49,12 +50,16 @@ func NewTeam(accountID, name, displayName, slug string, teamType TeamType) (*Tea
 		return nil, errors.New("team type is required")
 	}
 
+	// Every team's display name carries the "Team" prefix so they're
+	// visually distinct from accounts in the switcher and headers.
+	prefixedDisplayName := "Team " + displayName
+
 	now := time.Now()
 	return &Team{
 		ID:          uuid.New().String(),
 		AccountID:   accountID,
 		Name:        name,
-		DisplayName: displayName,
+		DisplayName: prefixedDisplayName,
 		Slug:        slug,
 		Type:        teamType,
 		IsActive:    true,
@@ -63,8 +68,18 @@ func NewTeam(accountID, name, displayName, slug string, teamType TeamType) (*Tea
 	}, nil
 }
 
-// NewPersonalTeam creates a new personal team
-// For personal teams, AccountID = UserID
+// personalSlugSuffix returns a short, URL-safe suffix used to keep
+// personal team names and slugs unique across multiple teams owned by
+// the same user.
+func personalSlugSuffix() string {
+	return strings.ReplaceAll(uuid.New().String(), "-", "")[:8]
+}
+
+// NewPersonalTeam creates a new personal team.
+//
+// Both the name and slug carry a per-team suffix so a user may create
+// any number of personal teams without violating the (account_id, name)
+// or (slug) unique constraints.
 func NewPersonalTeam(userID, userName string) (*Team, error) {
 	if userID == "" {
 		return nil, errors.New("user ID is required")
@@ -74,14 +89,24 @@ func NewPersonalTeam(userID, userName string) (*Team, error) {
 	}
 
 	displayName := userName + "'s Personal Team"
-	slug := "personal-" + userID
-	name := "personal_" + userID
+	slug := "personal-" + userID + "-" + personalSlugSuffix()
+	name := "personal_" + userID + "_" + personalSlugSuffix()
 
 	return NewTeam(userID, name, displayName, slug, TeamTypePersonal)
 }
 
-// ✅ NewPersonalTeamWithAccount creates a new personal team with a specific account ID
-func NewPersonalTeamWithAccount(userID, userName, accountID string) (*Team, error) {
+// NewPersonalTeamWithAccount creates a new personal team with a
+// specific account ID.
+//
+// Both the name and slug carry a per-team suffix so a user may create
+// any number of personal teams under a given account without
+// violating the (account_id, name) or (slug) unique constraints.
+//
+// displayName is the user-supplied label. When empty, falls back to
+// "<userName>'s Personal Team".
+func NewPersonalTeamWithAccount(
+	userID, userName, accountID, displayName string,
+) (*Team, error) {
 	if userID == "" {
 		return nil, errors.New("user ID is required")
 	}
@@ -92,15 +117,17 @@ func NewPersonalTeamWithAccount(userID, userName, accountID string) (*Team, erro
 		return nil, errors.New("account ID is required")
 	}
 
-	displayName := userName + "'s Personal Team"
-	slug := "personal-" + userID
-	name := "personal_" + userID
+	if displayName == "" {
+		displayName = userName + "'s Personal Team"
+	}
+
+	slug := "personal-" + userID + "-" + personalSlugSuffix()
+	name := "personal_" + userID + "_" + personalSlugSuffix()
 
 	return NewTeam(accountID, name, displayName, slug, TeamTypePersonal)
 }
 
-// NewInstitutionTeam creates a new institution team
-// For institution teams, AccountID = InstitutionID
+// NewInstitutionTeam creates a new institution team.
 func NewInstitutionTeam(accountID, name, displayName, slug string) (*Team, error) {
 	if accountID == "" {
 		return nil, errors.New("account ID is required")

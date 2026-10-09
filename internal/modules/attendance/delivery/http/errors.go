@@ -54,6 +54,11 @@ func mapDomainError(c fiber.Ctx, err error) error {
 	case errors.Is(err, attendance.ErrInvalidStatusTransition):
 		return response.UnprocessableEntity(c, err.Error(), nil)
 
+		// ---- 403 Forbidden ----
+	case errors.Is(err, attendance.ErrForbidden),
+		errors.Is(err, attendance.ErrTeamAccessDenied):
+		return response.Forbidden(c, "You don't have access to this team's attendees.", nil)
+
 	default:
 		return response.InternalError(c, "Something went wrong", err)
 	}

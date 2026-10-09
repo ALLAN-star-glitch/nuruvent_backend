@@ -489,7 +489,7 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	// Personal Team — only for personal accounts.
 	if reqAccountType == types.AccountTypePersonalName {
 		log.Printf("[VerifyOTPAndCreateUser] Creating personal team for user: %s (Personal Account)", user.ID)
-		if err := s.createAndAddToPersonalTeam(ctx, user.ID, cleanName); err != nil {
+		if err := s.createAndAddToPersonalTeam(ctx, user.ID, cleanName, account.ID); err != nil {
 			log.Printf("[VerifyOTPAndCreateUser] ⚠️ Warning: Failed to create personal team: %v", err)
 		} else {
 			log.Printf("[VerifyOTPAndCreateUser] ✅ Personal team created successfully for user: %s", user.ID)
@@ -573,21 +573,37 @@ func (s *service) getAccountTypeID(ctx context.Context, accountType string) (str
 // Team creation does NOT touch Casbin. The user's account role (assigned
 // during the registration transaction) already covers every team under
 // the account.
-func (s *service) createAndAddToPersonalTeam(ctx context.Context, userID, userName string) error {
-	log.Printf("[createAndAddToPersonalTeam] Checking existing personal team for user: %s", userID)
+//
+// The display name defaults to "<userName>'s Personal Team" during signup.
+// Users can rename it later via the team settings page.
+func (s *service) createAndAddToPersonalTeam(
+	ctx context.Context,
+	userID, userName, accountID string,
+) error {
+	log.Printf("[createAndAddToPersonalTeam] Checking existing personal team for user=%s account=%s", userID, accountID)
+
+	// Skip if this user already has a personal team in this account.
 	existingTeam, err := s.teamSvc.GetPersonalTeamByUserID(ctx, userID)
 	if err != nil {
 		log.Printf("[createAndAddToPersonalTeam] Failed to check existing personal team: %v", err)
 		return fmt.Errorf("failed to check existing personal team: %w", err)
 	}
-	if existingTeam != nil {
-		log.Printf("[createAndAddToPersonalTeam] Personal team already exists for user: %s, team_id: %s", userID, existingTeam.ID)
+	if existingTeam != nil && existingTeam.AccountID == accountID {
+		log.Printf("[createAndAddToPersonalTeam] Personal team already exists for user=%s account=%s team_id=%s",
+			userID, accountID, existingTeam.ID)
 		return nil
 	}
 
-	log.Printf("[createAndAddToPersonalTeam] Creating personal team for user: %s", userID)
+	displayName := userName + "'s Personal Team"
+	log.Printf("[createAndAddToPersonalTeam] Creating personal team for user=%s account=%s", userID, accountID)
 
-	team, err := s.teamSvc.CreatePersonalTeam(ctx, userID, userName)
+	team, err := s.teamSvc.CreatePersonalTeam(
+		ctx,
+		userID,
+		userName,
+		accountID,
+		displayName,
+	)
 	if err != nil {
 		log.Printf("[createAndAddToPersonalTeam] Failed to create personal team: %v", err)
 		return fmt.Errorf("failed to create personal team: %w", err)

@@ -39,3 +39,4 @@ var (
 	ErrParticipantUnmatched = errors.New("participant unmatched")
 )
 
+var ErrTeamAccessDenied = errors.New("team access denied")

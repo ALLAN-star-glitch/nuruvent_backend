@@ -6,6 +6,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 )
 
+
 // RegisterRoutes registers all team routes
 func (h *TeamHandler) RegisterRoutes(
 	router fiber.Router,
@@ -37,8 +38,8 @@ func (h *TeamHandler) RegisterRoutes(
 		// Registered before the /:id/... routes so the literal
 		// "invitations" segment is never captured as a team ID.
 		// ============================================================
-		protected.Post("/invitations/accept", h.AcceptInvitation)
-		protected.Post("/invitations/decline", h.DeclineInvitation)
+		protected.Post("/personal",    authzMiddleware, h.CreatePersonalTeam)
+        protected.Post("/institution", authzMiddleware, h.CreateInstitutionTeam)
 
 		// ============================================================
 		// TEAM OPERATIONS
