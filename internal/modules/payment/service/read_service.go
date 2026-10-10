@@ -45,6 +45,10 @@ func (s *service) ListPayments(
 		SortOrder:       cmd.SortOrder,
 	}
 
+	if err := s.applyTeamFilter(ctx, &f, cmd.ActorID, cmd.TeamID, cmd.Scope); err != nil {
+		return nil, err
+	}
+
 	rows, total, err := s.deps.Payments.ListForAccount(ctx, f)
 	if err != nil {
 		return nil, fmt.Errorf("list payments: %w", err)
@@ -96,5 +100,55 @@ func (s *service) GetPaymentStats(
 		DateTo:          cmd.DateTo,
 	}
 
+	if err := s.applyTeamFilter(ctx, &f, cmd.ActorID, cmd.TeamID, cmd.Scope); err != nil {
+		return nil, err
+	}
+
 	return s.deps.Payments.AggregateForAccount(ctx, f)
+}
+
+// applyTeamFilter expands a team ID into event IDs and, when
+// non-empty, narrows the filter to those events.
+//
+// Behaviour:
+//   - Scope != "team" or TeamID == ""  → no-op, filter unchanged.
+//   - TeamID set but ActorID empty     → ErrTeamAccessDenied (can't authorize).
+//   - Team has zero events             → filter set to match nothing.
+//   - Team not found or no access      → ErrTeamAccessDenied.
+//
+// The events service enforces permissions; this helper just
+// propagates its errors.
+func (s *service) applyTeamFilter(
+	ctx context.Context,
+	f *paymentdomain.ListPaymentsFilter,
+	actorID, teamID, scope string,
+) error {
+	if scope != "team" || teamID == "" {
+		return nil
+	}
+	if actorID == "" {
+		return paymentdomain.ErrTeamAccessDenied
+	}
+	if s.deps.EventsReader == nil {
+		return fmt.Errorf("events reader not configured")
+	}
+
+	eventIDs, err := s.deps.EventsReader.ListEventIDsByTeam(ctx, actorID, teamID)
+	if err != nil {
+		// The adapter translates the events domain's ErrForbidden
+		// into paymentdomain.ErrTeamAccessDenied. Anything else is
+		// propagated as-is.
+		return err
+	}
+
+	if len(eventIDs) == 0 {
+		// No events in the team — force an empty result. Using a
+		// sentinel that can't match anything is simpler than
+		// threading a separate "no results" flag through the repo.
+		f.EventIDs = []string{"00000000-0000-0000-0000-000000000000"}
+		return nil
+	}
+
+	f.EventIDs = eventIDs
+	return nil
 }

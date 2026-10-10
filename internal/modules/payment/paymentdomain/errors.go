@@ -162,4 +162,14 @@ var (
 	// ErrUnauthorized is returned when no usable identity proof was
 	// supplied at all.
 	ErrUnauthorized = errors.New("unauthorized")
+
+
+
+	
 )
+
+
+// ErrTeamAccessDenied is returned when a caller requests a team's
+// ledger or stats but isn't authorized to see that team's events.
+// The HTTP layer maps it to 403.
+var ErrTeamAccessDenied = errors.New("you don't have access to this team's payments")

@@ -138,6 +138,11 @@ type ListPaymentsCommand struct {
 
 	SortBy    string
 	SortOrder string
+
+	// Same as PaymentStatsCommand — see comments there.
+	ActorID string
+	TeamID  string
+	Scope   string
 }
 
 // PaymentStatsCommand is the input for GetPaymentStats.
@@ -150,6 +155,20 @@ type PaymentStatsCommand struct {
 	EventID  string
 	DateFrom *time.Time
 	DateTo   *time.Time
+
+	// ActorID is the authenticated user making the request. Required
+	// when TeamID is set — the service uses it to authorize the
+	// team→events lookup against the caller's permissions.
+	ActorID string
+
+	// TeamID filters the stats to payments belonging to events in this
+	// team. When set, the service resolves the team's event IDs via
+	// EventsReader and applies them as an additional filter.
+	TeamID string
+
+	// Scope is "team" to apply TeamID, anything else to ignore it.
+	// Mirrors the attendance module's scope semantics.
+	Scope string
 }
 
 

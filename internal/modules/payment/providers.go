@@ -116,6 +116,8 @@ func ProvideServiceDependencies(
 	registrationPricing paymentdomain.RegistrationPricingResolver,
 	registrationBilling paymentdomain.RegistrationBillingResolver,
 
+	eventsReader paymentdomain.EventsReader,
+
 	cfg *config.Config,
 
 	idGen id.Generator,
@@ -134,6 +136,8 @@ func ProvideServiceDependencies(
 		Registrations:       registrations,
 		RegistrationPricing: registrationPricing,
 		RegistrationBilling: registrationBilling,
+
+		EventsReader: eventsReader,
 
 		Config: cfg,
 

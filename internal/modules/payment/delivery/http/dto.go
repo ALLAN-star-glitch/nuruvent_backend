@@ -119,13 +119,15 @@ type OrderItemResponse struct {
 // GET /payments. All fields are optional except the implicit account
 // scope, which comes from the authenticated user's JWT.
 type ListPaymentsQuery struct {
-	Page     int    `query:"page"`
-	PageSize int    `query:"page_size"`
-	Search   string `query:"search"`
-	Status   string `query:"status"`
-	Method   string `query:"method"`
-	EventID  string `query:"event_id"`
-	SortBy   string `query:"sort_by"`
+	Page      int    `query:"page"`
+	PageSize  int    `query:"page_size"`
+	Search    string `query:"search"`
+	Status    string `query:"status"`
+	Method    string `query:"method"`
+	EventID   string `query:"event_id"`
+	TeamID    string `query:"team_id"`
+	Scope     string `query:"scope"`
+	SortBy    string `query:"sort_by"`
 	SortOrder string `query:"sort_order"`
 
 	// Date range — ISO 8601 date or RFC3339 timestamp, parsed in the
@@ -198,6 +200,8 @@ type PaymentStatsQuery struct {
 	EventID  string `query:"event_id"`
 	DateFrom string `query:"date_from"`
 	DateTo   string `query:"date_to"`
+	TeamID   string `query:"team_id"`
+	Scope    string `query:"scope"`
 }
 
 // PaymentStatsResponse is the aggregate summary.

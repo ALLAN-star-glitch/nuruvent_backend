@@ -96,6 +96,15 @@ type ListPaymentsFilter struct {
     Method  string // mpesa | card
     EventID string
 
+    // EventIDs narrows the query to a specific set of events. Used for
+	// team scoping: the service resolves a team to its event IDs and
+	// sets this. When non-empty, only payments whose event is in this
+	// set are returned.
+	//
+	// Takes precedence over EventID when both are set — the caller
+	// shouldn't set both.
+	EventIDs []string
+
     // Date range on payment.created_at
     DateFrom *time.Time
     DateTo   *time.Time

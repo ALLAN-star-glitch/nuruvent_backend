@@ -338,6 +338,7 @@ func (s *eventService) getEventAndCheckUpdatePermission(ctx context.Context, eve
 	return event, nil
 }
 
+
 // canViewCreatorInfo checks whether a user may see creator info for an event.
 func (s *eventService) canViewCreatorInfo(ctx context.Context, userID string, event *domain.Event) bool {
 	if userID == "" {

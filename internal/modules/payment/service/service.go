@@ -56,6 +56,10 @@ type Dependencies struct {
 	RegistrationPricing paymentdomain.RegistrationPricingResolver
 	RegistrationBilling paymentdomain.RegistrationBillingResolver
 
+	// EventsReader resolves a team to its event IDs for team-scoped
+	// ledger and stats queries. Mirrors the attendance module's port.
+	EventsReader paymentdomain.EventsReader
+
 	// Config carries the platform fee model. The rate is read at order
 	// creation time and snapshotted onto each order, so later config
 	// changes don't rewrite historical attribution.

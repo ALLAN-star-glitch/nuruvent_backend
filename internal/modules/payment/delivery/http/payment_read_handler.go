@@ -3,6 +3,7 @@
 package http
 
 import (
+	"errors"
 	"strings"
 	"time"
 
@@ -90,6 +91,8 @@ func parseDate(s string) *time.Time {
 // @Param status query string false "Filter by status (succeeded, pending, failed, expired, refunded)"
 // @Param method query string false "Filter by method (mpesa, card)"
 // @Param event_id query string false "Filter by event"
+// @Param team_id query string false "Filter by team"
+// @Param scope query string false "Set to 'team' to apply team_id"
 // @Param sort_by query string false "Sort field (created_at, amount, completed_at)"
 // @Param sort_order query string false "Sort direction (asc, desc)"
 // @Param date_from query string false "Filter by created_at >= date (RFC3339 or YYYY-MM-DD)"
@@ -97,6 +100,7 @@ func parseDate(s string) *time.Time {
 // @Success 200 {object} response.BaseResponse{data=ListPaymentsResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
+// @Failure 403 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/payments [get]
 func (h *Handler) ListPayments(c fiber.Ctx) error {
@@ -112,6 +116,8 @@ func (h *Handler) ListPayments(c fiber.Ctx) error {
 		})
 	}
 
+	actorID, _ := c.Locals(authdomain.ContextKeyUserID).(string)
+
 	cmd := service.ListPaymentsCommand{
 		BilledAccountID: accountID,
 		Page:            q.Page,
@@ -124,10 +130,16 @@ func (h *Handler) ListPayments(c fiber.Ctx) error {
 		SortOrder:       q.SortOrder,
 		DateFrom:        parseDate(q.DateFrom),
 		DateTo:          parseDate(q.DateTo),
+		ActorID:         actorID,
+		TeamID:          q.TeamID,
+		Scope:           q.Scope,
 	}
 
 	result, err := h.svc.ListPayments(c.Context(), cmd)
 	if err != nil {
+		if errors.Is(err, paymentdomain.ErrTeamAccessDenied) {
+			return response.Forbidden(c, "You don't have access to this team's payments", nil)
+		}
 		return response.InternalError(c, "Failed to list payments", fiber.Map{
 			"error": err.Error(),
 		})
@@ -159,11 +171,14 @@ func (h *Handler) ListPayments(c fiber.Ctx) error {
 // @Tags Payments
 // @Produce json
 // @Param event_id query string false "Filter by event"
+// @Param team_id query string false "Filter by team"
+// @Param scope query string false "Set to 'team' to apply team_id"
 // @Param date_from query string false "Filter by created_at >= date"
 // @Param date_to query string false "Filter by created_at <= date"
 // @Success 200 {object} response.BaseResponse{data=PaymentStatsResponse}
 // @Failure 400 {object} response.BaseResponse
 // @Failure 401 {object} response.BaseResponse
+// @Failure 403 {object} response.BaseResponse
 // @Failure 500 {object} response.BaseResponse
 // @Router /api/v1/payments/stats [get]
 func (h *Handler) GetPaymentStats(c fiber.Ctx) error {
@@ -179,15 +194,23 @@ func (h *Handler) GetPaymentStats(c fiber.Ctx) error {
 		})
 	}
 
+	actorID, _ := c.Locals(authdomain.ContextKeyUserID).(string)
+
 	cmd := service.PaymentStatsCommand{
 		BilledAccountID: accountID,
 		EventID:         q.EventID,
 		DateFrom:        parseDate(q.DateFrom),
 		DateTo:          parseDate(q.DateTo),
+		ActorID:         actorID,
+		TeamID:          q.TeamID,
+		Scope:           q.Scope,
 	}
 
 	stats, err := h.svc.GetPaymentStats(c.Context(), cmd)
 	if err != nil {
+		if errors.Is(err, paymentdomain.ErrTeamAccessDenied) {
+			return response.Forbidden(c, "You don't have access to this team's payments", nil)
+		}
 		return response.InternalError(c, "Failed to load payment stats", fiber.Map{
 			"error": err.Error(),
 		})

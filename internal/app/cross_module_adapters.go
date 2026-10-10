@@ -335,3 +335,14 @@ func NewEventsTeamMembershipAdapter(
 ) eventsDomain.TeamMembershipChecker {
 	return events.NewTeamMembershipAdapter(teamSvc)
 }
+
+
+
+// NewPaymentEventsReader wires the payment module's EventsReader port
+// to the events service via the shared attendance holder. Reuses the
+// same lazy hand-off that attendance uses.
+func NewPaymentEventsReader(
+	holder *attendanceadapters.EventsServiceHolder,
+) paymentdomain.EventsReader {
+	return paymentadapters.NewEventsReader(holder)
+}

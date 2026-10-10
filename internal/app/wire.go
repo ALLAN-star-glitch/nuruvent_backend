@@ -247,6 +247,8 @@ func InitializeApp() (*AppDependencies, error) {
 
 
 		NewAccountRoleAssignmentAdapter,
+
+		NewPaymentEventsReader,
 	
 
 

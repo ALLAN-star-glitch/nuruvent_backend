@@ -285,6 +285,10 @@ func (r *PaymentRepository) ListForAccount(
 		where = append(where, "e.id = ?")
 		args = append(args, f.EventID)
 	}
+	if len(f.EventIDs) > 0 {
+		where = append(where, "e.id IN ?")
+		args = append(args, f.EventIDs)
+	}
 	if f.DateFrom != nil {
 		where = append(where, "p.created_at >= ?")
 		args = append(args, *f.DateFrom)
@@ -443,6 +447,10 @@ func (r *PaymentRepository) AggregateForAccount(
 	if f.EventID != "" {
 		where = append(where, "e.id = ?")
 		args = append(args, f.EventID)
+	}
+	if len(f.EventIDs) > 0 {
+		where = append(where, "e.id IN ?")
+		args = append(args, f.EventIDs)
 	}
 	if f.DateFrom != nil {
 		where = append(where, "p.created_at >= ?")
