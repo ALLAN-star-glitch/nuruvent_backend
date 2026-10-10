@@ -27,11 +27,14 @@ type AccountMember struct {
 const (
     RoleAccountAdmin = "account_admin"
     RoleTrainer      = "trainer"
+    RoleLearner      ="learner"
 )
 
-// AllAccountRoles returns all valid account roles
+
+// AllAccountRoles returns all valid account roles, in descending
+// priority order (most privileged first).
 func AllAccountRoles() []string {
-    return []string{RoleAccountAdmin, RoleTrainer}
+    return []string{RoleAccountAdmin, RoleTrainer, RoleLearner}
 }
 
 // IsValidRole checks if a role is valid
@@ -81,6 +84,11 @@ func (m *AccountMember) IsAdmin() bool {
 // IsTrainer checks if the member is a trainer
 func (m *AccountMember) IsTrainer() bool {
     return m.Role == RoleTrainer
+}
+
+// IsLearner checks if the member is a learner
+func (m *AccountMember) IsLearner() bool {
+    return m.Role == RoleLearner
 }
 
 // UpdateRole updates the member's role
