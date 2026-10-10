@@ -286,6 +286,8 @@ func GetAccountPolicies() [][]string {
 
 		// ---- Dashboard (view own) ----
 		{learner, domain, authdomain.ResourceDashboard.String(), authdomain.ActionRead.String()},
+
+		{learner, domain, authdomain.ResourceMember.String(), authdomain.ActionRead.String()},
 	}
 	policies = append(policies, learnerPolicies...)
 
