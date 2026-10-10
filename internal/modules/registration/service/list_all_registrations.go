@@ -76,6 +76,10 @@ func (s *service) ListAllRegistrations(
 		PageSize:   pageSize,
 	}
 
+	if err := s.applyTeamFilter(ctx, &filter, cmd.ActorID, cmd.TeamID, cmd.Scope); err != nil {
+		return nil, err
+	}
+
 	registrations, total, err := s.deps.EventRegistrations.ListAll(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("list all registrations: %w", err)
@@ -92,4 +96,41 @@ func (s *service) ListAllRegistrations(
 		Page:          page,
 		PageSize:      pageSize,
 	}, nil
+}
+
+// applyTeamFilter expands a team ID into event IDs and, when
+// non-empty, narrows the filter to those events.
+//
+// Behaviour:
+//   - Scope != "team" or TeamID == ""   → no-op, filter unchanged.
+//   - TeamID set but ActorID empty      → ErrTeamAccessDenied.
+//   - Team has zero events              → filter matches nothing.
+//   - Team not found or caller denied   → ErrTeamAccessDenied.
+func (s *service) applyTeamFilter(
+	ctx context.Context,
+	f *registrationdomain.ListAllFilter,
+	actorID, teamID, scope string,
+) error {
+	if scope != "team" || teamID == "" {
+		return nil
+	}
+	if actorID == "" {
+		return registrationdomain.ErrTeamAccessDenied
+	}
+	if s.deps.EventsReader == nil {
+		return fmt.Errorf("events reader not configured")
+	}
+
+	eventIDs, err := s.deps.EventsReader.ListEventIDsByTeam(ctx, actorID, teamID)
+	if err != nil {
+		return err
+	}
+
+	if len(eventIDs) == 0 {
+		f.EventIDs = []string{"00000000-0000-0000-0000-000000000000"}
+		return nil
+	}
+
+	f.EventIDs = eventIDs
+	return nil
 }

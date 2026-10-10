@@ -3,12 +3,14 @@
 package http
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
 
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/handlerhelper"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
@@ -172,12 +174,16 @@ func (h *Handler) ListMine(c fiber.Ctx) error {
 // ListAllRegistrations handles GET /registrations.
 //
 // Cross-event organizer view. Returns registrations across every
-// event owned by any account the caller belongs to.
+// event owned by any account the caller belongs to, or — when
+// team_id+scope=team are provided — across only the events in that
+// team.
 //
 // Query params:
 //   page        — 1-indexed (default 1)
 //   page_size   — rows per page (default 20, max 100)
 //   event_id    — optional; filter to one event
+//   team_id     — optional; filter to one team (requires scope=team)
+//   scope       — set to "team" to apply team_id
 //   search      — optional; matches attendee name or email
 //   status      — optional; comma-separated status slugs
 //   sort_by     — created_at | attendee_name | event_name | status
@@ -199,8 +205,14 @@ func (h *Handler) ListAllRegistrations(c fiber.Ctx) error {
 		SortOrder: c.Query("sort_order", "desc"),
 		Page:      parseQueryInt(c, "page", 1),
 		PageSize:  parseQueryInt(c, "page_size", 20),
+		ActorID:   userID,
+		TeamID:    c.Query("team_id"),
+		Scope:     c.Query("scope"),
 	})
 	if err != nil {
+		if errors.Is(err, registrationdomain.ErrTeamAccessDenied) {
+			return response.Forbidden(c, "You don't have access to this team's registrations", nil)
+		}
 		return mapDomainError(c, err)
 	}
 
@@ -378,7 +390,6 @@ func (h *Handler) GetMySessionLinks(c fiber.Ctx) error {
 	if err != nil {
 		return mapDomainError(c, err)
 	}
-	
 
 	return response.Success(c, "Session links retrieved", toMySessionLinksResponse(result))
 }

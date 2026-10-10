@@ -346,3 +346,14 @@ func NewPaymentEventsReader(
 ) paymentdomain.EventsReader {
 	return paymentadapters.NewEventsReader(holder)
 }
+
+
+// NewRegistrationEventsReader wires the registration module's
+// EventsReader port to the events service via the shared attendance
+// holder. Reuses the same lazy hand-off that attendance and payment
+// use.
+func NewRegistrationEventsReader(
+	holder *attendanceadapters.EventsServiceHolder,
+) registrationdomain.EventsReader {
+	return registrationadapters.NewEventsReader(holder)
+}

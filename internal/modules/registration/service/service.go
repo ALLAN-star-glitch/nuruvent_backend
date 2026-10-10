@@ -62,6 +62,7 @@ type Dependencies struct {
 	Users              registrationdomain.UserInfoProvider
 	Attendance         registrationdomain.AttendanceRegistrar
 	PermissionChecker  registrationdomain.PermissionChecker
+	EventsReader registrationdomain.EventsReader
 }
 
 // Clock abstracts time.Now so tests can control time.

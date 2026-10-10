@@ -250,6 +250,7 @@ func InitializeApp() (*AppDependencies, error) {
 
 		NewPaymentEventsReader,
 	
+		NewRegistrationEventsReader,
 
 
 

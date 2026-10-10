@@ -15,14 +15,15 @@ type ListFilter struct {
 
 // ListAllFilter carries options for the cross-event registration list.
 type ListAllFilter struct {
-    AccountIDs []string // scope: caller's accounts
-    EventID    string   // optional filter
-    Search     string   // optional, matches attendee name or email
-    Statuses   []Status // optional
-    SortBy     string   // optional
-    SortOrder  string   // optional
-    Page       int
-    PageSize   int
+	AccountIDs []string // scope: caller's accounts
+	EventID    string   // optional filter
+	EventIDs   []string // optional filter; used for team scoping
+	Search     string   // optional, matches attendee name or email
+	Statuses   []Status // optional
+	SortBy     string   // optional
+	SortOrder  string   // optional
+	Page       int
+	PageSize   int
 }
 
 

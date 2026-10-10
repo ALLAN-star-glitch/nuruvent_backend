@@ -58,6 +58,9 @@ type ListAllRegistrationsCommand struct {
 	SortOrder string
 	Page      int
 	PageSize  int
+    ActorID string
+	TeamID  string
+	Scope   string
 }
 
 // ListAllRegistrationsResult is the output. Registrations is always

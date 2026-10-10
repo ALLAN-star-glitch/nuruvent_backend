@@ -20,3 +20,5 @@ var (
     ErrRegistrationIsTerminal   = errors.New("registration is in a terminal state")
     ErrAuthRequired = errors.New("authentication required for this event")
 )
+
+var ErrTeamAccessDenied = errors.New("you don't have access to this team's registrations")

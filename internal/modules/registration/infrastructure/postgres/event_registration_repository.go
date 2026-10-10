@@ -310,6 +310,11 @@ func (r *EventRegistrationRepository) ListAll(
 		args = append(args, f.EventID)
 	}
 
+	if len(f.EventIDs) > 0 {
+		where = append(where, "er.event_id IN ?")
+		args = append(args, f.EventIDs)
+	}
+
 	if s := strings.TrimSpace(f.Search); s != "" {
 		like := "%" + strings.ToLower(s) + "%"
 		where = append(where,
