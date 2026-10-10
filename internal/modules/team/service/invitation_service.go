@@ -1,4 +1,4 @@
-// internal/modules/team/service/member_service.go
+// internal/modules/team/service/invitation_service.go
 
 package service
 
@@ -23,14 +23,26 @@ import (
 //
 // Authorization:
 //   - The inviter must hold `member:invite` in the team's parent account.
-//   - To invite as `account_admin`, the inviter must additionally have
-//     `member:manage` (i.e. be an account_admin).
+//     Account admins and trainers hold this.
+//   - To invite as `account_admin`, the inviter must additionally hold
+//     `member:create` (i.e. be an account_admin). Trainers cannot
+//     escalate anyone to account_admin.
+//   - To invite as `trainer`, the inviter must additionally hold
+//     `member:create`. Only account admins may invite other trainers.
+//     Trainers may only invite learners.
+//
+// Duplicate handling:
+//   - If the invitee is already an account member, the invitation is
+//     refused. Role changes must go through an explicit member-update
+//     flow.
+//   - If a pending invitation already exists for this email + team, the
+//     invitation is refused.
 //
 // The Role is applied at accept time:
 //   - If the invitee is not yet an account member, they are added with
 //     this role.
-//   - If the invitee is already an account member, this role is ignored;
-//     their existing role wins.
+//   - If the invitee is already an account member, they would not have
+//     been inviteable in the first place (see above).
 func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand) (*teamdomain.Invitation, error) {
 	// 1. Validate input.
 	if cmd.TeamID == "" {
@@ -46,8 +58,8 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
 		return nil, fmt.Errorf("role is required")
 	}
 	if !teamdomain.IsValidAccountRole(cmd.Role) {
-		return nil, fmt.Errorf("invalid role: %q (must be %q or %q)",
-			cmd.Role, teamdomain.RoleAccountAdmin, teamdomain.RoleTrainer)
+		return nil, fmt.Errorf("invalid role %q (must be one of: %s)",
+			cmd.Role, strings.Join(teamdomain.GetAllAccountRoles(), ", "))
 	}
 
 	// 2. Load the team.
@@ -70,9 +82,17 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
 		return nil, teamdomain.ErrPermissionDenied
 	}
 
-	// 4. Guard: only an account_admin may invite another account_admin.
-	if cmd.Role == teamdomain.RoleAccountAdmin {
-		inviterIsAdmin, err := s.casbinSvc.CanManageMembers(ctx, cmd.InvitedBy, accountDomain)
+	// 4. Role-specific guard.
+	//
+	// Any role above `learner` requires `member:create` — which only
+	// account admins hold. Trainers can only invite learners.
+	//
+	// We use CanAddMember (checks `member:create` specifically) rather
+	// than CanManageMembers (which is OR'd across create/update/delete/
+	// invite). Once trainers gained `member:invite`, CanManageMembers
+	// would return true for them, defeating this guard.
+	if cmd.Role == teamdomain.RoleAccountAdmin || cmd.Role == teamdomain.RoleTrainer {
+		inviterIsAdmin, err := s.casbinSvc.CanAddMember(ctx, cmd.InvitedBy, accountDomain)
 		if err != nil {
 			return nil, fmt.Errorf("permission check failed: %w", err)
 		}
@@ -89,9 +109,8 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
 	}
 	log.Printf("[InviteMember] Inviter: %s (%s)", inviterName, cmd.InvitedBy)
 
-		// 6. Check whether the invitee is a registered user, and if so, whether
-	//    they're already a team member; also check whether they're already
-	//    an account member (which affects the email copy).
+	// 6. Check whether the invitee is a registered user. If so, they
+	//    must not already be in this team or in this account.
 	userExists, err := s.authSvc.UserExists(ctx, cmd.Email)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check user: %w", err)
@@ -106,17 +125,23 @@ func (s *teamService) InviteMember(ctx context.Context, cmd InviteMemberCommand)
 			return nil, fmt.Errorf("failed to get user: %w", err)
 		}
 
+		// Already in this team?
 		existing, err := s.repo.GetMemberByTeamAndUser(ctx, cmd.TeamID, user.ID)
 		if err == nil && existing != nil && existing.IsActive {
 			return nil, teamdomain.ErrMemberAlreadyExists
 		}
 
-		// NEW: is the invitee already in the account?
+		// Already in this account (with any role)?
+		// Role changes must go through an explicit member-update flow,
+		// not through re-invitation.
 		existingRole, err := s.authSvc.GetUserRoleInAccount(ctx, user.ID, team.AccountID)
 		if err != nil {
 			log.Printf("⚠️ failed to check account membership for %s: %v", user.ID, err)
 		}
-		isExistingAccountMember = existingRole != ""
+		if existingRole != "" {
+			isExistingAccountMember = true
+			return nil, teamdomain.ErrInviteeAlreadyAccountMember
+		}
 	}
 
 	// 7. Reject if there is already a pending invitation for this email + team.
@@ -197,7 +222,7 @@ func (s *teamService) ResendInvitation(ctx context.Context, invitationID string)
 		return nil, fmt.Errorf("failed to update invitation: %w", err)
 	}
 
-		// 4. Load team.
+	// 4. Load team.
 	team, err := s.repo.GetTeamByID(ctx, invitation.TeamID)
 	if err != nil {
 		return nil, err
@@ -236,7 +261,7 @@ func (s *teamService) ResendInvitation(ctx context.Context, invitationID string)
 		invitation.InvitedBy,
 		team,
 		invitation.Role,
-		isExistingAccountMember,   // ← added
+		isExistingAccountMember,
 		user,
 		userExists,
 	)
@@ -271,19 +296,19 @@ func (s *teamService) processAsyncInvitationEmail(
 		log.Printf("[AsyncInviteWorker] 🤖 Generating AI content for invitation to %s", email)
 
 		aiReq := GenerateInvitationRequest{
-			RecipientName:    getUserDisplayName(user),
-			RecipientEmail:   email,
-			IsExistingAccountMember: isExistingAccountMember,
-			IsExistingUser:   userExists,
-			InviterName:      inviterName,
-			InviterRole:      s.getUserRole(bgCtx, invitedByID, team.AccountID),
-			TeamName:         team.DisplayName,
-			TeamType:         string(team.Type),
-			InvitedRole:      role,
-			TeamMemberCount:  s.getTeamMemberCount(bgCtx, team.ID),
-			TeamEventCount:   s.getTeamEventCount(bgCtx, team.ID),
-			RecentEventNames: s.getRecentEventNames(bgCtx, team.ID, 3),
-			TeamMemberNames:  s.getTeamMemberNames(bgCtx, team.ID, 5),
+			RecipientName:            getUserDisplayName(user),
+			RecipientEmail:           email,
+			IsExistingAccountMember:  isExistingAccountMember,
+			IsExistingUser:           userExists,
+			InviterName:              inviterName,
+			InviterRole:              s.getUserRole(bgCtx, invitedByID, team.AccountID),
+			TeamName:                 team.DisplayName,
+			TeamType:                 string(team.Type),
+			InvitedRole:              role,
+			TeamMemberCount:          s.getTeamMemberCount(bgCtx, team.ID),
+			TeamEventCount:           s.getTeamEventCount(bgCtx, team.ID),
+			RecentEventNames:         s.getRecentEventNames(bgCtx, team.ID, 3),
+			TeamMemberNames:          s.getTeamMemberNames(bgCtx, team.ID, 5),
 		}
 
 		content, err := s.aiSvc.GenerateInvitationContent(bgCtx, aiReq)
@@ -452,13 +477,11 @@ func (s *teamService) AcceptInvitation(ctx context.Context, token, userID string
 		log.Printf("⚠️ failed to reload casbin policies after invitation accept: %v", err)
 	}
 
-	
 	// 9. Notify the inviter asynchronously.
 	go func() {
 		bgCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 
-		// Resolve the inviter (user ID → email + display name).
 		inviter, err := s.authSvc.GetUserByID(bgCtx, invitation.InvitedBy)
 		if err != nil || inviter == nil {
 			log.Printf("⚠️ [AcceptInvitation] could not load inviter %s for notification: %v",
@@ -474,10 +497,9 @@ func (s *teamService) AcceptInvitation(ctx context.Context, token, userID string
 			adminName = inviter.Email
 		}
 
-		
 		if err := s.notifSvc.SendTeamInviteAccepted(bgCtx, SendTeamInviteAcceptedRequest{
-			To:        inviter.Email,   // ✅ real email
-			AdminName: adminName,       // ✅ real name
+			To:        inviter.Email,
+			AdminName: adminName,
 			UserName:  user.Name,
 			UserEmail: user.Email,
 			TeamName:  team.DisplayName,
@@ -509,7 +531,6 @@ func (s *teamService) ensureAccountMembership(
 		return fmt.Errorf("failed to check account membership: %w", err)
 	}
 	if existingRole != "" {
-		// Already a member. Keep the existing role.
 		log.Printf("[AcceptInvitation] User %s is already a member of account %s with role %s; keeping existing role",
 			userID, accountID, existingRole)
 		return nil

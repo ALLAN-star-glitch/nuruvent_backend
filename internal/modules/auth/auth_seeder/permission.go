@@ -19,7 +19,7 @@ import (
 // CONSTANTS
 // ============================================================
 
-const CURRENT_POLICY_VERSION = "v15"
+const CURRENT_POLICY_VERSION = "v16"
 
 // ============================================================
 // POLICY VERSION TRACKING
@@ -324,6 +324,30 @@ func (s *permissionSeeder) seedAccountRoleHierarchy() error {
 		return fmt.Errorf("failed to add account role hierarchy: %w", err)
 	}
 	log.Printf("   ✅ Seeded %d account role hierarchy entries", len(hierarchy))
+	return nil
+}
+
+
+// AssignLearner assigns the learner role to a user in an account.
+func AssignLearner(db *gorm.DB, accountID, userID string) error {
+	cfg := config.Load()
+
+	enforcer, err := authorization.NewEnforcer(db, cfg)
+	if err != nil {
+		return fmt.Errorf("failed to init enforcer: %w", err)
+	}
+	defer enforcer.Close()
+
+	ctx := context.Background()
+	roleManager := authorization.NewRoleManager(enforcer)
+
+	domain := authdomain.AccountDomain(accountID)
+
+	if err := roleManager.AssignRole(ctx, domain, userID, authdomain.RoleLearner.String()); err != nil {
+		return fmt.Errorf("failed to assign learner role: %w", err)
+	}
+
+	log.Printf("✅ Assigned learner role for account %s to user %s", accountID, userID)
 	return nil
 }
 

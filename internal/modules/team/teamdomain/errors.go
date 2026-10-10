@@ -45,6 +45,12 @@ var (
     ErrInvalidInvitationToken    = errors.New("invalid invitation token")
     ErrInvitationEmailMismatch   = errors.New("invitation email does not match user")
     ErrInvitationCannotRegister  = errors.New("this invitation has expired. Please contact the admin for a new invitation")
+
+    // ErrInviteeAlreadyAccountMember is returned when an invitation is
+	// attempted for a user who already belongs to the target account.
+	// Role changes must go through an explicit member-update flow, not
+	// through re-invitation.
+	ErrInviteeAlreadyAccountMember = errors.New("this user is already a member of this account; update their role from the members list instead")
 )
 
 // ============================================================

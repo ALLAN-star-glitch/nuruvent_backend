@@ -247,12 +247,10 @@ func (s *eventService) BulkCompleteEvents(ctx context.Context, ids []string) (*B
 // getEventAndCheckPublishPermission loads the event and verifies the user
 // may publish it.
 //
-// POST-REVAMP: single Casbin check against the event's parent account
-// domain. Teams are not authorization domains.
-//
-// The account is resolved through `resolveEventAccountID`, which walks
-// events.team_id → teams.account_id when the event doesn't carry its own
-// account reference. See helpers.go for details.
+// Resolution order:
+//   1. Unrestricted: account_admin has event:publish_all → allow.
+//   2. Own-only: trainer has event:publish_own AND owns this event → allow.
+//   3. Otherwise → deny.
 func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
 	if publishedBy == "" {
 		return nil, errors.New("published by is required")
@@ -272,19 +270,30 @@ func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id
 	}
 
 	accountDomain := domain.AccountDomain(accountID)
-	log.Printf("🔍 PUBLISH CHECK: user=%s accountID=%s domain=%s",
-		publishedBy, accountID, accountDomain)
+	log.Printf("🔍 PUBLISH CHECK: user=%s accountID=%s domain=%s event=%s",
+		publishedBy, accountID, accountDomain, event.ID)
 
-	allowed, err := s.permChecker.CanPublishAllEvents(ctx, publishedBy, accountDomain)
+	// 1. Unrestricted publish rights.
+	canAll, err := s.permChecker.CanPublishAllEvents(ctx, publishedBy, accountDomain)
 	if err != nil {
 		return nil, fmt.Errorf("permission check failed: %w", err)
 	}
-	if !allowed {
-		log.Printf("❌ Publish permission denied: user=%s accountDomain=%s", publishedBy, accountDomain)
-		return nil, errors.New("insufficient permissions to publish this event")
+	if canAll {
+		return event, nil
 	}
 
-	return event, nil
+	// 2. Own-only publish rights + ownership.
+	canOwn, err := s.permChecker.CanPublishOwnEvents(ctx, publishedBy, accountDomain)
+	if err != nil {
+		return nil, fmt.Errorf("permission check failed: %w", err)
+	}
+	if canOwn && event.CreatedBy == publishedBy {
+		return event, nil
+	}
+
+	log.Printf("❌ Publish permission denied: user=%s accountDomain=%s event=%s",
+		publishedBy, accountDomain, event.ID)
+	return nil, errors.New("insufficient permissions to publish this event")
 }
 
 // getEventStatusBySlug retrieves an event status by slug.

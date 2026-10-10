@@ -18,7 +18,7 @@ type AccountResponse struct {
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
 	Slug        string `json:"slug"`
-	Type        string `json:"type"` // "personal" or "institution"
+	Type        string `json:"type"`
 	Email       string `json:"email"`
 	Phone       string `json:"phone,omitempty"`
 	Website     string `json:"website,omitempty"`
@@ -61,7 +61,20 @@ func NewAccountResponse(account *accountdomain.Account) AccountResponse {
 	}
 }
 
-// MemberResponse represents an account member in API responses
+// ============================================================
+// MEMBER RESPONSE
+// ============================================================
+//
+// Two constructors:
+//
+//   NewMemberResponse(member)          → metadata only (member.id, role, ...)
+//   NewMemberResponseWithUser(m, user) → metadata + user identity fields
+//
+// The "with user" variant is used by GetAccountMembers so the response
+// carries name/email/avatar for the UI's member pickers. The plain
+// variant is used by mutations (AddMember, UpdateMemberRole) where the
+// UI doesn't need identity info.
+
 type MemberResponse struct {
 	ID        string `json:"id"`
 	AccountID string `json:"account_id"`
@@ -69,9 +82,17 @@ type MemberResponse struct {
 	Role      string `json:"role"`
 	IsActive  bool   `json:"is_active"`
 	JoinedAt  string `json:"joined_at"`
+
+	// User identity — only populated by GetAccountMembers. Empty on
+	// mutation responses (AddMember, UpdateMemberRole).
+	Name        string `json:"name,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
+	Email       string `json:"email,omitempty"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
 }
 
-// NewMemberResponse creates a new MemberResponse from domain AccountMember
+// NewMemberResponse builds a member response without user identity.
+// Used by mutations where the caller already knows who they acted on.
 func NewMemberResponse(member *accountdomain.AccountMember) MemberResponse {
 	if member == nil {
 		return MemberResponse{}
@@ -86,7 +107,43 @@ func NewMemberResponse(member *accountdomain.AccountMember) MemberResponse {
 	}
 }
 
-// AccountTypeResponse represents an account type in API responses
+// NewMemberResponseWithUser builds a member response enriched with the
+// user's display fields. Used by GetAccountMembers.
+//
+// user may be nil — for example if a user row was soft-deleted but the
+// account_members row still exists. In that case only the member
+// metadata is returned, and the frontend falls back to the user ID.
+func NewMemberResponseWithUser(
+	member *accountdomain.AccountMember,
+	user *accountdomain.UserInfo,
+) MemberResponse {
+	if member == nil {
+		return MemberResponse{}
+	}
+
+	resp := MemberResponse{
+		ID:        member.ID,
+		AccountID: member.AccountID,
+		UserID:    member.UserID,
+		Role:      string(member.Role),
+		IsActive:  member.IsActive,
+		JoinedAt:  member.JoinedAt.Format(time.RFC3339),
+	}
+
+	if user != nil {
+		resp.Name = user.Name
+		resp.DisplayName = user.DisplayName
+		resp.Email = user.Email
+		resp.AvatarURL = user.AvatarURL
+	}
+
+	return resp
+}
+
+// ============================================================
+// ACCOUNT TYPE
+// ============================================================
+
 type AccountTypeResponse struct {
 	ID          string `json:"id"`
 	Slug        string `json:"slug"`
@@ -96,7 +153,6 @@ type AccountTypeResponse struct {
 	IsActive    bool   `json:"is_active"`
 }
 
-// NewAccountTypeResponse creates a new AccountTypeResponse from domain AccountType
 func NewAccountTypeResponse(accountType *accountdomain.AccountType) AccountTypeResponse {
 	if accountType == nil {
 		return AccountTypeResponse{}

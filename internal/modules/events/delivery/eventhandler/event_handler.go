@@ -68,6 +68,22 @@ func resolveTeamIDForUnified(c fiber.Ctx, userID string) string {
 	return userID
 }
 
+// buildEventResponse converts a single domain Event to its response DTO,
+// including creator info when the service populated it.
+//
+// The service sets event.Creator only when the caller is authorized to
+// see creator details (see eventService.canViewCreatorInfo). When it is
+// nil, we fall back to the plain builder.
+//
+// This mirrors the conditional already used by buildEventResponses, so
+// single-event and list endpoints return the same shape.
+func (h *EventHandler) buildEventResponse(event *domain.Event) EventResponse {
+	if event.Creator != nil {
+		return NewEventResponseFromEventWithCreator(event)
+	}
+	return NewEventResponseFromEvent(event)
+}
+
 func (h *EventHandler) buildEventResponses(c fiber.Ctx, events []*domain.Event) []EventResponse {
 	if len(events) == 0 {
 		return []EventResponse{}
@@ -75,11 +91,7 @@ func (h *EventHandler) buildEventResponses(c fiber.Ctx, events []*domain.Event) 
 
 	responses := make([]EventResponse, len(events))
 	for i, event := range events {
-		if event.Creator != nil {
-			responses[i] = NewEventResponseFromEventWithCreator(event)
-		} else {
-			responses[i] = NewEventResponseFromEvent(event)
-		}
+		responses[i] = h.buildEventResponse(event)
 	}
 	return responses
 }
@@ -88,6 +100,17 @@ func (h *EventHandler) buildEventResponses(c fiber.Ctx, events []*domain.Event) 
 // PUBLIC HANDLERS
 // ============================================================
 
+// GetEvent returns a single event.
+//
+// KNOWN GAP: the response includes raw join fields (meet_link, zoom_link,
+// video_meeting_id, video_meeting_external_id) on every virtual schedule
+// for any caller who passes the service's canViewEvent check — including
+// non-hosts. The frontend hides Join / Start buttons for non-hosts, but
+// does not prevent reading the raw links from this response.
+//
+// Intended fix: strip those fields in events/service/read.go unless the
+// caller is the event creator (event.CreatedBy == userID), mirroring how
+// Creator is gated here.
 func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 	id := c.Params("id")
 	if id == "" {
@@ -104,9 +127,13 @@ func (h *EventHandler) GetEvent(c fiber.Ctx) error {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
-	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
+	return response.Success(c, "Event retrieved successfully", h.buildEventResponse(event))
 }
 
+// GetEventBySlug returns a single event by slug.
+//
+// KNOWN GAP: see GetEvent — raw join fields are not yet stripped for
+// non-hosts.
 func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 	slug := c.Params("slug")
 	if slug == "" {
@@ -123,7 +150,7 @@ func (h *EventHandler) GetEventBySlug(c fiber.Ctx) error {
 		return response.NotFound(c, "Event not found", nil)
 	}
 
-	return response.Success(c, "Event retrieved successfully", NewEventResponseFromEvent(event))
+	return response.Success(c, "Event retrieved successfully", h.buildEventResponse(event))
 }
 
 func (h *EventHandler) GetUpcomingEvents(c fiber.Ctx) error {
@@ -743,7 +770,7 @@ func (h *EventHandler) BulkPermanentlyDeleteEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "At least one event ID is required", nil)
 	}
 	if len(req.IDs) > 100 {
-		return response.BadRequest(c, "Maximum 100 events can be deleted at once", nil)
+		return response.BadRequest(c, "Maximum 100 events can be processed at once", nil)
 	}
 
 	userID, err := handlerhelper.GetUserID(c)

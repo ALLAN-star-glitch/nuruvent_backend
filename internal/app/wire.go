@@ -244,6 +244,9 @@ func InitializeApp() (*AppDependencies, error) {
         NewEventsReader,
 
 		NewEventsTeamMembershipAdapter,
+
+
+		NewAccountRoleAssignmentAdapter,
 	
 
 

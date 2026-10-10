@@ -36,6 +36,7 @@ const (
 	// Account-level roles (within accounts)
 	RoleAccountAdmin Role = "account_admin" // Full account management
 	RoleTrainer      Role = "trainer"       // Training focused
+	RoleLearner      Role = "learner"       // Consumes training content; no management
 
 	// System
 	RoleGuest Role = "guest" // Unregistered user
@@ -83,17 +84,17 @@ type Action string
 
 const (
 	// Standard actions
-	ActionCreate   Action = "create"
-	ActionRead     Action = "read"
-	ActionUpdate   Action = "update"
-	ActionDelete   Action = "delete"
-	ActionManage   Action = "manage"
-	ActionIssue    Action = "issue"
-	ActionRegister Action = "register"
-	ActionExport   Action = "export"
-	ActionRefund   Action = "refund"
-	ActionDownload Action = "download"
-	ActionInvite   Action = "invite"
+	ActionCreate      Action = "create"
+	ActionRead        Action = "read"
+	ActionUpdate      Action = "update"
+	ActionDelete      Action = "delete"
+	ActionManage      Action = "manage"
+	ActionIssue       Action = "issue"
+	ActionRegister    Action = "register"
+	ActionExport      Action = "export"
+	ActionRefund      Action = "refund"
+	ActionDownload    Action = "download"
+	ActionInvite      Action = "invite"
 	ActionViewCreator Action = "view_creator"
 
 	// Account-specific actions
@@ -193,6 +194,7 @@ func IsValidRole(role string) bool {
 		RoleAdmin.String():        true,
 		RoleAccountAdmin.String(): true,
 		RoleTrainer.String():      true,
+		RoleLearner.String():      true,
 		RoleGuest.String():        true,
 	}
 	return validRoles[role]
@@ -211,6 +213,7 @@ func IsAccountRole(role string) bool {
 	accountRoles := map[string]bool{
 		RoleAccountAdmin.String(): true,
 		RoleTrainer.String():      true,
+		RoleLearner.String():      true,
 	}
 	return accountRoles[role]
 }
@@ -229,6 +232,7 @@ func GetAllRoles() []Role {
 		RoleAdmin,
 		RoleAccountAdmin,
 		RoleTrainer,
+		RoleLearner,
 		RoleGuest,
 	}
 }
@@ -245,6 +249,7 @@ func GetAllAccountRoles() []Role {
 	return []Role{
 		RoleAccountAdmin,
 		RoleTrainer,
+		RoleLearner,
 	}
 }
 
@@ -379,7 +384,6 @@ func DefaultAccountPermissions() map[Role][]string {
 			"member:update",
 			"member:delete",
 			"member:invite",
-	
 
 			// Profile
 			"profile:read_all",
@@ -447,6 +451,33 @@ func DefaultAccountPermissions() map[Role][]string {
 			// Account
 			"account:read",
 		},
+		RoleLearner: {
+			// Events — can view but not manage
+			"event:read_all",
+			"event:read_own",
+			"event:register",
+
+			// Attendee — own registrations only
+			"attendee:read",
+			"attendee:update_own",
+
+			// Certificate — view and download their own
+			"certificate:read",
+			"certificate:download",
+
+			// Course materials — consume
+			"material:read",
+
+			// Profile
+			"profile:read",
+			"profile:update",
+
+			// Team
+			"team:read",
+
+			// Account
+			"account:read",
+		},
 	}
 }
 
@@ -460,6 +491,7 @@ func RolePriority(role Role) int {
 		RoleAdmin:        90,
 		RoleAccountAdmin: 80,
 		RoleTrainer:      70,
+		RoleLearner:      50,
 		RoleGuest:        10,
 	}
 	return priority[role]

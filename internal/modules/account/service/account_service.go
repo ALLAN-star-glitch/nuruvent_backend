@@ -22,6 +22,7 @@ type accountService struct {
 	notifSvc    NotificationService
 	permChecker accountdomain.PermissionChecker
 	mediaSvc    accountdomain.MediaService
+	roleAssignment accountdomain.RoleAssignment
 	sanitizer   validation.Sanitize
 }
 
@@ -31,6 +32,7 @@ func NewAccountService(
 	notifSvc NotificationService,
 	permChecker accountdomain.PermissionChecker,
 	mediaSvc accountdomain.MediaService,
+	roleAssignment accountdomain.RoleAssignment,
 ) Service {
 	return &accountService{
 		repo:        repo,
@@ -38,6 +40,7 @@ func NewAccountService(
 		notifSvc:    notifSvc,
 		permChecker: permChecker,
 		mediaSvc:    mediaSvc,
+		roleAssignment: roleAssignment,
 		sanitizer:   validation.Sanitize{},
 	}
 }

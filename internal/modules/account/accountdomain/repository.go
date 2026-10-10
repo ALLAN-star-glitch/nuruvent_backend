@@ -34,7 +34,7 @@ type Repository interface {
 
         // User lookups
     GetUserByID(ctx context.Context, userID string) (*User, error)
-    GetUsersByIDs(ctx context.Context, userIDs []string) ([]*User, error)
+    GetUsersByIDs(ctx context.Context, userIDs []string) ([]*UserInfo, error)
     GetUserBySlug(ctx context.Context, slug string) (*User, error)
 
 

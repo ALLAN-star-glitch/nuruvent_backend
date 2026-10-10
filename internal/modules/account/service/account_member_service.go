@@ -16,7 +16,14 @@ import (
 
 // AddMember adds a member to an account.
 // Permission: caller must be able to manage account members.
-func (s *accountService) AddMember(ctx context.Context, cmd AddMemberCommand) (*accountdomain.AccountMember, error) {
+//
+// Side effects:
+//   1. account_members row inserted.
+//   2. Casbin grouping rule assigned: g, <user>, <role>, account:<id>.
+func (s *accountService) AddMember(
+	ctx context.Context,
+	cmd AddMemberCommand,
+) (*accountdomain.AccountMember, error) {
 	// 1. Validate input
 	if cmd.AccountID == "" {
 		return nil, fmt.Errorf("account ID is required")
@@ -70,6 +77,19 @@ func (s *accountService) AddMember(ctx context.Context, cmd AddMemberCommand) (*
 		return nil, fmt.Errorf("failed to add account member: %w", err)
 	}
 
+	// 7. Sync Casbin.
+	//
+	// Log-and-continue: DB is source of truth. A reconciliation pass
+	// can repair any drift from a Casbin failure.
+	if s.roleAssignment != nil {
+		if err := s.roleAssignment.Assign(ctx, cmd.AccountID, cmd.UserID, cmd.Role); err != nil {
+			log.Printf(
+				"⚠️ AddMember: casbin assign failed user=%s account=%s role=%s: %v",
+				cmd.UserID, cmd.AccountID, cmd.Role, err,
+			)
+		}
+	}
+
 	log.Printf("✅ User %s added to account %s as %s", cmd.UserID, cmd.AccountID, cmd.Role)
 	return member, nil
 }
@@ -81,7 +101,14 @@ func (s *accountService) AddMember(ctx context.Context, cmd AddMemberCommand) (*
 // RemoveMember removes a member from an account.
 // Permission: caller must be able to manage account members.
 // Guard: cannot remove self; cannot remove the last admin.
-func (s *accountService) RemoveMember(ctx context.Context, accountID, userID, removedBy string) error {
+//
+// Side effects:
+//   1. account_members row soft-deleted.
+//   2. Every Casbin grouping rule for (user, account) revoked.
+func (s *accountService) RemoveMember(
+	ctx context.Context,
+	accountID, userID, removedBy string,
+) error {
 	if accountID == "" {
 		return fmt.Errorf("account ID is required")
 	}
@@ -129,6 +156,16 @@ func (s *accountService) RemoveMember(ctx context.Context, accountID, userID, re
 		return fmt.Errorf("failed to remove account member: %w", err)
 	}
 
+	// Revoke Casbin rules — the user no longer belongs to this account.
+	if s.roleAssignment != nil {
+		if err := s.roleAssignment.RevokeAll(ctx, accountID, userID); err != nil {
+			log.Printf(
+				"⚠️ RemoveMember: casbin revoke failed user=%s account=%s: %v",
+				userID, accountID, err,
+			)
+		}
+	}
+
 	log.Printf("✅ User %s removed from account %s by %s", userID, accountID, removedBy)
 	return nil
 }
@@ -140,7 +177,17 @@ func (s *accountService) RemoveMember(ctx context.Context, accountID, userID, re
 // UpdateMemberRole changes a member's role.
 // Permission: caller must be able to manage account members.
 // Guard: cannot change own role.
-func (s *accountService) UpdateMemberRole(ctx context.Context, accountID, userID, newRole, updatedBy string) (*accountdomain.AccountMember, error) {
+//
+// Side effects:
+//   1. account_members.role updated.
+//   2. Casbin grouping rules replaced — every existing rule for
+//      (user, account) is revoked, then the new role is assigned.
+//      Revoke-first because Casbin's AddGroupingPolicy is additive;
+//      without the clear, the user would end up with two roles.
+func (s *accountService) UpdateMemberRole(
+	ctx context.Context,
+	accountID, userID, newRole, updatedBy string,
+) (*accountdomain.AccountMember, error) {
 	if accountID == "" {
 		return nil, fmt.Errorf("account ID is required")
 	}
@@ -179,13 +226,34 @@ func (s *accountService) UpdateMemberRole(ctx context.Context, accountID, userID
 		return nil, accountdomain.ErrCannotChangeOwnRole
 	}
 
-	// Update role
+	// No-op when the role is unchanged.
+	if member.Role == newRole {
+		return member, nil
+	}
+
+	// Update DB
 	if err := member.UpdateRole(newRole); err != nil {
 		return nil, err
 	}
 
 	if err := s.repo.UpdateAccountMember(ctx, member); err != nil {
 		return nil, fmt.Errorf("failed to update member role: %w", err)
+	}
+
+	// Replace the Casbin role.
+	if s.roleAssignment != nil {
+		if err := s.roleAssignment.RevokeAll(ctx, accountID, userID); err != nil {
+			log.Printf(
+				"⚠️ UpdateMemberRole: casbin revoke failed user=%s account=%s: %v",
+				userID, accountID, err,
+			)
+		}
+		if err := s.roleAssignment.Assign(ctx, accountID, userID, newRole); err != nil {
+			log.Printf(
+				"⚠️ UpdateMemberRole: casbin assign failed user=%s account=%s role=%s: %v",
+				userID, accountID, newRole, err,
+			)
+		}
 	}
 
 	log.Printf("✅ User %s role updated to %s in account %s", userID, newRole, accountID)
@@ -198,7 +266,10 @@ func (s *accountService) UpdateMemberRole(ctx context.Context, accountID, userID
 
 // GetAccountMembers lists the members of an account.
 // Permission: caller must be able to view the account.
-func (s *accountService) GetAccountMembers(ctx context.Context, accountID string) ([]*accountdomain.AccountMember, error) {
+func (s *accountService) GetAccountMembers(
+	ctx context.Context,
+	accountID string,
+) ([]*accountdomain.AccountMember, error) {
 	if accountID == "" {
 		return nil, fmt.Errorf("account ID is required")
 	}
@@ -219,7 +290,14 @@ func (s *accountService) GetAccountMembers(ctx context.Context, accountID string
 // No permission check beyond "you are a member" — the caller can
 // always leave.
 // Guard: last admin cannot leave.
-func (s *accountService) LeaveAccount(ctx context.Context, accountID, userID string) error {
+//
+// Side effects:
+//   1. account_members row soft-deleted.
+//   2. Every Casbin grouping rule for (user, account) revoked.
+func (s *accountService) LeaveAccount(
+	ctx context.Context,
+	accountID, userID string,
+) error {
 	if accountID == "" {
 		return fmt.Errorf("account ID is required")
 	}
@@ -254,6 +332,16 @@ func (s *accountService) LeaveAccount(ctx context.Context, accountID, userID str
 		return fmt.Errorf("failed to leave account: %w", err)
 	}
 
+	// Revoke Casbin rules — the user has left the account.
+	if s.roleAssignment != nil {
+		if err := s.roleAssignment.RevokeAll(ctx, accountID, userID); err != nil {
+			log.Printf(
+				"⚠️ LeaveAccount: casbin revoke failed user=%s account=%s: %v",
+				userID, accountID, err,
+			)
+		}
+	}
+
 	log.Printf("✅ User %s left account %s", userID, accountID)
 	return nil
 }
@@ -282,7 +370,11 @@ func (s *accountService) requireMemberManage(ctx context.Context, accountID stri
 
 // ensureNotLastAdmin returns ErrLastAdminCannotLeave if removing the
 // member would leave the account with zero admins.
-func (s *accountService) ensureNotLastAdmin(ctx context.Context, accountID string, member *accountdomain.AccountMember) error {
+func (s *accountService) ensureNotLastAdmin(
+	ctx context.Context,
+	accountID string,
+	member *accountdomain.AccountMember,
+) error {
 	if member.Role != accountdomain.RoleAccountAdmin {
 		return nil
 	}
@@ -303,3 +395,51 @@ func (s *accountService) ensureNotLastAdmin(ctx context.Context, accountID strin
 	}
 	return nil
 }
+
+// GetAccountMembersWithUsers is the enriched variant of GetAccountMembers.
+// It performs the same authorization as the base method, then batch-fetches
+// user display fields (name, email, avatar) for every member in one query.
+//
+// Members whose user row no longer exists are returned with a nil User —
+// the frontend falls back to the user ID in that case.
+func (s *accountService) GetAccountMembersWithUsers(
+	ctx context.Context,
+	accountID string,
+) ([]*accountdomain.AccountMemberWithUser, error) {
+	// Reuse the authz-checked base method.
+	members, err := s.GetAccountMembers(ctx, accountID)
+	if err != nil {
+		return nil, err
+	}
+
+	userIDs := make([]string, 0, len(members))
+	for _, m := range members {
+		if m.UserID != "" {
+			userIDs = append(userIDs, m.UserID)
+		}
+	}
+
+	// Use the service-level GetUsersByIDs — it returns []*UserInfo
+	// (the projection) and drops nils.
+	users, err := s.GetUsersByIDs(ctx, userIDs)
+	if err != nil {
+		// Non-fatal: identity fields are display-only. Fall back to
+		// bare member rows.
+		users = nil
+	}
+
+	userByID := make(map[string]*accountdomain.UserInfo, len(users))
+	for _, u := range users {
+		userByID[u.ID] = u
+	}
+
+	out := make([]*accountdomain.AccountMemberWithUser, len(members))
+	for i, m := range members {
+		out[i] = &accountdomain.AccountMemberWithUser{
+			Member: m,
+			User:   userByID[m.UserID],
+		}
+	}
+	return out, nil
+}
+

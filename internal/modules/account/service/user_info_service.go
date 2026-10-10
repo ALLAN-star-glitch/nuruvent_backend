@@ -52,6 +52,9 @@ func (s *accountService) GetUserByIDWithDetails(ctx context.Context, userID stri
 
 // GetUsersByIDs returns user info for multiple IDs in one call.
 // Missing IDs are silently skipped (not returned as nil entries).
+//
+// The repository already returns the *UserInfo projection, so no
+// conversion happens here — we only drop nils.
 func (s *accountService) GetUsersByIDs(ctx context.Context, userIDs []string) ([]*accountdomain.UserInfo, error) {
 	if len(userIDs) == 0 {
 		return []*accountdomain.UserInfo{}, nil
@@ -65,7 +68,7 @@ func (s *accountService) GetUsersByIDs(ctx context.Context, userIDs []string) ([
 	out := make([]*accountdomain.UserInfo, 0, len(users))
 	for _, u := range users {
 		if u != nil {
-			out = append(out, toUserInfo(u))
+			out = append(out, u)
 		}
 	}
 	return out, nil

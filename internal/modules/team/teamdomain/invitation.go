@@ -28,21 +28,33 @@ const (
 // ACCOUNT ROLE CONSTANTS
 // ============================================================
 //
-// These mirror authdomain.RoleAccountAdmin and authdomain.RoleTrainer.
-// Duplicated here to avoid the team module importing auth.
+// These mirror authdomain.RoleAccountAdmin, authdomain.RoleTrainer, and
+// authdomain.RoleLearner. Duplicated here to avoid the team module
+// importing auth.
 //
 // The `account_members.role` column has a CHECK constraint limiting
-// values to exactly these two strings. Keep them in sync.
+// values to exactly these three strings. Keep them in sync.
 
 const (
 	RoleAccountAdmin = "account_admin"
 	RoleTrainer      = "trainer"
+	RoleLearner      = "learner"
 )
 
-// IsValidAccountRole reports whether role is one of the two account roles
+// IsValidAccountRole reports whether role is one of the account roles
 // that may be granted via a team invitation.
 func IsValidAccountRole(role string) bool {
-	return role == RoleAccountAdmin || role == RoleTrainer
+	return role == RoleAccountAdmin || role == RoleTrainer || role == RoleLearner
+}
+
+// GetAllAccountRoles returns every role that may be granted via a team
+// invitation, in descending priority order.
+func GetAllAccountRoles() []string {
+	return []string{
+		RoleAccountAdmin,
+		RoleTrainer,
+		RoleLearner,
+	}
 }
 
 // ============================================================
@@ -64,7 +76,7 @@ type Invitation struct {
 	ID         string
 	TeamID     string
 	Email      string
-	Role       string // "account_admin" or "trainer"
+	Role       string // "account_admin", "trainer", or "learner"
 	Token      string
 	Status     InvitationStatus
 	InvitedBy  string
@@ -82,9 +94,9 @@ type Invitation struct {
 
 // NewInvitation creates a new pending team invitation.
 //
-// The role must be one of RoleAccountAdmin or RoleTrainer. It describes
-// the role the invitee will receive in the account if they are not
-// already an account member.
+// The role must be one of RoleAccountAdmin, RoleTrainer, or RoleLearner.
+// It describes the role the invitee will receive in the account if they
+// are not already an account member.
 func NewInvitation(
 	teamID, email, role, invitedBy, token string,
 	expiresAt time.Time,
@@ -99,8 +111,8 @@ func NewInvitation(
 		return nil, errors.New("role is required")
 	}
 	if !IsValidAccountRole(role) {
-		return nil, fmt.Errorf("invalid role: %q (must be %q or %q)",
-			role, RoleAccountAdmin, RoleTrainer)
+		return nil, fmt.Errorf("invalid role: %q (must be one of: %s)",
+			role, joinRoles(GetAllAccountRoles()))
 	}
 	if invitedBy == "" {
 		return nil, errors.New("invited by is required")
@@ -128,6 +140,32 @@ func NewInvitation(
 		CreatedAt: now,
 		UpdatedAt: now,
 	}, nil
+}
+
+// joinRoles renders a slice of roles as a comma-separated string with
+// an Oxford "or" before the last element. Used in error messages.
+func joinRoles(roles []string) string {
+	switch len(roles) {
+	case 0:
+		return ""
+	case 1:
+		return roles[0]
+	case 2:
+		return roles[0] + " or " + roles[1]
+	default:
+		out := ""
+		for i, r := range roles {
+			switch {
+			case i == 0:
+				out = r
+			case i == len(roles)-1:
+				out += ", or " + r
+			default:
+				out += ", " + r
+			}
+		}
+		return out
+	}
 }
 
 // ============================================================
@@ -165,8 +203,6 @@ func (i *Invitation) IsUsable() bool {
 // ============================================================
 
 // Accept marks the invitation as accepted.
-//
-// Returns an error if the invitation is not pending or has expired.
 func (i *Invitation) Accept() error {
 	if i.Status != InvitationStatusPending {
 		return fmt.Errorf("cannot accept invitation in status %q", i.Status)
@@ -182,8 +218,6 @@ func (i *Invitation) Accept() error {
 }
 
 // Decline marks the invitation as declined.
-//
-// Returns an error if the invitation is not pending or has expired.
 func (i *Invitation) Decline() error {
 	if i.Status != InvitationStatusPending {
 		return fmt.Errorf("cannot decline invitation in status %q", i.Status)
@@ -209,9 +243,6 @@ func (i *Invitation) Expire() {
 }
 
 // Reissue refreshes the token and expiry on a pending invitation.
-//
-// Used by the "resend invitation" flow. Resets the state to pending
-// so a previously expired invitation can be reactivated.
 func (i *Invitation) Reissue(newToken string, newExpiry time.Time) error {
 	if newToken == "" {
 		return errors.New("new token is required")

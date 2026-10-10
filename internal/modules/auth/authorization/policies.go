@@ -25,8 +25,6 @@ import "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/auth
 // ============================================================
 
 // GetPlatformPolicies returns policies for the "platform" domain.
-// Used only by Nuruvent staff: super_admin, admin, and the anonymous
-// guest role for public event viewing.
 func GetPlatformPolicies() [][]string {
 	superAdmin := authdomain.RoleSuperAdmin.String()
 	admin := authdomain.RoleAdmin.String()
@@ -107,9 +105,6 @@ func GetPlatformPolicies() [][]string {
 	policies = append(policies, adminPolicies...)
 
 	// ---- Guest: anonymous public viewing only ----
-	// Platform-domain guest. Distinct from the account-domain guest role
-	// (see GetAccountPolicies). Platform guest = unauthenticated visitor.
-	// Account guest = invited external collaborator.
 	guestPolicies := [][]string{
 		{guest, platform, authdomain.ResourceEvent.String(), authdomain.ActionRead.String()},
 	}
@@ -119,9 +114,6 @@ func GetPlatformPolicies() [][]string {
 }
 
 // GetPlatformRoleHierarchy returns platform-domain role inheritance rules.
-//
-// super_admin inherits admin's capabilities within the platform domain.
-// This is a role-to-role rule, not a user-to-role assignment.
 func GetPlatformRoleHierarchy() [][]string {
 	return [][]string{
 		{authdomain.RoleSuperAdmin.String(), authdomain.RoleAdmin.String(), authdomain.DomainPlatform},
@@ -133,24 +125,14 @@ func GetPlatformRoleHierarchy() [][]string {
 // ============================================================
 
 // AccountDomainWildcard is the pattern used in policies that apply to
-// every account. At check time, keyMatch2 resolves it to any concrete
-// "account:<uuid>" domain.
+// every account.
 const AccountDomainWildcard = "account:*"
 
 // GetAccountPolicies returns the account-domain policy set.
-//
-// Domain: "account:*" (wildcard, matches every account)
-//
-// Applies to both personal and institution accounts. The account type
-// distinction is product metadata (billing, onboarding, KYC); it does
-// not affect authorization.
-//
-// Teams are NOT authz domains. The policies below cover both account-level
-// and team-level actions, since team membership is enforced as data
-// (team_members) in the service layer.
 func GetAccountPolicies() [][]string {
 	accountAdmin := authdomain.RoleAccountAdmin.String()
 	trainer := authdomain.RoleTrainer.String()
+	learner := authdomain.RoleLearner.String()
 	guest := authdomain.RoleGuest.String()
 	domain := AccountDomainWildcard
 
@@ -222,24 +204,35 @@ func GetAccountPolicies() [][]string {
 	policies = append(policies, accountAdminPolicies...)
 
 	// ============================================================
-	// TRAINER - Training-focused, no account/team management
+	// TRAINER - Training-focused, own-only event management
 	// ============================================================
+	//
+	// Trainers may create events and manage the ones they created.
+	// They may not edit or delete events created by other trainers
+	// or by account admins. Ownership is enforced by the events
+	// service using the *_own action codes below.
+	//
+	// Trainers may invite new members (as trainer or learner) but
+	// cannot invite account_admins — that escalation path is gated
+	// in the team service by an explicit CanAddMember check.
 	trainerPolicies := [][]string{
 		// ---- Account (read only) ----
 		{trainer, domain, authdomain.ResourceAccount.String(), authdomain.ActionRead.String()},
 
-		// ---- Members (view roster, leave) ----
+		// ---- Members (view roster, invite, leave) ----
 		{trainer, domain, authdomain.ResourceMember.String(), authdomain.ActionRead.String()},
+		{trainer, domain, authdomain.ResourceMember.String(), authdomain.ActionInvite.String()},
 		{trainer, domain, authdomain.ResourceMember.String(), authdomain.ActionLeave.String()},
 
 		// ---- Teams (read only) ----
 		{trainer, domain, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
 
-		// ---- Events ----
+		// ---- Events (own only) ----
 		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionCreate.String()},
 		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionReadAll.String()},
-		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionUpdateAll.String()},
-		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionPublishAll.String()},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionUpdateOwn.String()},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionDeleteOwn.String()},
+		{trainer, domain, authdomain.ResourceEvent.String(), authdomain.ActionPublishOwn.String()},
 
 		// ---- Attendees ----
 		{trainer, domain, authdomain.ResourceAttendee.String(), authdomain.ActionCreate.String()},
@@ -265,11 +258,40 @@ func GetAccountPolicies() [][]string {
 	policies = append(policies, trainerPolicies...)
 
 	// ============================================================
+	// LEARNER - Consumes training content, no management
+	// ============================================================
+	learnerPolicies := [][]string{
+		// ---- Account (read only) ----
+		{learner, domain, authdomain.ResourceAccount.String(), authdomain.ActionRead.String()},
+
+		// ---- Teams (read only) ----
+		{learner, domain, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
+
+		// ---- Events (view + register only) ----
+		{learner, domain, authdomain.ResourceEvent.String(), authdomain.ActionReadAll.String()},
+		{learner, domain, authdomain.ResourceEvent.String(), authdomain.ActionReadOwn.String()},
+		{learner, domain, authdomain.ResourceEvent.String(), authdomain.ActionRegister.String()},
+
+		// ---- Attendee (own records) ----
+		{learner, domain, authdomain.ResourceAttendee.String(), authdomain.ActionRead.String()},
+		{learner, domain, authdomain.ResourceAttendee.String(), authdomain.ActionUpdateOwn.String()},
+
+		// ---- Certificates (view + download own) ----
+		{learner, domain, authdomain.ResourceCertificate.String(), authdomain.ActionRead.String()},
+		{learner, domain, authdomain.ResourceCertificate.String(), authdomain.ActionDownload.String()},
+
+		// ---- Profile ----
+		{learner, domain, authdomain.ResourceProfile.String(), authdomain.ActionRead.String()},
+		{learner, domain, authdomain.ResourceProfile.String(), authdomain.ActionUpdate.String()},
+
+		// ---- Dashboard (view own) ----
+		{learner, domain, authdomain.ResourceDashboard.String(), authdomain.ActionRead.String()},
+	}
+	policies = append(policies, learnerPolicies...)
+
+	// ============================================================
 	// GUEST - Narrow cross-account collaboration
 	// ============================================================
-	// Account-domain guest: invited external collaborator with minimal
-	// permissions. Distinct from the platform-domain guest, which is for
-	// anonymous public viewing.
 	guestPolicies := [][]string{
 		{guest, domain, authdomain.ResourceAccount.String(), authdomain.ActionRead.String()},
 		{guest, domain, authdomain.ResourceTeam.String(), authdomain.ActionRead.String()},
@@ -283,16 +305,6 @@ func GetAccountPolicies() [][]string {
 }
 
 // GetAccountRoleHierarchy returns the role hierarchy for account domains.
-//
-// Domain: "account:*" (wildcard)
-//
-// account_admin inherits everything trainer has, within the same account
-// domain. This is a role-to-role rule, not a user assignment. It applies
-// to every account but only grants inheritance within a single account
-// at check time.
-//
-// Note: user role assignments (from account_members) must ALWAYS use
-// concrete domains ("account:<uuid>"), never the wildcard.
 func GetAccountRoleHierarchy() [][]string {
 	return [][]string{
 		{authdomain.RoleAccountAdmin.String(), authdomain.RoleTrainer.String(), AccountDomainWildcard},

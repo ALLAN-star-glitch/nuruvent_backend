@@ -18,6 +18,7 @@ import (
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
 	attendanceService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/service"
 	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
 	eventsDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	eventsService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
@@ -84,6 +85,18 @@ func NewAccountMediaAdapter(mediaSvc mediaService.Service) accountDomain.MediaSe
 	return accounts.NewMediaAdapter(mediaSvc)
 }
 
+// NewAccountRoleAssignmentAdapter bridges the auth module's Casbin
+// enforcer to the account domain's RoleAssignment port.
+//
+// Used by the account service to keep Casbin in sync whenever account
+// membership changes — assign on add, replace on role change, revoke
+// on remove or leave, and revoke-all on account deletion.
+func NewAccountRoleAssignmentAdapter(
+	enforcer *authorization.Enforcer,
+) accountDomain.RoleAssignment {
+	return accounts.NewRoleAssignmentAdapter(enforcer)
+}
+
 // ---- EVENTS ADAPTERS ----
 
 // NewEventsPermissionAdapter creates a new events permission adapter
@@ -143,10 +156,6 @@ func NewRegistrableResolver(eventsSvc eventsService.Service) registrationdomain.
 
 // NewRegistrationAttendanceRegistrar wires the registration module's
 // AttendanceRegistrar port to the attendance service.
-//
-// The registration service uses this to register attendees and issue
-// join tokens when a registration is confirmed. Join URLs are built
-// using cfg.App.PublicURL.
 func NewRegistrationAttendanceRegistrar(
 	attendanceSvc attendanceService.Service,
 	cfg *config.Config,
@@ -159,9 +168,6 @@ func NewRegistrationAttendanceRegistrar(
 
 // NewRegistrationUserInfoAdapter wires the registration module's
 // UserInfoProvider port to the auth service.
-//
-// The registration service uses this to resolve an authenticated
-// user's display name and email when building the attendance record.
 func NewRegistrationUserInfoAdapter(
 	authSvc authService.Service,
 ) registrationdomain.UserInfoProvider {
@@ -170,9 +176,6 @@ func NewRegistrationUserInfoAdapter(
 
 // NewRegistrationPermissionAdapter bridges auth's PermissionChecker to
 // the registration module's PermissionChecker port.
-//
-// Used by the cross-event registration directory to resolve the
-// caller's accounts.
 func NewRegistrationPermissionAdapter(
 	permChecker authDomain.PermissionChecker,
 ) registrationDomain.PermissionChecker {
@@ -191,10 +194,6 @@ func NewPaymentRegistrationConfirmer(
 
 // NewPaymentProviderRegistry builds the provider registry from
 // configured credentials.
-//
-// Paystack is currently the sole payment provider for both M-Pesa and
-// cards — it handles both methods through one hosted integration, so
-// there's no per-method fallback to worry about.
 func NewPaymentProviderRegistry(
 	cfg *config.Config,
 ) (paymentdomain.ProviderRegistry, error) {
@@ -243,10 +242,6 @@ func NewPaymentNotifier(
 
 // NewPaymentPricingResolver wires the payment module's
 // RegistrationPricingResolver port to the registration repository.
-//
-// We inject the repository rather than the service so the adapter can
-// load a registration without going through the service's ownership
-// check. The payment service enforces ownership itself.
 func NewPaymentPricingResolver(
 	regRepo registrationdomain.EventRegistrationRepository,
 ) paymentdomain.RegistrationPricingResolver {
@@ -263,10 +258,6 @@ func NewEventsVideoAdapter(
 
 // NewVideoAttendanceAdapter wires the video module's
 // ParticipantRecorder port to the attendance service.
-//
-// The video service uses this in FetchGoogleMeetAttendance to hand
-// fetched Google Meet participants to the attendance module for
-// recording.
 func NewVideoAttendanceAdapter(
 	attendanceSvc attendanceService.Service,
 ) videoService.ParticipantRecorder {
@@ -275,10 +266,6 @@ func NewVideoAttendanceAdapter(
 
 // NewAttendanceVideoMeetingIDResolver wires the attendance module's
 // VideoMeetingIDResolver port to the video service.
-//
-// The attendance service uses this in GetEventAttendanceSummary to
-// resolve each session's underlying video meeting ID, so the
-// frontend can address POST /video/meetings/:id/fetch-attendance.
 func NewAttendanceVideoMeetingIDResolver(
 	meetings videodomain.MeetingRepository,
 ) attendanceService.VideoMeetingIDResolver {
@@ -294,9 +281,6 @@ func NewRegistrationNotifier(
 
 // NewAttendancePermissionAdapter bridges auth's PermissionChecker to
 // the attendance module's PermissionChecker port.
-//
-// Used by the cross-event attendee directory to resolve the caller's
-// accounts.
 func NewAttendancePermissionAdapter(
 	permChecker authDomain.PermissionChecker,
 ) attendanceDomain.PermissionChecker {
@@ -305,23 +289,14 @@ func NewAttendancePermissionAdapter(
 
 // NewAttendanceRegistrationLookup wires the attendance module's
 // RegistrationLookup port to the registration service.
-//
-// Used by the join handler when a guest redeems a join token, so the
-// handler can resolve the Nuruvent user behind the registration and
-// issue a session cookie for them before redirecting to the meeting.
 func NewAttendanceRegistrationLookup(
 	eventRegs registrationDomain.EventRegistrationRepository,
 ) attendanceDomain.RegistrationLookup {
 	return attendanceadapters.NewRegistrationLookupAdapter(eventRegs)
 }
 
-
 // NewEventsVideoIdentityAdapter bridges the video service to the
 // events domain's VideoIdentityProvider port.
-//
-// Used by the events service at publish time to pre-link the host's
-// Google Meet identity so the first attendance fetch matches without
-// a manual roster link.
 func NewEventsVideoIdentityAdapter(
 	videoSvc videoService.Service,
 ) eventsDomain.VideoIdentityProvider {
@@ -331,9 +306,9 @@ func NewEventsVideoIdentityAdapter(
 // NewPaymentBillingResolver wires the payment module's
 // RegistrationBillingResolver port to the registration service.
 func NewPaymentBillingResolver(
-    regSvc registrationService.Service,
+	regSvc registrationService.Service,
 ) paymentdomain.RegistrationBillingResolver {
-    return paymentadapters.NewBillingResolver(regSvc)
+	return paymentadapters.NewBillingResolver(regSvc)
 }
 
 func NewAttendanceAuthSessionIssuer(

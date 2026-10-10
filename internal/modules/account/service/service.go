@@ -50,6 +50,7 @@ type Service interface {
 	RemoveMember(ctx context.Context, accountID, userID, removedBy string) error
 	UpdateMemberRole(ctx context.Context, accountID, userID, newRole, updatedBy string) (*accountdomain.AccountMember, error)
 	GetAccountMembers(ctx context.Context, accountID string) ([]*accountdomain.AccountMember, error)
+	GetAccountMembersWithUsers(ctx context.Context, accountID string) ([]*accountdomain.AccountMemberWithUser, error)
 	LeaveAccount(ctx context.Context, accountID, userID string) error
 
 	// ============================================================

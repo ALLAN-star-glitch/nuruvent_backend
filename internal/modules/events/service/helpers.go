@@ -218,16 +218,12 @@ func (s *eventService) applySEO(event *domain.Event, input *SEOInput) {
 // ============================================================
 // PERMISSION HELPERS (shared across services)
 // ============================================================
-//
-// POST-REVAMP: every permission check runs against the event's parent
-// ACCOUNT domain. Teams are not authorization domains. Team membership
-// is enforced by the service as data (team_members) when it matters.
-//
-// Every event must have an AccountID. If it's missing on a loaded event,
-// the caller is responsible for backfilling it (usually by resolving
-// through the team).
-
 // validateUpdatePermission checks whether the user may update this event.
+//
+// Resolution order:
+//   1. Unrestricted: account_admin has event:update_all → allow.
+//   2. Own-only: trainer has event:update_own AND owns this event → allow.
+//   3. Otherwise → deny.
 func (s *eventService) validateUpdatePermission(ctx context.Context, event *domain.Event, userID string) error {
 	if event == nil {
 		return errors.New("event is nil")
@@ -242,16 +238,26 @@ func (s *eventService) validateUpdatePermission(ctx context.Context, event *doma
 	log.Printf("🔍 AUTHZ: event:update check user=%s domain=%s event=%s",
 		userID, accountDomain, event.ID)
 
-	allowed, err := s.permChecker.CanUpdateEvent(ctx, userID, accountDomain)
+	// 1. Unrestricted update rights (account_admin).
+	canAll, err := s.permChecker.CanUpdateAllEvents(ctx, userID, accountDomain)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
 	}
-	if !allowed {
-		log.Printf("❌ Permission denied: user %s cannot update event %s", userID, event.ID)
-		return domain.ErrForbidden
+	if canAll {
+		return nil
 	}
 
-	return nil
+	// 2. Own-only update rights (trainer) — verify ownership.
+	canOwn, err := s.permChecker.CanUpdateOwnEvents(ctx, userID, accountDomain)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if canOwn && event.CreatedBy == userID {
+		return nil
+	}
+
+	log.Printf("❌ Permission denied: user %s cannot update event %s", userID, event.ID)
+	return domain.ErrForbidden
 }
 
 

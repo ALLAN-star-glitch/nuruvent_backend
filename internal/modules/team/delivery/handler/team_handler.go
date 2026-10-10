@@ -134,11 +134,9 @@ func (h *TeamHandler) CreatePersonalTeam(c fiber.Ctx) error {
 		return response.BadRequest(c, "account_id is required", nil)
 	}
 
-	// Sanitize the user-supplied display name.
 	sanitizer := validation.Sanitize{}
 	displayName := sanitizer.DisplayName(req.Name)
 
-	// Fallback userName for legacy callers that don't send a name.
 	userName, _ := c.Locals(authDomain.ContextKeyUserName).(string)
 	if userName == "" {
 		userName = "User"
@@ -404,8 +402,8 @@ func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
 	if req.Role == "" {
 		return response.BadRequest(c, "role is required", nil)
 	}
-	if req.Role != "account_admin" && req.Role != "trainer" {
-		return response.BadRequest(c, "invalid role; must be account_admin or trainer", nil)
+	if !teamdomain.IsValidAccountRole(req.Role) {
+		return response.BadRequest(c, "invalid role; must be account_admin, trainer, or learner", nil)
 	}
 
 	invitation, err := h.service.InviteMember(c.Context(), service.InviteMemberCommand{
@@ -420,6 +418,8 @@ func (h *TeamHandler) InviteMember(c fiber.Ctx) error {
 			return response.NotFound(c, "Team not found", nil)
 		case teamdomain.ErrMemberAlreadyExists:
 			return response.Conflict(c, "User is already a member of this team", nil)
+		case teamdomain.ErrInviteeAlreadyAccountMember:
+			return response.Conflict(c, "This user is already a member of this account; update their role from the members list instead", nil)
 		case teamdomain.ErrInvitationPending:
 			return response.Conflict(c, "An invitation is already pending for this email", nil)
 		case teamdomain.ErrPermissionDenied:
@@ -568,7 +568,6 @@ func (h *TeamHandler) DeclineInvitation(c fiber.Ctx) error {
 
 	return response.Success(c, "Invitation declined successfully", nil)
 }
-
 
 func (h *TeamHandler) CreateInstitutionTeam(c fiber.Ctx) error {
 	userID := authenticatedUserID(c)

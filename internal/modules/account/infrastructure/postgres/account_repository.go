@@ -453,9 +453,10 @@ func (r *AccountRepository) GetUserByID(ctx context.Context, userID string) (*ac
 	return model.ToDomain(), nil
 }
 
-func (r *AccountRepository) GetUsersByIDs(ctx context.Context, userIDs []string) ([]*accountdomain.User, error) {
+
+func (r *AccountRepository) GetUsersByIDs(ctx context.Context, userIDs []string) ([]*accountdomain.UserInfo, error) {
 	if len(userIDs) == 0 {
-		return []*accountdomain.User{}, nil
+		return []*accountdomain.UserInfo{}, nil
 	}
 
 	var models []UserModel
@@ -466,9 +467,18 @@ func (r *AccountRepository) GetUsersByIDs(ctx context.Context, userIDs []string)
 		return nil, fmt.Errorf("failed to get users: %w", err)
 	}
 
-	out := make([]*accountdomain.User, len(models))
+	out := make([]*accountdomain.UserInfo, len(models))
 	for i, m := range models {
-		out[i] = m.ToDomain()
+		user := m.ToDomain() // *User
+		out[i] = &accountdomain.UserInfo{
+			ID:          user.ID,
+			Name:        user.Name,
+			DisplayName: user.DisplayName,
+			Email:       user.Email,
+			Phone:       user.Phone,
+			AvatarURL:   user.AvatarURL,
+			// Bio/Location/Website/SocialLinks left empty — not on User.
+		}
 	}
 	return out, nil
 }

@@ -125,6 +125,9 @@ func (s *teamService) AddMember(ctx context.Context, teamID, userID, addedBy str
 //
 // No Casbin writes happen here. The removed user's account role is
 // unchanged; they simply lose visibility to this specific team.
+//
+// Note: personal teams are not special. Roles are account-level; team
+// membership is a data link. Admins manage both team types identically.
 func (s *teamService) RemoveMember(ctx context.Context, teamID, userID, removedBy string) error {
 	if teamID == "" {
 		return fmt.Errorf("team ID is required")
@@ -170,10 +173,6 @@ func (s *teamService) RemoveMember(ctx context.Context, teamID, userID, removedB
 		return teamdomain.ErrCannotRemoveSelf
 	}
 
-	if team.IsPersonal() {
-		return fmt.Errorf("cannot remove members from personal team")
-	}
-
 	if err := s.repo.DeleteMember(ctx, teamID, userID); err != nil {
 		return fmt.Errorf("failed to remove member: %w", err)
 	}
@@ -190,6 +189,11 @@ func (s *teamService) RemoveMember(ctx context.Context, teamID, userID, removedB
 // yourself never requires elevated permissions.
 //
 // No Casbin writes. The user's account role is unchanged.
+//
+// Note: personal teams are not special. A user may leave any team they
+// belong to. If you need to prevent the last admin of an account from
+// leaving their own personal team, enforce that at the account level,
+// not here.
 func (s *teamService) LeaveTeam(ctx context.Context, teamID, userID string) error {
 	if teamID == "" {
 		return fmt.Errorf("team ID is required")
@@ -204,10 +208,6 @@ func (s *teamService) LeaveTeam(ctx context.Context, teamID, userID string) erro
 	}
 	if team == nil {
 		return teamdomain.ErrTeamNotFound
-	}
-
-	if team.IsPersonal() {
-		return fmt.Errorf("cannot leave personal team")
 	}
 
 	member, err := s.repo.GetMemberByTeamAndUser(ctx, teamID, userID)

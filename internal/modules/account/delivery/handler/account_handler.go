@@ -620,9 +620,11 @@ func (h *AccountHandler) UpdateMemberRole(c fiber.Ctx) error {
 	return response.Success(c, "Member role updated successfully", NewMemberResponse(member))
 }
 
+
+
 // GetAccountMembers godoc
 // @Summary Get account members
-// @Description Get all members of an account
+// @Description Get all members of an account, with user identity fields.
 // @Tags Accounts
 // @Produce json
 // @Security BearerAuth
@@ -655,9 +657,31 @@ func (h *AccountHandler) GetAccountMembers(c fiber.Ctx) error {
 		})
 	}
 
+	// Batch-fetch the user identities so we can embed name/email/avatar.
+	// One query, no N+1. Users that no longer exist (or have been
+	// soft-deleted) simply produce members with empty identity fields.
+	userIDs := make([]string, 0, len(members))
+	for _, m := range members {
+		if m.UserID != "" {
+			userIDs = append(userIDs, m.UserID)
+		}
+	}
+
+	users, err := h.svc.GetUsersByIDs(ctx, userIDs)
+	if err != nil {
+		// Non-fatal — the identity fields are a nice-to-have.
+		users = nil
+	}
+
+	// GetUsersByIDs returns []*accountdomain.UserInfo (projection).
+	userByID := make(map[string]*accountdomain.UserInfo, len(users))
+	for _, u := range users {
+		userByID[u.ID] = u
+	}
+
 	responses := make([]MemberResponse, len(members))
 	for i, member := range members {
-		responses[i] = NewMemberResponse(member)
+		responses[i] = NewMemberResponseWithUser(member, userByID[member.UserID])
 	}
 
 	return response.Success(c, "Account members retrieved successfully", responses)

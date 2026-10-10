@@ -191,10 +191,10 @@ func (s *eventService) RestoreEvents(ctx context.Context, ids []string, restored
 
 // validateDeletePermission checks whether the user may delete this event.
 //
-// POST-REVAMP: single Casbin check against the account domain.
-// `fallbackAccountID` is used only when the loaded event has no AccountID
-// (legacy rows). Passing an empty value and hitting a legacy event is an
-// error.
+// Resolution order:
+//   1. Unrestricted: account_admin has event:delete_all → allow.
+//   2. Own-only: trainer has event:delete_own AND owns this event → allow.
+//   3. Otherwise → deny.
 func (s *eventService) validateDeletePermission(
 	ctx context.Context,
 	event *domain.Event,
@@ -212,22 +212,33 @@ func (s *eventService) validateDeletePermission(
 	log.Printf("🔍 AUTHZ: event:delete check user=%s domain=%s event=%s",
 		userID, accountDomain, event.ID)
 
-	allowed, err := s.permChecker.CanDeleteEvent(ctx, userID, accountDomain)
+	// 1. Unrestricted delete rights.
+	canAll, err := s.permChecker.CanDeleteAllEvents(ctx, userID, accountDomain)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
 	}
-	if !allowed {
-		log.Printf("❌ Permission denied: user %s cannot delete event %s in domain %s",
-			userID, event.ID, accountDomain)
-		return domain.ErrForbidden
+	if canAll {
+		return nil
 	}
 
-	return nil
+	// 2. Own-only delete rights + ownership.
+	canOwn, err := s.permChecker.CanDeleteOwnEvents(ctx, userID, accountDomain)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if canOwn && event.CreatedBy == userID {
+		return nil
+	}
+
+	log.Printf("❌ Permission denied: user %s cannot delete event %s in domain %s",
+		userID, event.ID, accountDomain)
+	return domain.ErrForbidden
 }
 
 // validateRestorePermission checks whether the user may restore this event.
 //
-// POST-REVAMP: single Casbin check against the account domain.
+// Restore uses the update permission set — restoring is a mutation of
+// an existing event, not a destructive action.
 func (s *eventService) validateRestorePermission(
 	ctx context.Context,
 	event *domain.Event,
@@ -245,17 +256,27 @@ func (s *eventService) validateRestorePermission(
 	log.Printf("🔍 AUTHZ: event:update check user=%s domain=%s event=%s (restore)",
 		userID, accountDomain, event.ID)
 
-	allowed, err := s.permChecker.CanUpdateEvent(ctx, userID, accountDomain)
+	// 1. Unrestricted update rights.
+	canAll, err := s.permChecker.CanUpdateAllEvents(ctx, userID, accountDomain)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
 	}
-	if !allowed {
-		log.Printf("❌ Permission denied: user %s cannot restore event %s in domain %s",
-			userID, event.ID, accountDomain)
-		return domain.ErrForbidden
+	if canAll {
+		return nil
 	}
 
-	return nil
+	// 2. Own-only update rights + ownership.
+	canOwn, err := s.permChecker.CanUpdateOwnEvents(ctx, userID, accountDomain)
+	if err != nil {
+		return fmt.Errorf("permission check failed: %w", err)
+	}
+	if canOwn && event.CreatedBy == userID {
+		return nil
+	}
+
+	log.Printf("❌ Permission denied: user %s cannot restore event %s in domain %s",
+		userID, event.ID, accountDomain)
+	return domain.ErrForbidden
 }
 
 // checkDeletePermissionForEvent loads the event (including soft-deleted)
