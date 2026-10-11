@@ -45,14 +45,32 @@ func main() {
 	}
 	defer application.Close()
 
-	// 3. Setup routes
+	// 3. Reconcile Casbin grouping rules with account_members.
+	//
+	// SQL (account_members.role) is the source of truth; Casbin
+	// grouping rules are a derived cache. This one-shot pass clears
+	// any drift accumulated since the last boot. The mutation hook
+	// (RoleAssignment.ReconcileAll) keeps things aligned during the
+	// run, after every add / remove / update-role / leave.
+	//
+	// Non-fatal: if it fails, the server still boots and the next
+	// role mutation reconciles.
+		if application.AccountService != nil {
+		if err := application.AccountService.ReconcileRoles(context.Background()); err != nil {
+			log.Printf("⚠️  Startup reconcile failed: %v", err)
+		}
+	} else {
+		log.Println("ℹ️  Startup reconcile skipped: AccountService not wired")
+	}
+
+	// 4. Setup routes
 	application.SetupRoutes()
 
-	// 4. Start embedded Asynq worker
+	// 5. Start embedded Asynq worker
 	stopWorker := worker.StartEmbeddedWorker(cfg)
 	defer stopWorker()
 
-	// 5. Start the Google Meet attendance poller.
+	// 6. Start the Google Meet attendance poller.
 	//    Off by default so dev environments don't hit Google's API
 	//    unattended. Enable with AUTO_FETCH_MEET_ATTENDANCE=true.
 	if cfg.AutoFetchMeetAttendance {
@@ -69,7 +87,7 @@ func main() {
 		log.Println("ℹ️  Meet attendance poller disabled (set AUTO_FETCH_MEET_ATTENDANCE=true to enable)")
 	}
 
-	// 6. Start server (blocking)
+	// 7. Start server (blocking)
 	log.Println("🚀 Starting HTTP API server...")
 	if err := application.Run(); err != nil {
 		log.Fatalf("Failed to start server: %v", err)

@@ -8,6 +8,7 @@ package app
 
 import (
 	attendance2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/attendance"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/team"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	postgres3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/infrastructure/postgres"
@@ -98,7 +99,9 @@ func InitializeApp() (*AppDependencies, error) {
 	casbinService := NewTeamCasbinAdapter(permissionChecker, roleManager, policyManager)
 	serviceNotificationService := NewTeamNotificationAdapter(notificationService)
 	aiService := infrastructure.NewTeamAIAdapter(aiClient)
-	serviceService := service2.NewTeamService(teamdomainRepository, authService, casbinService, serviceNotificationService, aiService)
+	accountServiceHolder := NewAccountServiceHolder()
+	userProfileProvider := NewTeamUserProfileAdapter(accountServiceHolder)
+	serviceService := service2.NewTeamService(teamdomainRepository, authService, casbinService, serviceNotificationService, aiService, userProfileProvider)
 	teamService := NewAuthTeamAdapter(serviceService)
 	service11 := service3.NewService(repository, configConfig, redisClient, queueService, permissionChecker, roleManager, policyManager, tokenService, authdomainNotificationService, enforcer, teamService)
 	accountdomainRepository := postgres3.NewAccountRepository(db)
@@ -108,7 +111,7 @@ func InitializeApp() (*AppDependencies, error) {
 	domainRepository := postgres4.NewPostgresRepository(db)
 	service12 := service4.NewService(domainRepository, client)
 	mediaService := NewAccountMediaAdapter(service12)
-	roleAssignment := NewAccountRoleAssignmentAdapter(enforcer)
+	roleAssignment := NewAccountRoleAssignmentAdapter(enforcer, db)
 	service13 := service5.NewAccountService(accountdomainRepository, serviceAuthService, notificationService2, accountdomainPermissionChecker, mediaService, roleAssignment)
 	repository2 := postgres5.NewPostgresRepository(db)
 	domainPermissionChecker := NewEventsPermissionAdapter(permissionChecker)
@@ -196,7 +199,7 @@ func InitializeApp() (*AppDependencies, error) {
 	authSessionIssuer := NewAttendanceAuthSessionIssuer(service11)
 	handlers := http3.NewHandlers(service14, v2, authSessionIssuer)
 	httpHandlers := http4.NewHandlers(service15)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service11, tokenService, service13, serviceService, service16, service12, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker, httpHandler, service17, handler3, orderHandler, service18, handlers, service14, httpHandlers, service15, eventsServiceHolder)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service11, tokenService, service13, serviceService, service16, service12, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker, httpHandler, service17, handler3, orderHandler, service18, handlers, service14, httpHandlers, service15, eventsServiceHolder, accountServiceHolder)
 	return appDependencies, nil
 }
 
@@ -247,4 +250,6 @@ type AppDependencies struct {
 	VideoService service7.Service
 
 	EventsServiceHolder *attendance2.EventsServiceHolder
+
+	AccountServiceHolder *team.AccountServiceHolder
 }

@@ -77,6 +77,15 @@ type CasbinService interface {
 	// CanViewMembers reports whether userID may view the member roster.
 	CanViewMembers(ctx context.Context, userID, domain string) (bool, error)
 
+
+	// CanViewMembersOwn reports whether userID may view the member roster
+	// of teams they belong to (learners).
+	//
+	// This is the own-scoped counterpart of CanViewMembers. A true result
+	// means the caller may read the roster of any team they are an active
+	// member of — the team service enforces that membership check.
+	CanViewMembersOwn(ctx context.Context, userID, domain string) (bool, error)
+
 	// CanManageMembers reports whether userID may perform any management
 	// action on members (add, update, remove, invite).
 	CanManageMembers(ctx context.Context, userID, domain string) (bool, error)

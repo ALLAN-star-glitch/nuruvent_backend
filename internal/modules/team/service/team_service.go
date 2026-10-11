@@ -20,6 +20,7 @@ type teamService struct {
 	casbinSvc CasbinService
 	notifSvc  NotificationService
 	aiSvc     AIService
+	userProfileSvc     UserProfileProvider
 }
 
 // NewTeamService creates a new team service.
@@ -29,6 +30,7 @@ func NewTeamService(
 	casbinSvc CasbinService,
 	notifSvc NotificationService,
 	aiSvc AIService,
+	userProfileSvc UserProfileProvider,
 ) Service {
 	return &teamService{
 		repo:      repo,
@@ -36,6 +38,7 @@ func NewTeamService(
 		casbinSvc: casbinSvc,
 		notifSvc:  notifSvc,
 		aiSvc:     aiSvc,
+		userProfileSvc: userProfileSvc,
 	}
 }
 

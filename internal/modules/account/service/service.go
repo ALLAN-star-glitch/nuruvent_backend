@@ -53,6 +53,19 @@ type Service interface {
 	GetAccountMembersWithUsers(ctx context.Context, accountID string) ([]*accountdomain.AccountMemberWithUser, error)
 	LeaveAccount(ctx context.Context, accountID, userID string) error
 
+	// ReconcileRoles re-aligns Casbin grouping rules with the
+	// account_members table.
+	//
+	// SQL (account_members.role) is the source of truth; Casbin
+	// grouping rules are a derived cache. This method delegates to the
+	// RoleAssignment port's ReconcileAll. It is called once at
+	// application startup to clear drift accumulated since the last
+	// boot; the account-member mutations reconcile automatically after
+	// every add / remove / update-role / leave.
+	//
+	// Idempotent. Safe to call at any time.
+	ReconcileRoles(ctx context.Context) error
+
 	// ============================================================
 	// USER INFO PROJECTIONS
 	// ============================================================
@@ -69,38 +82,50 @@ type Service interface {
 	GetUserByIDWithDetails(ctx context.Context, userID string) (*accountdomain.UserInfo, error)
 	GetUsersByIDs(ctx context.Context, userIDs []string) ([]*accountdomain.UserInfo, error)
 
-    // ============================================================
-    // MEDIA OPERATIONS (avatars, logos)
-    // ============================================================
+	// ============================================================
+	// MEDIA OPERATIONS (avatars, logos)
+	// ============================================================
 
-    // UploadUserAvatar stores a new avatar for the user and updates avatar_url.
-    // Self-service: the caller may only change their own avatar.
-    UploadUserAvatar(ctx context.Context, userID string, file []byte, filename, contentType string) (*accountdomain.UserInfo, error)
-    DeleteUserAvatar(ctx context.Context, userID string) error
+	// UploadUserAvatar stores a new avatar for the user and updates avatar_url.
+	// Self-service: the caller may only change their own avatar.
+	UploadUserAvatar(ctx context.Context, userID string, file []byte, filename, contentType string) (*accountdomain.UserInfo, error)
+	DeleteUserAvatar(ctx context.Context, userID string) error
 
-    // UploadAccountLogo stores a new logo for the account and updates logo_url.
-    // Permission: caller must be able to manage the account.
-    UploadAccountLogo(ctx context.Context, accountID string, file []byte, filename, contentType string) (*accountdomain.Account, error)
-    DeleteAccountLogo(ctx context.Context, accountID string) error
+	// UploadAccountLogo stores a new logo for the account and updates logo_url.
+	// Permission: caller must be able to manage the account.
+	UploadAccountLogo(ctx context.Context, accountID string, file []byte, filename, contentType string) (*accountdomain.Account, error)
+	DeleteAccountLogo(ctx context.Context, accountID string) error
 
-        // ============================================================
-    // USER PROFILE OPERATIONS
-    // ============================================================
+	// ============================================================
+	// USER PROFILE OPERATIONS
+	// ============================================================
 
-    // GetMyProfile returns the authenticated user's own profile.
-    // Self-service: no permission check beyond authentication.
-    GetMyProfile(ctx context.Context, userID string) (*accountdomain.UserInfo, error)
+	// GetMyProfile returns the authenticated user's own profile.
+	// Self-service: no permission check beyond authentication.
+	GetMyProfile(ctx context.Context, userID string) (*accountdomain.UserInfo, error)
 
-    // UpdateMyProfile updates the authenticated user's own profile.
-    // Self-service: no permission check beyond authentication.
-    UpdateMyProfile(ctx context.Context, userID string, updates ProfileUpdates) (*accountdomain.UserInfo, error)
+	// UpdateMyProfile updates the authenticated user's own profile.
+	// Self-service: no permission check beyond authentication.
+	UpdateMyProfile(ctx context.Context, userID string, updates ProfileUpdates) (*accountdomain.UserInfo, error)
 
-    // GetPublicProfile returns a user's public-facing profile by ID.
-    // No auth required; returns only safe fields.
-    GetPublicProfile(ctx context.Context, userID string) (*accountdomain.PublicProfile, error)
+	// GetPublicProfile returns a user's public-facing profile by ID.
+	// No auth required; returns only safe fields.
+	GetPublicProfile(ctx context.Context, userID string) (*accountdomain.PublicProfile, error)
 
-    // GetPublicProfileBySlug returns a user's public profile by slug.
-    GetPublicProfileBySlug(ctx context.Context, slug string) (*accountdomain.PublicProfile, error)
+	// GetPublicProfileBySlug returns a user's public profile by slug.
+	GetPublicProfileBySlug(ctx context.Context, slug string) (*accountdomain.PublicProfile, error)
+
+
+	// GetMyAccountMembership returns the caller's own membership row in
+	// an account.
+	//
+	// Self-service: no permission check. Used by the UserMenu role badge
+	// to resolve the caller's role without listing the account's members.
+	//
+	// Returns (nil, nil) when the user is not an active member of the
+	// account.
+	GetMyAccountMembership(ctx context.Context, accountID, userID string) (*accountdomain.AccountMember, error)
+
 }
 
 // ============================================================

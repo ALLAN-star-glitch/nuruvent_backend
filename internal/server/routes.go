@@ -71,14 +71,20 @@ func SetupRoutes(
 	// Account routes
 	accountHandler.RegisterRoutes(api, authMiddleware, authzMiddleware)
 
-	// Registration routes
-	registrationhttp.RegisterRoutes(api, regHandler, authMiddleware, optionalAuth)
+	// Registration routes — authzMiddleware now attached so
+	// account-scoped reads (registration lists, attendee exports) are
+	// authorized, not just authenticated.
+	registrationhttp.RegisterRoutes(api, regHandler, authMiddleware, authzMiddleware, optionalAuth)
 
-	// Payment routes (orders + payments + webhooks)
-	paymenthttp.RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware, optionalAuth)
+	// Payment routes (orders + payments + webhooks) — authzMiddleware
+	// attached so the ledger, stats, single-payment lookup, and refund
+	// routes are authorized against the caller's role.
+	paymenthttp.RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware, authzMiddleware, optionalAuth)
 
-	// Attendance routes (sessions, join links, webhooks, host operations)
-	attendancehttp.RegisterRoutes(api, attendanceHandler, authMiddleware, optionalAuth)
+	// Attendance routes (sessions, join links, webhooks, host
+	// operations) — authzMiddleware attached so attendance reads,
+	// exports, and host actions are authorized.
+	attendancehttp.RegisterRoutes(api, attendanceHandler, authMiddleware, authzMiddleware, optionalAuth)
 
 	// Video routes (OAuth connect/callback, connections)
 	videohttp.RegisterRoutes(api.Group("/video"), videoHandler, authMiddleware)

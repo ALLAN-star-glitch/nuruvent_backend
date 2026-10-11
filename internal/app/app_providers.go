@@ -59,6 +59,8 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
+
+	teamAdapter "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/team"
 )
 
 // ============================================================
@@ -135,6 +137,7 @@ func provideAppDependencies(
 	videoHndlr *videoHandler.Handlers,
 	videoSvc videoService.Service,
 	eventsServiceHolder *attendanceadapters.EventsServiceHolder,
+	accountServiceHolder *teamAdapter.AccountServiceHolder,
 ) *AppDependencies {
 	return &AppDependencies{
 		Config:                    cfg,
@@ -172,5 +175,6 @@ func provideAppDependencies(
 		VideoHandler:              videoHndlr,
 		VideoService:              videoSvc,
 		EventsServiceHolder: eventsServiceHolder,
+		AccountServiceHolder: accountServiceHolder,
 	}
 }

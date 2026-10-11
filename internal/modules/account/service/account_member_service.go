@@ -20,6 +20,7 @@ import (
 // Side effects:
 //   1. account_members row inserted.
 //   2. Casbin grouping rule assigned: g, <user>, <role>, account:<id>.
+//   3. Casbin grouping rules reconciled with account_members.
 func (s *accountService) AddMember(
 	ctx context.Context,
 	cmd AddMemberCommand,
@@ -88,6 +89,15 @@ func (s *accountService) AddMember(
 				cmd.UserID, cmd.AccountID, cmd.Role, err,
 			)
 		}
+
+		// 7b. Reconcile — repair any drift between account_members
+		// and Casbin grouping rules.
+		if err := s.roleAssignment.ReconcileAll(ctx); err != nil {
+			log.Printf(
+				"⚠️ AddMember: reconcile failed account=%s: %v",
+				cmd.AccountID, err,
+			)
+		}
 	}
 
 	log.Printf("✅ User %s added to account %s as %s", cmd.UserID, cmd.AccountID, cmd.Role)
@@ -105,6 +115,7 @@ func (s *accountService) AddMember(
 // Side effects:
 //   1. account_members row soft-deleted.
 //   2. Every Casbin grouping rule for (user, account) revoked.
+//   3. Casbin grouping rules reconciled with account_members.
 func (s *accountService) RemoveMember(
 	ctx context.Context,
 	accountID, userID, removedBy string,
@@ -164,6 +175,15 @@ func (s *accountService) RemoveMember(
 				userID, accountID, err,
 			)
 		}
+
+		// Reconcile — repair any drift between account_members and
+		// Casbin grouping rules.
+		if err := s.roleAssignment.ReconcileAll(ctx); err != nil {
+			log.Printf(
+				"⚠️ RemoveMember: reconcile failed account=%s: %v",
+				accountID, err,
+			)
+		}
 	}
 
 	log.Printf("✅ User %s removed from account %s by %s", userID, accountID, removedBy)
@@ -184,6 +204,7 @@ func (s *accountService) RemoveMember(
 //      (user, account) is revoked, then the new role is assigned.
 //      Revoke-first because Casbin's AddGroupingPolicy is additive;
 //      without the clear, the user would end up with two roles.
+//   3. Casbin grouping rules reconciled with account_members.
 func (s *accountService) UpdateMemberRole(
 	ctx context.Context,
 	accountID, userID, newRole, updatedBy string,
@@ -254,6 +275,15 @@ func (s *accountService) UpdateMemberRole(
 				userID, accountID, newRole, err,
 			)
 		}
+
+		// Reconcile — repair any drift between account_members and
+		// Casbin grouping rules.
+		if err := s.roleAssignment.ReconcileAll(ctx); err != nil {
+			log.Printf(
+				"⚠️ UpdateMemberRole: reconcile failed account=%s: %v",
+				accountID, err,
+			)
+		}
 	}
 
 	log.Printf("✅ User %s role updated to %s in account %s", userID, newRole, accountID)
@@ -294,6 +324,7 @@ func (s *accountService) GetAccountMembers(
 // Side effects:
 //   1. account_members row soft-deleted.
 //   2. Every Casbin grouping rule for (user, account) revoked.
+//   3. Casbin grouping rules reconciled with account_members.
 func (s *accountService) LeaveAccount(
 	ctx context.Context,
 	accountID, userID string,
@@ -338,6 +369,15 @@ func (s *accountService) LeaveAccount(
 			log.Printf(
 				"⚠️ LeaveAccount: casbin revoke failed user=%s account=%s: %v",
 				userID, accountID, err,
+			)
+		}
+
+		// Reconcile — repair any drift between account_members and
+		// Casbin grouping rules.
+		if err := s.roleAssignment.ReconcileAll(ctx); err != nil {
+			log.Printf(
+				"⚠️ LeaveAccount: reconcile failed account=%s: %v",
+				accountID, err,
 			)
 		}
 	}
@@ -443,3 +483,45 @@ func (s *accountService) GetAccountMembersWithUsers(
 	return out, nil
 }
 
+func (s *accountService) ReconcileRoles(ctx context.Context) error {
+	if s.roleAssignment == nil {
+		return fmt.Errorf("role assignment adapter not wired")
+	}
+	return s.roleAssignment.ReconcileAll(ctx)
+}
+
+
+// ============================================================
+// GET MY MEMBERSHIP
+// ============================================================
+
+// GetMyAccountMembership returns the caller's own membership row in
+// an account.
+//
+// Self-service: no permission check. A user can always read their own
+// role. The HTTP layer is responsible for confirming the caller is
+// asking about their own membership — which it does by passing the
+// authenticated user's ID.
+//
+// Returns (nil, nil) when the user is not an active member of the
+// account, so callers must handle the nil case explicitly.
+func (s *accountService) GetMyAccountMembership(
+	ctx context.Context,
+	accountID, userID string,
+) (*accountdomain.AccountMember, error) {
+	if accountID == "" {
+		return nil, fmt.Errorf("account ID is required")
+	}
+	if userID == "" {
+		return nil, fmt.Errorf("user ID is required")
+	}
+
+	member, err := s.repo.GetAccountMemberByAccountAndUser(ctx, accountID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load membership: %w", err)
+	}
+	if member == nil || !member.IsActive {
+		return nil, nil
+	}
+	return member, nil
+}

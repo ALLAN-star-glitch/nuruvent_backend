@@ -1055,3 +1055,57 @@ func (h *AccountHandler) GetPublicProfileBySlug(c fiber.Ctx) error {
 
 	return response.Success(c, "Profile retrieved successfully", NewPublicProfileResponse(profile))
 }
+
+// ============================================================
+// GET MY MEMBERSHIP
+// ============================================================
+
+// GetMyMembership returns the caller's own membership row in the
+// specified account.
+//
+// Self-service: no permission check beyond authentication. The
+// endpoint exists so the UserMenu can resolve the caller's role
+// without listing the account's members. Learners do not hold
+// `member:read`, so the account member list is unavailable to them —
+// this endpoint gives them their own row only.
+//
+// @Summary     Get my membership in an account
+// @Description Returns the caller's role and membership details for the specified account.
+// @Tags        Accounts
+// @Produce     json
+// @Security    BearerAuth
+// @Param       id path string true "Account ID"
+// @Success     200 {object} response.BaseResponse{data=MemberResponse}
+// @Failure     400 {object} response.BaseResponse
+// @Failure     401 {object} response.BaseResponse
+// @Failure     404 {object} response.BaseResponse
+// @Failure     500 {object} response.BaseResponse
+// @Router      /api/v1/accounts/{id}/members/me [get]
+func (h *AccountHandler) GetMyMembership(c fiber.Ctx) error {
+	accountID := c.Params("id")
+	if accountID == "" {
+		return response.BadRequest(c, "Account ID is required", nil)
+	}
+
+	userID, err := handlerhelper.GetUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "User not authenticated", nil)
+	}
+
+	ctx := handlerhelper.EnrichUserContext(c)
+
+	member, err := h.svc.GetMyAccountMembership(ctx, accountID, userID)
+	if err != nil {
+		if errors.Is(err, accountdomain.ErrAccountNotFound) {
+			return response.NotFound(c, "Account not found", nil)
+		}
+		return response.InternalError(c, "Failed to get membership", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+	if member == nil {
+		return response.NotFound(c, "You are not a member of this account", nil)
+	}
+
+	return response.Success(c, "Membership retrieved successfully", NewMemberResponse(member))
+}

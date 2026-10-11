@@ -33,10 +33,24 @@ func NewHandlers(
 
 // RegisterRoutes wires the attendance module's routes into the given
 // router.
+//
+// Auth policy:
+//
+//   - Public routes: join-token redemption and provider webhooks.
+//     Neither has a session; the token or the provider signature is
+//     the authentication.
+//   - Consumer-facing POSTs (register attendee, upsert session) use
+//     authMiddleware. They operate on data the caller already owns,
+//     so a domain-scoped authz check is deferred to the service.
+//   - Host-facing reads and mutations use authMiddleware AND
+//     authzMiddleware. These endpoints expose attendance for a
+//     session, an event, or the whole account, and must be
+//     authorized against the caller's role.
 func RegisterRoutes(
 	r fiber.Router,
 	h *Handlers,
 	authMiddleware fiber.Handler,
+	authzMiddleware fiber.Handler,
 	optionalAuth fiber.Handler,
 ) {
 	// ---- Public ----
@@ -45,25 +59,30 @@ func RegisterRoutes(
 	// r.Post("/webhooks/google-meet", h.Webhooks.GoogleMeetWebhook) // deferred
 
 	// ---- Consumer-facing (other modules) ----
+	// Authn only. The service scopes writes to the caller.
 	r.Post("/attendees", authMiddleware, h.Sessions.RegisterAttendee)
 	r.Post("/attendees/:id/register-for-external", authMiddleware, h.Sessions.RegisterAttendeeForExternal)
 	r.Post("/sessions", authMiddleware, h.Sessions.UpsertSession)
 
-	// ---- Host-facing ----
-	r.Post("/sessions/:id/join-tokens", authMiddleware, h.Sessions.IssueJoinToken)
-	r.Delete("/sessions/:id/join-tokens", authMiddleware, h.Sessions.RevokeJoinTokens)
+	// ---- Host-facing: session join tokens ----
+	r.Post("/sessions/:id/join-tokens", authMiddleware, authzMiddleware, h.Sessions.IssueJoinToken)
+	r.Delete("/sessions/:id/join-tokens", authMiddleware, authzMiddleware, h.Sessions.RevokeJoinTokens)
 
-	r.Get("/sessions/:id/attendance", optionalAuth, h.Attendance.ListSessionAttendance)
-	r.Get("/sessions/:id/attendance/export", optionalAuth, h.Attendance.ExportSessionAttendance)
-	r.Post("/sessions/:id/attendance/:attendeeID/confirm", authMiddleware, h.Attendance.ConfirmAttendance)
-	r.Post("/sessions/:id/attendance/:attendeeID/override", authMiddleware, h.Attendance.OverrideAttendance)
-	r.Post("/sessions/:id/attendance/bulk-confirm", authMiddleware, h.Attendance.BulkConfirm)
+	// ---- Host-facing: attendance reads and mutations ----
+	// Previously optionalAuth — anyone with a session ID or attendee
+	// ID could read attendance. Now authenticated and authorized.
+	r.Get("/sessions/:id/attendance", authMiddleware, authzMiddleware, h.Attendance.ListSessionAttendance)
+	r.Get("/sessions/:id/attendance/export", authMiddleware, authzMiddleware, h.Attendance.ExportSessionAttendance)
 
-	r.Get("/attendees/:id/summary", optionalAuth, h.Attendance.GetAttendeeSummary)
+	r.Post("/sessions/:id/attendance/:attendeeID/confirm", authMiddleware, authzMiddleware, h.Attendance.ConfirmAttendance)
+	r.Post("/sessions/:id/attendance/:attendeeID/override", authMiddleware, authzMiddleware, h.Attendance.OverrideAttendance)
+	r.Post("/sessions/:id/attendance/bulk-confirm", authMiddleware, authzMiddleware, h.Attendance.BulkConfirm)
+
+	r.Get("/attendees/:id/summary", authMiddleware, authzMiddleware, h.Attendance.GetAttendeeSummary)
 
 	// ---- Event-facing ----
-	r.Get("/events/:eventId/summary", authMiddleware, h.Attendance.EventSummary)
-	r.Get("/events/:eventId/attendees", authMiddleware, h.Attendance.ListEventAttendees)
-	r.Get("/events/:eventId/attendees/:attendeeId", authMiddleware, h.Attendance.GetEventAttendeeDetail)
-	r.Get("/attendees", authMiddleware, h.Attendance.ListAttendees)
+	r.Get("/events/:eventId/summary", authMiddleware, authzMiddleware, h.Attendance.EventSummary)
+	r.Get("/events/:eventId/attendees", authMiddleware, authzMiddleware, h.Attendance.ListEventAttendees)
+	r.Get("/events/:eventId/attendees/:attendeeId", authMiddleware, authzMiddleware, h.Attendance.GetEventAttendeeDetail)
+	r.Get("/attendees", authMiddleware, authzMiddleware, h.Attendance.ListAttendees)
 }

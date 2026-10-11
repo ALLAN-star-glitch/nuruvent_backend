@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 )
@@ -80,6 +81,64 @@ func (s *service) ListAllRegistrations(
 		return nil, err
 	}
 
+
+
+
+		// Own-scope decision.
+	//
+	// If the request carries a team, the operation is about one
+	// account — authorize against that account only.
+	//
+	// If there is no team, the query spans every account the caller
+	// belongs to. Skip the filter only if they hold registration:read
+	// everywhere.
+	var canReadAll bool
+	var teamAccountID string
+
+	if cmd.TeamID != "" {
+		teamAccountID, err = s.deps.EventRegistrations.ResolveTeamAccount(ctx, cmd.TeamID)
+		if err != nil {
+			return nil, fmt.Errorf("resolve team account: %w", err)
+		}
+		canReadAll = s.callerHasReadInAccount(ctx, cmd.UserID, teamAccountID)
+	} else {
+		canReadAll = s.callerHasReadInEveryAccount(ctx, cmd.UserID, accountIDs)
+	}
+
+		if !canReadAll {
+		// Not account-wide read. Two possibilities:
+		//
+		//   - Trainer: holds event:read_all → their scope is every
+		//     registration on the teams they belong to. They run
+		//     events on those teams, so they need operational
+		//     visibility into who is registering. Allowed.
+		//   - Learner: holds neither → the team registrations view
+		//     is not for them. Deny with 403.
+		//
+		// Distinguishing requires knowing which account the view is
+		// about. Without a team scope, we cannot tell trainer from
+		// learner, so we fall through to denial — a caller with no
+		// account-wide read has no legitimate reason to hit the
+		// cross-account organizer view.
+		//
+		// NOTE: no EventOwnerUserID filter is applied for trainers.
+		// The account + team scope from the filter is the boundary.
+		// A trainer on a team sees that team's registrations; a
+		// trainer on multiple teams sees the union. Payments remain
+		// own-scoped via payment:read_own — this relaxation is
+		// specific to registration and attendee visibility.
+		isTrainer := teamAccountID != "" &&
+			s.callerHoldsEventReadAll(ctx, cmd.UserID, teamAccountID)
+
+		if !isTrainer {
+			return nil, registrationdomain.ErrPermissionDenied
+		}
+	}
+
+
+		log.Printf("🔍 ListAllRegistrations user=%s accounts=%d scoped_user=%q team_id=%q scope=%q can_read_all=%v",
+		cmd.UserID, len(accountIDs), filter.UserID, cmd.TeamID, cmd.Scope, canReadAll)
+
 	registrations, total, err := s.deps.EventRegistrations.ListAll(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("list all registrations: %w", err)
@@ -133,4 +192,65 @@ func (s *service) applyTeamFilter(
 
 	f.EventIDs = eventIDs
 	return nil
+}
+
+
+
+// callerHasReadInAccount reports whether the caller holds the
+// account-wide registration:read grant in one specific account.
+func (s *service) callerHasReadInAccount(
+	ctx context.Context,
+	userID, accountID string,
+) bool {
+	if s.deps.PermissionChecker == nil || accountID == "" {
+		return false
+	}
+	domain := "account:" + accountID
+	allowed, err := s.deps.PermissionChecker.HasPermission(
+		ctx, userID, domain, "registration", "read",
+	)
+	return err == nil && allowed
+}
+
+// callerHasReadInEveryAccount reports whether the caller holds
+// registration:read in every account they belong to.
+//
+// Used only when the request has no team scope — in that case the
+// query spans all accounts, and the own-scope filter is skipped only
+// if the caller is an admin everywhere.
+func (s *service) callerHasReadInEveryAccount(
+	ctx context.Context,
+	userID string,
+	accountIDs []string,
+) bool {
+	if len(accountIDs) == 0 {
+		return false
+	}
+	for _, id := range accountIDs {
+		if !s.callerHasReadInAccount(ctx, userID, id) {
+			return false
+		}
+	}
+	return true
+}
+
+// callerHoldsEventReadAll reports whether the caller holds the
+// account-wide event:read_all grant in a specific account.
+//
+// Used to distinguish trainers from learners: trainers hold
+// event:read_all (they see the whole account's event roster),
+// learners hold event:read_own. Both hold registration:read_own, so
+// the registration grant alone is not enough to tell them apart.
+func (s *service) callerHoldsEventReadAll(
+	ctx context.Context,
+	userID, accountID string,
+) bool {
+	if s.deps.PermissionChecker == nil || accountID == "" {
+		return false
+	}
+	domain := "account:" + accountID
+	allowed, err := s.deps.PermissionChecker.HasPermission(
+		ctx, userID, domain, "event", "read_all",
+	)
+	return err == nil && allowed
 }

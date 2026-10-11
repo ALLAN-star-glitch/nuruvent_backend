@@ -11,9 +11,11 @@ import (
 // IMPORTANT — Route ordering rule:
 //   Fiber matches routes in the order they are registered. Any route with a
 //   literal segment that could also be captured by a parametrised sibling
-//   (e.g. "/users/me/profile" vs "/users/:id/profile") MUST be registered
-//   first, otherwise the parametrised route wins and the literal segment is
-//   treated as an ID (which then fails UUID validation downstream).
+//   (e.g. "/users/me/profile" vs "/users/:id/profile", or
+//   "/accounts/:id/members/me" vs "/accounts/:id/members/:userId") MUST be
+//   registered first, otherwise the parametrised route wins and the literal
+//   segment is treated as an ID (which then fails UUID validation
+//   downstream).
 func (h *AccountHandler) RegisterRoutes(
 	router fiber.Router,
 	authMiddleware fiber.Handler,
@@ -63,13 +65,38 @@ func (h *AccountHandler) RegisterRoutes(
 	}
 
 	// ============================================================
-	// 3. ACCOUNT MEMBER ROUTES
+	// 3. SELF-SERVICE MEMBERSHIP ROUTE
+	// ============================================================
+	//
+	// Registered BEFORE the guarded /accounts/:id/members group so
+	// Fiber matches "me" as a literal segment rather than capturing it
+	// as :userId on the DELETE /accounts/:id/members/:userId route.
+	//
+	// No authzMiddleware. Reading your own membership is not the same
+	// as listing the account's members. Every authenticated user — of
+	// any role — can read their own membership row. This is what lets
+	// the UserMenu role badge resolve the caller's role without
+	// needing `member:read`.
+	//
+	// If authzMiddleware were applied here, learners would get 403
+	// (they hold no member-list grant), which is the exact bug this
+	// route exists to fix.
+	selfMembership := router.Group("/accounts/:id/members/me")
+	selfMembership.Use(authMiddleware)
+	{
+		selfMembership.Get("/", h.GetMyMembership)
+	}
+
+	// ============================================================
+	// 4. ACCOUNT MEMBER ROUTES (guarded)
 	// ============================================================
 	members := router.Group("/accounts/:id/members")
 	members.Use(authMiddleware)
 	members.Use(authzMiddleware)
 	{
 		// ---- READ ----
+		// Gated by `member:read`. Admins and trainers have it;
+		// learners do not. Learners use /accounts/:id/members/me above.
 		members.Get("/", h.GetAccountMembers)
 
 		// ---- CREATE ----
@@ -83,7 +110,7 @@ func (h *AccountHandler) RegisterRoutes(
 	}
 
 	// ============================================================
-	// 4. USER'S ACCOUNTS ROUTES
+	// 5. USER'S ACCOUNTS ROUTES
 	// ============================================================
 	user := router.Group("/users/me/accounts")
 	user.Use(authMiddleware)
@@ -93,7 +120,7 @@ func (h *AccountHandler) RegisterRoutes(
 	}
 
 	// ============================================================
-	// 5. USER AVATAR ROUTES
+	// 6. USER AVATAR ROUTES
 	// ============================================================
 	avatar := router.Group("/users/me/avatar")
 	avatar.Use(authMiddleware)
@@ -104,7 +131,7 @@ func (h *AccountHandler) RegisterRoutes(
 	}
 
 	// ============================================================
-	// 6. USER'S OWN PROFILE ROUTES (Auth required)
+	// 7. USER'S OWN PROFILE ROUTES (Auth required)
 	//
 	// ⚠️ MUST be registered BEFORE the public "/users/:id/profile"
 	//    route below. Fiber matches in registration order, so if the
@@ -120,9 +147,8 @@ func (h *AccountHandler) RegisterRoutes(
 		profile.Put("/", h.UpdateMyProfile)
 	}
 
-	
 	// ============================================================
-	// 7. PUBLIC USER PROFILE ROUTES (No auth)
+	// 8. PUBLIC USER PROFILE ROUTES (No auth)
 	// ============================================================
 	profilePublic := router.Group("/users")
 	{

@@ -13,6 +13,7 @@ import (
 	paymentadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/payment"
 	registrationadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/registration"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/team"
+	"gorm.io/gorm"
 
 	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
 	accountService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/service"
@@ -90,11 +91,13 @@ func NewAccountMediaAdapter(mediaSvc mediaService.Service) accountDomain.MediaSe
 //
 // Used by the account service to keep Casbin in sync whenever account
 // membership changes — assign on add, replace on role change, revoke
-// on remove or leave, and revoke-all on account deletion.
+// on remove or leave, revoke-all on account deletion, and reconcile
+// the whole table after every mutation.
 func NewAccountRoleAssignmentAdapter(
 	enforcer *authorization.Enforcer,
+	db *gorm.DB,
 ) accountDomain.RoleAssignment {
-	return accounts.NewRoleAssignmentAdapter(enforcer)
+	return accounts.NewRoleAssignmentAdapter(enforcer, db)
 }
 
 // ---- EVENTS ADAPTERS ----
@@ -356,4 +359,24 @@ func NewRegistrationEventsReader(
 	holder *attendanceadapters.EventsServiceHolder,
 ) registrationdomain.EventsReader {
 	return registrationadapters.NewEventsReader(holder)
+}
+
+// NewTeamUserProfileAdapter bridges the account module's user
+// projection to the team module's UserProfileProvider port.
+//
+// Resolves the account service lazily through the holder.
+func NewTeamUserProfileAdapter(
+	holder *team.AccountServiceHolder,
+) teamService.UserProfileProvider {
+	return team.NewUserProfileAdapter(holder)
+}
+
+
+// NewAccountServiceHolder constructs the empty holder. Wire populates
+// it after graph construction via app.go.
+//
+// Breaks the auth → team → account → auth cycle. See
+// adapters/team/account_service_resolver.go.
+func NewAccountServiceHolder() *team.AccountServiceHolder {
+	return team.NewAccountServiceHolder()
 }

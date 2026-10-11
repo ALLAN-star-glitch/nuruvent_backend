@@ -19,8 +19,9 @@ import "github.com/gofiber/fiber/v3"
 //     checkouts are allowed, and ownership is enforced in the
 //     handler/service by matching either the JWT subject or the
 //     guest email on the order.
-//   - The ledger, stats, and refund endpoints require a full session
-//     (authMiddleware) — they are organizer actions scoped to the
+//   - The ledger, stats, single-payment lookup, and refund endpoints
+//     require a full session (authMiddleware) AND a permission check
+//     (authzMiddleware) — they are organizer actions scoped to the
 //     caller's active account.
 //   - Webhooks are unauthenticated by design; the provider's signature
 //     is the sole authentication mechanism, verified inside the
@@ -40,6 +41,7 @@ func RegisterRoutes(
 	orderHandler *OrderHandler,
 	paymentHandler *Handler,
 	authMiddleware fiber.Handler,
+	authzMiddleware fiber.Handler,
 	optionalAuth fiber.Handler,
 ) {
 	// ------------------------------------------------------------
@@ -61,25 +63,33 @@ func RegisterRoutes(
 	// ------------------------------------------------------------
 	// Payment ledger and stats — organizer view
 	// ------------------------------------------------------------
-	// Require a full session. Scoped to the caller's active account
-	// (JWT's account_id). Placed BEFORE /payments/:id so the static
-	// "stats" path is not captured by the parameterised route.
-	r.Get("/payments", authMiddleware, paymentHandler.ListPayments)
-	r.Get("/payments/stats", authMiddleware, paymentHandler.GetPaymentStats)
+	// Require a full session AND a payment:read permission.
+	// Scoped to the caller's active account (JWT's account_id).
+	// Placed BEFORE /payments/:id so the static "stats" path is not
+	// captured by the parameterised route.
+	r.Get("/payments", authMiddleware, authzMiddleware, paymentHandler.ListPayments)
+	r.Get("/payments/stats", authMiddleware, authzMiddleware, paymentHandler.GetPaymentStats)
 
 	// ------------------------------------------------------------
 	// Single payment lookup
 	// ------------------------------------------------------------
+	// Requires a full session AND a payment:read permission.
+	// Previously optionalAuth — a payment ID is not a capability
+	// token, and unauthenticated reads let anyone who guessed or
+	// intercepted an ID inspect the payment. Guests who need to
+	// check their payment status read the order via GET /orders/:id
+	// instead, which enforces guest-email ownership.
+	//
 	// Registered after the static paths above so /payments/stats and
 	// /payments resolve to their specific handlers.
-	r.Get("/payments/:id", optionalAuth, paymentHandler.GetPayment)
+	r.Get("/payments/:id", authMiddleware, authzMiddleware, paymentHandler.GetPayment)
 
 	// ------------------------------------------------------------
 	// Refunds — organizer or admin action
 	// ------------------------------------------------------------
-	// Requires a full session. The service enforces role/permission
-	// checks on top of authentication.
-	r.Post("/payments/:id/refund", authMiddleware, paymentHandler.Refund)
+	// Requires a full session AND a payment:refund permission.
+	// The service enforces role checks on top of the middleware.
+	r.Post("/payments/:id/refund", authMiddleware, authzMiddleware, paymentHandler.Refund)
 
 	// ------------------------------------------------------------
 	// Webhooks — signature-verified, no session

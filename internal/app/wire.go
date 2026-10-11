@@ -73,6 +73,9 @@ import (
 
 
 	attendanceadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/attendance"
+
+
+	teamAdapter "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/team"
 )
 
 // ============================================================
@@ -128,6 +131,8 @@ type AppDependencies struct {
 
 
 	EventsServiceHolder *attendanceadapters.EventsServiceHolder
+
+	AccountServiceHolder *teamAdapter.AccountServiceHolder 
 }
 
 // ============================================================
@@ -251,6 +256,10 @@ func InitializeApp() (*AppDependencies, error) {
 		NewPaymentEventsReader,
 	
 		NewRegistrationEventsReader,
+
+		NewTeamUserProfileAdapter,
+
+		NewAccountServiceHolder,
 
 
 

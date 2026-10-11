@@ -396,6 +396,8 @@ func getResourceFromRequest(c fiber.Ctx) string {
 			return authdomain.ResourceEvent.String()
 		case "certificates", "certificate":
 			return authdomain.ResourceCertificate.String()
+		case "registrations", "registration":
+			return authdomain.ResourceRegistration.String()
 		case "attendees", "attendee":
 			return authdomain.ResourceAttendee.String()
 		case "payments", "payment":

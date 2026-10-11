@@ -14,6 +14,7 @@ type ListFilter struct {
 }
 
 // ListAllFilter carries options for the cross-event registration list.
+// ListAllFilter carries options for the cross-event registration list.
 type ListAllFilter struct {
 	AccountIDs []string // scope: caller's accounts
 	EventID    string   // optional filter
@@ -24,6 +25,24 @@ type ListAllFilter struct {
 	SortOrder  string   // optional
 	Page       int
 	PageSize   int
+
+	// UserID, when set, restricts the result to registrations
+	// belonging to that user.
+	//
+	// Applied for callers who hold only registration:read_own
+	// (learners), so they see their own records rather than every
+	// registration in the account. Admin and trainer hold
+	// registration:read and are scoped by AccountIDs alone.
+	UserID string
+
+    	// EventOwnerUserID, when set, restricts the result to
+	// registrations for events created by that user.
+	//
+	// Applied for trainers: they hold registration:read_own but their
+	// "own" scope is events they created, not registrations they made.
+	// A trainer does not register for their own events, so the
+	// self-scope (UserID) would always return empty for them.
+	EventOwnerUserID string
 }
 
 
@@ -60,6 +79,7 @@ type RegistrationRepository interface {
 }
 
 // EventRegistrationRepository persists event-specific registrations.
+// EventRegistrationRepository persists event-specific registrations.
 type EventRegistrationRepository interface {
     Create(ctx context.Context, e *EventRegistration) error
     Update(ctx context.Context, e *EventRegistration) error
@@ -67,30 +87,42 @@ type EventRegistrationRepository interface {
     ListByEvent(ctx context.Context, eventID string, f ListFilter) ([]*EventRegistration, int, error)
     ListByUser(ctx context.Context, userID string, f ListFilter) ([]*EventRegistration, int, error)
     Deactivate(ctx context.Context, registrationID string) error
-// ListAll returns registrations across every event owned by any of
-// the given account IDs. Empty AccountIDs returns an empty page.
-//
-// Returns a flattened read model — not the full EventRegistration
-// entity — because the caller only needs table columns.
-ListAll(
-    ctx context.Context,
-    f ListAllFilter,
-) ([]*CrossEventRegistrationRow, int, error)
 
-// ListMine returns the caller's own registrations across every event
-// they've registered for. Same flattened read model as ListAll —
-// different filter.
-ListMine(
-	ctx context.Context,
-	f ListMineFilter,
-) ([]*CrossEventRegistrationRow, int, error)
+    // ListAll returns registrations across every event owned by any of
+    // the given account IDs. Empty AccountIDs returns an empty page.
+    //
+    // Returns a flattened read model — not the full EventRegistration
+    // entity — because the caller only needs table columns.
+    ListAll(
+        ctx context.Context,
+        f ListAllFilter,
+    ) ([]*CrossEventRegistrationRow, int, error)
 
+    // ListMine returns the caller's own registrations across every event
+    // they've registered for. Same flattened read model as ListAll —
+    // different filter.
+    ListMine(
+        ctx context.Context,
+        f ListMineFilter,
+    ) ([]*CrossEventRegistrationRow, int, error)
 
-
-   // Returns ErrRegistrationNotFound if the registration doesn't exist,
+    // ResolveBilledAccount returns the account that owns the event behind
+    // the given registration.
+    //
+    // Returns ErrRegistrationNotFound if the registration doesn't exist,
     // or a specific ErrBilledAccountUnresolved if the chain is broken
     // (event unassigned from a team, team soft-deleted).
     ResolveBilledAccount(ctx context.Context, registrationID string) (string, error)
+
+    // ResolveTeamAccount returns the account ID that owns the given team.
+    //
+    // Used by the service to scope permission checks when a request
+    // carries a team_id — the caller's role in *that* account determines
+    // whether they see all registrations or only their own.
+    //
+    // Returns ("", nil) when the team does not exist or has no account.
+    // Returns a non-nil error only on query failure.
+    ResolveTeamAccount(ctx context.Context, teamID string) (string, error)
 }
 
 // WaitlistRepository persists waitlist entries.

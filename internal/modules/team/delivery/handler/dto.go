@@ -59,6 +59,12 @@ func NewTeamsListResponse(teams []*teamdomain.Team) TeamsListResponse {
 // ============================================================
 // MEMBER
 // ============================================================
+//
+// Identity fields (Name, DisplayName, Email, AvatarURL) and the
+// account-level Role are populated only when the member came from the
+// enriched read path — GetTeamMembersWithUsers. Mutation responses
+// (AddMember, AcceptInvitation, LeaveTeam) return the same DTO with
+// those fields omitted.
 
 type MemberResponse struct {
 	ID        string `json:"id"`
@@ -68,6 +74,15 @@ type MemberResponse struct {
 	JoinedAt  string `json:"joined_at"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
+
+	// ---- Identity (enriched read path only) ----
+	Name        string `json:"name,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
+	Email       string `json:"email,omitempty"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+
+	// ---- Account-level role of this member (enriched read path only) ----
+	Role string `json:"role,omitempty"`
 }
 
 func NewMemberResponse(m *teamdomain.Member) MemberResponse {
@@ -75,13 +90,18 @@ func NewMemberResponse(m *teamdomain.Member) MemberResponse {
 		return MemberResponse{}
 	}
 	return MemberResponse{
-		ID:        m.ID,
-		TeamID:    m.TeamID,
-		UserID:    m.UserID,
-		IsActive:  m.IsActive,
-		JoinedAt:  m.JoinedAt.Format(time.RFC3339),
-		CreatedAt: m.CreatedAt.Format(time.RFC3339),
-		UpdatedAt: m.UpdatedAt.Format(time.RFC3339),
+		ID:          m.ID,
+		TeamID:      m.TeamID,
+		UserID:      m.UserID,
+		IsActive:    m.IsActive,
+		JoinedAt:    m.JoinedAt.Format(time.RFC3339),
+		CreatedAt:   m.CreatedAt.Format(time.RFC3339),
+		UpdatedAt:   m.UpdatedAt.Format(time.RFC3339),
+		Name:        m.Name,
+		DisplayName: m.DisplayName,
+		Email:       m.Email,
+		AvatarURL:   m.AvatarURL,
+		Role:        m.AccountRole,
 	}
 }
 

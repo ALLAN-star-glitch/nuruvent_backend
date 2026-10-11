@@ -232,12 +232,21 @@ func (s *teamService) LeaveTeam(ctx context.Context, teamID, userID string) erro
 
 // GetTeamMembers retrieves all members of a team.
 //
-// Authorization: the viewer must hold `member:read` in the team's parent
-// account domain. Any account member with the read grant on members can
-// view the roster.
+// Authorization — two paths:
 //
-// The viewerUserID parameter is required — it cannot be inferred from the
-// team or filters. Callers must pass the authenticated user's ID.
+//  1. Account-wide read (admins, trainers): the caller holds
+//     `member:read` on the team's parent account. Returns the full
+//     roster.
+//
+//  2. Own-scoped read (learners): the caller holds `member:read_own`
+//     on the team's parent account AND is an active member of this
+//     specific team. Returns the roster of that team only.
+//
+// A caller who holds neither grant, or who holds only the own-scoped
+// grant but is not a member of this team, is denied.
+//
+// The viewerUserID parameter is required — it cannot be inferred from
+// the team or filters. Callers must pass the authenticated user's ID.
 func (s *teamService) GetTeamMembers(
 	ctx context.Context,
 	viewerUserID, teamID string,
@@ -263,11 +272,34 @@ func (s *teamService) GetTeamMembers(
 		return nil, 0, fmt.Errorf("team %s has no valid account", teamID)
 	}
 
-	allowed, err := s.casbinSvc.CanViewMembers(ctx, viewerUserID, accountDomain)
+	// ---- Permission: account-wide read ----
+	canViewMembers, err := s.casbinSvc.CanViewMembers(ctx, viewerUserID, accountDomain)
 	if err != nil {
 		return nil, 0, fmt.Errorf("permission check failed: %w", err)
 	}
-	if !allowed {
+
+	// ---- Permission: own-scoped read ----
+	canViewMembersOwn, err := s.casbinSvc.CanViewMembersOwn(ctx, viewerUserID, accountDomain)
+	if err != nil {
+		return nil, 0, fmt.Errorf("permission check failed: %w", err)
+	}
+
+	// ---- Enforce ----
+	switch {
+	case canViewMembers:
+		// Account-wide: no further scoping.
+
+	case canViewMembersOwn:
+		// Own-scoped: the caller must be an active member of this team.
+		isMember, err := s.IsTeamMember(ctx, teamID, viewerUserID)
+		if err != nil {
+			return nil, 0, fmt.Errorf("team membership check failed: %w", err)
+		}
+		if !isMember {
+			return nil, 0, teamdomain.ErrPermissionDenied
+		}
+
+	default:
 		return nil, 0, teamdomain.ErrPermissionDenied
 	}
 
@@ -387,4 +419,84 @@ func (s *teamService) IsTeamMember(
 		return false, nil
 	}
 	return member.IsActive, nil
+}
+
+// ============================================================
+// READ - Enriched
+// ============================================================
+
+// GetTeamMembersWithUsers retrieves all members of a team, enriched
+// with each member's user identity (name, display name, email, avatar)
+// and account role.
+//
+// Authorization is delegated to GetTeamMembers — the two paths cannot
+// diverge. Enrichment happens here rather than in the handler so the
+// batching lives in one place.
+//
+// Enrichment is best-effort. If the user batch fetch fails, the
+// members are still returned with empty identity fields — the
+// frontend falls back to the user ID. A failure to resolve a single
+// user's role leaves that member's AccountRole empty.
+func (s *teamService) GetTeamMembersWithUsers(
+	ctx context.Context,
+	viewerUserID, teamID string,
+	filters teamdomain.ListMembersFilters,
+) ([]*teamdomain.Member, int64, error) {
+	members, total, err := s.GetTeamMembers(ctx, viewerUserID, teamID, filters)
+	if err != nil {
+		return nil, 0, err
+	}
+	if len(members) == 0 {
+		return members, total, nil
+	}
+
+	team, err := s.repo.GetTeamByID(ctx, teamID)
+	if err != nil {
+		return nil, 0, err
+	}
+	if team == nil {
+		return nil, 0, teamdomain.ErrTeamNotFound
+	}
+
+	userIDs := make([]string, 0, len(members))
+	for _, m := range members {
+		if m.UserID != "" {
+			userIDs = append(userIDs, m.UserID)
+		}
+	}
+
+	// Batch-fetch user display identities — name, email, avatar.
+	// Sourced from the account module's user projection, which owns
+	// avatars. Non-fatal: on failure, identity fields stay empty and
+	// the frontend falls back to initials.
+	var profilesByID map[string]*UserProfile
+	if s.userProfileSvc != nil {
+		profilesByID, err = s.userProfileSvc.GetUserProfilesByIDs(ctx, userIDs)
+		if err != nil {
+			log.Printf("⚠️ GetTeamMembersWithUsers: profile fetch failed: %v", err)
+			profilesByID = nil
+		}
+	}
+
+	// Account roles — one lookup per user.
+	rolesByUserID := make(map[string]string, len(userIDs))
+	for _, uid := range userIDs {
+		role, err := s.authSvc.GetUserRoleInAccount(ctx, uid, team.AccountID)
+		if err != nil {
+			continue
+		}
+		rolesByUserID[uid] = role
+	}
+
+	for _, m := range members {
+		if p, ok := profilesByID[m.UserID]; ok && p != nil {
+			m.Name = p.Name
+			m.DisplayName = p.DisplayName
+			m.Email = p.Email
+			m.AvatarURL = p.AvatarURL
+		}
+		m.AccountRole = rolesByUserID[m.UserID]
+	}
+
+	return members, total, nil
 }

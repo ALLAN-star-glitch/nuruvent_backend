@@ -22,13 +22,19 @@ type AuthService interface {
 	// UserExists checks if a user exists by email
 	UserExists(ctx context.Context, email string) (bool, error)
 
+	// GetUsersByIDs returns a map of userID → UserResult for the given
+	// IDs. Users that don't exist are omitted from the map.
+	//
+	// Used by GetTeamMembersWithUsers to enrich team member rows with
+	// display identity in one batch instead of N single lookups.
+	GetUsersByIDs(ctx context.Context, userIDs []string) (map[string]*UserResult, error)
+
 	// ============================================================
 	// ACCOUNT QUERIES
 	// ============================================================
 
 	// GetAccountIDByUserID gets the account ID for a user
 	GetAccountIDByUserID(ctx context.Context, userID string) (string, error)
-
 
 	GetUserRoleInAccount(ctx context.Context, userID, accountID string) (string, error)
 
@@ -43,8 +49,9 @@ type UserResult struct {
 	Phone        string
 	DisplayName  string
 	AccountType  string
-	AccountID    string // ✅ Added: Account ID from account_members
+	AccountID    string
 	IsActive     bool
 	AccessToken  string
 	RefreshToken string
+	AvatarURL    string // added for team member enrichment
 }

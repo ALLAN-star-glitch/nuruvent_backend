@@ -22,3 +22,5 @@ var (
 )
 
 var ErrTeamAccessDenied = errors.New("you don't have access to this team's registrations")
+
+var ErrPermissionDenied = errors.New("permission denied")

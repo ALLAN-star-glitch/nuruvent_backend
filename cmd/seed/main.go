@@ -21,8 +21,6 @@ import (
 	"gorm.io/gorm"
 )
 
-
-
 type SeederLog struct {
 	ID         string    `gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	SeederName string    `gorm:"uniqueIndex"`
@@ -72,6 +70,12 @@ func main() {
 	}
 
 	// Define seeders with dependencies
+	//
+	// NOTE: Casbin grouping-rule reconciliation is NOT a seeder. It is
+	// a maintenance invariant that runs at application startup and
+	// after every account-member mutation, via
+	// RoleAssignment.ReconcileAll. See internal/app/providers.go and
+	// internal/modules/account/service/account_member_service.go.
 	seedersList := []SeederInfo{
 		// ============================================================
 		// AUTH SEEDERS
@@ -169,7 +173,7 @@ func main() {
 			Deps:        []string{},
 		},
 
-				// ============================================================
+		// ============================================================
 		// REGISTRATION SEEDERS
 		// ============================================================
 		{
@@ -439,7 +443,6 @@ func printHelp() {
 	fmt.Println("")
 	fmt.Println("  # Force re-seed in production")
 	fmt.Println("  go run cmd/seed/main.go -env=production -force")
-	
 }
 
 func printAvailableSeeders(seeders []SeederInfo) {

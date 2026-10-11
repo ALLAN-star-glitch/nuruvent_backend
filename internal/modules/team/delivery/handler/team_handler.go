@@ -249,7 +249,10 @@ func (h *TeamHandler) GetTeamMembers(c fiber.Ctx) error {
 		Search: c.Query("search"),
 	}
 
-	members, total, err := h.service.GetTeamMembers(c.Context(), viewerUserID, teamID, filters)
+	// Enriched read path — includes user identity and account role,
+	// so the frontend does not need a second call to the account
+	// members endpoint (which would 403 for learners).
+	members, total, err := h.service.GetTeamMembersWithUsers(c.Context(), viewerUserID, teamID, filters)
 	if err != nil {
 		switch err {
 		case teamdomain.ErrTeamNotFound:

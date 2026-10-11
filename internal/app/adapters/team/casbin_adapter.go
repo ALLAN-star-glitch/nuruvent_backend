@@ -105,3 +105,22 @@ func (a *CasbinAdapter) CanInviteMember(ctx context.Context, userID, domain stri
 func (a *CasbinAdapter) CanLeaveAccount(ctx context.Context, userID, domain string) (bool, error) {
 	return a.permChecker.CanLeaveAccount(ctx, userID, domain)
 }
+
+
+// CanViewMembersOwn reports whether userID may view the member roster
+// of teams they belong to. This is the own-scoped counterpart of
+// CanViewMembers — learners hold this grant, admins and trainers hold
+// the account-wide one.
+//
+// A true result means "the caller may read the roster of any team they
+// are an active member of." The team service enforces that membership
+// check against team_members.
+func (a *CasbinAdapter) CanViewMembersOwn(ctx context.Context, userID, domain string) (bool, error) {
+	return a.permChecker.HasPermission(
+		ctx,
+		userID,
+		domain,
+		authDomain.ResourceMember.String(),
+		authDomain.ActionReadOwn.String(),
+	)
+}

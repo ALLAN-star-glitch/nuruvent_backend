@@ -9,9 +9,6 @@ import (
 
 // PermissionCheckerAdapter bridges auth's PermissionChecker to the
 // registration module's port.
-//
-// The registration module only needs to know which accounts a user
-// belongs to, so the adapter exposes just that method.
 type PermissionCheckerAdapter struct {
 	checker authDomain.PermissionChecker
 }
@@ -30,6 +27,19 @@ func (a *PermissionCheckerAdapter) GetUserAccountIDs(
 	userID string,
 ) ([]string, error) {
 	return a.checker.GetUserAccountIDs(ctx, userID)
+}
+
+// HasPermission reports whether userID holds the given (resource,
+// action) grant in the given domain.
+//
+// The auth domain's PermissionChecker has this method; the adapter
+// exposes it to the registration module under the same name so the
+// semantics are unambiguous.
+func (a *PermissionCheckerAdapter) HasPermission(
+	ctx context.Context,
+	userID, domain, resource, action string,
+) (bool, error) {
+	return a.checker.HasPermission(ctx, userID, domain, resource, action)
 }
 
 // compile-time assertion

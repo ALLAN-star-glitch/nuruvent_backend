@@ -55,10 +55,16 @@ func mapDomainError(c fiber.Ctx, err error) error {
 	case errors.Is(err, registrationdomain.ErrPricingMismatch):
 		return response.InternalError(c, "Pricing could not be resolved", nil)
 
+	case errors.Is(err, registrationdomain.ErrPermissionDenied): 
+		return response.Forbidden(c, "You don't have permission to view this team's registrations", nil)
+	
+
 	case errors.Is(err, registrationdomain.ErrRegistrableTypeUnknown):
 		return response.InternalError(c, "Unknown registration target", nil)
 	case errors.Is(err, registrationdomain.ErrAuthRequired):
+
     return response.Unauthorized(c, "Authentication required to register for this event", nil)
+
 
 
 }

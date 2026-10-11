@@ -88,6 +88,46 @@ func (a *AuthAdapter) GetUserByEmail(ctx context.Context, email string) (*teamSe
 	}, nil
 }
 
+// GetUsersByIDs returns a map of userID → UserResult for the given IDs.
+//
+// Users that don't exist are omitted from the map. This loops over the
+// single-user lookup because the auth repository does not expose a
+// batch query; team rosters are small enough that the loop is
+// acceptable.
+//
+// Account IDs are intentionally NOT resolved here — the enriched team
+// member path resolves account roles separately via
+// GetUserRoleInAccount, using the team's known account. Resolving the
+// "primary" account per user here would be wasteful and potentially
+// wrong.
+func (a *AuthAdapter) GetUsersByIDs(
+	ctx context.Context,
+	userIDs []string,
+) (map[string]*teamService.UserResult, error) {
+	out := make(map[string]*teamService.UserResult, len(userIDs))
+	for _, id := range userIDs {
+		if id == "" {
+			continue
+		}
+		user, err := a.authRepo.GetUserByID(ctx, id)
+		if err != nil || user == nil {
+			continue
+		}
+		out[id] = &teamService.UserResult{
+			ID:          user.ID,
+			Email:       user.Email,
+			Name:        user.Name,
+			Phone:       user.Phone,
+			DisplayName: user.DisplayName,
+			IsActive:    user.IsActive,
+			// AvatarURL is available on the auth user record when
+			// present. Uncomment if the field exists on user:
+			// AvatarURL: user.AvatarURL,
+		}
+	}
+	return out, nil
+}
+
 // UserExists checks if a user exists by email
 func (a *AuthAdapter) UserExists(ctx context.Context, email string) (bool, error) {
 	user, err := a.authRepo.GetUserByEmail(ctx, email)
@@ -118,7 +158,6 @@ func (a *AuthAdapter) AddAccountMember(ctx context.Context, accountID, userID, r
 		return fmt.Errorf("role is required")
 	}
 
-	
 	// Construct the domain entity.
 	member, err := authDomain.NewAccountMember(accountID, userID, role, userID)
 	if err != nil {
@@ -134,7 +173,6 @@ func (a *AuthAdapter) AddAccountMember(ctx context.Context, accountID, userID, r
 }
 
 // GetUserRoleInAccount gets a user's role in a specific account
-// ✅ Added: Required for AddMember to assign Casbin team role
 func (a *AuthAdapter) GetUserRoleInAccount(ctx context.Context, userID, accountID string) (string, error) {
 	members, err := a.authRepo.GetAccountMembersByUser(ctx, userID)
 	if err != nil {
@@ -149,7 +187,6 @@ func (a *AuthAdapter) GetUserRoleInAccount(ctx context.Context, userID, accountI
 
 	return "", nil
 }
-
 
 // ============================================================
 // PRIVATE HELPERS
@@ -167,5 +204,3 @@ func (a *AuthAdapter) getAccountIDByUserID(ctx context.Context, userID string) (
 	// Use the first account (primary)
 	return members[0].AccountID, nil
 }
-
-

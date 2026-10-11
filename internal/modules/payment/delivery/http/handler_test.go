@@ -35,14 +35,9 @@ type fakeService struct {
 	handleWebhookFunc func(ctx context.Context, provider string, payload []byte, headers map[string]string) error
 	getPaymentFunc    func(ctx context.Context, paymentID string) (*paymentdomain.Payment, error)
 
-
-	listPaymentsFunc     func(ctx context.Context, cmd service.ListPaymentsCommand) (*service.ListPaymentsResult, error)
-	getPaymentStatsFunc  func(ctx context.Context, cmd service.PaymentStatsCommand) (*paymentdomain.PaymentStats, error)
-
+	listPaymentsFunc    func(ctx context.Context, cmd service.ListPaymentsCommand) (*service.ListPaymentsResult, error)
+	getPaymentStatsFunc func(ctx context.Context, cmd service.PaymentStatsCommand) (*paymentdomain.PaymentStats, error)
 }
-
-
-
 
 func (f *fakeService) CreateOrder(ctx context.Context, cmd service.CreateOrderCommand) (*paymentdomain.Order, error) {
 	if f.createOrderFunc != nil {
@@ -100,12 +95,44 @@ func (f *fakeService) HandleWebhook(ctx context.Context, provider string, payloa
 	return nil
 }
 
+func (f *fakeService) ListPayments(
+	ctx context.Context,
+	cmd service.ListPaymentsCommand,
+) (*service.ListPaymentsResult, error) {
+	if f.listPaymentsFunc != nil {
+		return f.listPaymentsFunc(ctx, cmd)
+	}
+	return &service.ListPaymentsResult{
+		Payments: []*paymentdomain.PaymentListRow{},
+		Total:    0,
+		Page:     1,
+		PageSize: 20,
+	}, nil
+}
+
+func (f *fakeService) GetPaymentStats(
+	ctx context.Context,
+	cmd service.PaymentStatsCommand,
+) (*paymentdomain.PaymentStats, error) {
+	if f.getPaymentStatsFunc != nil {
+		return f.getPaymentStatsFunc(ctx, cmd)
+	}
+	return &paymentdomain.PaymentStats{
+		ByStatus: map[string]int64{},
+	}, nil
+}
+
 // ============================================================
 // TEST HARNESS
 // ============================================================
 
 // newTestApp returns a Fiber app with the payment routes and a fake
-// service. The auth middleware is a no-op that sets a user ID.
+// service.
+//
+// The auth middleware is a no-op that sets a user ID. The authz
+// middleware is also a no-op that lets every request through — the
+// handler tests exercise the handler logic, not the Casbin policies.
+// Authorization is covered by the middleware's own tests.
 func newTestApp(t *testing.T, fake *fakeService) *fiber.App {
 	t.Helper()
 
@@ -113,6 +140,12 @@ func newTestApp(t *testing.T, fake *fakeService) *fiber.App {
 
 	authMiddleware := func(c fiber.Ctx) error {
 		c.Locals(types.ContextKeyUserID, "test-user")
+		return c.Next()
+	}
+
+	// No-op authz — lets every request through. Handler tests are not
+	// the place to exercise policy.
+	authzMiddleware := func(c fiber.Ctx) error {
 		return c.Next()
 	}
 
@@ -127,7 +160,7 @@ func newTestApp(t *testing.T, fake *fakeService) *fiber.App {
 	paymentHandler := NewHandler(fake)
 
 	api := app.Group("/api/v1")
-	RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware, optionalAuth)
+	RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware, authzMiddleware, optionalAuth)
 
 	return app
 }
@@ -414,33 +447,6 @@ func TestHandler_FlutterwaveWebhook_EmptyBody(t *testing.T) {
 	if resp.StatusCode != 400 {
 		t.Fatalf("status: got %d, want 400", resp.StatusCode)
 	}
-}
-
-func (f *fakeService) ListPayments(
-	ctx context.Context,
-	cmd service.ListPaymentsCommand,
-) (*service.ListPaymentsResult, error) {
-	if f.listPaymentsFunc != nil {
-		return f.listPaymentsFunc(ctx, cmd)
-	}
-	return &service.ListPaymentsResult{
-		Payments: []*paymentdomain.PaymentListRow{},
-		Total:    0,
-		Page:     1,
-		PageSize: 20,
-	}, nil
-}
-
-func (f *fakeService) GetPaymentStats(
-	ctx context.Context,
-	cmd service.PaymentStatsCommand,
-) (*paymentdomain.PaymentStats, error) {
-	if f.getPaymentStatsFunc != nil {
-		return f.getPaymentStatsFunc(ctx, cmd)
-	}
-	return &paymentdomain.PaymentStats{
-		ByStatus: map[string]int64{},
-	}, nil
 }
 
 // Silence unused import for errors.

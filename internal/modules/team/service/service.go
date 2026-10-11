@@ -21,7 +21,7 @@ type Service interface {
 	// TEAM OPERATIONS
 	// ============================================================
 
-		// CreatePersonalTeam creates a personal team under the given account.
+	// CreatePersonalTeam creates a personal team under the given account.
 	//
 	// No role parameter: roles are assigned at the ACCOUNT level and
 	// inherited by every team under that account. The team service does
@@ -59,7 +59,24 @@ type Service interface {
 
 	// GetTeamMembers requires the viewer's user ID so it can authorize the
 	// request against the team's parent account domain.
+	//
+	// Returns bare member rows — no user identity, no account role.
+	// Use GetTeamMembersWithUsers for the enriched shape.
 	GetTeamMembers(
+		ctx context.Context,
+		viewerUserID, teamID string,
+		filters teamdomain.ListMembersFilters,
+	) ([]*teamdomain.Member, int64, error)
+
+	// GetTeamMembersWithUsers returns the same roster as GetTeamMembers,
+	// but with each member's user identity (name, display name, email,
+	// avatar) and account role populated.
+	//
+	// Authorization is delegated to GetTeamMembers — the two paths
+	// cannot diverge. Use this from HTTP handlers serving the member
+	// list UI. Use GetTeamMembers only when identity fields are
+	// unnecessary (rare).
+	GetTeamMembersWithUsers(
 		ctx context.Context,
 		viewerUserID, teamID string,
 		filters teamdomain.ListMembersFilters,
@@ -114,7 +131,7 @@ type Service interface {
 	// institution teams the user belongs to (deduplicated).
 	GetUserInstitutionTeamDomains(ctx context.Context, userID string) ([]string, error)
 
-		// IsTeamMember returns true if the given user is an active member
+	// IsTeamMember returns true if the given user is an active member
 	// of the given team. Lightweight — does not authorize the caller,
 	// does not paginate. Used by other modules that need to gate
 	// access on team membership.

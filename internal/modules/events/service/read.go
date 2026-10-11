@@ -104,7 +104,11 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 		}
 
 		if accountID == "" {
-			return nil, 0, domain.ErrForbidden
+			// The team filter points at a team that no longer exists, or
+			// references an invalid ID. Return an empty result rather than a
+			// permission error — the caller isn't forbidden, there's just
+			// nothing to return.
+			return []*domain.Event{}, 0, nil
 		}
 
 		{
@@ -115,6 +119,7 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 				return nil, 0, fmt.Errorf("permission check failed: %w", err)
 			}
 
+
 			if !canReadAll {
 				canReadOwn, err := s.permChecker.CanReadOwnEvents(ctx, userID, accountDomain)
 				if err != nil {
@@ -123,9 +128,16 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 				if !canReadOwn {
 					return nil, 0, domain.ErrForbidden
 				}
-				filters.UserID = userID
+				// Do NOT set filters.UserID here for events. The repository's
+				// visibility filter (filterEventsByVisibility) already drops
+				// events the caller can't see, based on team membership for
+				// private events. Setting created_by = caller would return zero
+				// events for a learner, who creates nothing.
+				//
+				// The account + team scope from the filter is the actual boundary.
 			}
 		}
+
 	}
 
 	// Normalize: prefer the string TeamID; fall back to the object's ID

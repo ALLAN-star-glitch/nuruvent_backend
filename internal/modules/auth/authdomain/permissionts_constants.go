@@ -65,6 +65,7 @@ const (
 	ResourceEvent        Resource = "event"
 	ResourceCertificate  Resource = "certificate"
 	ResourceAttendee     Resource = "attendee"
+	ResourceRegistration Resource = "registration"
 	ResourcePayment      Resource = "payment"
 	ResourcePayout       Resource = "payout"
 	ResourceMember       Resource = "member"
@@ -83,7 +84,7 @@ const (
 type Action string
 
 const (
-	// Standard actions
+	// ---- Standard actions ----
 	ActionCreate      Action = "create"
 	ActionRead        Action = "read"
 	ActionUpdate      Action = "update"
@@ -97,15 +98,20 @@ const (
 	ActionInvite      Action = "invite"
 	ActionViewCreator Action = "view_creator"
 
-	// Account-specific actions
+	// ---- Account-specific actions ----
 	ActionMemberAdd     Action = "member_add"
 	ActionMemberRemove  Action = "member_remove"
 	ActionBillingRead   Action = "billing_read"
 	ActionBillingUpdate Action = "billing_update"
-	// Membership / self-service actions
+
+	// ---- Membership / self-service actions ----
 	ActionLeave Action = "leave" // member self-removal from an account/team
 
-	// OWN vs ALL Actions
+	// ---- OWN vs ALL actions ----
+	// These encode data-scope for a resource: whether the grant applies to
+	// the whole account or only to rows the caller created / is associated
+	// with. The service layer applies the actual query filter; the policy
+	// grant expresses which scope the caller may operate within.
 	ActionReadAll    Action = "read_all"
 	ActionReadOwn    Action = "read_own"
 	ActionUpdateAll  Action = "update_all"
@@ -114,6 +120,7 @@ const (
 	ActionDeleteOwn  Action = "delete_own"
 	ActionPublishAll Action = "publish_all"
 	ActionPublishOwn Action = "publish_own"
+	ActionExportOwn  Action = "export_own"
 )
 
 // ============================================================
@@ -136,15 +143,18 @@ func (a Action) String() string {
 // ACTION HELPER METHODS
 // ============================================================
 
+// IsOwnAction reports whether the action is scoped to the caller's own
+// rows rather than the whole account.
 func (a Action) IsOwnAction() bool {
 	switch a {
-	case ActionReadOwn, ActionUpdateOwn, ActionDeleteOwn, ActionPublishOwn:
+	case ActionReadOwn, ActionUpdateOwn, ActionDeleteOwn, ActionPublishOwn, ActionExportOwn:
 		return true
 	default:
 		return false
 	}
 }
 
+// IsAllAction reports whether the action is scoped to the whole account.
 func (a Action) IsAllAction() bool {
 	switch a {
 	case ActionReadAll, ActionUpdateAll, ActionDeleteAll, ActionPublishAll:
@@ -154,6 +164,8 @@ func (a Action) IsAllAction() bool {
 	}
 }
 
+// GetOwnAction maps a base action to its own-scoped counterpart.
+// Returns the input unchanged when no own-scoped counterpart exists.
 func (a Action) GetOwnAction() Action {
 	switch a {
 	case ActionRead:
@@ -162,6 +174,8 @@ func (a Action) GetOwnAction() Action {
 		return ActionUpdateOwn
 	case ActionDelete:
 		return ActionDeleteOwn
+	case ActionExport:
+		return ActionExportOwn
 	case ActionPublishAll:
 		return ActionPublishOwn
 	default:
@@ -169,6 +183,9 @@ func (a Action) GetOwnAction() Action {
 	}
 }
 
+// GetAllAction maps a base or own-scoped action to its account-wide
+// counterpart. Returns the input unchanged when no all-scoped
+// counterpart exists.
 func (a Action) GetAllAction() Action {
 	switch a {
 	case ActionRead:
@@ -177,6 +194,8 @@ func (a Action) GetAllAction() Action {
 		return ActionUpdateAll
 	case ActionDelete:
 		return ActionDeleteAll
+	case ActionExportOwn:
+		return ActionExport
 	case ActionPublishOwn:
 		return ActionPublishAll
 	default:
@@ -188,6 +207,7 @@ func (a Action) GetAllAction() Action {
 // ROLE VALIDATION HELPERS
 // ============================================================
 
+// IsValidRole reports whether the string is a known role.
 func IsValidRole(role string) bool {
 	validRoles := map[string]bool{
 		RoleSuperAdmin.String():   true,
@@ -200,6 +220,8 @@ func IsValidRole(role string) bool {
 	return validRoles[role]
 }
 
+// IsPlatformRole reports whether the role belongs to the platform
+// domain (Nuruvent staff and unauthenticated guests).
 func IsPlatformRole(role string) bool {
 	platformRoles := map[string]bool{
 		RoleSuperAdmin.String(): true,
@@ -209,6 +231,7 @@ func IsPlatformRole(role string) bool {
 	return platformRoles[role]
 }
 
+// IsAccountRole reports whether the role belongs to the account domain.
 func IsAccountRole(role string) bool {
 	accountRoles := map[string]bool{
 		RoleAccountAdmin.String(): true,
@@ -218,6 +241,8 @@ func IsAccountRole(role string) bool {
 	return accountRoles[role]
 }
 
+// IsValidAccountRole is an alias for IsAccountRole. Kept for callers
+// that read better as "is this a valid account role" in context.
 func IsValidAccountRole(role string) bool {
 	return IsAccountRole(role)
 }
@@ -265,6 +290,7 @@ func GetAllResources() []Resource {
 		ResourceEvent,
 		ResourceCertificate,
 		ResourceAttendee,
+		ResourceRegistration,
 		ResourcePayment,
 		ResourcePayout,
 		ResourceMember,
@@ -301,6 +327,7 @@ func GetAllActions() []Action {
 		ActionMemberRemove,
 		ActionBillingRead,
 		ActionBillingUpdate,
+		ActionLeave,
 		ActionReadAll,
 		ActionReadOwn,
 		ActionUpdateAll,
@@ -309,12 +336,28 @@ func GetAllActions() []Action {
 		ActionDeleteOwn,
 		ActionPublishAll,
 		ActionPublishOwn,
+		ActionExportOwn,
 	}
 }
 
 // ============================================================
 // DEFAULT PERMISSION MATRIX
 // ============================================================
+//
+// These two functions are descriptive, not authoritative. The
+// authoritative policy set lives in authorization.GetPlatformPolicies()
+// and authorization.GetAccountPolicies().
+//
+// They exist so tooling and documentation can present a flat
+// "what does role X get" view without reading the policy builder. They
+// MUST stay in sync with the seeded policy set. Any change to
+// authorization.GetPlatformPolicies() or
+// authorization.GetAccountPolicies() must be mirrored here, or the
+// two views diverge and this file becomes a source of confusion
+// rather than clarity.
+//
+// ValidatePolicies() enforces the policy invariants at seed time;
+// keeping these maps aligned is a review responsibility.
 
 func DefaultPlatformPermissions() map[Role][]string {
 	return map[Role][]string{
@@ -322,8 +365,7 @@ func DefaultPlatformPermissions() map[Role][]string {
 			"*:*",
 		},
 		RoleAdmin: {
-			"platform:read",
-			"platform:update",
+			"platform:manage",
 			"user:read",
 			"user:update",
 			"user:delete",
@@ -336,41 +378,56 @@ func DefaultPlatformPermissions() map[Role][]string {
 			"event:read_all",
 			"event:update_all",
 			"event:delete_all",
-			"team:read",
-			"team:update",
-			"team:delete",
+			"event:manage",
 			"analytics:read",
-			"billing:read",
+			"payment:read",
 			"certificate:read",
 			"member:read",
 			"member:delete",
-			"profile:read_all",
-			"profile:update_all",
+			"media:read",
+			"media:delete",
+			"team:read",
+			"team:update",
+			"team:delete",
 		},
 	}
 }
 
 func DefaultAccountPermissions() map[Role][]string {
 	return map[Role][]string{
+		// ============================================================
+		// ACCOUNT ADMIN
+		// ============================================================
+		// Full account control. No scoping — admins operate on every row
+		// in the account.
 		RoleAccountAdmin: {
-			// Account management
+			// Account
 			"account:read",
 			"account:update",
 			"account:delete",
-			"account:member_add",
-			"account:member_remove",
-			"billing:read",
-			"billing:update",
-			"setting:read",
-			"setting:update",
 
-			// Team management
+
+			"registration:read",
+			"registration:update",
+			"registration:delete",
+			"registration:export",
+
+			// Members
+			"member:create",
+			"member:read",
+			"member:update",
+			"member:delete",
+			"member:invite",
+			"member:leave",
+
+			// Teams
 			"team:create",
 			"team:read",
 			"team:update",
 			"team:delete",
+			"team:manage",
 
-			// Event management
+			// Events
 			"event:create",
 			"event:read_all",
 			"event:update_all",
@@ -378,105 +435,135 @@ func DefaultAccountPermissions() map[Role][]string {
 			"event:publish_all",
 			"event:manage",
 
-			// Member management
-			"member:create",
-			"member:read",
-			"member:update",
-			"member:delete",
-			"member:invite",
-
-			// Profile
-			"profile:read_all",
-			"profile:update_all",
-
-			// Certificate
+			// Certificates
 			"certificate:create",
 			"certificate:read",
 			"certificate:update",
-			"certificate:delete",
 			"certificate:issue",
+			"certificate:delete",
 
-			// Attendee
+			// Attendees
 			"attendee:read",
 			"attendee:update",
 			"attendee:export",
 
-			// Dashboard
+			// Payments
+			"payment:read",
+			"payment:create",
+			"payment:refund",
+
+			// Billing
+			"billing:read",
+			"billing:update",
+
+			// Settings
+			"setting:read",
+			"setting:update",
+
+			// Dashboard, profile, analytics
 			"dashboard:read",
+			"profile:read",
+			"profile:update",
 			"analytics:read",
 		},
+
+		// ============================================================
+		// TRAINER
+		// ============================================================
+		// Operational staff. Account-wide read of the event roster, but
+		// manages only their own events. Payments and attendees are
+		// own-scoped. Member roster is visible (team-aware filtering is
+		// applied at the service layer for team endpoints).
 		RoleTrainer: {
-			// Events
+			// Account (read only)
+			"account:read",
+
+			// Members (view roster, invite, leave)
+			"member:read",
+			"member:invite",
+			"member:leave",
+
+
+			"registration:read_own",
+			"registration:update_own",
+			"registration:export_own",
+
+			// Teams (read only)
+			"team:read",
+
+			// Events: account-wide read, own-only write
 			"event:create",
 			"event:read_all",
-			"event:update_all",
-			"event:delete_all",
-			"event:publish_all",
+			"event:update_own",
+			"event:delete_own",
+			"event:publish_own",
 
-			// Attendee
+			// Attendees: own events only
 			"attendee:create",
-			"attendee:read",
-			"attendee:update",
-			"attendee:delete",
-			"attendance:track",
-			"attendance:export",
+			"attendee:read_own",
+			"attendee:update_own",
+			"attendee:export_own",
 
-			// Certificate
+			// Certificates
 			"certificate:create",
 			"certificate:read",
 			"certificate:issue",
-			"certificate:revoke",
-			"certificate:download",
 
-			// Course materials
-			"material:create",
-			"material:read",
-			"material:update",
-			"material:delete",
-			"material:upload",
+	
 
-			// Analytics
-			"analytics:read_training",
-			"analytics:read_attendance",
-			"analytics:read_certificates",
-			"analytics:export_training",
-
-			// Profile
+			// Dashboard, profile, analytics
+			"dashboard:read",
 			"profile:read",
 			"profile:update",
+			"analytics:read",
+		},
 
-			// Team
+		// ============================================================
+		// LEARNER
+		// ============================================================
+		// Consumes training content. No management anywhere in the
+		// account. Visibility is scoped by the service layer:
+		//
+		//   - Events: only events on teams the learner belongs to.
+		//   - Attendees: only the learner's own records.
+		//   - Certificates: only the learner's own certificates.
+		//   - Members: no account-wide roster. Team rosters are read via
+		//     the team members endpoint, which is scoped to teams the
+		//     learner belongs to.
+		//
+		// The learner does NOT hold `member:read` or `account:read`. The
+		// UserMenu role badge reads from the self-service
+		// GET /accounts/:id/members/me endpoint, which requires no
+		// member-list grant.
+		RoleLearner: {
+			// Teams (read only)
 			"team:read",
 
-			// Account
-			"account:read",
-		},
-		RoleLearner: {
-			// Events — can view but not manage
-			"event:read_all",
+			// Members (team-scoped read, self-service leave)
+			"member:read_own",
+			"member:leave",
+
+			"registration:read_own",
+
+
+			// Events: visible-scope read + register
 			"event:read_own",
 			"event:register",
 
-			// Attendee — own registrations only
-			"attendee:read",
+			// Attendee: own records only
+			"attendee:read_own",
 			"attendee:update_own",
 
-			// Certificate — view and download their own
+			// Certificates: own records only
 			"certificate:read",
 			"certificate:download",
-
-			// Course materials — consume
-			"material:read",
 
 			// Profile
 			"profile:read",
 			"profile:update",
 
-			// Team
-			"team:read",
-
-			// Account
-			"account:read",
+			// Dashboard
+			"dashboard:read",
 		},
 	}
 }

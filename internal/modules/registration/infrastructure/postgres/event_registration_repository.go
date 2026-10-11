@@ -305,6 +305,18 @@ func (r *EventRegistrationRepository) ListAll(
 	}
 	args := []any{f.AccountIDs}
 
+	// Own-scope: applied for callers holding only registration:read_own
+	// (learners). Restricts the result to registrations they made.
+	if f.UserID != "" {
+		where = append(where, "r.user_id = ?")
+		args = append(args, f.UserID)
+	}
+
+	if f.EventOwnerUserID != "" {
+		where = append(where, "e.created_by = ?")
+		args = append(args, f.EventOwnerUserID)
+	}
+
 	if f.EventID != "" {
 		where = append(where, "er.event_id = ?")
 		args = append(args, f.EventID)
@@ -685,4 +697,34 @@ func (r *EventRegistrationRepository) ResolveBilledAccount(
         return "", fmt.Errorf("no account found for registration %s", registrationID)
     }
     return accountID, nil
+}
+
+// ResolveTeamAccount returns the account that owns the given team.
+//
+// Returns ("", nil) when the team doesn't exist or is soft-deleted.
+// Raw SQL is used for the same reason as ResolveBilledAccount — GORM's
+// Table().Select().Scan() chain has silently dropped columns on this
+// codebase.
+func (r *EventRegistrationRepository) ResolveTeamAccount(
+	ctx context.Context,
+	teamID string,
+) (string, error) {
+	if teamID == "" {
+		return "", nil
+	}
+
+	var accountID string
+	err := r.db.WithContext(ctx).
+		Raw(`
+			SELECT account_id
+			FROM teams
+			WHERE id = ? AND deleted_at IS NULL
+			LIMIT 1
+		`, teamID).
+		Scan(&accountID).Error
+
+	if err != nil {
+		return "", fmt.Errorf("resolve team account: %w", err)
+	}
+	return accountID, nil
 }
