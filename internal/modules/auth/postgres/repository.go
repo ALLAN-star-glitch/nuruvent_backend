@@ -795,3 +795,24 @@ func isUniqueViolation(err error) bool {
 	return strings.Contains(err.Error(), "SQLSTATE 23505") ||
 		strings.Contains(err.Error(), "duplicate key value")
 }
+
+func (r *PostgresRepository) UpdatePasswordHash(
+    ctx context.Context,
+    userID, hash string,
+) error {
+    result := r.db.WithContext(ctx).
+        Model(&UserModel{}).
+        Where("id = ?", userID).
+        Updates(map[string]any{
+            "password_hash": hash,
+            "is_guest":      false,
+            "updated_at":    time.Now(),
+        })
+    if result.Error != nil {
+        return fmt.Errorf("update password hash: %w", result.Error)
+    }
+    if result.RowsAffected == 0 {
+        return fmt.Errorf("no user matched id %s", userID)
+    }
+    return nil
+}

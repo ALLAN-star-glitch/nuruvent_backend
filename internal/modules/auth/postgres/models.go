@@ -386,7 +386,7 @@ type AccountMemberModel struct {
 	UserID      string         `gorm:"column:user_id;type:uuid;not null;index"`
 	Role        string         `gorm:"column:role;type:varchar(50);not null"`
 	IsActive    bool           `gorm:"column:is_active;default:true"`
-	InvitedBy   string         `gorm:"column:invited_by;type:uuid;index"`
+	InvitedBy   *string        `gorm:"column:invited_by;type:uuid;index"`
 	JoinedAt    time.Time      `gorm:"column:joined_at;default:CURRENT_TIMESTAMP"`
 	CreatedAt   time.Time      `gorm:"column:created_at;default:CURRENT_TIMESTAMP"`
 	UpdatedAt   time.Time      `gorm:"column:updated_at;default:CURRENT_TIMESTAMP"`

@@ -112,10 +112,9 @@ func (s *service) VerifyResetOTPAndResetPassword(ctx context.Context, email, otp
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	// Update password
-	user.UpdatePassword(string(hashedPassword))
-	if err := s.repo.UpdateUser(ctx, user); err != nil {
-		log.Printf("❌ [Auth] Failed to update user: %v", err)
+	// Persist the hash and clear guest status in one narrow UPDATE.
+	if err := s.repo.UpdatePasswordHash(ctx, user.ID, string(hashedPassword)); err != nil {
+		log.Printf("❌ [Auth] Failed to update password: %v", err)
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 

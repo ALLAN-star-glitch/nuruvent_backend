@@ -16,7 +16,7 @@ type AccountMember struct {
 	UserID      string
 	Role        string
 	IsActive    bool
-	InvitedBy   string
+	InvitedBy   *string
 	JoinedAt    time.Time
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
@@ -34,8 +34,13 @@ func NewAccountMember(accountID, userID, role, invitedBy string) (*AccountMember
 	if role == "" {
 		return nil, errors.New("role is required")
 	}
-	if !IsValidAccountRole(role) {
+	if !IsValidRole(role) {
 		return nil, errors.New("invalid role")
+	}
+
+	var invited *string
+	if invitedBy != "" {
+		invited = &invitedBy
 	}
 
 	now := time.Now()
@@ -45,7 +50,7 @@ func NewAccountMember(accountID, userID, role, invitedBy string) (*AccountMember
 		UserID:      userID,
 		Role:        role,
 		IsActive:    true,
-		InvitedBy:   invitedBy,
+		InvitedBy:   invited,   // nil when self-created
 		JoinedAt:    now,
 		CreatedAt:   now,
 		UpdatedAt:   now,

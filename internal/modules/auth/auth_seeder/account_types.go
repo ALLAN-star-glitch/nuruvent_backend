@@ -8,6 +8,10 @@ import (
 	"gorm.io/gorm"
 )
 
+
+
+
+
 // SeedAccountTypes seeds the account types from domain constants
 func SeedAccountTypes(db *gorm.DB) error {
 	log.Println("🌱 Seeding account types...")

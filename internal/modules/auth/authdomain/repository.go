@@ -118,5 +118,11 @@ type Repository interface {
 ProvisionUserAccount(ctx context.Context, user *User) (string, error)
 
 
+// UpdatePasswordHash persists only the password_hash and is_guest
+// fields for the given user. Used by the reset flow, which must not
+// touch any other column on the row.
+UpdatePasswordHash(ctx context.Context, userID, hash string) error
+
+
 	
 }
