@@ -138,7 +138,7 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 	domainFilters := domain.ListEventsFilters{
 		Team:           filters.Team,
 		Account:        filters.Account,
-		TeamID:         effectiveTeamID,   // ← FIXED
+		TeamID:         effectiveTeamID,
 		UserID:         filters.UserID,
 		EventTypeID:    filters.EventTypeID,
 		EventStatusID:  filters.EventStatusID,
@@ -164,12 +164,13 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 	filteredEvents := s.filterEventsByVisibility(ctx, userID, events, showDeleted)
 
 	for _, event := range filteredEvents {
-		organizer, err := s.getOrganizerInfo(ctx, event)
-		if err != nil {
+		if organizer, err := s.getOrganizerInfo(ctx, event); err != nil {
 			log.Printf("⚠️ Failed to get organizer info for event %s: %v", event.ID, err)
-			continue
+			// Leave Organizer nil; do NOT skip the rest of the iteration —
+			// creator enrichment below should still run.
+		} else {
+			event.Organizer = organizer
 		}
-		event.Organizer = organizer
 	}
 
 	if filters.IncludeCreator && userID != "" {
@@ -259,12 +260,12 @@ func (s *eventService) GetUpcomingEvents(ctx context.Context, teamID string, lim
 	filtered := s.filterEventsByVisibility(ctx, userID, events, false)
 
 	for _, event := range filtered {
-		organizer, err := s.getOrganizerInfo(ctx, event)
-		if err != nil {
+		if organizer, err := s.getOrganizerInfo(ctx, event); err != nil {
 			log.Printf("⚠️ Failed to get organizer info for event %s: %v", event.ID, err)
-			continue
+			// Leave Organizer nil; do NOT skip the rest of the iteration.
+		} else {
+			event.Organizer = organizer
 		}
-		event.Organizer = organizer
 
 		if userID != "" && s.canViewCreatorInfo(ctx, userID, event) {
 			event.Creator = s.getCreatorInfo(ctx, event.CreatedBy)
@@ -291,12 +292,12 @@ func (s *eventService) GetPastEvents(ctx context.Context, teamID string, limit i
 	filtered := s.filterEventsByVisibility(ctx, userID, events, false)
 
 	for _, event := range filtered {
-		organizer, err := s.getOrganizerInfo(ctx, event)
-		if err != nil {
+		if organizer, err := s.getOrganizerInfo(ctx, event); err != nil {
 			log.Printf("⚠️ Failed to get organizer info for event %s: %v", event.ID, err)
-			continue
+			// Leave Organizer nil; do NOT skip the rest of the iteration.
+		} else {
+			event.Organizer = organizer
 		}
-		event.Organizer = organizer
 
 		if userID != "" && s.canViewCreatorInfo(ctx, userID, event) {
 			event.Creator = s.getCreatorInfo(ctx, event.CreatedBy)
@@ -385,12 +386,12 @@ func (s *eventService) SearchEvents(ctx context.Context, query string, filters S
 	filteredEvents := s.filterEventsByVisibility(ctx, userID, events, showDeleted)
 
 	for _, event := range filteredEvents {
-		organizer, err := s.getOrganizerInfo(ctx, event)
-		if err != nil {
+		if organizer, err := s.getOrganizerInfo(ctx, event); err != nil {
 			log.Printf("⚠️ Failed to get organizer info for event %s: %v", event.ID, err)
-			continue
+			// Leave Organizer nil; do NOT skip the rest of the iteration.
+		} else {
+			event.Organizer = organizer
 		}
-		event.Organizer = organizer
 
 		if filters.IncludeCreator && userID != "" && s.canViewCreatorInfo(ctx, userID, event) {
 			event.Creator = s.getCreatorInfo(ctx, event.CreatedBy)

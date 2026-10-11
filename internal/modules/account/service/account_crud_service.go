@@ -153,7 +153,8 @@ func (s *accountService) CreateInstitutionAccount(ctx context.Context, cmd Creat
 // ============================================================
 
 // GetAccountByTeamID resolves the account that owns a given team.
-// Permission: caller must be able to view the account.
+// This is public information — organizer identity is displayed on
+// every public event page. No permission check.
 // Returns (nil, nil) if the team doesn't exist or has no account.
 func (s *accountService) GetAccountByTeamID(ctx context.Context, teamID string) (*accountdomain.Account, error) {
 	if teamID == "" {
@@ -166,11 +167,6 @@ func (s *accountService) GetAccountByTeamID(ctx context.Context, teamID string) 
 	}
 	if accountID == "" {
 		return nil, nil
-	}
-
-	// Permission check: caller must be able to view this account
-	if err := s.requireAccountView(ctx, accountID); err != nil {
-		return nil, err
 	}
 
 	return s.repo.GetAccountByID(ctx, accountID)
