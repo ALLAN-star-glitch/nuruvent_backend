@@ -37,8 +37,8 @@ func NewTeamAIAdapter(client *ai.Client) service.AIService {
 	return &TeamAIAdapter{client: client}
 }
 
-// GenerateInvitationContent generates a personalized team-invitation
-// email body using the shared AI client.
+// GenerateInvitationContent generates a short, personalized team-invitation
+// message using the shared AI client.
 func (a *TeamAIAdapter) GenerateInvitationContent(
 	ctx context.Context,
 	req service.GenerateInvitationRequest,
@@ -52,7 +52,8 @@ func (a *TeamAIAdapter) GenerateInvitationContent(
 		req.RecipientEmail, req.IsExistingUser, req.IsExistingAccountMember, req.InvitedRole)
 
 	const system = `You are a professional email writer for Nuruvent, an event management platform.
-Generate warm, professional, and personalized invitation emails.
+Write short, warm, professional, and personalized invitation emails.
+Keep the body to ONE short sentence.
 Always return valid JSON only. Do not add markdown backticks, explanations, or extra text.`
 
 	user := a.buildPrompt(req)
@@ -112,9 +113,11 @@ func (a *TeamAIAdapter) buildExistingAccountMemberPrompt(req service.GenerateInv
 	}
 
 	return fmt.Sprintf(`
-Generate a personalized email notifying an EXISTING ACCOUNT MEMBER that they have been invited to join an additional team within the same account on Nuruvent.
+Generate a short, personalized email notifying an EXISTING ACCOUNT MEMBER that they have been invited to join an additional team within the same account on Nuruvent.
 
 IMPORTANT: The recipient is ALREADY a member of the account. Their role in the account does not change. Do NOT mention being granted a role, joining as a trainer/admin, or any role-related wording. Just invite them to join the team.
+
+Keep it brief. The "body" must be ONE short sentence. Keep "intro" to one short phrase (or an empty string). Keep "benefits" to 2–3 very short bullet items. Keep "pss" to one short sentence or an empty string.
 
 Recipient Details:
 - Name: %s
@@ -135,15 +138,15 @@ Return ONLY valid JSON. No markdown, no extra text. The JSON must have these exa
 {
     "subject": "Email subject line",
     "greeting": "Opening greeting",
-    "intro": "One sentence introduction",
-    "body": "2-3 sentences explaining that they have been invited to join the team",
+    "intro": "One short sentence introduction",
+    "body": "ONE short sentence explaining that they have been invited to join the team",
     "benefits": ["Benefit 1", "Benefit 2", "Benefit 3"],
     "call_to_action": "Button text (e.g. 'View Invitation' or 'Join Team')",
     "closing": "Sign-off",
-    "pss": "P.S. message"
+    "pss": "Short P.S. message"
 }
 
-Tone: professional and welcoming. Emphasize collaboration, not role changes.
+Tone: professional, welcoming, and concise. Emphasize collaboration, not role changes.
 `,
 		req.RecipientName,
 		req.RecipientEmail,
@@ -173,9 +176,11 @@ func (a *TeamAIAdapter) buildExistingUserPrompt(req service.GenerateInvitationRe
 	}
 
 	return fmt.Sprintf(`
-Generate a personalized invitation email for an EXISTING Nuruvent user to join a team and become a member of its parent account.
+Generate a short, personalized invitation email for an EXISTING Nuruvent user to join a team and become a member of its parent account.
 
 The recipient will be granted the role "%s" in the account. Mention this role naturally in the email (e.g., "join as a Trainer" or "join as an Account Admin").
+
+Keep it brief. The "body" must be ONE short sentence. Keep "intro" to one short phrase (or an empty string). Keep "benefits" to 2–3 very short bullet items. Keep "pss" to one short sentence or an empty string.
 
 User Details:
 - Name: %s
@@ -197,15 +202,15 @@ Return ONLY valid JSON. No markdown, no extra text. The JSON must have these exa
 {
     "subject": "Email subject line",
     "greeting": "Opening greeting",
-    "intro": "One sentence introduction",
-    "body": "2-3 sentences explaining the invitation, including the role they will receive",
+    "intro": "One short sentence introduction",
+    "body": "ONE short sentence explaining the invitation, including the role they will receive",
     "benefits": ["Benefit 1", "Benefit 2", "Benefit 3"],
     "call_to_action": "Button text",
     "closing": "Sign-off",
-    "pss": "P.S. message"
+    "pss": "Short P.S. message"
 }
 
-Make it warm, professional, and personalized. Reference the role naturally.
+Make it warm, professional, concise, and personalized. Reference the role naturally.
 `,
 		req.InvitedRole,
 		req.RecipientName,
@@ -226,9 +231,11 @@ Make it warm, professional, and personalized. Reference the role naturally.
 // register and, in the same flow, be granted a role in the account.
 func (a *TeamAIAdapter) buildNewUserPrompt(req service.GenerateInvitationRequest) string {
 	return fmt.Sprintf(`
-Generate a warm, friendly, and conversational email invitation for a recipient to join a team on Nuruvent.
+Generate a short, warm, friendly invitation email for a recipient to join a team on Nuruvent.
 
 The recipient does not have a Nuruvent account yet. When they register, they will be granted the role "%s" in the team's parent account. Mention this role naturally in the email.
+
+Keep it brief. The "body" must be ONE short sentence. Keep "intro" to one short phrase. Keep "benefits" to 2–3 very short bullet items. Keep "pss" to one short sentence or an empty string.
 
 Context:
 - Recipient Email: %s
@@ -239,17 +246,18 @@ Context:
 - Total Hosted Events: %d
 
 Guidelines:
-1. Tone: Warm, approachable, human, and exciting (avoid corporate buzzwords like "elevate your event planning skills").
+1. Tone: Warm, approachable, human, and concise (avoid corporate buzzwords like "elevate your event planning skills").
 2. Greeting: Use "Hey there," or "Welcome!" since the recipient's first name is unknown. Never use email handles or usernames in greetings.
-3. Benefits: Provide 2-3 clear, conversational value points. Do not return empty bullet items.
-4. Mention the role ("%s") naturally — the recipient should know what role they're joining as.
+3. Body: ONE short, friendly sentence inviting them to join.
+4. Benefits: Provide 2–3 short, conversational value points. Do not return empty bullet items.
+5. Mention the role ("%s") naturally — the recipient should know what role they're joining as.
 
 Return ONLY valid JSON matching this schema:
 {
     "subject": "Catchy, friendly subject line",
     "greeting": "Friendly greeting",
-    "intro": "Warm opening line explaining why they are receiving this",
-    "body": "Friendly 2-sentence paragraph inviting them to collaborate with the team as a role",
+    "intro": "Short warm opening line explaining why they are receiving this",
+    "body": "ONE short, friendly sentence inviting them to collaborate with the team as a role",
     "benefits": [
         "Collaborate directly with team members on upcoming events",
         "Manage event schedules, check-ins, and guest lists seamlessly",
