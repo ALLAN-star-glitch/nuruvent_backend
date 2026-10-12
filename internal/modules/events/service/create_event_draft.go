@@ -323,6 +323,7 @@ func (s *eventService) populateSchedules(ctx context.Context, event *domain.Even
 		return err
 	}
 	event.Schedules = converted
+	deriveEventFromSchedules(event) 
 	return nil
 }
 

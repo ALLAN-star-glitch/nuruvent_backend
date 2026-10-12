@@ -307,6 +307,7 @@ func (s *eventService) populateEventSchedules(ctx context.Context, event *domain
 		return err
 	}
 	event.Schedules = converted
+	deriveEventFromSchedules(event)
 	return nil
 }
 
