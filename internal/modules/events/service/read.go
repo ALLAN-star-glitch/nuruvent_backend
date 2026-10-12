@@ -655,3 +655,34 @@ func (s *eventService) ListEventIDsByTeam(
 	}
 	return ids, nil
 }
+
+// ResolveEventAccount returns the account UUID that owns the event's
+// team.
+func (s *eventService) ResolveEventAccount(
+	ctx context.Context,
+	eventID string,
+) (string, error) {
+	if eventID == "" {
+		return "", domain.ErrEventNotFound
+	}
+
+	event, err := s.repo.GetEventByID(ctx, eventID)
+	if err != nil {
+		return "", err
+	}
+	if event == nil {
+		return "", domain.ErrEventNotFound
+	}
+	if event.TeamID == "" {
+		return "", domain.ErrEventNotFound
+	}
+
+	accountID, err := s.repo.AccountIDForTeam(ctx, event.TeamID)
+	if err != nil {
+		return "", err
+	}
+	if accountID == "" {
+		return "", domain.ErrEventNotFound
+	}
+	return accountID, nil
+}

@@ -207,6 +207,19 @@ RegisterAttendeeForExternal(
 	) (*ListAttendeesResult, error)
 
 
+
+	// ResolveSessionAccount returns the account UUID that owns the
+// session's parent event.
+//
+// Used by the delivery layer to inject the Casbin domain into
+// request Locals before authzMiddleware runs on /sessions/:id/*
+// routes.
+//
+// Returns attendance.ErrSessionNotFound when the session does not
+// exist or does not belong to an event-typed parent.
+ResolveSessionAccount(ctx context.Context, sessionID string) (string, error)
+
+
 	// RegisterHostAttendee creates or updates the host's attendee row
 // for an event, and adds a status row for every session under it.
 //

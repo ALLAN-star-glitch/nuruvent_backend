@@ -15,6 +15,11 @@ type Handlers struct {
 	Attendance *AttendanceHandler
 	Webhooks   *WebhookHandler
 	Join       *JoinHandler
+
+	// svc is retained so the delivery layer can construct middleware
+	// that needs a specific use case (e.g. SessionContextMiddleware,
+	// which resolves a session's owning account before authz runs).
+	svc service.Service // ← NEW
 }
 
 // NewHandlers constructs all handlers.
@@ -28,7 +33,18 @@ func NewHandlers(
 		Attendance: NewAttendanceHandler(svc),
 		Webhooks:   NewWebhookHandler(svc, providers),
 		Join:       NewJoinHandler(svc, authIssuer),
+		svc:        svc, // ← NEW
 	}
+}
+
+// Service returns the attendance service backing these handlers.
+//
+// Used by server/routes.go to build middleware that depends on a
+// specific use case — currently SessionContextMiddleware, which needs
+// ResolveSessionAccount to inject the Casbin domain before
+// authzMiddleware runs on /sessions/:id/* routes.
+func (h *Handlers) Service() service.Service { // ← NEW
+	return h.svc
 }
 
 // RegisterRoutes wires the attendance module's routes into the given
@@ -46,12 +62,19 @@ func NewHandlers(
 //     authzMiddleware. These endpoints expose attendance for a
 //     session, an event, or the whole account, and must be
 //     authorized against the caller's role.
+//   - Session-scoped routes (/sessions/:id/*) additionally insert
+//     sessionCtx between authMiddleware and authzMiddleware. sessionCtx
+//     resolves the session's owning account and writes account:<uuid>
+//     into ContextKeyDomain, so authzMiddleware can run a domain-scoped
+//     Casbin check. Without it, authzMiddleware has no domain to check
+//     against on these routes.
 func RegisterRoutes(
 	r fiber.Router,
 	h *Handlers,
 	authMiddleware fiber.Handler,
 	authzMiddleware fiber.Handler,
 	optionalAuth fiber.Handler,
+	sessionCtx fiber.Handler, // ← NEW
 ) {
 	// ---- Public ----
 	r.Get("/join/:token", h.Join.RedeemJoinToken)
@@ -65,18 +88,27 @@ func RegisterRoutes(
 	r.Post("/sessions", authMiddleware, h.Sessions.UpsertSession)
 
 	// ---- Host-facing: session join tokens ----
+	// NOTE: these still lack a domain resolver and will 500 under
+	// authzMiddleware. Fix tracked separately; sessionCtx will be
+	// inserted here in a follow-up once the attendance routes are
+	// verified.
 	r.Post("/sessions/:id/join-tokens", authMiddleware, authzMiddleware, h.Sessions.IssueJoinToken)
 	r.Delete("/sessions/:id/join-tokens", authMiddleware, authzMiddleware, h.Sessions.RevokeJoinTokens)
 
 	// ---- Host-facing: attendance reads and mutations ----
 	// Previously optionalAuth — anyone with a session ID or attendee
 	// ID could read attendance. Now authenticated and authorized.
-	r.Get("/sessions/:id/attendance", authMiddleware, authzMiddleware, h.Attendance.ListSessionAttendance)
-	r.Get("/sessions/:id/attendance/export", authMiddleware, authzMiddleware, h.Attendance.ExportSessionAttendance)
+	//
+	// sessionCtx runs between authn and authz on each of these so the
+	// Casbin check gets the correct account domain. It calls
+	// ResolveSessionAccount on the attendance service; on not-found it
+	// defers to the handler, which returns a proper 404.
+	r.Get("/sessions/:id/attendance", authMiddleware, sessionCtx, authzMiddleware, h.Attendance.ListSessionAttendance)
+	r.Get("/sessions/:id/attendance/export", authMiddleware, sessionCtx, authzMiddleware, h.Attendance.ExportSessionAttendance)
 
-	r.Post("/sessions/:id/attendance/:attendeeID/confirm", authMiddleware, authzMiddleware, h.Attendance.ConfirmAttendance)
-	r.Post("/sessions/:id/attendance/:attendeeID/override", authMiddleware, authzMiddleware, h.Attendance.OverrideAttendance)
-	r.Post("/sessions/:id/attendance/bulk-confirm", authMiddleware, authzMiddleware, h.Attendance.BulkConfirm)
+	r.Post("/sessions/:id/attendance/:attendeeID/confirm", authMiddleware, sessionCtx, authzMiddleware, h.Attendance.ConfirmAttendance)
+	r.Post("/sessions/:id/attendance/:attendeeID/override", authMiddleware, sessionCtx, authzMiddleware, h.Attendance.OverrideAttendance)
+	r.Post("/sessions/:id/attendance/bulk-confirm", authMiddleware, sessionCtx, authzMiddleware, h.Attendance.BulkConfirm)
 
 	r.Get("/attendees/:id/summary", authMiddleware, authzMiddleware, h.Attendance.GetAttendeeSummary)
 

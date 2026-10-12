@@ -51,5 +51,25 @@ func (a *eventsReaderAdapter) ListEventIDsByTeam(
 	return ids, nil
 }
 
+
+func (a *eventsReaderAdapter) ResolveEventAccount(
+	ctx context.Context,
+	eventID string,
+) (string, error) {
+	svc, err := a.resolve()
+	if err != nil {
+		return "", err
+	}
+
+	accountID, err := svc.ResolveEventAccount(ctx, eventID)
+	if err != nil {
+		if errors.Is(err, eventsDomain.ErrEventNotFound) {
+			return "", attendanceDomain.ErrSessionNotFound
+		}
+		return "", err
+	}
+	return accountID, nil
+}
+
 // Compile-time assertion.
 var _ attendanceDomain.EventsReader = (*eventsReaderAdapter)(nil)

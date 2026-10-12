@@ -29,6 +29,11 @@ import (
 // DomainDeferred; the service layer performs the team→account resolution
 // and the authorization check.
 //
+// Session-scoped routes (/sessions/:id/*) are resolved by an upstream
+// SessionContextMiddleware that reads the session's owning account and
+// writes account:<uuid> into ContextKeyDomain before this middleware
+// runs. The Locals override below picks that up.
+//
 // Resolution pipeline per request:
 //
 //   1. Extract caller identity (userID) — required.
@@ -79,8 +84,9 @@ func AuthorizationMiddleware(checker authdomain.PermissionChecker) fiber.Handler
 		// ---- 4. Deferred domain ----
 		//
 		// The resolver returns DomainDeferred when it cannot determine the
-		// account from the URL alone (slug routes, team-scoped routes, etc.).
-		// The service layer is responsible for authorization in these cases.
+		// account from the URL alone (slug routes, team-scoped routes,
+		// session routes with an unresolved owner, etc.). The service layer
+		// is responsible for authorization in these cases.
 		if domain == authdomain.DomainDeferred {
 			log.Printf("⏸  AUTHZ DEFERRED: %s %s (service must authorize)", c.Method(), c.Path())
 			c.Locals(authdomain.ContextKeyDomain, domain)
@@ -237,7 +243,8 @@ func checkAny(
 // Precedence:
 //
 //  1. Locals override — set by an upstream middleware (e.g. a team guard
-//     that loads the team and injects its account ID).
+//     that loads the team and injects its account ID, or a
+//     SessionContextMiddleware that loads the session's owning account).
 //
 //  2. Query override (?account_id=X).
 //
@@ -256,6 +263,12 @@ func checkAny(
 // team ID to an account requires a DB read the middleware deliberately
 // does not perform. Such routes hit step 7 and are authorized by the
 // service layer.
+//
+// SESSION-SCOPED ROUTES: /sessions/:id/* is also not resolved here. The
+// SessionContextMiddleware runs before this middleware on those routes
+// and writes account:<uuid> into ContextKeyDomain, which step 1 picks
+// up. If that middleware defers (session not found, resolver not wired),
+// the domain is DomainDeferred and step 7's behavior applies.
 func getDomainFromRequest(c fiber.Ctx) string {
 	path := c.Path()
 
@@ -377,6 +390,11 @@ func getResourceFromRequest(c fiber.Ctx) string {
 				return r
 			}
 			return authdomain.ResourceTeam.String()
+		case "sessions", "session": // ← NEW
+			if r := sessionSubResource(segments, i); r != "" {
+				return r
+			}
+			return authdomain.ResourceEvent.String()
 		case "profile":
 			return authdomain.ResourceProfile.String()
 		case "avatar":
@@ -505,6 +523,33 @@ func teamSubResource(segments []string, i int) string {
 		return authdomain.ResourceMember.String()
 	case "events", "event":
 		return authdomain.ResourceEvent.String()
+	}
+	return ""
+}
+
+// sessionSubResource resolves the resource for a /sessions/* path. // ← NEW
+//
+// The session itself has no Casbin resource; it belongs to an event.
+// Attendance operates on attendee rows, so /sessions/:id/attendance*
+// maps to the attendee resource. Anything else under /sessions/*
+// falls back to the parent event resource so the domain-scoped check
+// still runs against a known constant.
+//
+// Examples:
+//
+//	/sessions/:id/attendance              → attendee
+//	/sessions/:id/attendance/export       → attendee
+//	/sessions/:id/attendance/:aid/confirm → attendee
+//	/sessions/:id/attendance/:aid/override→ attendee
+//	/sessions/:id/attendance/bulk-confirm → attendee
+//	/sessions/:id/join-tokens             → event (fallback)
+func sessionSubResource(segments []string, i int) string { // ← NEW
+	if i+1 >= len(segments) {
+		return ""
+	}
+	switch segments[i+1] {
+	case "attendance":
+		return authdomain.ResourceAttendee.String()
 	}
 	return ""
 }

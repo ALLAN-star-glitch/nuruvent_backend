@@ -129,6 +129,15 @@ type Service interface {
 	ListEventIDsByTeam(ctx context.Context, userID, teamID string) ([]string, error)
 
 
+		// ResolveEventAccount returns the account UUID that owns the event's
+	// team.
+	//
+	// Chain: events.team_id → teams.account_id.
+	// Returns domain.ErrEventNotFound if the event doesn't exist or has
+	// no team.
+	ResolveEventAccount(ctx context.Context, eventID string) (string, error)
+
+
 	
 }
 

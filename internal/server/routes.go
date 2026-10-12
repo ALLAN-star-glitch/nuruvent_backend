@@ -81,10 +81,15 @@ func SetupRoutes(
 	// routes are authorized against the caller's role.
 	paymenthttp.RegisterRoutes(api, orderHandler, paymentHandler, authMiddleware, authzMiddleware, optionalAuth)
 
-	// Attendance routes (sessions, join links, webhooks, host
-	// operations) — authzMiddleware attached so attendance reads,
-	// exports, and host actions are authorized.
-	attendancehttp.RegisterRoutes(api, attendanceHandler, authMiddleware, authzMiddleware, optionalAuth)
+	sessionCtx := attendancehttp.SessionContextMiddleware(attendanceHandler.Service())
+	attendancehttp.RegisterRoutes(
+		api,
+		attendanceHandler,
+		authMiddleware,
+		authzMiddleware,
+		optionalAuth,
+		sessionCtx,
+	)
 
 	// Video routes (OAuth connect/callback, connections)
 	videohttp.RegisterRoutes(api.Group("/video"), videoHandler, authMiddleware)
