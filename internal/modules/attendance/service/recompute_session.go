@@ -19,6 +19,10 @@ import (
 //
 // Idempotent: calling it twice with the same state produces the same
 // result and no spurious publish events.
+//
+// Rollup recompute is triggered by *either* a status change or a
+// duration change. A late joiner can extend their duration without
+// changing status — the rollup still needs to reflect the new total.
 func (s *attendanceService) RecomputeSessionStatuses(
 	ctx context.Context,
 	sessionID string,
@@ -31,23 +35,21 @@ func (s *attendanceService) RecomputeSessionStatuses(
 
 	// Captured from the transaction, used after commit.
 	var sessionExternal attendance.ExternalRef
-	var changes []SessionStatusChange
+	var statusChanges []SessionStatusChange
+	var rollupAttendeeIDs []string
 
 	txErr := s.deps.UnitOfWork.Do(ctx, func(repos attendance.Repositories) error {
-		// 1. Load the session.
 		session, err := repos.Sessions.FindByID(ctx, sessionID)
 		if err != nil {
 			return fmt.Errorf("load session: %w", err)
 		}
 		sessionExternal = session.External
 
-		// 2. Load every status row for the session.
 		statuses, err := repos.SessionStatuses.ListBySession(ctx, sessionID)
 		if err != nil {
 			return fmt.Errorf("list session statuses: %w", err)
 		}
 
-		// 3. Re-derive each attendee's status.
 		for _, st := range statuses {
 			records, err := repos.Records.FindByAttendeeSession(ctx, st.AttendeeID, st.SessionID)
 			if err != nil {
@@ -63,6 +65,8 @@ func (s *attendanceService) RecomputeSessionStatuses(
 			totalDuration := attendance.SumDuration(records, now)
 
 			oldStatus := st.EffectiveStatus()
+			oldDuration := st.TotalDurationSeconds
+
 			st.Recompute(derived, totalDuration, now)
 			newStatus := st.EffectiveStatus()
 
@@ -70,12 +74,15 @@ func (s *attendanceService) RecomputeSessionStatuses(
 				return fmt.Errorf("upsert status for %s: %w", st.AttendeeID, err)
 			}
 
-			if oldStatus != newStatus {
+			statusChanged := oldStatus != newStatus
+			durationChanged := oldDuration != st.TotalDurationSeconds
+
+			if statusChanged {
 				attendee, err := repos.Attendees.FindByID(ctx, st.AttendeeID)
 				if err != nil {
 					return fmt.Errorf("load attendee %s: %w", st.AttendeeID, err)
 				}
-				changes = append(changes, SessionStatusChange{
+				statusChanges = append(statusChanges, SessionStatusChange{
 					AttendeeID:       st.AttendeeID,
 					AttendeeExternal: attendee.External,
 					SessionID:        session.ID,
@@ -85,6 +92,11 @@ func (s *attendanceService) RecomputeSessionStatuses(
 					OccurredAt:       now,
 				})
 			}
+
+			// Rollup recompute is needed whenever either fact changed.
+			if statusChanged || durationChanged {
+				rollupAttendeeIDs = append(rollupAttendeeIDs, st.AttendeeID)
+			}
 		}
 
 		return nil
@@ -93,20 +105,23 @@ func (s *attendanceService) RecomputeSessionStatuses(
 		return txErr
 	}
 
-	// Publish changes after commit. Publish failures do not roll back
-	// the status changes — the changes are authoritative, and the
-	// publisher is best-effort. Real deployments would use an outbox
-	// for reliable delivery.
-	for _, change := range changes {
+	// Publish status changes after commit. Best-effort.
+	for _, change := range statusChanges {
 		if err := s.deps.Publisher.SessionStatusChanged(ctx, change); err != nil {
-			_ = err // swallow; see comment above
+			_ = err
 		}
 	}
 
-	// Recompute roll-ups for every attendee whose status moved.
-	for _, change := range changes {
-		if err := s.RecomputeRollup(ctx, change.AttendeeID, sessionExternal); err != nil {
-			_ = err // best-effort; a background job can re-run
+	// Recompute rollups for every attendee whose status OR duration
+	// moved. Deduplicate — an attendee may appear in both categories.
+	seen := make(map[string]struct{}, len(rollupAttendeeIDs))
+	for _, id := range rollupAttendeeIDs {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		if err := s.RecomputeRollup(ctx, id, sessionExternal); err != nil {
+			_ = err
 		}
 	}
 
