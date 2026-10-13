@@ -76,19 +76,13 @@ func (s *eventService) syncEventSchedulesToAttendance(
 	}
 
 	log.Printf("[events] sync DONE event=%s schedules=%d ok=%d failed=%d",
-	
 		event.ID, len(event.Schedules), succeeded, failed)
 
-
-		// Register the host as an attendee for the event. Runs after the
+	// Register the host as an attendee for the event. Runs after the
 	// schedules are mirrored so the host's session-status rows find
 	// sessions to attach to.
 	s.registerHostAttendeeForSync(ctx, event)
 }
-
-
-
-
 
 // registerHostAttendeeForSync creates or updates the host's attendee
 // row in the attendance module.
@@ -96,6 +90,13 @@ func (s *eventService) syncEventSchedulesToAttendance(
 // Best-effort, same as the schedule sync: a failure here does not
 // fail the caller. The host's attendance will be missing until a
 // later sync succeeds.
+//
+// The host's username is what Zoom's webhook matcher uses to resolve
+// the host back to an attendee — it looks up participant.customer_key
+// against attendees.username. If event.Creator.Username is empty when
+// this runs, the host attendee row will also have an empty username,
+// and Zoom host joins will never be recorded. Ensure the loaded
+// Creator carries Username (see getCreatorInfo in the events service).
 func (s *eventService) registerHostAttendeeForSync(
 	ctx context.Context,
 	event *domain.Event,
@@ -112,16 +113,17 @@ func (s *eventService) registerHostAttendeeForSync(
 		HostUserID: event.CreatedBy,
 	}
 
-	// Resolve the host's display name and email. Same helper the
-	// organizer lookup uses.
+	// Resolve the host's display name, email, phone, and username.
+	// Username is critical: the attendance matcher looks it up against
+	// participant.customer_key on Zoom webhooks.
 	if event.Creator != nil {
 		cmd.HostDisplayName = strings.TrimSpace(event.Creator.DisplayName)
 		if cmd.HostDisplayName == "" {
 			cmd.HostDisplayName = strings.TrimSpace(event.Creator.Name)
 		}
 		cmd.HostEmail = strings.TrimSpace(event.Creator.Email)
-		cmd.HostPhone = strings.TrimSpace(event.Creator.Phone) 
-	    cmd.HostUsername = strings.TrimSpace(event.Creator.Username)
+		cmd.HostPhone = strings.TrimSpace(event.Creator.Phone)
+		cmd.HostUsername = strings.TrimSpace(event.Creator.Username)
 	}
 	if cmd.HostDisplayName == "" {
 		cmd.HostDisplayName = s.resolveOrganizerForSync(ctx, event)
@@ -147,6 +149,15 @@ func (s *eventService) registerHostAttendeeForSync(
 		}
 	}
 
+	// Warn when the host's username is empty — this is the condition
+	// that silently breaks Zoom host matching.
+	if cmd.HostUsername == "" {
+		log.Printf(
+			"[events] register host WARN event=%s host=%s reason=empty-username (Zoom matching will fail for this host)",
+			event.ID, event.CreatedBy,
+		)
+	}
+
 	if err := s.attendance.RegisterHostAttendee(ctx, cmd); err != nil {
 		log.Printf(
 			"[events] register host attendee FAIL event=%s host=%s err=%v",
@@ -156,8 +167,8 @@ func (s *eventService) registerHostAttendeeForSync(
 	}
 
 	log.Printf(
-		"[events] register host attendee OK event=%s host=%s google_meet_id=%q",
-		event.ID, event.CreatedBy, cmd.HostGoogleMeetUserID,
+		"[events] register host attendee OK event=%s host=%s google_meet_id=%q username=%q email=%q",
+		event.ID, event.CreatedBy, cmd.HostGoogleMeetUserID, cmd.HostUsername, cmd.HostEmail,
 	)
 }
 
@@ -309,6 +320,7 @@ func parseTimeOfDay(s string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unrecognized time format")
 }
 
+// composeSessionTitle builds a human-friendly session title.
 // The events module already composes "Session N: Name" on the way in.
 // If SessionName is set, use it as-is — don't prepend the session
 // number again.
@@ -516,4 +528,3 @@ func parseMeetCode(link string) string {
 	}
 	return m[1]
 }
-

@@ -27,22 +27,23 @@ func (r *AttendeeRepository) Create(ctx context.Context, a *attendance.Attendee)
 }
 
 func (r *AttendeeRepository) Update(ctx context.Context, a *attendance.Attendee) error {
-    res := r.db.WithContext(ctx).
-        Model(&AttendeeModel{}).
-        Where("id = ?", a.ID).
-        Updates(map[string]any{
-            "display_name":        a.DisplayName,
-            "email":               a.Email,
-            "google_meet_user_id": a.GoogleMeetUserID,
-            "updated_at":          time.Now().UTC(),
-        })
-    if res.Error != nil {
-        return translateError(res.Error, "update attendee", attendance.ErrInvalidSession)
-    }
-    if res.RowsAffected == 0 {
-        return attendance.ErrInvalidSession
-    }
-    return nil
+	res := r.db.WithContext(ctx).
+		Model(&AttendeeModel{}).
+		Where("id = ?", a.ID).
+		Updates(map[string]any{
+			"display_name":        a.DisplayName,
+			"email":               a.Email,
+			"username":            a.Username,
+			"google_meet_user_id": a.GoogleMeetUserID,
+			"updated_at":          time.Now().UTC(),
+		})
+	if res.Error != nil {
+		return translateError(res.Error, "update attendee", attendance.ErrInvalidSession)
+	}
+	if res.RowsAffected == 0 {
+		return attendance.ErrInvalidSession
+	}
+	return nil
 }
 
 func (r *AttendeeRepository) FindByID(ctx context.Context, id string) (*attendance.Attendee, error) {
@@ -74,7 +75,7 @@ func (r *AttendeeRepository) FindByExternalRef(ctx context.Context, ref attendan
 func (r *AttendeeRepository) FindByEmail(ctx context.Context, email string) ([]*attendance.Attendee, error) {
 	var models []AttendeeModel
 	err := r.db.WithContext(ctx).
-		Where("email = ?", email).
+		Where("LOWER(email) = LOWER(?)", email).
 		Find(&models).Error
 	if err != nil {
 		return nil, translateError(err, "find attendees by email", attendance.ErrAttendeeNotFound)
@@ -86,15 +87,28 @@ func (r *AttendeeRepository) FindByEmail(ctx context.Context, email string) ([]*
 	return out, nil
 }
 
-
-
+// FindByUsername resolves an attendee by the identifier a video
+// platform delivers as the participant's match key.
+//
+// Zoom's Meeting SDK echoes back whatever the frontend sends as
+// customerKey. That value may be either the Nuruvent username or the
+// user's email, depending on the client version. Matching against
+// both columns in a single query makes the lookup tolerant of either
+// choice and removes the need for the client to know which one the
+// backend expects.
+//
+// Case-insensitive so that capitalization differences between the
+// identity provider and the attendee record don't cause misses.
 func (r *AttendeeRepository) FindByUsername(
 	ctx context.Context,
 	username string,
 ) ([]*attendance.Attendee, error) {
 	var models []AttendeeModel
 	err := r.db.WithContext(ctx).
-		Where("username = ? AND deleted_at IS NULL", username).
+		Where(
+			"(LOWER(username) = LOWER(?) OR LOWER(email) = LOWER(?)) AND deleted_at IS NULL",
+			username, username,
+		).
 		Find(&models).Error
 	if err != nil {
 		return nil, translateError(err, "find attendees by username", attendance.ErrAttendeeNotFound)
