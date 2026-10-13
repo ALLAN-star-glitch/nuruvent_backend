@@ -15,7 +15,15 @@ import (
 // Differs from the standard login flow in that it:
 //   - skips password verification (the caller already knows the user)
 //   - skips 2FA OTP issuance
-//   - issues a short-lived token (default 4 hours)
+//   - honors an explicit TTL (defaults to 4 hours)
+//   - issues only an access token, no refresh token
+//
+// The returned expiresAt is the JWT's actual exp claim. Previously
+// this returned `now + ttl` while the token itself was minted with
+// the default 15-minute TTL — the cookie then outlived the token,
+// and every request past 15 minutes 401'd with "Invalid or expired
+// token". This version mints the token with the requested TTL so the
+// two stay in sync.
 func (s *service) IssueSessionForUser(
 	ctx context.Context,
 	userID string,
@@ -39,9 +47,19 @@ func (s *service) IssueSessionForUser(
 		return "", time.Time{}, authdomain.ErrUserInactive
 	}
 
-	accessToken, _, err := s.GenerateTokens(ctx, user)
+	// Build the TokenContext the same way login does — resolves role,
+	// account, and team from memberships. Shared with GenerateTokens so
+	// guest sessions and login sessions carry identical context.
+	tokenCtx, err := s.GetTokenContext(ctx, user)
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("generate tokens: %w", err)
+		return "", time.Time{}, fmt.Errorf("build token context: %w", err)
+	}
+
+	// Mint with the requested TTL. The JWT's exp claim is `now + ttl`,
+	// matching the value returned below.
+	accessToken, err := s.tokenSvc.GenerateAccessTokenWithTTL(tokenCtx, ttl)
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("generate access token: %w", err)
 	}
 
 	return accessToken, time.Now().Add(ttl), nil

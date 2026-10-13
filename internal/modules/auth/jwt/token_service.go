@@ -23,23 +23,42 @@ func NewTokenService(cfg *config.Config) authdomain.TokenService {
 	return &TokenService{config: cfg}
 }
 
-// GenerateAccessToken generates a new access token from TokenContext
+// GenerateAccessToken generates a new access token using the default
+// AccessExpiration from config. Use GenerateAccessTokenWithTTL when
+// the caller needs a non-default lifetime (e.g. guest join sessions).
 func (s *TokenService) GenerateAccessToken(ctx *authdomain.TokenContext) (string, error) {
+	return s.GenerateAccessTokenWithTTL(ctx, s.config.JWT.AccessExpiration)
+}
+
+// GenerateAccessTokenWithTTL generates an access token with an explicit
+// lifetime. Passing a non-positive ttl falls back to the configured
+// AccessExpiration.
+//
+// This is the primitive. The JWT's exp claim reflects the ttl passed
+// in — no separate metadata overrides it.
+func (s *TokenService) GenerateAccessTokenWithTTL(
+	ctx *authdomain.TokenContext,
+	ttl time.Duration,
+) (string, error) {
+	if ttl <= 0 {
+		ttl = s.config.JWT.AccessExpiration
+	}
+
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"sub":           ctx.UserID,
-		"type":          "access",
-		"iat":           now.Unix(),
-		"exp":           now.Add(s.config.JWT.AccessExpiration).Unix(),
-		"jti":           uuid.New().String(),
-		"email":         ctx.Email,
-		"role":          ctx.Role,
-		"is_verified":   ctx.IsVerified,
-		"is_active":     ctx.IsActive,
-		"account_id":    ctx.AccountID,
-		"account_type":  ctx.AccountTypeSlug,
-		"team_id":       ctx.TeamID,
-		"team_type":     ctx.TeamTypeSlug,
+		"sub":          ctx.UserID,
+		"type":         "access",
+		"iat":          now.Unix(),
+		"exp":          now.Add(ttl).Unix(),
+		"jti":          uuid.New().String(),
+		"email":        ctx.Email,
+		"role":         ctx.Role,
+		"is_verified":  ctx.IsVerified,
+		"is_active":    ctx.IsActive,
+		"account_id":   ctx.AccountID,
+		"account_type": ctx.AccountTypeSlug,
+		"team_id":      ctx.TeamID,
+		"team_type":    ctx.TeamTypeSlug,
 	}
 
 	if ctx.DisplayName != "" {
