@@ -172,6 +172,7 @@ func ProvideVideoDependencies(
 	clients videodomain.ClientRegistry,
 	ids *id.UUIDGenerator,
 	clock *systemClock,
+	users videodomain.UserLookup,   // ← NEW
 ) videoService.Dependencies {
 	return videoService.Dependencies{
 		UnitOfWork:  unitOfWork,
@@ -181,10 +182,10 @@ func ProvideVideoDependencies(
 		Clients:     clients,
 		IDs:         ids,
 		Clock:       clock,
-		Attendance: attendance,
+		Attendance:  attendance,
+		Users:       users,   // ← NEW
 	}
 }
-
 
 // ============================================================
 // MISC

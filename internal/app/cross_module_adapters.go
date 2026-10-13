@@ -39,6 +39,11 @@ import (
 	registrationDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 
 	attendanceDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
+
+
+
+	videoadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/video"
+	videoDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/videodomain"
 )
 
 // ---- AUTH ADAPTERS ----
@@ -379,4 +384,12 @@ func NewTeamUserProfileAdapter(
 // adapters/team/account_service_resolver.go.
 func NewAccountServiceHolder() *team.AccountServiceHolder {
 	return team.NewAccountServiceHolder()
+}
+
+// internal/app/cross_module_adapters.go (or wire.go)
+
+// NewVideoUserLookup bridges the auth module's user repository to the
+// video module's UserLookup port.
+func NewVideoUserLookup(repo authDomain.Repository) videoDomain.UserLookup {
+	return videoadapters.NewUserLookupAdapter(repo)
 }

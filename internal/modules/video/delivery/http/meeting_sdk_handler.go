@@ -93,13 +93,16 @@ func (h *MeetingSDKHandler) ZAK(c fiber.Ctx) error {
 	})
 }
 
-
 // JoinInfo handles GET /meetings/:id/join-info?platform=zoom.
 //
 // Returns the credentials a browser needs to join the meeting via
 // the embedded Meeting SDK. The :id path segment is the platform's
 // external meeting ID (the numeric Zoom meeting number), matching
 // what is stored on the schedule as video_meeting_id.
+//
+// The response includes display_name — the participant's name as it
+// should appear in the Zoom meeting. Guests rely on this because
+// their browser session carries no auth slice with a user profile.
 func (h *MeetingSDKHandler) JoinInfo(c fiber.Ctx) error {
 	// --- Request arrival diagnostics -------------------------------
 	// Logged before any validation so we can see exactly what the
@@ -155,14 +158,15 @@ func (h *MeetingSDKHandler) JoinInfo(c fiber.Ctx) error {
 	}
 
 	log.Printf(
-    "[join-info] success meetingNumber=%q role=%d hasZAK=%v passwordLen=%d sdkKeyLen=%d sigLen=%d",
-    info.MeetingNumber,
-    info.Role,
-    info.ZAK != "",
-    len(info.Password),
-    len(info.SDKKey),
-    len(info.Signature),
-)
+		"[join-info] success meetingNumber=%q role=%d hasZAK=%v passwordLen=%d sdkKeyLen=%d sigLen=%d displayName=%q",
+		info.MeetingNumber,
+		info.Role,
+		info.ZAK != "",
+		len(info.Password),
+		len(info.SDKKey),
+		len(info.Signature),
+		info.DisplayName,
+	)
 
 	return response.Success(c, "Join info retrieved", &JoinInfoResponse{
 		MeetingNumber: info.MeetingNumber,
@@ -172,19 +176,6 @@ func (h *MeetingSDKHandler) JoinInfo(c fiber.Ctx) error {
 		WebEndpoint:   info.WebEndpoint,
 		ZAK:           info.ZAK,
 		Role:          info.Role,
+		DisplayName:   info.DisplayName,
 	})
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

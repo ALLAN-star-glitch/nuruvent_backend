@@ -131,13 +131,14 @@ type FetchMeetingZAKCommand struct {
 }
 
 type MeetingJoinInfo struct {
-    MeetingNumber string
-    Signature     string
-    SDKKey        string
-    Password      string // Zoom meeting passcode (plaintext, from create response)
+	MeetingNumber string
+	Signature     string
+	SDKKey        string
+	Password      string
 	WebEndpoint   string
-    ZAK           string // empty for attendees
-    Role          int    // 1 = host, 0 = attendee
+	ZAK           string
+	Role          int
+	DisplayName   string   // ← NEW: participant's display name
 }
 
 

@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
 
@@ -26,6 +27,11 @@ import (
 // meeting's join URL, not the raw human-readable password from the
 // `password` column. The two are different strings and Zoom rejects
 // the raw one with "password are invalid".
+//
+// DisplayName: the participant's name as it should appear in the Zoom
+// meeting. Resolved from the Nuruvent user record via the Users port.
+// Guests depend on this because their browser session has no auth
+// slice — without it, the SDK defaults to "Attendee".
 func (s *videoService) GetMeetingJoinInfo(
 	ctx context.Context,
 	cmd GetMeetingJoinInfoCommand,
@@ -96,6 +102,23 @@ func (s *videoService) GetMeetingJoinInfo(
 		}
 	}
 
+	// Resolve the participant's display name. Best-effort: if the
+	// lookup port isn't wired or the user can't be resolved, the SDK
+	// receives an empty string and falls back to its own default
+	// ("Attendee"). A failed lookup must never fail the join.
+	displayName := ""
+	if s.deps.Users != nil {
+		name, lookupErr := s.deps.Users.GetDisplayName(ctx, cmd.UserID)
+		if lookupErr != nil {
+			log.Printf(
+				"[join-info] user lookup failed user=%s err=%v",
+				cmd.UserID, lookupErr,
+			)
+		} else {
+			displayName = name
+		}
+	}
+
 	info := &MeetingJoinInfo{
 		MeetingNumber: meeting.ExternalID,
 		Signature:     signature,
@@ -103,6 +126,7 @@ func (s *videoService) GetMeetingJoinInfo(
 		Password:      encryptedPwd,
 		WebEndpoint:   webEndpoint,
 		Role:          role,
+		DisplayName:   displayName,
 	}
 
 	if role == 1 {

@@ -150,7 +150,8 @@ func InitializeApp() (*AppDependencies, error) {
 	googleMeetClient := video.ProvideGoogleMeetClient(configConfig)
 	clientRegistry := video.ProvideClientRegistry(zoomClient, googleMeetClient)
 	videoSystemClock := video.NewSystemClock()
-	serviceDependencies := video.ProvideVideoDependencies(postgresUnitOfWork, connectionRepository, oAuthStateRepository, participantRecorder, meetingRepository, clientRegistry, uuidGenerator, videoSystemClock)
+	userLookup := NewVideoUserLookup(repository)
+	serviceDependencies := video.ProvideVideoDependencies(postgresUnitOfWork, connectionRepository, oAuthStateRepository, participantRecorder, meetingRepository, clientRegistry, uuidGenerator, videoSystemClock, userLookup)
 	service15, err := service7.New(serviceDependencies)
 	if err != nil {
 		return nil, err

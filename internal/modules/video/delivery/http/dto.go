@@ -38,16 +38,16 @@ type ConnectResponse struct {
 //
 // Deliberately excludes tokens — FR-V-023.
 type ConnectionResponse struct {
-	ID              string     `json:"id"`
-	Platform        string     `json:"platform"`
-	ExternalUserID  string     `json:"external_user_id"`
-	ExternalEmail   string     `json:"external_email"`
-	ExternalOrgID   string     `json:"external_org_id,omitempty"`
-	Scopes          string     `json:"scopes,omitempty"`
-	ConnectedAt     time.Time  `json:"connected_at"`
-	RevokedAt       *time.Time `json:"revoked_at,omitempty"`
-	IsActive        bool       `json:"is_active"`
-	TokenExpiresAt  time.Time  `json:"token_expires_at"`
+	ID             string     `json:"id"`
+	Platform       string     `json:"platform"`
+	ExternalUserID string     `json:"external_user_id"`
+	ExternalEmail  string     `json:"external_email"`
+	ExternalOrgID  string     `json:"external_org_id,omitempty"`
+	Scopes         string     `json:"scopes,omitempty"`
+	ConnectedAt    time.Time  `json:"connected_at"`
+	RevokedAt      *time.Time `json:"revoked_at,omitempty"`
+	IsActive       bool       `json:"is_active"`
+	TokenExpiresAt time.Time  `json:"token_expires_at"`
 }
 
 // ListConnectionsResponse is the response for GET /connections.
@@ -83,6 +83,10 @@ type JoinInfoResponse struct {
 	WebEndpoint   string `json:"web_endpoint"`
 	ZAK           string `json:"zak,omitempty"`
 	Role          int    `json:"role"`
+
+	// DisplayName is the participant's name as it should appear in
+	// the Zoom meeting. Populated from the Nuruvent user record.
+	// Empty when the user cannot be resolved (e.g. missing
+	// membership) — the SDK then falls back to its own default.
+	DisplayName string `json:"display_name,omitempty"`
 }
-
-

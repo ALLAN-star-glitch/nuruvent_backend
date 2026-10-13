@@ -50,4 +50,10 @@ type Dependencies struct {
 	// Cross-cutting
 	IDs   *id.UUIDGenerator
 	Clock Clock
+
+
+	// Users resolves Nuruvent user display data for the join flow.
+	// Optional: if nil, join-info returns an empty display_name and
+	// the SDK falls back to its own default ("Attendee").
+	Users videodomain.UserLookup   // ← NEW
 }

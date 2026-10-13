@@ -261,6 +261,8 @@ func InitializeApp() (*AppDependencies, error) {
 
 		NewAccountServiceHolder,
 
+		NewVideoUserLookup,
+
 
 
 
