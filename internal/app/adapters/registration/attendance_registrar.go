@@ -5,7 +5,6 @@ package registration
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	attendanceDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
@@ -34,9 +33,6 @@ func (a *AttendanceRegistrarAdapter) RegisterAttendee(
 	ctx context.Context,
 	cmd registrationDomain.RegisterAttendeeForAttendanceCommand,
 ) (string, error) {
-
-	log.Printf("[reg-adapter] forwarding phone=%q email=%q",
-		cmd.Phone, cmd.Email)
 
 	attendee, err := a.attendance.RegisterAttendee(ctx, attendanceService.RegisterAttendeeCommand{
 		External: attendanceDomain.ExternalRef{

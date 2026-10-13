@@ -170,6 +170,7 @@ func clearAuthCookies(c fiber.Ctx, cfg *config.Config) {
 		Secure:   secure,
 		SameSite: "Lax",
 		Path:     "/",
+		Domain:   cfg.App.CookieDomain,   // ← changed
 	})
 	c.Cookie(&fiber.Cookie{
 		Name:     "refresh_token",
@@ -178,7 +179,8 @@ func clearAuthCookies(c fiber.Ctx, cfg *config.Config) {
 		HTTPOnly: true,
 		Secure:   secure,
 		SameSite: "Lax",
-		Path:     "/auth/refresh",
+		Path: "/api/v1/auth/refresh", 
+		Domain:   cfg.App.CookieDomain,   // ← changed
 	})
 }
 

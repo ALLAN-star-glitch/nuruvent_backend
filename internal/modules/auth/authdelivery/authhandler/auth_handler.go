@@ -61,11 +61,11 @@ func (h *AuthHandler) setAccessTokenCookie(c fiber.Ctx, token string) {
 		Secure:   isSecure,
 		SameSite: sameSite,
 		Path:     "/",
-		Domain:   "",
+		Domain:   h.config.App.CookieDomain,   // ← changed
 	})
 
-	log.Printf("🍪 Cookie set: Secure=%v, SameSite=%v, Domain='%s', Environment=%s",
-		isSecure, sameSite, "", h.config.Environment)
+	log.Printf("🍪 Cookie set: Secure=%v, SameSite=%v, Domain=%q, Environment=%s",
+		isSecure, sameSite, h.config.App.CookieDomain, h.config.Environment)
 }
 
 func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
@@ -79,8 +79,8 @@ func (h *AuthHandler) setRefreshTokenCookie(c fiber.Ctx, token string) {
 		HTTPOnly: true,
 		Secure:   isSecure,
 		SameSite: "Lax",
-		Path:     "/api/v1/auth/refresh",   // ← must match the real route prefix
-		Domain:   "",
+		Path:     "/api/v1/auth/refresh",
+		Domain:   h.config.App.CookieDomain,   // ← changed
 	})
 }
 
@@ -98,7 +98,7 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
 		Secure:   isSecure,
 		SameSite: sameSite,
 		Path:     "/",
-		Domain:   "",
+		Domain:   h.config.App.CookieDomain,   // ← changed
 	})
 	c.Cookie(&fiber.Cookie{
 		Name:     "refresh_token",
@@ -108,7 +108,7 @@ func (h *AuthHandler) clearAuthCookies(c fiber.Ctx) {
 		Secure:   isSecure,
 		SameSite: sameSite,
 		Path:     "/api/v1/auth/refresh",
-		Domain:   "",
+		Domain:   h.config.App.CookieDomain,   // ← changed
 	})
 }
 

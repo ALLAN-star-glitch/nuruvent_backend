@@ -40,7 +40,7 @@ func SessionContextMiddleware(resolver SessionAccountResolver) fiber.Handler {
 		}
 
 		if resolver == nil {
-			log.Printf("⚠️  SESSION CTX: resolver not wired for %s", c.Path())
+			log.Printf(" SESSION CTX: resolver not wired for %s", c.Path())
 			c.Locals(authdomain.ContextKeyDomain, authdomain.DomainDeferred)
 			return c.Next()
 		}
@@ -48,16 +48,12 @@ func SessionContextMiddleware(resolver SessionAccountResolver) fiber.Handler {
 		accountID, err := resolver.ResolveSessionAccount(c.Context(), sessionID)
 		if err != nil {
 			if errors.Is(err, attendance.ErrSessionNotFound) {
-				log.Printf("⏸  SESSION CTX: session %s not found, deferring", sessionID)
 				c.Locals(authdomain.ContextKeyDomain, authdomain.DomainDeferred)
 				return c.Next()
 			}
-			log.Printf("❌ SESSION CTX: resolve failed for %s: %v", sessionID, err)
 			return fiber.NewError(fiber.StatusInternalServerError, "failed to resolve session owner")
 		}
-
 		domain := authdomain.AccountDomain(accountID)
-		log.Printf("✅ SESSION CTX: session=%s domain=%s", sessionID, domain)
 		c.Locals(authdomain.ContextKeyDomain, domain)
 		return c.Next()
 	}

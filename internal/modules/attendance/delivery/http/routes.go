@@ -7,33 +7,30 @@ import (
 
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
-// Handlers bundles the HTTP handlers for the attendance module.
 type Handlers struct {
 	Sessions   *SessionHandler
 	Attendance *AttendanceHandler
 	Webhooks   *WebhookHandler
 	Join       *JoinHandler
 
-	// svc is retained so the delivery layer can construct middleware
-	// that needs a specific use case (e.g. SessionContextMiddleware,
-	// which resolves a session's owning account before authz runs).
-	svc service.Service // ← NEW
+	svc service.Service
 }
 
-// NewHandlers constructs all handlers.
 func NewHandlers(
 	svc service.Service,
 	providers map[attendance.SessionProvider]service.ProviderAdapter,
 	authIssuer attendance.AuthSessionIssuer,
+	cfg *config.Config,   // ← new
 ) *Handlers {
 	return &Handlers{
 		Sessions:   NewSessionHandler(svc),
 		Attendance: NewAttendanceHandler(svc),
 		Webhooks:   NewWebhookHandler(svc, providers),
-		Join:       NewJoinHandler(svc, authIssuer),
-		svc:        svc, // ← NEW
+		Join:       NewJoinHandler(svc, authIssuer, cfg),   // ← pass cfg
+		svc:        svc,
 	}
 }
 

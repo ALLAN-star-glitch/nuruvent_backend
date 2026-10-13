@@ -666,8 +666,8 @@ func (s *eventService) ResolveEventAccount(
 		return "", domain.ErrEventNotFound
 	}
 
-	event, err := s.repo.GetEventByID(ctx, eventID)
-	if err != nil {
+	event, err := s.repo.GetEventByID(ctx, eventID) // Get event by id - expects an event or an error
+	if err != nil { 
 		return "", err
 	}
 	if event == nil {

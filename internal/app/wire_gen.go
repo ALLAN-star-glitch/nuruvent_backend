@@ -197,7 +197,7 @@ func InitializeApp() (*AppDependencies, error) {
 	handler3 := http2.NewHandler(service18)
 	orderHandler := http2.NewOrderHandler(service18)
 	authSessionIssuer := NewAttendanceAuthSessionIssuer(service11)
-	handlers := http3.NewHandlers(service14, v2, authSessionIssuer)
+	handlers := http3.NewHandlers(service14, v2, authSessionIssuer, configConfig)
 	httpHandlers := http4.NewHandlers(service15)
 	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service11, tokenService, service13, serviceService, service16, service12, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker, httpHandler, service17, handler3, orderHandler, service18, handlers, service14, httpHandlers, service15, eventsServiceHolder, accountServiceHolder)
 	return appDependencies, nil

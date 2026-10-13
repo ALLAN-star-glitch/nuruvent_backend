@@ -3,7 +3,6 @@
 package http
 
 import (
-
 	"log"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
 // JoinHandler handles the public join-link redemption endpoint.
@@ -19,16 +19,23 @@ import (
 // No authentication — the token is the credential. But when the token
 // resolves to a user, we issue a short-lived session cookie so guests
 // land on the meeting page authenticated (required for the Zoom SDK).
+// JoinHandler handles the public join-link redemption endpoint.
+//
+// No authentication — the token is the credential. But when the token
+// resolves to a user, we issue a short-lived session cookie so guests
+// land on the meeting page authenticated (required for the Zoom SDK).
 type JoinHandler struct {
-	svc  service.Service
-	auth attendance.AuthSessionIssuer
+	svc    service.Service
+	auth   attendance.AuthSessionIssuer
+	config *config.Config
 }
 
 func NewJoinHandler(
 	svc service.Service,
 	auth attendance.AuthSessionIssuer,
+	cfg *config.Config,
 ) *JoinHandler {
-	return &JoinHandler{svc: svc, auth: auth}
+	return &JoinHandler{svc: svc, auth: auth, config: cfg}
 }
 
 // RedeemJoinToken handles GET /join/:token.
@@ -79,7 +86,7 @@ func (h *JoinHandler) RedeemJoinToken(c fiber.Ctx) error {
 			log.Printf("[join] issue guest session failed user=%s err=%v",
 				result.UserID, err)
 		} else {
-			setSessionCookie(c, token, expiresAt)
+			h.setSessionCookie(c, token, expiresAt)
 		}
 	}
 
@@ -101,7 +108,7 @@ func (h *JoinHandler) RedeemJoinToken(c fiber.Ctx) error {
 //
 // Domain is left empty — the cookie is scoped to the exact host that
 // served the join link. This matches what the auth handler does.
-func setSessionCookie(c fiber.Ctx, token string, expiresAt time.Time) {
+func (h *JoinHandler) setSessionCookie(c fiber.Ctx, token string, expiresAt time.Time) {
 	isSecure := c.Protocol() == "https" ||
 		c.Get("X-Forwarded-Proto") == "https"
 
@@ -113,7 +120,7 @@ func setSessionCookie(c fiber.Ctx, token string, expiresAt time.Time) {
 		Secure:   isSecure,
 		SameSite: "Lax",
 		Path:     "/",
-		Domain:   "",
+		Domain:   h.config.App.CookieDomain,   // ← critical for cross-subdomain
 	})
 }
 

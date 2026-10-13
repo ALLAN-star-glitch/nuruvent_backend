@@ -179,6 +179,18 @@ type AppConfig struct {
 	// PublicURL is the base URL of the public-facing app. Used to
 	// build join links, confirmation links, etc.
 	PublicURL string
+
+	// CookieDomain is the domain scope for auth cookies.
+	//
+	// Leave empty in local dev (host-only cookies for localhost).
+	// In production, set to ".nuruvent.com" so the cookie is sent to
+	// every subdomain: nuruvent.com, www.nuruvent.com, api.nuruvent.com.
+	//
+	// Without this, cookies set on one subdomain are not visible to
+	// the others — which breaks the guest join flow, where the token
+	// is redeemed on nuruvent.com but the meeting page runs on
+	// www.nuruvent.com and calls api.nuruvent.com.
+	CookieDomain string
 }
 
 // ============================================================
@@ -340,7 +352,8 @@ func Load() *Config {
 			},
 		},
 		App: AppConfig{
-			PublicURL: getEnv("APP_PUBLIC_URL", "http://localhost:3000"),
+			PublicURL:    getEnv("APP_PUBLIC_URL", "http://localhost:3000"),
+			CookieDomain: getEnv("APP_COOKIE_DOMAIN", ""),
 		},
 		Supabase: SupabaseConfig{
 			URL:               getEnv("SUPABASE_URL", ""),
