@@ -157,17 +157,6 @@ func (h *MeetingSDKHandler) JoinInfo(c fiber.Ctx) error {
 		return mapDomainError(c, err)
 	}
 
-	log.Printf(
-		"[join-info] success meetingNumber=%q role=%d hasZAK=%v passwordLen=%d sdkKeyLen=%d sigLen=%d displayName=%q",
-		info.MeetingNumber,
-		info.Role,
-		info.ZAK != "",
-		len(info.Password),
-		len(info.SDKKey),
-		len(info.Signature),
-		info.DisplayName,
-		info.Email,
-	)
 
 	return response.Success(c, "Join info retrieved", &JoinInfoResponse{
 		MeetingNumber: info.MeetingNumber,
