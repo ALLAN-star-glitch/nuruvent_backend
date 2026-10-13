@@ -83,10 +83,6 @@ type JoinInfoResponse struct {
 	WebEndpoint   string `json:"web_endpoint"`
 	ZAK           string `json:"zak,omitempty"`
 	Role          int    `json:"role"`
-
-	// DisplayName is the participant's name as it should appear in
-	// the Zoom meeting. Populated from the Nuruvent user record.
-	// Empty when the user cannot be resolved (e.g. missing
-	// membership) — the SDK then falls back to its own default.
-	DisplayName string `json:"display_name,omitempty"`
+	DisplayName   string `json:"display_name,omitempty"`
+	Email         string `json:"email,omitempty"`   // ← NEW
 }

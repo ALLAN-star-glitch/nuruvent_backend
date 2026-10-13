@@ -166,6 +166,7 @@ func (h *MeetingSDKHandler) JoinInfo(c fiber.Ctx) error {
 		len(info.SDKKey),
 		len(info.Signature),
 		info.DisplayName,
+		info.Email,
 	)
 
 	return response.Success(c, "Join info retrieved", &JoinInfoResponse{
@@ -177,5 +178,6 @@ func (h *MeetingSDKHandler) JoinInfo(c fiber.Ctx) error {
 		ZAK:           info.ZAK,
 		Role:          info.Role,
 		DisplayName:   info.DisplayName,
+		Email:         info.Email,
 	})
 }

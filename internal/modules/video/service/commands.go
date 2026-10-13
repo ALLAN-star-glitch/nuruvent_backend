@@ -139,6 +139,7 @@ type MeetingJoinInfo struct {
 	ZAK           string
 	Role          int
 	DisplayName   string   // ← NEW: participant's display name
+	Email 		string
 }
 
 

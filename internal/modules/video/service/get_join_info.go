@@ -28,10 +28,15 @@ import (
 // `password` column. The two are different strings and Zoom rejects
 // the raw one with "password are invalid".
 //
-// DisplayName: the participant's name as it should appear in the Zoom
-// meeting. Resolved from the Nuruvent user record via the Users port.
-// Guests depend on this because their browser session has no auth
-// slice — without it, the SDK defaults to "Attendee".
+// DisplayName and Email: resolved from the Nuruvent user record via
+// the Users port. Both are needed downstream:
+//
+//   - DisplayName → the Zoom SDK's userName parameter. Guests depend
+//     on this because their browser session has no auth slice.
+//   - Email → used as userEmail and customerKey in the SDK join call.
+//     Zoom echoes the email back in the participant.joined webhook,
+//     which the attendance module matches against attendee.Email to
+//     record the join. Without it, guest attendance is never recorded.
 func (s *videoService) GetMeetingJoinInfo(
 	ctx context.Context,
 	cmd GetMeetingJoinInfoCommand,
@@ -102,20 +107,29 @@ func (s *videoService) GetMeetingJoinInfo(
 		}
 	}
 
-	// Resolve the participant's display name. Best-effort: if the
-	// lookup port isn't wired or the user can't be resolved, the SDK
-	// receives an empty string and falls back to its own default
-	// ("Attendee"). A failed lookup must never fail the join.
+	// Resolve the participant's display name and email. Best-effort:
+	// if the lookup port isn't wired or the user can't be resolved,
+	// the SDK receives empty strings and falls back to its own
+	// defaults. A failed lookup must never fail the join.
 	displayName := ""
+	email := ""
 	if s.deps.Users != nil {
-		name, lookupErr := s.deps.Users.GetDisplayName(ctx, cmd.UserID)
-		if lookupErr != nil {
+		if name, lookupErr := s.deps.Users.GetDisplayName(ctx, cmd.UserID); lookupErr != nil {
 			log.Printf(
-				"[join-info] user lookup failed user=%s err=%v",
+				"[join-info] display name lookup failed user=%s err=%v",
 				cmd.UserID, lookupErr,
 			)
 		} else {
 			displayName = name
+		}
+
+		if addr, lookupErr := s.deps.Users.GetEmail(ctx, cmd.UserID); lookupErr != nil {
+			log.Printf(
+				"[join-info] email lookup failed user=%s err=%v",
+				cmd.UserID, lookupErr,
+			)
+		} else {
+			email = addr
 		}
 	}
 
@@ -127,6 +141,7 @@ func (s *videoService) GetMeetingJoinInfo(
 		WebEndpoint:   webEndpoint,
 		Role:          role,
 		DisplayName:   displayName,
+		Email:         email,
 	}
 
 	if role == 1 {

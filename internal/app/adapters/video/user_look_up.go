@@ -57,5 +57,20 @@ func (a *UserLookupAdapter) GetDisplayName(
 	return "", nil
 }
 
+
+func (a *UserLookupAdapter) GetEmail(ctx context.Context, userID string) (string, error) {
+    if userID == "" {
+        return "", nil
+    }
+    user, err := a.repo.GetUserByID(ctx, userID)
+    if err != nil {
+        return "", err
+    }
+    if user == nil {
+        return "", nil
+    }
+    return strings.TrimSpace(user.Email), nil
+}
+
 // Compile-time assertion.
 var _ videoDomain.UserLookup = (*UserLookupAdapter)(nil)

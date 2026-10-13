@@ -18,4 +18,8 @@ type UserLookup interface {
 	// doesn't exist — callers should then fall back to a generic
 	// label.
 	GetDisplayName(ctx context.Context, userID string) (string, error)
+
+
+
+	GetEmail(ctx context.Context, userID string) (string, error)
 }
