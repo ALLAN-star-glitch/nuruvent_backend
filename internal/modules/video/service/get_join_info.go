@@ -12,28 +12,20 @@ import (
 )
 
 // GetMeetingJoinInfo assembles the credentials a browser needs to
-// join a meeting via the embedded Meeting SDK.
+// join a meeting via the embedded Meeting SDK (Client View).
 //
 // The meeting is looked up by its platform-side external ID (the
 // numeric Zoom meeting number), not by Nuruvent's UUID. This is
 // because the schedule stores the platform ID, not the UUID.
 //
-// The caller's role is derived from the meeting's UserID: the
-// meeting owner joins as host (role 1), everyone else joins as
-// attendee (role 0). Hosts receive a ZAK in addition to the
+// Role: the meeting owner joins as host (role 1), everyone else joins
+// as attendee (role 0). Hosts receive a ZAK in addition to the
 // signature; attendees receive only the signature.
 //
-// Password handling: Zoom's Meeting SDK 6.x expects the *raw*
-// meeting password (the value shown in the Zoom web client as the
-// user-typed password), not the encrypted pwd= value from the join
-// URL. The DB column `password` stores the raw value.
-//
-// (The encrypted pwd= value is only used by Zoom's older SDKs and
-// by the SDK Embed product. If Zoom ever changes this for 6.x, the
-// extraction from join_url is here for reference:
-//
-//	if p := u.Query().Get("pwd"); p != "" { password = p }
-// )
+// Password: Client View requires the *encrypted* pwd= value from the
+// meeting's join URL, not the raw human-readable password from the
+// `password` column. The two are different strings and Zoom rejects
+// the raw one with "password are invalid".
 func (s *videoService) GetMeetingJoinInfo(
 	ctx context.Context,
 	cmd GetMeetingJoinInfoCommand,
@@ -88,12 +80,19 @@ func (s *videoService) GetMeetingJoinInfo(
 		return nil, fmt.Errorf("get join info: sign: %w", err)
 	}
 
-	// Derive the region's web endpoint from the join URL host so the
-	// SDK connects to the correct Zoom cluster (e.g. us04web.zoom.us).
+	// The join URL carries the encrypted password as ?pwd=... and the
+	// region's web endpoint host. Client View needs the encrypted
+	// password. Fall back to the raw password if the URL is missing —
+	// Zoom will reject it with a specific error, which is easier to
+	// debug than a silent failure.
 	webEndpoint := ""
+	encryptedPwd := meeting.Password
 	if meeting.JoinURL != "" {
 		if u, err := url.Parse(meeting.JoinURL); err == nil {
 			webEndpoint = u.Host
+			if p := u.Query().Get("pwd"); p != "" {
+				encryptedPwd = p
+			}
 		}
 	}
 
@@ -101,7 +100,7 @@ func (s *videoService) GetMeetingJoinInfo(
 		MeetingNumber: meeting.ExternalID,
 		Signature:     signature,
 		SDKKey:        signer.ClientID(),
-		Password:      meeting.Password, // raw password — what SDK 6.x expects
+		Password:      encryptedPwd,
 		WebEndpoint:   webEndpoint,
 		Role:          role,
 	}
