@@ -23,17 +23,17 @@ import (
 // attendee (role 0). Hosts receive a ZAK in addition to the
 // signature; attendees receive only the signature.
 //
-// Password handling: Zoom stores two different passwords per meeting.
+// Password handling: Zoom's Meeting SDK 6.x expects the *raw*
+// meeting password (the value shown in the Zoom web client as the
+// user-typed password), not the encrypted pwd= value from the join
+// URL. The DB column `password` stores the raw value.
 //
-//   - The "raw" password (e.g. "Nbr53Q") is the one users type by hand
-//     in the Zoom web/app client.
-//   - The "encrypted" password (e.g. "NPwSbXKzRXBiQDPhSyvCpAEHXJDaI3.1")
-//     is embedded in the meeting's join URL as the pwd= query param, and
-//     is what the Meeting SDK expects.
+// (The encrypted pwd= value is only used by Zoom's older SDKs and
+// by the SDK Embed product. If Zoom ever changes this for 6.x, the
+// extraction from join_url is here for reference:
 //
-// The DB stores the raw password. The encrypted one is extracted from
-// the join URL at read time. Sending the raw password to the SDK makes
-// Zoom reject the join with "password are invalid".
+//	if p := u.Query().Get("pwd"); p != "" { password = p }
+// )
 func (s *videoService) GetMeetingJoinInfo(
 	ctx context.Context,
 	cmd GetMeetingJoinInfoCommand,
@@ -88,19 +88,12 @@ func (s *videoService) GetMeetingJoinInfo(
 		return nil, fmt.Errorf("get join info: sign: %w", err)
 	}
 
-	// The join URL carries the encrypted password as ?pwd=... and the
-	// region's web endpoint host. Extract both here so the SDK gets
-	// exactly what it needs. Fall back to the raw password if the
-	// join URL is missing or malformed — Zoom will then reject with a
-	// specific "password invalid" error rather than a silent timeout.
+	// Derive the region's web endpoint from the join URL host so the
+	// SDK connects to the correct Zoom cluster (e.g. us04web.zoom.us).
 	webEndpoint := ""
-	encryptedPwd := meeting.Password
 	if meeting.JoinURL != "" {
 		if u, err := url.Parse(meeting.JoinURL); err == nil {
 			webEndpoint = u.Host
-			if p := u.Query().Get("pwd"); p != "" {
-				encryptedPwd = p
-			}
 		}
 	}
 
@@ -108,7 +101,7 @@ func (s *videoService) GetMeetingJoinInfo(
 		MeetingNumber: meeting.ExternalID,
 		Signature:     signature,
 		SDKKey:        signer.ClientID(),
-		Password:      encryptedPwd,
+		Password:      meeting.Password, // raw password — what SDK 6.x expects
 		WebEndpoint:   webEndpoint,
 		Role:          role,
 	}
