@@ -119,10 +119,11 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 
 	// --- Base query ---
 	base := r.db.WithContext(ctx).
-		Table("attendee_rollup_statuses AS ars").
-		Joins("JOIN attendees a ON a.id = ars.attendee_id AND a.deleted_at IS NULL").
-		Where("ars.external_type = ? AND ars.external_id = ?",
-			"event", q.EventID)
+    Table("attendee_rollup_statuses AS ars").
+    Joins("JOIN attendees a ON a.id = ars.attendee_id AND a.deleted_at IS NULL").
+    Where("ars.external_type = ? AND ars.external_id = ?",
+        "event", q.EventID).
+    Where("a.is_host = false")
 
 	// --- Search filter ---
 	if s := strings.TrimSpace(q.Search); s != "" {
@@ -320,14 +321,15 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 
 	// --- Base query ---
 	base := r.db.WithContext(ctx).
-		Table("attendee_rollup_statuses AS ars").
-		Joins("JOIN attendees a ON a.id = ars.attendee_id AND a.deleted_at IS NULL").
-		Joins("JOIN events e ON e.id = ars.external_id AND e.deleted_at IS NULL").
-		Where("ars.external_type = ?", "event").
-		Where(
-			"e.team_id IN (SELECT t.id FROM teams t WHERE t.account_id IN ? AND t.deleted_at IS NULL)",
-			q.AccountIDs,
-		)
+    Table("attendee_rollup_statuses AS ars").
+    Joins("JOIN attendees a ON a.id = ars.attendee_id AND a.deleted_at IS NULL").
+    Joins("JOIN events e ON e.id = ars.external_id AND e.deleted_at IS NULL").
+    Where("ars.external_type = ?", "event").
+    Where("a.is_host = false").
+    Where(
+        "e.team_id IN (SELECT t.id FROM teams t WHERE t.account_id IN ? AND t.deleted_at IS NULL)",
+        q.AccountIDs,
+    )
 
 	// --- Event filter ---
 	// --- Team filter (event IDs resolved by the service) ---

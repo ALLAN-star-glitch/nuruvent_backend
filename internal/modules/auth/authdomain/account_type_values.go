@@ -92,7 +92,7 @@ func GetAccountTypeInfo(accountType AccountTypeValue) (AccountTypeInfo, bool) {
 // AllAccountTypeInfos returns all type infos
 func AllAccountTypeInfos() []AccountTypeInfo {
 	infos := make([]AccountTypeInfo, 0, len(accountTypeRegistry))
-	for _, info := range accountTypeRegistry {
+	for _, info := range accountTypeRegistry { // itereate over the registry (map) to return the values(infos) of the map
 		infos = append(infos, info)
 	}
 	return infos
@@ -101,10 +101,10 @@ func AllAccountTypeInfos() []AccountTypeInfo {
 // SelfServiceAccountTypeInfos returns only the type infos a client may
 // select during self-service signup. Invited is excluded.
 func SelfServiceAccountTypeInfos() []AccountTypeInfo {
-	infos := make([]AccountTypeInfo, 0, len(types.SelfServiceAccountTypes))
-	for _, t := range types.SelfServiceAccountTypes {
+	infos := make([]AccountTypeInfo, 0, len(types.SelfServiceAccountTypes)) // an empty slice with a capacity of self service account types length. 
+	for _, t := range types.SelfServiceAccountTypes { // iterate over the slice and for every value of the slice, use it as key to get the value of the account type registry  - ie., to get the info of the respective self service account type
 		if info, ok := accountTypeRegistry[t]; ok {
-			infos = append(infos, info)
+			infos = append(infos, info) 
 		}
 	}
 	return infos

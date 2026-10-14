@@ -30,7 +30,7 @@ func (s *service) StoreOTP(ctx context.Context, email, otp, purpose string) erro
 // GetOTP retrieves an OTP by email and purpose
 func (s *service) GetOTP(ctx context.Context, email, purpose string) (string, error) {
 	key := s.getOTPKey(email, purpose)
-	otp, exists, err := s.redisClient.Get(ctx, key)
+	otp, exists, err := s.redisClient.Get(ctx, key) // Get otp from redis - result is: otp, boolean(if otp exists or not), and err
 	if err != nil {
 		return "", err
 	}
@@ -121,12 +121,12 @@ func (s *service) getOTPExpiryString(purpose string) string {
 // ============================================================
 
 // StoreUserData stores temporary user data during registration
-func (s *service) StoreUserData(ctx context.Context, email string, data map[string]interface{}) error {
+func (s *service) StoreUserData(ctx context.Context, email string, data map[string]any) error {
 	key := "user:data:" + email
 	if err := s.redisClient.HSet(ctx, key, data); err != nil {
 		return err
 	}
-	return s.redisClient.Expire(ctx, key, 1*time.Hour)
+	return s.redisClient.Expire(ctx, key, 1*time.Hour) // set the ttl for the key to 1 hour
 }
 
 // GetUserData retrieves temporary user data during registration
@@ -162,7 +162,7 @@ func (s *service) StoreResetData(ctx context.Context, email, otp, newPassword st
 	if err := s.redisClient.HSet(ctx, key, data); err != nil {
 		return err
 	}
-	return s.redisClient.Expire(ctx, key, 15*time.Minute)
+	return s.redisClient.Expire(ctx, key, 15*time.Minute) // set ttl to 15 minutes
 }
 
 // GetResetData retrieves password reset data

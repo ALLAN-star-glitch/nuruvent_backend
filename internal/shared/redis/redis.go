@@ -13,7 +13,7 @@ import (
 
 // ParseURL is a wrapper around redis.ParseURL
 func ParseURL(url string) (*redis.Options, error) {
-    return redis.ParseURL(url)
+    return redis.ParseURL(url) // return redis options to connect to redis
 }
 
 // Client wraps the Redis client with context support
@@ -88,7 +88,7 @@ func (c *Client) Delete(ctx context.Context, key string) error {
 }
 
 // HSet stores a hash
-func (c *Client) HSet(ctx context.Context, key string, values map[string]interface{}) error {
+func (c *Client) HSet(ctx context.Context, key string, values map[string]any) error {
     return c.client.HSet(ctx, key, values).Err()
 }
 

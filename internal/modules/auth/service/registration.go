@@ -68,6 +68,9 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 			return fmt.Errorf("user with email '%s' already exists. A new OTP has been sent to your email", req.Email)
 		}
 
+
+		// if user is inactive 
+
 		if err := s.repo.ReactivateUser(ctx, existingUser.ID); err != nil {
 			return fmt.Errorf("failed to reactivate user: %w", err)
 		}
