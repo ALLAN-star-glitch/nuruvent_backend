@@ -337,6 +337,11 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 		base = base.Where("ars.external_id IN ?", q.EventIDs)
 	}
 
+		// --- Single-event filter (from the Event dropdown) ---
+	if q.EventID != "" {
+		base = base.Where("ars.external_id = ?", q.EventID)
+	}
+
 	// --- Search ---
 	if s := strings.TrimSpace(q.Search); s != "" {
 		like := "%" + strings.ToLower(s) + "%"
