@@ -79,6 +79,19 @@ func mapDomainError(c fiber.Ctx, err error) error {
 		errors.Is(err, videodomain.ErrCapabilityMissing):
 		return response.NotImplemented(c, err.Error(), nil)
 
+	// ---- 403 Forbidden ----
+	// The stored credential lacks a permission the platform requires.
+	// Distinct from ErrForbidden (caller lacks access) and from
+	// ErrPlatformRejected (platform understood but declined). This one
+	// has a specific remedy: the user reconnects the platform.
+	case errors.Is(err, videodomain.ErrConnectionMissingScopes):
+		return response.Forbidden(c,
+			"Your video platform connection is missing a required permission. Reconnect the platform to continue.",
+			fiber.Map{
+				"reason":   "missing_scopes",
+            "action":   "reconnect",
+        })
+
 	default:
 		return response.InternalError(c, "Something went wrong", err)
 	}

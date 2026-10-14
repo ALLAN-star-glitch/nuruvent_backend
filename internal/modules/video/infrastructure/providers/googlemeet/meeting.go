@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -70,8 +71,8 @@ func (c *Client) CreateMeeting(
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, mapHTTPError(resp)
-	}
+    return nil, mapGoogleMeetCreateError(resp)
+}
 
 	var sr spaceResponse
 	if err := json.NewDecoder(resp.Body).Decode(&sr); err != nil {
@@ -241,4 +242,33 @@ func toMeetingDomain(
 		CreatedAt:  now,
 		UpdatedAt:  now,
 	}, nil
+}
+
+// mapGoogleMeetCreateError inspects a non-2xx response from
+// spaces.create and returns a specific domain error when the
+// failure is scope-related.
+//
+// Google returns 403 PERMISSION_DENIED both when the token lacks
+// the meetings.space.created scope and when the Meet API is not
+// enabled in the Cloud project. In either case the host must
+// reconnect Google — the fix is not something the server can
+// perform.
+//
+// The helper preserves the original body for mapHTTPError by
+// re-wrapping the reader, so callers that fall through still see
+// the platform's message.
+func mapGoogleMeetCreateError(resp *http.Response) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 8*1024))
+	resp.Body.Close()
+	resp.Body = io.NopCloser(strings.NewReader(string(body)))
+
+	if resp.StatusCode == http.StatusForbidden {
+		text := string(body)
+		if strings.Contains(text, "insufficient authentication scopes") ||
+			strings.Contains(text, "PERMISSION_DENIED") {
+			return videodomain.ErrConnectionMissingScopes
+		}
+	}
+
+	return mapHTTPError(resp)
 }

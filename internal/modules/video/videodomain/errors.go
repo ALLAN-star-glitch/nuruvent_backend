@@ -24,6 +24,9 @@ var (
 	ErrOAuthStateNotFound = errors.New("oauth state not found")
 )
 
+
+
+
 // ============================================================
 // LIFECYCLE
 // ============================================================
@@ -48,6 +51,19 @@ var (
 	// ErrRefreshTokenExpired is returned when the provider rejects a
 	// refresh attempt. The host must reconnect.
 	ErrRefreshTokenExpired = errors.New("refresh token expired; reconnect required")
+
+
+
+	// ErrConnectionMissingScopes is returned when the stored OAuth
+// token lacks a scope the platform requires to complete the
+// request. The host must reconnect the platform to grant the
+// missing permission.
+//
+// Google Meet is the primary case: a connection created before a
+// scope was added carries an under-scoped token, and every
+// spaces.create call fails with PERMISSION_DENIED until the host
+// reconnects.
+ErrConnectionMissingScopes = errors.New("connection is missing required permissions")
 )
 
 // ============================================================
