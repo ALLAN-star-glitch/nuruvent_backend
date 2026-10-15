@@ -100,6 +100,18 @@ type Service interface {
 		ctx context.Context,
 		userID, templateID string,
 	) error
+
+
+		// DownloadURL returns a URL the caller can use to download the
+	// certificate PDF. Renders the PDF on first call; returns the
+	// cached URL afterwards.
+	//
+	// Authorized for the issuing account's admins and for the
+	// certificate's own recipient.
+	DownloadURL(
+		ctx context.Context,
+		userID, certificateID string,
+	) (string, error)
 }
 
 // ============================================================

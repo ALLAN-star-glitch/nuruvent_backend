@@ -59,6 +59,7 @@ func RegisterRoutes(
 	r.Post("/certificates", authMiddleware, authzMiddleware, h.Handler.Issue)
 	r.Post("/certificates/bulk", authMiddleware, authzMiddleware, h.Handler.IssueBulk)
 	r.Post("/certificates/:id/revoke", authMiddleware, authzMiddleware, h.Handler.RevokeByUser)
+	r.Get("/certificates/:id/download", authMiddleware, authzMiddleware, h.Handler.Download)
 
 	// ---- Templates (auth + authz) ----
 	r.Post("/certificate-templates", authMiddleware, authzMiddleware, h.Handler.CreateTemplate)

@@ -18,8 +18,14 @@ type Dependencies struct {
 
 	Authz domain.AuthorizationChecker
 
-	// Reserved for later phases:
-	// Storage      domain.ObjectStorage
-	// PDF          domain.PDFGenerator
+	// Phase 2: PDF rendering + storage
+	PDF     domain.PDFGenerator
+	Storage domain.ObjectStorage
+
+	// VerifyBaseURL is the public base URL used to build the QR-code
+	// verification link. Comes from cfg.App.PublicURL.
+	VerifyBaseURL string
+
+	// Notification is reserved for Phase 4.
 	// Notification domain.NotificationSender
 }

@@ -178,6 +178,30 @@ func (h *Handler) ListMine(c fiber.Ctx) error {
 	return response.Success(c, "Certificates retrieved", toCertificateListResponse(certs))
 }
 
+
+// Download handles GET /certificates/:id/download.
+//
+// Returns a 302 redirect to the certificate's PDF URL. Triggers
+// rendering on first call.
+func (h *Handler) Download(c fiber.Ctx) error {
+	userID, err := handlerhelper.GetUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "Authentication required", nil)
+	}
+
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c, "Certificate ID is required", nil)
+	}
+
+	url, err := h.svc.DownloadURL(c.Context(), userID, id)
+	if err != nil {
+		return respondClassifiedError(c, "download certificate", err)
+	}
+
+	return c.Redirect().To(url)
+}
+
 // ============================================================
 // HELPERS
 // ============================================================

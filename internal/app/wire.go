@@ -284,10 +284,13 @@ func InitializeApp() (*AppDependencies, error) {
 				// MODULES (add certificate.ProviderSet)
 		certificate.ProviderSet,
 
-		// CROSS-MODULE ADAPTERS - CERTIFICATE
-		NewCertificatePermissionAdapter,
-		//NewCertificateStorageAdapter,
-		NewEventsCertificateIssuerAdapter,
+		// ============================================================
+	// CROSS-MODULE ADAPTERS - CERTIFICATE
+	// ============================================================
+	NewCertificatePermissionAdapter,
+	NewCertificateStorageAdapter,
+	NewCertificatePDFAdapter,
+	NewEventsCertificateIssuerAdapter,
 
 
 

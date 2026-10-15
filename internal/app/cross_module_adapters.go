@@ -433,3 +433,10 @@ func NewEventsCertificateIssuerAdapter(
 ) eventsDomain.CertificateIssuer {
 	return events.NewCertificateIssuerAdapter(certSvc)
 }
+
+
+// NewCertificatePDFAdapter constructs the PDF adapter for the
+// certificate module.
+func NewCertificatePDFAdapter() certificateDomain.PDFGenerator {
+	return certificateadapters.NewPDFAdapter()
+}

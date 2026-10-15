@@ -12,6 +12,7 @@ import (
 	certificateVC "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/infrastructure/verificationcode"
 	certificateService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 	certificateHTTP "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/delivery/http"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
 // ProviderSet is the certificate module's wire provider set.
@@ -44,6 +45,7 @@ var ProviderSet = wire.NewSet(
 )
 
 // ProvideDependencies assembles the service.Dependencies bundle.
+// ProvideDependencies assembles the service.Dependencies bundle.
 func ProvideDependencies(
 	certs certificateDomain.CertificateRepository,
 	templates certificateDomain.TemplateRepository,
@@ -51,13 +53,19 @@ func ProvideDependencies(
 	codes certificateDomain.VerificationCodeGenerator,
 	clock certificateDomain.Clock,
 	authz certificateDomain.AuthorizationChecker,
+	pdf certificateDomain.PDFGenerator,
+	storage certificateDomain.ObjectStorage,
+	cfg *config.Config,
 ) certificateService.Dependencies {
 	return certificateService.Dependencies{
-		Certificates: certs,
-		Templates:    templates,
-		IDs:          ids,
-		Codes:        codes,
-		Clock:        clock,
-		Authz:        authz,
+		Certificates:  certs,
+		Templates:     templates,
+		IDs:           ids,
+		Codes:         codes,
+		Clock:         clock,
+		Authz:         authz,
+		PDF:           pdf,
+		Storage:       storage,
+		VerifyBaseURL: cfg.App.PublicURL,
 	}
 }
