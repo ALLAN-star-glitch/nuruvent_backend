@@ -54,11 +54,6 @@ var (
 	ErrEventTicketRequired     = errors.New("at least one ticket is required")
 	ErrInvalidCapacity         = errors.New("invalid capacity")
 
-	// ============================================================
-	// Certificates
-	// ============================================================
-	ErrInvalidCertificateTemplate = errors.New("invalid certificate template")
-	ErrInvalidCertificateType     = errors.New("invalid certificate type")
 
 	// ============================================================
 	// Categories / materials / tickets

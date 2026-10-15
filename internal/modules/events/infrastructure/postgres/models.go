@@ -457,26 +457,6 @@ func (RecurrencePatternModel) TableName() string {
 	return "recurrence_patterns"
 }
 
-// ============================================================
-// CERTIFICATE TEMPLATE MODEL
-// ============================================================
-
-type CertificateTemplateModel struct {
-	ID          string `gorm:"primaryKey;default:gen_random_uuid()"`
-	Slug        string `gorm:"uniqueIndex;not null"`
-	Name        string `gorm:"not null"`
-	DisplayName string
-	Description string
-	PreviewURL  string
-	IsActive    bool `gorm:"default:true"`
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   gorm.DeletedAt `gorm:"index"`
-}
-
-func (CertificateTemplateModel) TableName() string {
-	return "certificate_templates"
-}
 
 // ============================================================
 // CERTIFICATE TYPE MODEL

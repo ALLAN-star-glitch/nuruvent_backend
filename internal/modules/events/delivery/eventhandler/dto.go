@@ -712,3 +712,46 @@ type GenerateEventDraftRequest struct {
 type ReorderSchedulesRequest struct {
 	OrderedIDs []string `json:"ordered_ids" binding:"required,min=1,dive,uuid"`
 }
+
+// ============================================================
+// ISSUE CERTIFICATES
+// ============================================================
+
+// IssueCertificatesRequest is the body for
+// POST /events/:id/certificates/issue.
+//
+// The caller supplies the recipient list. Later phases will allow
+// omitting it so the server derives qualified attendees from
+// attendance data.
+type IssueCertificatesRequest struct {
+	// Recipients who should receive certificates. Must be non-empty.
+	Recipients []IssueCertificateRecipientDTO `json:"recipients" binding:"required,min=1,dive"`
+
+	// TemplateID is optional. Empty means use the account's default
+	// template, or a system template if none is set.
+	TemplateID string `json:"template_id,omitempty"`
+
+	// IssuerName is the organization name printed on the certificate.
+	// Optional; defaults to "Nuruvent" if empty.
+	IssuerName string `json:"issuer_name,omitempty"`
+
+	// EventDuration is a human-readable duration string (e.g. "2 hours")
+	// rendered onto the certificate. Optional.
+	EventDuration string `json:"event_duration,omitempty"`
+}
+
+// IssueCertificateRecipientDTO is one recipient in the request.
+type IssueCertificateRecipientDTO struct {
+	UserID      string `json:"user_id,omitempty"`
+	Name        string `json:"name" binding:"required"`
+	Email       string `json:"email" binding:"required,email"`
+	CompletedAt string `json:"completed_at" binding:"required"` // RFC3339
+}
+
+// IssueCertificatesResponse summarizes the issuance.
+type IssueCertificatesResponse struct {
+	Issued int      `json:"issued"`
+	Reused int      `json:"reused"`
+	Failed int      `json:"failed"`
+	Errors []string `json:"errors,omitempty"`
+}

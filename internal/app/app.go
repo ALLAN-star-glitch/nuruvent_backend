@@ -117,6 +117,7 @@ func (app *App) SetupRoutes() {
 		app.OrderHandler,
 		app.AttendanceHandler,
 		app.VideoHandler,
+		app.CertificateHandler,
 	)
 	log.Println("Routes registered successfully")
 }

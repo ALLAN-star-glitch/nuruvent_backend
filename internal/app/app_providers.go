@@ -17,6 +17,7 @@ import (
 	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	authService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
+	certificateService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 
 	// Account Module
 	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
@@ -61,6 +62,8 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
 
 	teamAdapter "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/team"
+
+	certificatehttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/delivery/http"
 )
 
 // ============================================================
@@ -138,6 +141,8 @@ func provideAppDependencies(
 	videoSvc videoService.Service,
 	eventsServiceHolder *attendanceadapters.EventsServiceHolder,
 	accountServiceHolder *teamAdapter.AccountServiceHolder,
+	certificateSvc certificateService.Service,
+	certificateHndlr *certificatehttp.Handlers,
 ) *AppDependencies {
 	return &AppDependencies{
 		Config:                    cfg,
@@ -176,5 +181,7 @@ func provideAppDependencies(
 		VideoService:              videoSvc,
 		EventsServiceHolder: eventsServiceHolder,
 		AccountServiceHolder: accountServiceHolder,
+		CertificateService: certificateSvc,
+		CertificateHandler: certificateHndlr,
 	}
 }

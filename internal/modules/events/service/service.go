@@ -138,6 +138,18 @@ type Service interface {
 	ResolveEventAccount(ctx context.Context, eventID string) (string, error)
 
 
+		// ============================================================
+	// CERTIFICATES
+	// ============================================================
+
+	// IssueCertificatesForEvent issues certificates for the supplied
+	// recipients on behalf of an event.
+	IssueCertificatesForEvent(
+		ctx context.Context,
+		cmd IssueCertificatesForEventCommand,
+	) (*domain.IssueCertificatesResult, error)
+
+
 	
 }
 

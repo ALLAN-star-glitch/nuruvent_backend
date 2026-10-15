@@ -1,17 +1,22 @@
-// internal/modules/events/infrastructure/seeder/certificate_template_seeder.go
+// internal/modules/certificate/certificateseeder/certificate_template_seeder.go
 
-package eventseeder
+package certificateseeder
 
 import (
 	"log"
 
 	"gorm.io/gorm"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/infrastructure/postgres"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/infrastructure/postgres"
 )
 
-// SeedCertificateTemplates seeds the certificate templates from domain constants
+// SeedCertificateTemplates seeds the Nuruvent-provided system
+// certificate templates.
+//
+// Idempotent: upserts by slug. On existing rows, only the metadata
+// columns are updated — design and is_system are preserved so an
+// accidentally-modified system template doesn't get silently reset.
 func SeedCertificateTemplates(db *gorm.DB) error {
 	log.Println("🌱 Seeding certificate templates...")
 
@@ -22,7 +27,7 @@ func SeedCertificateTemplates(db *gorm.DB) error {
 		err := db.Where("slug = ?", info.Slug).First(&existing).Error
 
 		if err == nil {
-			// Update existing
+			// Update metadata only — leave design, is_system, is_default intact.
 			existing.Name = info.Name
 			existing.DisplayName = info.DisplayName
 			existing.Description = info.Description
@@ -35,16 +40,17 @@ func SeedCertificateTemplates(db *gorm.DB) error {
 			continue
 		}
 
-		// Create new
-		certificateTemplate := &postgres.CertificateTemplateModel{
+		// Create new — explicitly mark as a system template.
+		tmpl := &postgres.CertificateTemplateModel{
 			Slug:        info.Slug,
 			Name:        info.Name,
 			DisplayName: info.DisplayName,
 			Description: info.Description,
 			PreviewURL:  info.PreviewURL,
 			IsActive:    info.IsActive,
+			IsSystem:    true,
 		}
-		if err := db.Create(certificateTemplate).Error; err != nil {
+		if err := db.Create(tmpl).Error; err != nil {
 			return err
 		}
 		log.Printf("✅ Created certificate template: %s", info.Name)

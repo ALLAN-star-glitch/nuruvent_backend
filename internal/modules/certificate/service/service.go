@@ -1,0 +1,145 @@
+// internal/modules/certificate/service/service.go
+
+package service
+
+import (
+	"context"
+
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
+)
+
+// Service is the certificate module's public API.
+//
+// Consumers depend on this interface, not on the concrete
+// implementation.
+type Service interface {
+	// ============================================================
+	// ISSUANCE (machine-to-machine)
+	// ============================================================
+
+	// Issue issues a single certificate. Idempotent.
+	Issue(ctx context.Context, completion domain.ExternalCompletion) (*domain.Certificate, error)
+
+	// IssueBulk issues many certificates.
+	IssueBulk(ctx context.Context, completions []domain.ExternalCompletion) (*BulkResult, error)
+
+	// ============================================================
+	// VERIFICATION (public)
+	// ============================================================
+
+	// GetByCode looks up a certificate by its verification code.
+	// Public — no auth required at the HTTP layer.
+	GetByCode(ctx context.Context, code string) (*domain.Certificate, error)
+
+	// ============================================================
+	// ACCOUNT-SCOPED CERTIFICATE OPS (user-facing)
+	// ============================================================
+
+	// ListByAccount returns all certificates issued by an account.
+	ListByAccount(
+		ctx context.Context,
+		userID, accountID string,
+		f domain.CertificateFilter,
+	) ([]*domain.Certificate, error)
+
+	// Revoke revokes a certificate. Authorization is the caller's
+	// responsibility.
+	Revoke(ctx context.Context, certificateID, reason string) error
+
+	// RevokeByUser revokes a certificate on behalf of a user.
+	RevokeByUser(ctx context.Context, userID, certificateID, reason string) error
+
+	// ============================================================
+	// RECIPIENT-SCOPED CERTIFICATE OPS (user-facing)
+	// ============================================================
+
+	// ListMine returns the caller's own certificates.
+	ListMine(
+		ctx context.Context,
+		userID string,
+		f domain.CertificateFilter,
+	) ([]*domain.Certificate, error)
+
+	// ============================================================
+	// TEMPLATES (user-facing)
+	// ============================================================
+
+	// CreateTemplate creates a new certificate template for an account.
+	// Requires certificate:create in the account.
+	CreateTemplate(
+		ctx context.Context,
+		userID string,
+		in CreateTemplateInput,
+	) (*domain.Template, error)
+
+	// ListTemplates returns all templates visible to an account: its
+	// own plus system templates. Requires certificate:read.
+	ListTemplates(
+		ctx context.Context,
+		userID, accountID string,
+	) ([]*domain.Template, error)
+
+	// UpdateTemplate updates a template's editable fields.
+	// Requires certificate:update in the owning account.
+	UpdateTemplate(
+		ctx context.Context,
+		userID, templateID string,
+		in UpdateTemplateInput,
+	) (*domain.Template, error)
+
+	// DeleteTemplate soft-deletes a template. System templates cannot
+	// be deleted. Requires certificate:delete in the owning account.
+	DeleteTemplate(
+		ctx context.Context,
+		userID, templateID string,
+	) error
+
+	// SetDefaultTemplate marks a template as the account's default.
+	// Requires certificate:update in the owning account.
+	SetDefaultTemplate(
+		ctx context.Context,
+		userID, templateID string,
+	) error
+}
+
+// ============================================================
+// RESULT TYPES
+// ============================================================
+
+// BulkItemResult is the per-recipient outcome of a bulk issuance.
+type BulkItemResult struct {
+	Completion  domain.ExternalCompletion
+	Certificate *domain.Certificate
+	AlreadyHad  bool
+	Err         error
+}
+
+// BulkResult aggregates a bulk issuance call.
+type BulkResult struct {
+	Items     []BulkItemResult
+	Succeeded int
+	Failed    int
+	Reused    int
+}
+
+// ============================================================
+// INPUT TYPES
+// ============================================================
+
+// CreateTemplateInput carries the fields a caller supplies when
+// creating a template. AccountID is filled by the service from the
+// authz check.
+type CreateTemplateInput struct {
+	AccountID   string
+	Name        string
+	Description string
+	Design      domain.TemplateDesign
+}
+
+// UpdateTemplateInput carries the fields a caller can change on an
+// existing template. Nil/empty fields are treated as "no change".
+type UpdateTemplateInput struct {
+	Name        *string
+	Description *string
+	Design      *domain.TemplateDesign
+}

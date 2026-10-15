@@ -44,6 +44,14 @@ import (
 
 	videoadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/video"
 	videoDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/videodomain"
+
+
+
+	certificateadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/certificate"
+certificateDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
+sharedstorage "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
+
+certificateService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 )
 
 // ---- AUTH ADAPTERS ----
@@ -392,4 +400,36 @@ func NewAccountServiceHolder() *team.AccountServiceHolder {
 // video module's UserLookup port.
 func NewVideoUserLookup(repo authDomain.Repository) videoDomain.UserLookup {
 	return videoadapters.NewUserLookupAdapter(repo)
+}
+
+// ---- CERTIFICATE ADAPTERS ----
+
+// NewCertificatePermissionAdapter bridges auth's PermissionChecker to
+// the certificate module's domain.AuthorizationChecker port.
+func NewCertificatePermissionAdapter(
+	permChecker authDomain.PermissionChecker,
+) certificateDomain.AuthorizationChecker {
+	return certificateadapters.NewPermissionAdapter(permChecker)
+}
+
+// NewCertificateStorageAdapter bridges the shared storage client to the
+// certificate module's domain.ObjectStorage port.
+func NewCertificateStorageAdapter(
+	client *sharedstorage.Client,
+) certificateDomain.ObjectStorage {
+	return certificateadapters.NewStorageAdapter(client)
+}
+
+// ---- EVENTS → CERTIFICATE ----
+
+// NewEventsCertificateIssuerAdapter bridges the certificate module's
+// service to the events module's CertificateIssuer port.
+//
+// Used by the events service to issue certificates for an event's
+// qualified attendees, without the events module ever importing the
+// certificate module's internals.
+func NewEventsCertificateIssuerAdapter(
+	certSvc certificateService.Service,
+) eventsDomain.CertificateIssuer {
+	return events.NewCertificateIssuerAdapter(certSvc)
 }

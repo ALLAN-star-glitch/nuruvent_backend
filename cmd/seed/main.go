@@ -19,6 +19,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
 	"gorm.io/gorm"
+	certificateseeder "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/certificateseeder"
 )
 
 type SeederLog struct {
@@ -148,15 +149,15 @@ func main() {
 			Description: "Seed recurrence patterns (daily, weekly, monthly, custom)",
 			Deps:        []string{},
 		},
-		{
+				{
 			Name:        "certificate_templates",
-			Fn:          eventseeder.SeedCertificateTemplates,
+			Fn:          certificateseeder.SeedCertificateTemplates,
 			Description: "Seed certificate templates (default, professional, premium)",
 			Deps:        []string{},
 		},
 		{
 			Name:        "certificate_types",
-			Fn:          eventseeder.SeedCertificateTypes,
+			Fn:          certificateseeder.SeedCertificateTypes,
 			Description: "Seed certificate types (event, course, cpd)",
 			Deps:        []string{},
 		},

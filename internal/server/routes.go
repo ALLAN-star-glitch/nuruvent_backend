@@ -10,6 +10,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/delivery/handler"
 	attendancehttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/delivery/http"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
+	certificatehttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/delivery/http"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	paymenthttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/delivery/http"
 	registrationhttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
@@ -35,6 +36,7 @@ func SetupRoutes(
 	orderHandler *paymenthttp.OrderHandler,
 	attendanceHandler *attendancehttp.Handlers,
 	videoHandler *videohttp.Handlers,
+	certificateHandler *certificatehttp.Handlers,
 ) {
 	// ================================================
 	// 1. SWAGGER - Must be FIRST to avoid 404
@@ -93,6 +95,16 @@ func SetupRoutes(
 
 	// Video routes (OAuth connect/callback, connections)
 	videohttp.RegisterRoutes(api.Group("/video"), videoHandler, authMiddleware)
+
+	// Certificate routes
+	//
+	// The certificate module uses both authMiddleware and
+	// authzMiddleware at the route level, plus service-level authz
+	// for own-vs-all scope decisions. See the doc comment in the
+	// module's routes.go for the rationale.
+	certificatehttp.RegisterRoutes(api, certificateHandler, authMiddleware, authzMiddleware)
+	certificatehttp.RegisterUserRoutes(api, certificateHandler, authMiddleware, authzMiddleware)
+	certificatehttp.RegisterAccountRoutes(api, certificateHandler, authMiddleware, authzMiddleware)
 
 	// ================================================
 	// 4. 404 Handler - Must be LAST

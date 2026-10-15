@@ -86,6 +86,10 @@ func (h *EventHandler) RegisterRoutes(
 	events.Delete("/:id/image", authMiddleware, authzMiddleware, h.DeleteEventImage)
 	events.Delete("/:id/certificate", authMiddleware, authzMiddleware, h.DeleteEventCertificate)
 	events.Delete("/:id/media", authMiddleware, authzMiddleware, h.DeleteAllEventMedia)
+		// Issue certificates for this event's attendees. The caller
+	// supplies the recipient list; later phases may derive it from
+	// attendance data.
+	events.Post("/:id/certificates/issue", authMiddleware, authzMiddleware, h.IssueCertificates)
 
 	// ------------------------------------------------------------
 	// PUBLIC DYNAMIC ROUTE — LAST

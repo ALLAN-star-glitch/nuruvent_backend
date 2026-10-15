@@ -76,6 +76,13 @@ import (
 
 
 	teamAdapter "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/team"
+
+
+
+		// Certificate Module
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate"
+	certificateService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
+	certificatehttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/delivery/http"
 )
 
 // ============================================================
@@ -133,6 +140,11 @@ type AppDependencies struct {
 	EventsServiceHolder *attendanceadapters.EventsServiceHolder
 
 	AccountServiceHolder *teamAdapter.AccountServiceHolder 
+
+		// Certificate Module
+	CertificateService certificateService.Service
+	CertificateHandler *certificatehttp.Handlers
+
 }
 
 // ============================================================
@@ -267,6 +279,15 @@ func InitializeApp() (*AppDependencies, error) {
 
 
 		provideOrganizerProvider,
+
+
+				// MODULES (add certificate.ProviderSet)
+		certificate.ProviderSet,
+
+		// CROSS-MODULE ADAPTERS - CERTIFICATE
+		NewCertificatePermissionAdapter,
+		//NewCertificateStorageAdapter,
+		NewEventsCertificateIssuerAdapter,
 
 
 

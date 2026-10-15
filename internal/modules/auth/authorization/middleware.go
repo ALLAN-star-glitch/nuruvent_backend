@@ -412,7 +412,7 @@ func getResourceFromRequest(c fiber.Ctx) string {
 		switch seg {
 		case "events", "event":
 			return authdomain.ResourceEvent.String()
-		case "certificates", "certificate":
+		case "certificates", "certificate", "certificate-templates", "certificate-template":
 			return authdomain.ResourceCertificate.String()
 		case "registrations", "registration":
 			return authdomain.ResourceRegistration.String()
@@ -466,8 +466,12 @@ func userSubResource(segments []string, i int) string {
 		return authdomain.ResourceAccount.String()
 	case next == "events":
 		return authdomain.ResourceEvent.String()
+	case next == "certificates":
+		return authdomain.ResourceCertificate.String()
 	case i+2 < len(segments) && (segments[i+2] == "events" || segments[i+2] == "event"):
 		return authdomain.ResourceEvent.String()
+	case i+2 < len(segments) && (segments[i+2] == "certificates" || segments[i+2] == "certificate"):
+		return authdomain.ResourceCertificate.String()
 	case i+2 < len(segments) && segments[i+2] == "profiles":
 		return authdomain.ResourceProfile.String()
 	}
@@ -488,6 +492,8 @@ func accountSubResource(segments []string, i int) string {
 		switch segments[i+2] {
 		case "events", "event":
 			return authdomain.ResourceEvent.String()
+		case "certificates", "certificate":
+			return authdomain.ResourceCertificate.String()
 		case "profile":
 			return authdomain.ResourceProfile.String()
 		case "logo":
@@ -505,6 +511,8 @@ func institutionSubResource(segments []string, i int) string {
 		switch segments[i+2] {
 		case "events", "event":
 			return authdomain.ResourceEvent.String()
+		case "certificates", "certificate":
+			return authdomain.ResourceCertificate.String()
 		case "profile":
 			return authdomain.ResourceProfile.String()
 		case "logo":
@@ -523,6 +531,8 @@ func teamSubResource(segments []string, i int) string {
 		return authdomain.ResourceMember.String()
 	case "events", "event":
 		return authdomain.ResourceEvent.String()
+	case "certificates", "certificate":
+		return authdomain.ResourceCertificate.String()
 	}
 	return ""
 }
@@ -564,6 +574,20 @@ func getActionFromRequest(c fiber.Ctx) string {
 
 	if method == http.MethodPost && strings.HasSuffix(path, "/leave") {
 		return authdomain.ActionLeave.String()
+	}
+
+	// Certificate-specific POST sub-actions.
+	//
+	// POST /certificates/:id/revoke and
+	// POST /certificate-templates/:id/default are semantically updates,
+	// not creates. Without these special-cases they would be classified
+	// as "create" by the generic POST→create fallback, which is wrong.
+	if method == http.MethodPost && strings.HasSuffix(path, "/revoke") {
+		return authdomain.ActionUpdate.String()
+	}
+
+	if method == http.MethodPost && strings.HasSuffix(path, "/default") {
+		return authdomain.ActionUpdate.String()
 	}
 
 	if (method == http.MethodPut || method == http.MethodPatch) &&

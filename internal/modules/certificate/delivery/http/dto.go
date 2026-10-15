@@ -1,0 +1,153 @@
+// internal/modules/certificate/delivery/http/dto.go
+
+package http
+
+import "time"
+
+// ============================================================
+// CERTIFICATE REQUESTS
+// ============================================================
+
+// IssueCertificateRequest is the body for POST /certificates.
+//
+// In practice this endpoint is called by admin tools and other
+// modules via the service interface; the HTTP surface is a thin
+// wrapper around the same operation.
+type IssueCertificateRequest struct {
+	AccountID        string            `json:"account_id" binding:"required,uuid"`
+	TemplateID       string            `json:"template_id,omitempty"`
+	ContextType      string            `json:"context_type" binding:"required"`
+	ContextID        string            `json:"context_id" binding:"required,uuid"`
+	RecipientName    string            `json:"recipient_name" binding:"required"`
+	RecipientEmail   string            `json:"recipient_email" binding:"required,email"`
+	RecipientUserID  string            `json:"recipient_user_id,omitempty"`
+	CompletedAt      string            `json:"completed_at" binding:"required"` // RFC3339
+	Metadata         map[string]string `json:"metadata,omitempty"`
+	PaymentReference string            `json:"payment_reference,omitempty"`
+}
+
+// IssueBulkRequest is the body for POST /certificates/bulk.
+type IssueBulkRequest struct {
+	Completions []IssueCertificateRequest `json:"completions" binding:"required,min=1"`
+}
+
+// RevokeCertificateRequest is the body for POST /certificates/:id/revoke.
+type RevokeCertificateRequest struct {
+	Reason string `json:"reason,omitempty"`
+}
+
+// ============================================================
+// CERTIFICATE RESPONSES
+// ============================================================
+
+// CertificateResponse is the wire format for a certificate.
+type CertificateResponse struct {
+	ID               string            `json:"id"`
+	AccountID        string            `json:"account_id"`
+	TemplateID       string            `json:"template_id"`
+	VerificationCode string            `json:"verification_code"`
+	RecipientName    string            `json:"recipient_name"`
+	RecipientEmail   string            `json:"recipient_email"`
+	RecipientUserID  string            `json:"recipient_user_id,omitempty"`
+	ContextType      string            `json:"context_type"`
+	ContextID        string            `json:"context_id"`
+	Metadata         map[string]string `json:"metadata,omitempty"`
+	CompletedAt      time.Time         `json:"completed_at"`
+	IssuedAt         time.Time         `json:"issued_at"`
+	Status           string            `json:"status"`
+	RevokedAt        *time.Time        `json:"revoked_at,omitempty"`
+	RevocationReason string            `json:"revocation_reason,omitempty"`
+	PDFURL           string            `json:"pdf_url,omitempty"`
+	VerifyURL        string            `json:"verify_url,omitempty"`
+}
+
+// IssueBulkResponse summarizes a bulk issuance.
+type IssueBulkResponse struct {
+	Succeeded int                        `json:"succeeded"`
+	Failed    int                        `json:"failed"`
+	Reused    int                        `json:"reused"`
+	Items     []IssueBulkItemResponse    `json:"items"`
+}
+
+// IssueBulkItemResponse is one result inside a bulk issuance.
+type IssueBulkItemResponse struct {
+	CertificateID string `json:"certificate_id,omitempty"`
+	VerificationCode string `json:"verification_code,omitempty"`
+	RecipientEmail   string `json:"recipient_email"`
+	AlreadyHad       bool   `json:"already_had,omitempty"`
+	Error            string `json:"error,omitempty"`
+}
+
+// VerifyResponse is the public verification response. Deliberately
+// smaller than CertificateResponse — no internal IDs.
+type VerifyResponse struct {
+	VerificationCode string            `json:"verification_code"`
+	RecipientName    string            `json:"recipient_name"`
+	ContextType      string            `json:"context_type"`
+	ContextID        string            `json:"context_id"`
+	Metadata         map[string]string `json:"metadata,omitempty"`
+	CompletedAt      time.Time         `json:"completed_at"`
+	IssuedAt         time.Time         `json:"issued_at"`
+	Status           string            `json:"status"`
+}
+
+// ============================================================
+// TEMPLATE REQUESTS
+// ============================================================
+
+// CreateTemplateRequest is the body for POST /certificate-templates.
+type CreateTemplateRequest struct {
+	AccountID   string         `json:"account_id" binding:"required,uuid"`
+	Name        string         `json:"name" binding:"required,max=100"`
+	Description string         `json:"description,omitempty"`
+	Design      TemplateDesignDTO `json:"design"`
+}
+
+// UpdateTemplateRequest is the body for PUT /certificate-templates/:id.
+// All fields are optional — omitted fields are unchanged.
+type UpdateTemplateRequest struct {
+	Name        *string            `json:"name,omitempty"`
+	Description *string            `json:"description,omitempty"`
+	Design      *TemplateDesignDTO `json:"design,omitempty"`
+}
+
+// TemplateDesignDTO mirrors domain.TemplateDesign on the wire.
+type TemplateDesignDTO struct {
+	BackgroundColor string `json:"background_color,omitempty"`
+	TextColor       string `json:"text_color,omitempty"`
+	AccentColor     string `json:"accent_color,omitempty"`
+	FontFamily      string `json:"font_family,omitempty"`
+
+	LogoURL       string `json:"logo_url,omitempty"`
+	SealURL       string `json:"seal_url,omitempty"`
+	SignatureURL  string `json:"signature_url,omitempty"`
+	BackgroundURL string `json:"background_url,omitempty"`
+
+	SignatoryName  string `json:"signatory_name,omitempty"`
+	SignatoryTitle string `json:"signatory_title,omitempty"`
+
+	TitleText    string `json:"title_text,omitempty"`
+	SubtitleText string `json:"subtitle_text,omitempty"`
+	BodyText     string `json:"body_text,omitempty"`
+	FooterText   string `json:"footer_text,omitempty"`
+
+	QRPosition string `json:"qr_position,omitempty"`
+}
+
+// ============================================================
+// TEMPLATE RESPONSES
+// ============================================================
+
+// TemplateResponse is the wire format for a template.
+type TemplateResponse struct {
+	ID          string            `json:"id"`
+	AccountID   string            `json:"account_id,omitempty"`
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Design      TemplateDesignDTO `json:"design"`
+	SystemSlug  string            `json:"system_slug,omitempty"`
+	IsDefault   bool              `json:"is_default"`
+	IsSystem    bool              `json:"is_system"`
+	CreatedAt   time.Time         `json:"created_at"`
+	UpdatedAt   time.Time         `json:"updated_at"`
+}

@@ -25,11 +25,18 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/jwt"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
 	service3 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate"
+	http5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/delivery/http"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/infrastructure/clock"
+	id2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/infrastructure/id"
+	postgres9 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/infrastructure/postgres"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/infrastructure/verificationcode"
+	service8 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/delivery/eventhandler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 	infrastructure2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/infrastructure"
 	postgres5 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/infrastructure/postgres"
-	service8 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
+	service9 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/service"
 	postgres4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/postgres"
 	service4 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/media/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification"
@@ -37,12 +44,12 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment"
 	http2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/delivery/http"
-	postgres9 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/postgres"
-	service10 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/service"
+	postgres10 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/postgres"
+	service11 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/delivery/http"
 	postgres8 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/infrastructure/postgres"
-	service9 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
+	service10 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 	handler2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/delivery/handler"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure"
 	postgres2 "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/infrastructure/postgres"
@@ -103,21 +110,21 @@ func InitializeApp() (*AppDependencies, error) {
 	userProfileProvider := NewTeamUserProfileAdapter(accountServiceHolder)
 	serviceService := service2.NewTeamService(teamdomainRepository, authService, casbinService, serviceNotificationService, aiService, userProfileProvider)
 	teamService := NewAuthTeamAdapter(serviceService)
-	service11 := service3.NewService(repository, configConfig, redisClient, queueService, permissionChecker, roleManager, policyManager, tokenService, authdomainNotificationService, enforcer, teamService)
+	service12 := service3.NewService(repository, configConfig, redisClient, queueService, permissionChecker, roleManager, policyManager, tokenService, authdomainNotificationService, enforcer, teamService)
 	accountdomainRepository := postgres3.NewAccountRepository(db)
-	serviceAuthService := NewAccountAuthAdapter(service11)
+	serviceAuthService := NewAccountAuthAdapter(service12)
 	notificationService2 := NewAccountNotificationAdapter(notificationService)
 	accountdomainPermissionChecker := NewAccountPermissionAdapter(permissionChecker)
 	domainRepository := postgres4.NewPostgresRepository(db)
-	service12 := service4.NewService(domainRepository, client)
-	mediaService := NewAccountMediaAdapter(service12)
+	service13 := service4.NewService(domainRepository, client)
+	mediaService := NewAccountMediaAdapter(service13)
 	roleAssignment := NewAccountRoleAssignmentAdapter(enforcer, db)
-	service13 := service5.NewAccountService(accountdomainRepository, serviceAuthService, notificationService2, accountdomainPermissionChecker, mediaService, roleAssignment)
+	service14 := service5.NewAccountService(accountdomainRepository, serviceAuthService, notificationService2, accountdomainPermissionChecker, mediaService, roleAssignment)
 	repository2 := postgres5.NewPostgresRepository(db)
 	domainPermissionChecker := NewEventsPermissionAdapter(permissionChecker)
-	userInfoProvider := NewEventsUserInfoAdapter(service13)
-	domainMediaService := NewEventsMediaAdapter(service12)
-	organizerProvider := provideOrganizerProvider(service13)
+	userInfoProvider := NewEventsUserInfoAdapter(service14)
+	domainMediaService := NewEventsMediaAdapter(service13)
+	organizerProvider := provideOrganizerProvider(service14)
 	serviceAIService := infrastructure2.NewEventAIAdapter(aiClient)
 	unitOfWork := postgres6.NewUnitOfWork(db)
 	uuidGenerator := id.NewUUIDGenerator()
@@ -133,11 +140,11 @@ func InitializeApp() (*AppDependencies, error) {
 	eventsServiceHolder := attendance2.NewEventsServiceHolder()
 	eventsReader := NewEventsReader(eventsServiceHolder)
 	dependencies := attendance.ProvideAttendanceDependencies(unitOfWork, uuidGenerator, sha256Generator, logPublisher, systemClock, v2, videoMeetingIDResolver, attendancedomainPermissionChecker, registrationLookup, eventsReader, configConfig)
-	service14, err := service6.NewService(dependencies)
+	service15, err := service6.NewService(dependencies)
 	if err != nil {
 		return nil, err
 	}
-	attendanceRegistrar := NewEventsAttendanceRegistrar(service14)
+	attendanceRegistrar := NewEventsAttendanceRegistrar(service15)
 	tokenCipher, err := video.ProvideTokenCipher(configConfig)
 	if err != nil {
 		return nil, err
@@ -145,62 +152,72 @@ func InitializeApp() (*AppDependencies, error) {
 	postgresUnitOfWork := postgres7.NewUnitOfWork(db, tokenCipher)
 	connectionRepository := postgres7.NewConnectionRepository(db, tokenCipher)
 	oAuthStateRepository := postgres7.NewOAuthStateRepository(db)
-	participantRecorder := NewVideoAttendanceAdapter(service14)
+	participantRecorder := NewVideoAttendanceAdapter(service15)
 	zoomClient := video.ProvideZoomClient(configConfig)
 	googleMeetClient := video.ProvideGoogleMeetClient(configConfig)
 	clientRegistry := video.ProvideClientRegistry(zoomClient, googleMeetClient)
 	videoSystemClock := video.NewSystemClock()
 	userLookup := NewVideoUserLookup(repository)
 	serviceDependencies := video.ProvideVideoDependencies(postgresUnitOfWork, connectionRepository, oAuthStateRepository, participantRecorder, meetingRepository, clientRegistry, uuidGenerator, videoSystemClock, userLookup)
-	service15, err := service7.New(serviceDependencies)
+	service16, err := service7.New(serviceDependencies)
 	if err != nil {
 		return nil, err
 	}
-	videoMeetingCreator := NewEventsVideoAdapter(service15)
-	videoIdentityProvider := NewEventsVideoIdentityAdapter(service15)
+	videoMeetingCreator := NewEventsVideoAdapter(service16)
+	videoIdentityProvider := NewEventsVideoIdentityAdapter(service16)
 	teamMembershipChecker := NewEventsTeamMembershipAdapter(serviceService)
-	service16 := service8.NewService(repository2, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider, serviceAIService, attendanceRegistrar, videoMeetingCreator, videoIdentityProvider, teamMembershipChecker)
-	authHandler := authhandler.NewAuthHandler(service11, configConfig)
-	accountHandler := handler.NewAccountHandler(service13)
+	certificateRepository := postgres9.NewCertificateRepository(db)
+	templateRepository := postgres9.NewTemplateRepository(db)
+	idUUIDGenerator := id2.NewUUIDGenerator(uuidGenerator)
+	cryptoGenerator := verificationcode.NewCryptoGenerator()
+	clockSystemClock := clock.NewSystemClock()
+	authorizationChecker := NewCertificatePermissionAdapter(permissionChecker)
+	dependencies2 := certificate.ProvideDependencies(certificateRepository, templateRepository, idUUIDGenerator, cryptoGenerator, clockSystemClock, authorizationChecker)
+	service17 := service8.NewService(dependencies2)
+	certificateIssuer := NewEventsCertificateIssuerAdapter(service17)
+	service18 := service9.NewService(repository2, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider, serviceAIService, attendanceRegistrar, videoMeetingCreator, videoIdentityProvider, teamMembershipChecker, certificateIssuer)
+	authHandler := authhandler.NewAuthHandler(service12, configConfig)
+	accountHandler := handler.NewAccountHandler(service14)
 	teamHandler := handler2.NewTeamHandler(serviceService)
-	eventHandler := eventhandler.NewEventHandler(service16)
+	eventHandler := eventhandler.NewEventHandler(service18)
 	registrationRepository := postgres8.NewRegistrationRepository(db)
 	waitlistRepository := postgres8.NewWaitlistRepository(db)
-	registrableResolver := NewRegistrableResolver(service16)
-	registrationdomainUserInfoProvider := NewRegistrationUserInfoAdapter(service11)
+	registrableResolver := NewRegistrableResolver(service18)
+	registrationdomainUserInfoProvider := NewRegistrationUserInfoAdapter(service12)
 	notifier := NewRegistrationNotifier(notificationService, registrationdomainUserInfoProvider)
-	registrationdomainAttendanceRegistrar := NewRegistrationAttendanceRegistrar(service14, configConfig)
+	registrationdomainAttendanceRegistrar := NewRegistrationAttendanceRegistrar(service15, configConfig)
 	registrationdomainPermissionChecker := NewRegistrationPermissionAdapter(permissionChecker)
 	registrationdomainEventsReader := NewRegistrationEventsReader(eventsServiceHolder)
-	clock := registration.ProvideSystemClock()
+	serviceClock := registration.ProvideSystemClock()
 	registrationNumberGenerator := postgres8.NewRegistrationNumberGenerator(db)
-	dependencies2 := registration.ProvideServiceDependencies(registrationRepository, eventRegistrationRepository, waitlistRepository, registrableResolver, notifier, registrationdomainAttendanceRegistrar, registrationdomainUserInfoProvider, registrationdomainPermissionChecker, registrationdomainEventsReader, uuidGenerator, clock, registrationNumberGenerator)
-	service17 := service9.New(dependencies2)
-	httpHandler := http.NewHandler(service17)
-	orderRepository := postgres9.NewOrderRepository(db)
-	paymentRepository := postgres9.NewPaymentRepository(db)
-	refundRepository := postgres9.NewRefundRepository(db)
-	webhookEventRepository := postgres9.NewWebhookEventRepository(db)
+	dependencies3 := registration.ProvideServiceDependencies(registrationRepository, eventRegistrationRepository, waitlistRepository, registrableResolver, notifier, registrationdomainAttendanceRegistrar, registrationdomainUserInfoProvider, registrationdomainPermissionChecker, registrationdomainEventsReader, uuidGenerator, serviceClock, registrationNumberGenerator)
+	service19 := service10.New(dependencies3)
+	httpHandler := http.NewHandler(service19)
+	orderRepository := postgres10.NewOrderRepository(db)
+	paymentRepository := postgres10.NewPaymentRepository(db)
+	refundRepository := postgres10.NewRefundRepository(db)
+	webhookEventRepository := postgres10.NewWebhookEventRepository(db)
 	providerRegistry, err := NewPaymentProviderRegistry(configConfig)
 	if err != nil {
 		return nil, err
 	}
-	userEmailResolver := NewPaymentUserEmailResolver(service13)
+	userEmailResolver := NewPaymentUserEmailResolver(service14)
 	paymentdomainNotifier := NewPaymentNotifier(notificationService, userEmailResolver)
-	unitOfWork2 := postgres9.NewUnitOfWork(db)
-	registrationConfirmer := NewPaymentRegistrationConfirmer(service17)
+	unitOfWork2 := postgres10.NewUnitOfWork(db)
+	registrationConfirmer := NewPaymentRegistrationConfirmer(service19)
 	registrationPricingResolver := NewPaymentPricingResolver(eventRegistrationRepository)
-	registrationBillingResolver := NewPaymentBillingResolver(service17)
+	registrationBillingResolver := NewPaymentBillingResolver(service19)
 	paymentdomainEventsReader := NewPaymentEventsReader(eventsServiceHolder)
 	serviceSystemClock := payment.ProvideSystemClock()
-	dependencies3 := payment.ProvideServiceDependencies(orderRepository, paymentRepository, refundRepository, webhookEventRepository, providerRegistry, paymentdomainNotifier, unitOfWork2, registrationConfirmer, registrationPricingResolver, registrationBillingResolver, paymentdomainEventsReader, configConfig, uuidGenerator, serviceSystemClock)
-	service18 := service10.New(dependencies3)
-	handler3 := http2.NewHandler(service18)
-	orderHandler := http2.NewOrderHandler(service18)
-	authSessionIssuer := NewAttendanceAuthSessionIssuer(service11)
-	handlers := http3.NewHandlers(service14, v2, authSessionIssuer, configConfig)
-	httpHandlers := http4.NewHandlers(service15)
-	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service11, tokenService, service13, serviceService, service16, service12, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker, httpHandler, service17, handler3, orderHandler, service18, handlers, service14, httpHandlers, service15, eventsServiceHolder, accountServiceHolder)
+	dependencies4 := payment.ProvideServiceDependencies(orderRepository, paymentRepository, refundRepository, webhookEventRepository, providerRegistry, paymentdomainNotifier, unitOfWork2, registrationConfirmer, registrationPricingResolver, registrationBillingResolver, paymentdomainEventsReader, configConfig, uuidGenerator, serviceSystemClock)
+	service20 := service11.New(dependencies4)
+	handler3 := http2.NewHandler(service20)
+	orderHandler := http2.NewOrderHandler(service20)
+	authSessionIssuer := NewAttendanceAuthSessionIssuer(service12)
+	handlers := http3.NewHandlers(service15, v2, authSessionIssuer, configConfig)
+	httpHandlers := http4.NewHandlers(service16)
+	handlers2 := http5.NewHandlers(service17)
+	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service12, tokenService, service14, serviceService, service18, service13, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker, httpHandler, service19, handler3, orderHandler, service20, handlers, service15, httpHandlers, service16, eventsServiceHolder, accountServiceHolder, service17, handlers2)
 	return appDependencies, nil
 }
 
@@ -220,7 +237,7 @@ type AppDependencies struct {
 	AuthService               service3.Service
 	AccountService            service5.Service
 	TeamService               service2.Service
-	EventsService             service8.Service
+	EventsService             service9.Service
 	MediaService              service4.Service
 	NotificationSvc           notificationdomain.NotificationService
 	AuthHandler               *authhandler.AuthHandler
@@ -228,19 +245,19 @@ type AppDependencies struct {
 	TeamHandler               *handler2.TeamHandler
 	EventsHandler             *eventhandler.EventHandler
 	AIService                 service2.AIService
-	EventsAIService           service8.AIService
+	EventsAIService           service9.AIService
 	OrganizerProvider         domain.OrganizerProvider
 	AccountsPermissionChecker accountdomain.PermissionChecker
 	AIClient                  *ai.Client
 
 	// Registration Module
 	RegHandler *http.Handler
-	RegService service9.Service
+	RegService service10.Service
 
 	// Payment Module
 	PaymentHandler *http2.Handler
 	OrderHandler   *http2.OrderHandler
-	PaymentService service10.Service
+	PaymentService service11.Service
 
 	// Attendance Module
 	AttendanceHandler *http3.Handlers
@@ -253,4 +270,8 @@ type AppDependencies struct {
 	EventsServiceHolder *attendance2.EventsServiceHolder
 
 	AccountServiceHolder *team.AccountServiceHolder
+
+	// Certificate Module
+	CertificateService service8.Service
+	CertificateHandler *http5.Handlers
 }

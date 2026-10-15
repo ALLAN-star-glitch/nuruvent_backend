@@ -10,17 +10,18 @@ import (
 )
 
 type eventService struct {
-	repo          domain.Repository
-	permChecker   domain.PermissionChecker
-	mediaSvc      domain.MediaService
-	userInfo      domain.UserInfoProvider
-	validator     *validation.Validator
-	organizer     domain.OrganizerProvider
-	aiSvc         AIService
-	attendance    domain.AttendanceRegistrar
-	video         domain.VideoMeetingCreator
-	videoIdentity domain.VideoIdentityProvider
+	repo           domain.Repository
+	permChecker    domain.PermissionChecker
+	mediaSvc       domain.MediaService
+	userInfo       domain.UserInfoProvider
+	validator      *validation.Validator
+	organizer      domain.OrganizerProvider
+	aiSvc          AIService
+	attendance     domain.AttendanceRegistrar
+	video          domain.VideoMeetingCreator
+	videoIdentity  domain.VideoIdentityProvider
 	teamMembership domain.TeamMembershipChecker
+	certIssuer     domain.CertificateIssuer // NEW
 }
 
 func NewService(
@@ -34,6 +35,7 @@ func NewService(
 	video domain.VideoMeetingCreator,
 	videoIdentity domain.VideoIdentityProvider,
 	teamMembership domain.TeamMembershipChecker,
+	certIssuer domain.CertificateIssuer, // NEW
 ) Service {
 	return &eventService{
 		repo:           repo,
@@ -47,6 +49,7 @@ func NewService(
 		video:          video,
 		videoIdentity:  videoIdentity,
 		teamMembership: teamMembership,
+		certIssuer:     certIssuer, // NEW
 	}
 }
 
@@ -54,13 +57,6 @@ func NewService(
 // SHARED HELPER FUNCTIONS
 // ============================================================
 
-
-
-
-
 func (s *eventService) GetCategories(ctx context.Context) ([]*domain.Category, error) {
 	return s.repo.GetAllCategories(ctx)
 }
-
-
-

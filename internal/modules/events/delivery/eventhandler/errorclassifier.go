@@ -316,8 +316,6 @@ func classifyValidationError(err error) (classifiedError, bool) {
 		{domain.ErrInvalidRecurrence, "recurrence", "Recurrence configuration is invalid"},
 		{domain.ErrInvalidTicket, "tickets", "One or more tickets are invalid"},
 		{domain.ErrInvalidMaterial, "materials", "One or more materials are invalid"},
-		{domain.ErrInvalidCertificateTemplate, "certificate_template_id", "Certificate template is invalid"},
-		{domain.ErrInvalidCertificateType, "certificate_type_id", "Certificate type is invalid"},
 	}
 
 	for _, r := range rules {

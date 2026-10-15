@@ -1,17 +1,19 @@
-// internal/modules/events/infrastructure/seeder/certificate_type_seeder.go
+// internal/modules/certificate/certificateseeder/certificate_type_seeder.go
 
-package eventseeder
+package certificateseeder
 
 import (
 	"log"
 
 	"gorm.io/gorm"
 
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/infrastructure/postgres"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/infrastructure/postgres"
 )
 
-// SeedCertificateTypes seeds the certificate types from domain constants
+// SeedCertificateTypes seeds the certificate types lookup table.
+//
+// Idempotent: upserts by slug.
 func SeedCertificateTypes(db *gorm.DB) error {
 	log.Println("🌱 Seeding certificate types...")
 
@@ -22,7 +24,6 @@ func SeedCertificateTypes(db *gorm.DB) error {
 		err := db.Where("slug = ?", info.Slug).First(&existing).Error
 
 		if err == nil {
-			// Update existing
 			existing.Name = info.Name
 			existing.DisplayName = info.DisplayName
 			existing.IsActive = info.IsActive
@@ -33,14 +34,13 @@ func SeedCertificateTypes(db *gorm.DB) error {
 			continue
 		}
 
-		// Create new
-		certificateType := &postgres.CertificateTypeModel{
+		ct := &postgres.CertificateTypeModel{
 			Slug:        info.Slug,
 			Name:        info.Name,
 			DisplayName: info.DisplayName,
 			IsActive:    info.IsActive,
 		}
-		if err := db.Create(certificateType).Error; err != nil {
+		if err := db.Create(ct).Error; err != nil {
 			return err
 		}
 		log.Printf("✅ Created certificate type: %s", info.Name)
