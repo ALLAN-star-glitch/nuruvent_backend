@@ -8,6 +8,7 @@ import "context"
 // OUTBOUND PORT: AttendanceReader
 // ============================================================
 //
+
 // Reads attendance data for an event. Implemented by a cross-module
 // adapter that delegates to the attendance service.
 //

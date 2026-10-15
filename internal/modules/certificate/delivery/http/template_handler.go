@@ -5,8 +5,8 @@ package http
 import (
 	"github.com/gofiber/fiber/v3"
 
-	certificateService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/handlerhelper"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 )
@@ -25,12 +25,13 @@ func (h *Handler) CreateTemplate(c fiber.Ctx) error {
 		})
 	}
 
-	tmpl, err := h.svc.CreateTemplate(c.Context(), userID, certificateService.CreateTemplateInput{
-		AccountID:   body.AccountID,
-		Name:        body.Name,
-		Description: body.Description,
-		Design:      designFromDTO(body.Design),
-	})
+	tmpl, err := h.svc.CreateTemplate(c.Context(), userID, service.CreateTemplateInput{
+	AccountID:   body.AccountID,
+	Name:        body.Name,
+	Description: body.Description,
+	Design:      designFromDTO(body.Design),
+	PriceMinor:  body.PriceMinor, // ← NEW
+})
 	if err != nil {
 		return respondClassifiedError(c, "create template", err)
 	}
@@ -84,10 +85,11 @@ func (h *Handler) UpdateTemplate(c fiber.Ctx) error {
 		})
 	}
 
-	in := certificateService.UpdateTemplateInput{
-		Name:        body.Name,
-		Description: body.Description,
-	}
+	in := service.UpdateTemplateInput{
+	Name:        body.Name,
+	Description: body.Description,
+	PriceMinor:  body.PriceMinor, // ← NEW
+}
 	if body.Design != nil {
 		d := designFromDTO(*body.Design)
 		in.Design = &d

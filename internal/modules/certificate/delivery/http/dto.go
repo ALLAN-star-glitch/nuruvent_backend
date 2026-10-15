@@ -97,18 +97,18 @@ type VerifyResponse struct {
 
 // CreateTemplateRequest is the body for POST /certificate-templates.
 type CreateTemplateRequest struct {
-	AccountID   string         `json:"account_id" binding:"required,uuid"`
-	Name        string         `json:"name" binding:"required,max=100"`
-	Description string         `json:"description,omitempty"`
-	Design      TemplateDesignDTO `json:"design"`
+	AccountID   string             `json:"account_id" binding:"required,uuid"`
+	Name        string             `json:"name" binding:"required,max=100"`
+	Description string             `json:"description,omitempty"`
+	Design      TemplateDesignDTO  `json:"design"`
+	PriceMinor  *int64             `json:"price_minor,omitempty"` // ← NEW
 }
 
-// UpdateTemplateRequest is the body for PUT /certificate-templates/:id.
-// All fields are optional — omitted fields are unchanged.
 type UpdateTemplateRequest struct {
 	Name        *string            `json:"name,omitempty"`
 	Description *string            `json:"description,omitempty"`
 	Design      *TemplateDesignDTO `json:"design,omitempty"`
+	PriceMinor  *int64             `json:"price_minor,omitempty"` // ← NEW
 }
 
 // TemplateDesignDTO mirrors domain.TemplateDesign on the wire.
@@ -145,6 +145,7 @@ type TemplateResponse struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description,omitempty"`
 	Design      TemplateDesignDTO `json:"design"`
+	PriceMinor  *int64            `json:"price_minor,omitempty"` // ← NEW
 	SystemSlug  string            `json:"system_slug,omitempty"`
 	IsDefault   bool              `json:"is_default"`
 	IsSystem    bool              `json:"is_system"`

@@ -19,7 +19,6 @@ func (s *serviceImpl) UpdateTemplate(
 		return nil, err
 	}
 
-	// System templates are not editable.
 	if tmpl.IsSystem {
 		return nil, domain.ErrCannotEditSystemTemplate
 	}
@@ -32,7 +31,6 @@ func (s *serviceImpl) UpdateTemplate(
 		return nil, domain.ErrForbidden
 	}
 
-	// Apply partial updates — nil fields mean "no change".
 	if in.Name != nil {
 		tmpl.Name = *in.Name
 	}
@@ -41,6 +39,9 @@ func (s *serviceImpl) UpdateTemplate(
 	}
 	if in.Design != nil {
 		tmpl.Design = *in.Design
+	}
+	if in.PriceMinor != nil { // ← NEW
+		tmpl.PriceMinor = in.PriceMinor
 	}
 
 	tmpl.UpdatedAt = s.deps.Clock.Now().UTC()

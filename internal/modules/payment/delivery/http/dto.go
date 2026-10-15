@@ -20,6 +20,8 @@ type InitiatePaymentRequest struct {
 	Description    string           `json:"description,omitempty"`
 }
 
+
+
 // CardDetailsJSON is the wire format for card details.
 //
 // SECURITY: these values are PCI-sensitive. The HTTP layer must
@@ -52,12 +54,12 @@ type PaymentResponse struct {
 	Currency          string     `json:"currency"`
 	Status            string     `json:"status"`
 	ProviderReference string     `json:"provider_reference,omitempty"`
-	RedirectURL       string     `json:"redirect_url,omitempty"`  
+	RedirectURL       string     `json:"redirect_url,omitempty"`
 	FailureReason     string     `json:"failure_reason,omitempty"`
 	InitiatedAt       time.Time  `json:"initiated_at"`
 	ExpiresAt         time.Time  `json:"expires_at"`
 	CompletedAt       *time.Time `json:"completed_at,omitempty"`
-	AccessCode  string `json:"access_code,omitempty"`
+	AccessCode        string     `json:"access_code,omitempty"`
 	FailedAt          *time.Time `json:"failed_at,omitempty"`
 	CreatedAt         time.Time  `json:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at"`
@@ -73,8 +75,8 @@ type PaymentResponse struct {
 // pricing, items, and totals from the registration — the client cannot
 // influence the amount.
 type CreateOrderRequest struct {
-    RegistrationID string `json:"registration_id"`
-    GuestEmail     string `json:"guest_email,omitempty"` // for guests
+	RegistrationID string `json:"registration_id"`
+	GuestEmail     string `json:"guest_email,omitempty"` // for guests
 }
 
 // ============================================================
@@ -82,9 +84,13 @@ type CreateOrderRequest struct {
 // ============================================================
 
 // OrderResponse is the canonical output for an order.
+//
+// For certificate_batch orders, RegistrationID and Items are empty;
+// the batch is described by BatchAttendeeCount and BatchContext.
 type OrderResponse struct {
 	ID             string              `json:"id"`
-	RegistrationID string              `json:"registration_id"`
+	Kind           string              `json:"kind"` // "registration" | "certificate_batch"
+	RegistrationID string              `json:"registration_id,omitempty"`
 	UserID         string              `json:"user_id,omitempty"`
 	GuestEmail     string              `json:"guest_email,omitempty"`
 	Currency       string              `json:"currency"`
@@ -98,6 +104,11 @@ type OrderResponse struct {
 	CreatedAt      time.Time           `json:"created_at"`
 	UpdatedAt      time.Time           `json:"updated_at"`
 	Items          []OrderItemResponse `json:"items"`
+
+	// Certificate batch fields — only populated for certificate_batch
+	// orders. Zero/nil for registration orders.
+	BatchAttendeeCount int              `json:"batch_attendee_count,omitempty"`
+	BatchContext       *BatchContextDTO `json:"batch_context,omitempty"`
 }
 
 // OrderItemResponse is one line of an order.
@@ -109,7 +120,24 @@ type OrderItemResponse struct {
 	LineTotal    int64  `json:"line_total"` // minor units
 }
 
-
+// BatchContextDTO is the wire shape for a certificate batch order's
+// context. Only present on certificate_batch orders.
+//
+// The recipient list is intentionally omitted — the frontend only
+// needs the aggregate count and pricing. Exposing the full recipient
+// list would bloat the order response and leak recipient PII to any
+// caller authorized to read the order.
+type BatchContextDTO struct {
+	EventID           string `json:"event_id"`
+	AccountID         string `json:"account_id"`
+	TemplateID        string `json:"template_id"`
+	PricePerCertMinor int64  `json:"price_per_cert_minor"`
+	EventTitle        string `json:"event_title"`
+	EventDate         string `json:"event_date,omitempty"`     // RFC3339
+	EventDuration     string `json:"event_duration,omitempty"`
+	IssuerName        string `json:"issuer_name,omitempty"`
+	AttendeeCount     int    `json:"attendee_count"`
+}
 
 // ============================================================
 // LIST PAYMENTS
@@ -143,9 +171,9 @@ type ListPaymentsQuery struct {
 // display. Currency is included so the frontend can format with the
 // right symbol and locale.
 type PaymentListItemResponse struct {
-	ID                string `json:"id"`
-	OrderID           string `json:"order_id"`
-	RegistrationID    string `json:"registration_id"`
+	ID                 string `json:"id"`
+	OrderID            string `json:"order_id"`
+	RegistrationID     string `json:"registration_id"`
 	RegistrationNumber string `json:"registration_number,omitempty"`
 
 	// Attendee
@@ -160,20 +188,20 @@ type PaymentListItemResponse struct {
 	EventImageURL  string `json:"event_image_url,omitempty"`
 
 	// Payment
-	Amount            int64  `json:"amount"`
-	Currency          string `json:"currency"`
-	PlatformFee       int64  `json:"platform_fee"`
-	ProcessingFee     int64  `json:"processing_fee"`
-	NetToOrganizer    int64  `json:"net_to_organizer"`
+	Amount            int64   `json:"amount"`
+	Currency          string  `json:"currency"`
+	PlatformFee       int64   `json:"platform_fee"`
+	ProcessingFee     int64   `json:"processing_fee"`
+	NetToOrganizer    int64   `json:"net_to_organizer"`
 	PlatformFeeRate   float64 `json:"platform_fee_rate"`
 	ProcessingFeeRate float64 `json:"processing_fee_rate"`
 
-	Status          string `json:"status"`
-	StatusLabel     string `json:"status_label"`
-	Provider        string `json:"provider"`
-	Method          string `json:"method"`
-	MethodLabel     string `json:"method_label"`
-	TransactionID   string `json:"transaction_id,omitempty"`
+	Status        string `json:"status"`
+	StatusLabel   string `json:"status_label"`
+	Provider      string `json:"provider"`
+	Method        string `json:"method"`
+	MethodLabel   string `json:"method_label"`
+	TransactionID string `json:"transaction_id,omitempty"`
 
 	// Timing
 	InitiatedAt string `json:"initiated_at"`
@@ -214,6 +242,3 @@ type PaymentStatsResponse struct {
 	Currency            string           `json:"currency"`
 	ByStatus            map[string]int64 `json:"by_status"`
 }
-
-
-

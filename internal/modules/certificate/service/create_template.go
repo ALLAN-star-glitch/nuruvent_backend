@@ -29,7 +29,8 @@ func (s *serviceImpl) CreateTemplate(
 		Name:        in.Name,
 		Description: in.Description,
 		Design:      in.Design,
-		IsDefault:   false, // explicit — never auto-default
+		PriceMinor:  in.PriceMinor, // ← NEW
+		IsDefault:   false,
 		IsSystem:    false,
 		CreatedAt:   now,
 		UpdatedAt:   now,

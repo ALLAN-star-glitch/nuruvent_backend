@@ -15,10 +15,18 @@ import (
 //   - full      — attended every session
 //   - confirmed — attendance explicitly confirmed
 //   - partial   — attended at least one session of a multi-session event
+//   - joined    — connected to a session (may still be in progress)
 //
-// "joined" means connected but didn't stay; "no-show" and "registered"
-// mean the person didn't attend. None of those qualify.
-var certificateEligibleStatuses = []string{"full", "confirmed", "partial"}
+// "no-show" and "registered" mean the person never connected at all.
+// Those do not qualify.
+//
+// v1 policy: include "joined" so organizers can issue certificates
+// during or right after an event, before session-end rollups settle.
+// Organizers can still uncheck anyone in the batch dialog.
+//
+// TODO: replace with a per-event policy when CPD-grade events need a
+// stricter rule.
+var certificateEligibleStatuses = []string{"full", "confirmed", "partial", "joined"}
 
 // AttendanceReaderAdapter bridges the attendance service to the
 // events module's AttendanceReader port.

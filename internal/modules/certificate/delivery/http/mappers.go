@@ -103,6 +103,7 @@ func toTemplateResponse(t *domain.Template) TemplateResponse {
 		Name:        t.Name,
 		Description: t.Description,
 		Design:      designToDTO(t.Design),
+		PriceMinor:  t.PriceMinor, // ← NEW
 		SystemSlug:  string(t.SystemSlug),
 		IsDefault:   t.IsDefault,
 		IsSystem:    t.IsSystem,

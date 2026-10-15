@@ -184,13 +184,12 @@ type CreateTemplateInput struct {
 	Name        string
 	Description string
 	Design      domain.TemplateDesign
+	PriceMinor  *int64 // nil = fall back to account default; 0 = free; >0 = fixed
 }
 
-// UpdateTemplateInput carries the fields a caller can change on an
-// existing template. Nil/empty fields are treated as "no change".
 type UpdateTemplateInput struct {
 	Name        *string
 	Description *string
 	Design      *domain.TemplateDesign
+	PriceMinor  *int64
 }
-
