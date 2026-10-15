@@ -32,6 +32,22 @@ type Service interface {
 	// Ledger / reporting
 	ListPayments(ctx context.Context, cmd ListPaymentsCommand) (*ListPaymentsResult, error)
 	GetPaymentStats(ctx context.Context, cmd PaymentStatsCommand) (*paymentdomain.PaymentStats, error)
+
+
+		// CreateCertificateOrder creates a pending order for a certificate
+	// purchase. Idempotent per (context_type, context_id, recipient_email).
+	CreateCertificateOrder(
+		ctx context.Context,
+		cmd CreateCertificateOrderCommand,
+	) (*paymentdomain.Order, error)
+
+		// CreateCertificateBatchOrder creates a pending order for a
+	// certificate batch. Organizer pays; attendees receive certificates
+	// after payment succeeds. Idempotent per event.
+	CreateCertificateBatchOrder(
+		ctx context.Context,
+		cmd CreateCertificateBatchOrderCommand,
+	) (*paymentdomain.Order, error)
 }
 
 // ============================================================
@@ -68,6 +84,13 @@ type Dependencies struct {
 	// Utilities
 	IDGenerator id.Generator
 	Clock       Clock
+
+		// Cross-module (certificate)
+	CertificateIssuer paymentdomain.CertificateIssuer
+
+		// Certificate batch issuer — invoked by ConfirmPayment when a
+	// certificate_batch order is paid.
+	CertificateBatchIssuer paymentdomain.CertificateBatchIssuer
 }
 
 // ============================================================

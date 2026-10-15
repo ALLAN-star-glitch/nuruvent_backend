@@ -17,11 +17,13 @@ import (
 // ============================================================
 
 type fakeOrderRepository struct {
-	createFunc                   func(ctx context.Context, o *paymentdomain.Order) error
-	updateFunc                   func(ctx context.Context, o *paymentdomain.Order) error
-	findByIDFunc                 func(ctx context.Context, id string) (*paymentdomain.Order, error)
-	findActiveByRegistrationFunc func(ctx context.Context, regID string) (*paymentdomain.Order, error)
-	findExpiredFunc              func(ctx context.Context, before time.Time, limit int) ([]*paymentdomain.Order, error)
+	createFunc                         func(ctx context.Context, o *paymentdomain.Order) error
+	updateFunc                         func(ctx context.Context, o *paymentdomain.Order) error
+	findByIDFunc                       func(ctx context.Context, id string) (*paymentdomain.Order, error)
+	findActiveByRegistrationFunc       func(ctx context.Context, regID string) (*paymentdomain.Order, error)
+	findActiveByCertificateContextFunc func(ctx context.Context, contextType, contextID, recipientEmail string) (*paymentdomain.Order, error)
+	findExpiredFunc                    func(ctx context.Context, before time.Time, limit int) ([]*paymentdomain.Order, error)
+	findActiveByBatchEventFunc func(ctx context.Context, eventID string) (*paymentdomain.Order, error)
 
 	mu      sync.Mutex
 	created []*paymentdomain.Order
@@ -58,6 +60,16 @@ func (f *fakeOrderRepository) FindByID(ctx context.Context, id string) (*payment
 func (f *fakeOrderRepository) FindActiveByRegistration(ctx context.Context, regID string) (*paymentdomain.Order, error) {
 	if f.findActiveByRegistrationFunc != nil {
 		return f.findActiveByRegistrationFunc(ctx, regID)
+	}
+	return nil, paymentdomain.ErrOrderNotFound
+}
+
+func (f *fakeOrderRepository) FindActiveByCertificateContext(
+	ctx context.Context,
+	contextType, contextID, recipientEmail string,
+) (*paymentdomain.Order, error) {
+	if f.findActiveByCertificateContextFunc != nil {
+		return f.findActiveByCertificateContextFunc(ctx, contextType, contextID, recipientEmail)
 	}
 	return nil, paymentdomain.ErrOrderNotFound
 }
@@ -266,6 +278,16 @@ func (f *fakeWebhookEventRepository) FindUnprocessed(ctx context.Context, limit 
 	return nil, nil
 }
 
+func (f *fakeOrderRepository) FindActiveByBatchEvent(
+	ctx context.Context,
+	eventID string,
+) (*paymentdomain.Order, error) {
+	if f.findActiveByBatchEventFunc != nil {
+		return f.findActiveByBatchEventFunc(ctx, eventID)
+	}
+	return nil, paymentdomain.ErrOrderNotFound
+}
+
 // ============================================================
 // PROVIDER REGISTRY FAKE
 // ============================================================
@@ -434,9 +456,6 @@ func (f *fakeRegistrationConfirmer) ExpirePending(ctx context.Context, regID str
 // REGISTRATION BILLING RESOLVER FAKE
 // ============================================================
 
-// fakeRegistrationBillingResolver satisfies
-// paymentdomain.RegistrationBillingResolver. Default returns a stable
-// account ID so tests that don't care about billing still pass.
 type fakeRegistrationBillingResolver struct {
 	resolveFunc func(ctx context.Context, regID string) (string, error)
 }
@@ -536,9 +555,6 @@ func newTestService(t *testing.T, customize func(*Dependencies)) (Service, *Depe
 	return New(*deps), deps
 }
 
-// testConfig returns a Config with the fee rates the tests expect.
-// The only field actually used by the service is PaymentBilling, but
-// the zero values are harmless for the rest.
 func testConfig() *config.Config {
 	return &config.Config{
 		PaymentBilling: config.PaymentBillingConfig{
@@ -576,8 +592,8 @@ func newPendingOrder(t *testing.T) *paymentdomain.Order {
 		items,
 		30*time.Minute,
 		now,
-		"acct-1",   // billedAccountID
-		0.045,      // platformFeeRate
+		"acct-1", // billedAccountID
+		0.045,    // platformFeeRate
 	)
 	if err != nil {
 		t.Fatalf("newPendingOrder: %v", err)

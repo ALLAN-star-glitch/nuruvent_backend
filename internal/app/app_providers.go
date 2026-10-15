@@ -13,6 +13,8 @@ import (
 
 	// Auth Module
 	attendanceadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/attendance"
+	eventsadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/events"
+	paymentadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/payment"
 	authHandler "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdelivery/authhandler"
 	authDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authdomain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
@@ -143,6 +145,8 @@ func provideAppDependencies(
 	accountServiceHolder *teamAdapter.AccountServiceHolder,
 	certificateSvc certificateService.Service,
 	certificateHndlr *certificatehttp.Handlers,
+	certificateSvcHolder *paymentadapters.CertificateServiceHolder,
+		eventsCertificateServiceHolder *eventsadapters.CertificateServiceHolder,
 ) *AppDependencies {
 	return &AppDependencies{
 		Config:                    cfg,
@@ -183,5 +187,7 @@ func provideAppDependencies(
 		AccountServiceHolder: accountServiceHolder,
 		CertificateService: certificateSvc,
 		CertificateHandler: certificateHndlr,
+		CertificateServiceHolder: certificateSvcHolder,
+		EventsCertificateServiceHolder: eventsCertificateServiceHolder,
 	}
 }

@@ -45,7 +45,6 @@ var ProviderSet = wire.NewSet(
 )
 
 // ProvideDependencies assembles the service.Dependencies bundle.
-// ProvideDependencies assembles the service.Dependencies bundle.
 func ProvideDependencies(
 	certs certificateDomain.CertificateRepository,
 	templates certificateDomain.TemplateRepository,
@@ -55,6 +54,8 @@ func ProvideDependencies(
 	authz certificateDomain.AuthorizationChecker,
 	pdf certificateDomain.PDFGenerator,
 	storage certificateDomain.ObjectStorage,
+	payment certificateDomain.PaymentCharger,
+	accountPrices certificateDomain.AccountPriceResolver,
 	cfg *config.Config,
 ) certificateService.Dependencies {
 	return certificateService.Dependencies{
@@ -66,6 +67,8 @@ func ProvideDependencies(
 		Authz:         authz,
 		PDF:           pdf,
 		Storage:       storage,
+		Payment:       payment,
+		AccountPrices: accountPrices,
 		VerifyBaseURL: cfg.App.PublicURL,
 	}
 }

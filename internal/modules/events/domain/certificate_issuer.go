@@ -11,41 +11,56 @@ import (
 // OUTBOUND PORT: CertificateIssuer
 // ============================================================
 //
-// Issues certificates for an event's qualified attendees. Implemented
-// by a cross-module adapter that delegates to the certificate module.
+// The events module forwards certificate batch requests to the
+// certificate module through this port. The certificate module
+// decides whether the batch is free (issue immediately) or paid
+// (create a pending order that must be settled before issuance).
 //
-// See internal/app/adapters/events/certificate_adapter.go.
+// The events module owns the qualification decision (who attended
+// and qualifies for a certificate). The certificate module owns
+// issuance, verification, delivery, templates, and pricing. This
+// port carries the minimum data the certificate module needs — no
+// reference to event internals.
 //
-// The events module owns the qualification decision (who attended and
-// qualifies for a certificate). The certificate module owns issuance,
-// verification, delivery, and templates. This port carries the minimum
-// data the certificate module needs — no reference to event internals.
+// See internal/app/adapters/events/certificate_issuer_holder.go.
 type CertificateIssuer interface {
-	// IssueForEvent issues certificates for every recipient in the
-	// request. Idempotent per recipient — callers can retry safely;
-	// already-issued certificates are returned, not duplicated.
+	// InitiateBatchIssuance starts a certificate batch for an event.
 	//
-	// Returns per-recipient results. A single failure does not abort
-	// the batch.
-	IssueForEvent(
+	// Free batches issue immediately and return Type = "free" with
+	// Issued/Reused/Failed counts.
+	//
+	// Paid batches create a pending payment order and return
+	// Type = "paid" with the OrderID and amount. Issuance happens
+	// later, when the payment webhook fires.
+	//
+	// Idempotent per event on both paths.
+	InitiateBatchIssuance(
 		ctx context.Context,
-		req IssueCertificatesRequest,
-	) (*IssueCertificatesResult, error)
+		req InitiateBatchIssuanceRequest,
+	) (*InitiateBatchIssuanceResult, error)
 }
 
-// IssueCertificatesRequest carries everything the certificate module
-// needs to issue certificates for one event.
-type IssueCertificatesRequest struct {
+// ============================================================
+// REQUEST / RESULT TYPES
+// ============================================================
+
+// InitiateBatchIssuanceRequest carries everything the certificate
+// module needs to start a batch.
+type InitiateBatchIssuanceRequest struct {
+	// UserID is the caller (for authz forwarding).
+	UserID string
+
 	// EventID is the events module's own identifier for the event.
 	// The certificate module treats this as an opaque context_id.
 	EventID string
 
 	// AccountID is the account that owns the event. Certificates are
-	// issued under this account.
+	// issued under this account and the organizer is billed.
 	AccountID string
 
 	// TemplateID is optional. Empty means use the account's default,
-	// or a system template if none is set.
+	// or a system template if none is set. The template's price
+	// determines whether the batch is free or paid.
 	TemplateID string
 
 	// EventTitle is rendered into the certificate.
@@ -81,10 +96,25 @@ type CertificateRecipient struct {
 	CompletedAt time.Time
 }
 
-// IssueCertificatesResult summarizes the outcome.
-type IssueCertificatesResult struct {
+// InitiateBatchIssuanceResult is the outcome of a batch initiation.
+//
+// Exactly one set of fields is populated based on Type:
+//   - Type = "free" → Issued, Reused, Failed
+//   - Type = "paid" → OrderID, AmountMinor, Currency
+type InitiateBatchIssuanceResult struct {
+	// Type is either "free" or "paid".
+	Type string
+
+	// ---- Free path ----
 	Issued int
 	Reused int
 	Failed int
-	Errors []string
+
+	// ---- Paid path ----
+	OrderID     string
+	AmountMinor int64
+	Currency    string
+
+	// ---- Shared ----
+	AttendeeCount int
 }

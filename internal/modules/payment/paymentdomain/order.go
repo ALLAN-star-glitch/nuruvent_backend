@@ -7,6 +7,29 @@ import (
 	"time"
 )
 
+
+// OrderKind discriminates between the two kinds of orders the payment
+// module handles.
+type OrderKind string
+
+const (
+	OrderKindRegistration     OrderKind = "registration"
+	OrderKindCertificate      OrderKind = "certificate"       // legacy — attendee-pays, dormant
+	OrderKindCertificateBatch OrderKind = "certificate_batch" // NEW — organizer-pays
+)
+
+func (k OrderKind) IsValid() bool {
+	switch k {
+	case OrderKindRegistration, OrderKindCertificate, OrderKindCertificateBatch:
+		return true
+	default:
+		return false
+	}
+}
+
+// String returns the raw kind.
+func (k OrderKind) String() string { return string(k) }
+
 // Order is a commitment to pay for a set of tickets, tied to one
 // registration. An order has at most one successful payment.
 //
@@ -16,7 +39,13 @@ import (
 // Lifecycle: see OrderStatus.
 type Order struct {
 	ID             string
+	Kind           OrderKind 
 	RegistrationID string
+	CertificateCtx *CertificateContext 
+
+		// Certificate batch order (organizer-pays)
+	BatchCtx           *BatchContext
+	BatchAttendeeCount int
 
 	// Identity: exactly one of UserID or GuestEmail is populated.
 	UserID     string
@@ -132,6 +161,7 @@ func NewOrder(
 
 	return &Order{
 		ID:              id,
+		Kind:            OrderKindRegistration,
 		RegistrationID:  registrationID,
 		UserID:          userID,
 		GuestEmail:      guestEmail,
@@ -149,10 +179,169 @@ func NewOrder(
 	}, nil
 }
 
-// HydrateOrder reconstructs an order from persistence without
-// re-validating. The DB is assumed to hold valid state.
+
+
+// NewCertificateOrder constructs a pending order for a certificate
+// purchase. Certificates are single-amount purchases — no items.
+//
+// billedAccountID and platformFeeRate are snapshotted here and never
+// change afterwards, matching the registration-order behavior.
+func NewCertificateOrder(
+	id string,
+	certCtx CertificateContext,
+	userID string,
+	guestEmail string,
+	currency string,
+	amountMinor int64,
+	ttl time.Duration,
+	now time.Time,
+	billedAccountID string,
+	platformFeeRate float64,
+) (*Order, error) {
+	if id == "" {
+		return nil, fmt.Errorf("order id is required")
+	}
+	if certCtx.ContextType == "" {
+		return nil, fmt.Errorf("certificate context_type is required")
+	}
+	if certCtx.ContextID == "" {
+		return nil, fmt.Errorf("certificate context_id is required")
+	}
+	if certCtx.RecipientName == "" {
+		return nil, fmt.Errorf("certificate recipient name is required")
+	}
+	if certCtx.RecipientEmail == "" {
+		return nil, fmt.Errorf("certificate recipient email is required")
+	}
+
+	// Identity: exactly one of user / guest.
+	if userID == "" && guestEmail == "" {
+		return nil, ErrIdentityRequired
+	}
+	if userID != "" && guestEmail != "" {
+		return nil, fmt.Errorf("%w: both user and guest identity set", ErrIdentityRequired)
+	}
+
+	if currency == "" {
+		return nil, ErrInvalidCurrency
+	}
+	if amountMinor <= 0 {
+		return nil, fmt.Errorf("%w: amount must be positive", ErrInvalidAmount)
+	}
+	if ttl <= 0 {
+		return nil, fmt.Errorf("order ttl must be positive")
+	}
+	if billedAccountID == "" {
+		return nil, fmt.Errorf("billed account id is required")
+	}
+	if platformFeeRate < 0 || platformFeeRate > 1 {
+		return nil, fmt.Errorf(
+			"platform fee rate must be in [0, 1], got %v",
+			platformFeeRate,
+		)
+	}
+
+	return &Order{
+		ID:              id,
+		Kind:            OrderKindCertificate,
+		RegistrationID:  "",
+		CertificateCtx:  &certCtx,
+		UserID:          userID,
+		GuestEmail:      guestEmail,
+		Currency:        currency,
+		Items:           nil, // certificate orders have no items
+		Subtotal:        amountMinor,
+		DiscountTotal:   0,
+		TotalAmount:     amountMinor,
+		Status:          OrderStatusPending,
+		ExpiresAt:       now.Add(ttl),
+		CreatedAt:       now,
+		UpdatedAt:       now,
+		BilledAccountID: billedAccountID,
+		PlatformFeeRate: platformFeeRate,
+	}, nil
+}
+
+
+// NewCertificateBatchOrder constructs a pending order for a
+// certificate batch. The organizer pays; attendees receive
+// certificates free once the order is settled.
+//
+// Certificates are single-amount purchases at the order level (the
+// batch is one charge), so there are no OrderItems.
+func NewCertificateBatchOrder(
+	id string,
+	batchCtx BatchContext,
+	currency string,
+	totalAmountMinor int64,
+	ttl time.Duration,
+	now time.Time,
+	billedAccountID string,
+) (*Order, error) {
+	if id == "" {
+		return nil, fmt.Errorf("order id is required")
+	}
+	if batchCtx.EventID == "" {
+		return nil, fmt.Errorf("batch context event_id is required")
+	}
+	if batchCtx.AccountID == "" {
+		return nil, fmt.Errorf("batch context account_id is required")
+	}
+	if batchCtx.TemplateID == "" {
+		return nil, fmt.Errorf("batch context template_id is required")
+	}
+	if batchCtx.AttendeeCount <= 0 {
+		return nil, fmt.Errorf("%w: attendee count must be positive", ErrInvalidAmount)
+	}
+	if len(batchCtx.Recipients) != batchCtx.AttendeeCount {
+		return nil, fmt.Errorf("batch context recipient count (%d) does not match attendee_count (%d)",
+			len(batchCtx.Recipients), batchCtx.AttendeeCount)
+	}
+	if totalAmountMinor <= 0 {
+		return nil, fmt.Errorf("%w: total amount must be positive", ErrInvalidAmount)
+	}
+	if currency == "" {
+		return nil, ErrInvalidCurrency
+	}
+	if ttl <= 0 {
+		return nil, fmt.Errorf("order ttl must be positive")
+	}
+	if billedAccountID == "" {
+		return nil, fmt.Errorf("billed account id is required")
+	}
+
+	return &Order{
+		ID:                 id,
+		Kind:               OrderKindCertificateBatch,
+		RegistrationID:     "",
+		CertificateCtx:     nil,
+		BatchCtx:           &batchCtx,
+		BatchAttendeeCount: batchCtx.AttendeeCount,
+		UserID:             "",
+		GuestEmail:         "",
+		Currency:           currency,
+		Items:              nil,
+		Subtotal:           totalAmountMinor,
+		DiscountTotal:      0,
+		TotalAmount:        totalAmountMinor,
+		Status:             OrderStatusPending,
+		ExpiresAt:          now.Add(ttl),
+		CreatedAt:          now,
+		UpdatedAt:          now,
+		BilledAccountID:    billedAccountID,
+		// Certificate batch orders charge a flat 100% to Nuruvent.
+		// The organizer's share is zero — the amount is the fee.
+		PlatformFeeRate:    0,
+	}, nil
+}
+
 func HydrateOrder(
-	id, registrationID, userID, guestEmail, currency string,
+	id string,
+	kind OrderKind,
+	certCtx *CertificateContext,
+	batchCtx *BatchContext,          // NEW
+	batchAttendeeCount int,          // NEW
+	registrationID, userID, guestEmail, currency string,
 	items []OrderItem,
 	subtotal, discountTotal, totalAmount int64,
 	status OrderStatus,
@@ -164,25 +353,29 @@ func HydrateOrder(
 	payoutRef string,
 ) *Order {
 	return &Order{
-		ID:              id,
-		RegistrationID:  registrationID,
-		UserID:          userID,
-		GuestEmail:      guestEmail,
-		Currency:        currency,
-		Items:           items,
-		Subtotal:        subtotal,
-		DiscountTotal:   discountTotal,
-		TotalAmount:     totalAmount,
-		Status:          status,
-		ExpiresAt:       expiresAt,
-		CreatedAt:       createdAt,
-		UpdatedAt:       updatedAt,
-		PaidAt:          paidAt,
-		CancelledAt:     cancelledAt,
-		BilledAccountID: billedAccountID,
-		PlatformFeeRate: platformFeeRate,
-		SettledAt:       settledAt,
-		PayoutRef:       payoutRef,
+		ID:                 id,
+		Kind:               kind,
+		RegistrationID:     registrationID,
+		CertificateCtx:     certCtx,
+		BatchCtx:           batchCtx,
+		BatchAttendeeCount: batchAttendeeCount,
+		UserID:             userID,
+		GuestEmail:         guestEmail,
+		Currency:           currency,
+		Items:              items,
+		Subtotal:           subtotal,
+		DiscountTotal:      discountTotal,
+		TotalAmount:        totalAmount,
+		Status:             status,
+		ExpiresAt:          expiresAt,
+		CreatedAt:          createdAt,
+		UpdatedAt:          updatedAt,
+		PaidAt:             paidAt,
+		CancelledAt:        cancelledAt,
+		BilledAccountID:    billedAccountID,
+		PlatformFeeRate:    platformFeeRate,
+		SettledAt:          settledAt,
+		PayoutRef:          payoutRef,
 	}
 }
 
@@ -291,13 +484,23 @@ func (o *Order) TotalQuantity() int {
 // ============================================================
 
 // PlatformFee returns Nuruvent's cut of the order total, in minor
-// units, using the rate snapshotted at creation.
+// units.
 //
-// The multiplication promotes to float64, and the conversion back to
-// int64 truncates toward zero. That matches how the SQL aggregates
-// compute the same value — no drift between in-memory and DB.
+//   - Registration orders: TotalAmount × PlatformFeeRate
+//   - Certificate batch orders: the full TotalAmount (organizer pays
+//     Nuruvent directly; the organizer's net is zero)
 func (o *Order) PlatformFee() int64 {
+	if o.Kind == OrderKindCertificateBatch {
+		return o.TotalAmount
+	}
 	return int64(float64(o.TotalAmount) * o.PlatformFeeRate)
+}
+
+
+// IsCertificateBatch reports whether this is an organizer-pays
+// certificate batch order.
+func (o *Order) IsCertificateBatch() bool {
+	return o.Kind == OrderKindCertificateBatch
 }
 
 // NetToOrganizer returns the amount owed to the billed account before
@@ -349,4 +552,14 @@ func validateItem(it OrderItem) error {
 		)
 	}
 	return nil
+}
+
+// IsCertificate reports whether this is a certificate order.
+func (o *Order) IsCertificate() bool {
+	return o.Kind == OrderKindCertificate
+}
+
+// IsRegistration reports whether this is a registration order.
+func (o *Order) IsRegistration() bool {
+	return o.Kind == OrderKindRegistration
 }

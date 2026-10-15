@@ -63,13 +63,15 @@ import (
 	videoService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/service"
 
 	// Shared
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/ai" 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/database"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/id"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/queue"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
+
+	eventsadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/events"
 
 
 	attendanceadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/attendance"
@@ -83,6 +85,8 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate"
 	certificateService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 	certificatehttp "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/delivery/http"
+
+	paymentadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/payment"
 )
 
 // ============================================================
@@ -144,6 +148,12 @@ type AppDependencies struct {
 		// Certificate Module
 	CertificateService certificateService.Service
 	CertificateHandler *certificatehttp.Handlers
+
+
+	// Cycle-breaking holders
+	CertificateServiceHolder *paymentadapters.CertificateServiceHolder
+
+	EventsCertificateServiceHolder *eventsadapters.CertificateServiceHolder
 
 }
 
@@ -285,12 +295,26 @@ func InitializeApp() (*AppDependencies, error) {
 		certificate.ProviderSet,
 
 		// ============================================================
-	// CROSS-MODULE ADAPTERS - CERTIFICATE
-	// ============================================================
-	NewCertificatePermissionAdapter,
-	NewCertificateStorageAdapter,
-	NewCertificatePDFAdapter,
-	NewEventsCertificateIssuerAdapter,
+		// CROSS-MODULE ADAPTERS - CERTIFICATE
+		// ============================================================
+		NewCertificatePermissionAdapter,
+		NewCertificateStorageAdapter,
+		NewCertificatePDFAdapter,
+		NewEventsCertificateIssuerAdapter,
+		NewEventsAttendanceReaderAdapter,
+
+			// NEW — certificate ↔ payment
+		NewCertificatePaymentChargerAdapter,
+		NewCertificateAccountPriceResolverAdapter,
+		NewPaymentCertificateIssuerAdapter,
+
+
+		NewCertificateServiceHolder,
+
+
+		NewEventsCertificateServiceHolder,
+
+		NewPaymentCertificateBatchIssuerAdapter,
 
 
 

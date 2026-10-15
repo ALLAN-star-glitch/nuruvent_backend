@@ -29,6 +29,8 @@ func NewApp() (*App, error) {
 	// Populate the lazy resolver now that wire has built the full graph.
    deps.EventsServiceHolder.Set(deps.EventsService)
    deps.AccountServiceHolder.Set(deps.AccountService)
+   deps.CertificateServiceHolder.Set(deps.CertificateService)
+   deps.EventsCertificateServiceHolder.Set(deps.CertificateService) 
 
 
 

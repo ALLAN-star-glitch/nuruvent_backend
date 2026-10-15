@@ -118,4 +118,7 @@ var (
 	ErrPublishConnectionInvalid = errors.New("publish: connection invalid")
 	ErrPublishPlatformUnavailable = errors.New("publish: platform unavailable")
 	ErrPublishMeetingCreationFailed = errors.New("publish: meeting creation failed")
+
+
+		ErrInvalidIssueMode = errors.New("invalid certificate issue mode")
 )

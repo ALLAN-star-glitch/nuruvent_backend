@@ -75,6 +75,15 @@ type Template struct {
 	Description string
 	Design      TemplateDesign
 
+	// PriceMinor is the optional template-level certificate price.
+	//
+	//   nil = no override; use the account's default price
+	//   0   = explicitly free for certificates using this template
+	//   >0  = template-specific price in minor units
+	//
+	// Stored in certificate_templates.price_minor (nullable).
+	PriceMinor *int64
+
 	// SystemSlug is non-empty for templates Nuruvent ships with. Such
 	// templates are shared and not owned by any single account.
 	SystemSlug SystemTemplateSlug

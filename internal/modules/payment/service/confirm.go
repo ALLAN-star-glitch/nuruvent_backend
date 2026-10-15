@@ -66,13 +66,30 @@ func (s *service) ConfirmPayment(ctx context.Context, paymentID string) error {
 	}
 
 	// ------------------------------------------------------------
-	// 5. Confirm the registration (best-effort, cross-module)
+	// 5. Post-payment side effects — dispatched by order kind.
 	// ------------------------------------------------------------
-	if err := s.deps.Registrations.ConfirmRegistration(ctx, order.RegistrationID); err != nil {
-		// Log and continue — the payment is confirmed. If the
-		// registration confirmation fails, reconciliation will catch it.
-		// (Logging is done by the caller; this function only returns
-		// errors from the source-of-truth writes.)
+	switch order.Kind {
+	case paymentdomain.OrderKindRegistration:
+		if err := s.deps.Registrations.ConfirmRegistration(ctx, order.RegistrationID); err != nil {
+			// Reconciliation catches this. Not fatal.
+		}
+
+	case paymentdomain.OrderKindCertificate:
+		// Legacy attendee-pays path — kept for backward compat with
+		// any pending certificate orders created before the batch
+		// model shipped.
+		if s.deps.CertificateIssuer != nil {
+			if err := s.deps.CertificateIssuer.IssueFromPaidOrder(ctx, order, payment); err != nil {
+				// Reconciliation catches this. Not fatal.
+			}
+		}
+
+	case paymentdomain.OrderKindCertificateBatch:
+		if s.deps.CertificateBatchIssuer != nil {
+			if err := s.deps.CertificateBatchIssuer.IssueBatch(ctx, order, payment); err != nil {
+				// Reconciliation catches this. Not fatal.
+			}
+		}
 	}
 
 	// ------------------------------------------------------------

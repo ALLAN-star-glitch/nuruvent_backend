@@ -112,6 +112,29 @@ type Service interface {
 		ctx context.Context,
 		userID, certificateID string,
 	) (string, error)
+
+
+	
+
+		// ============================================================
+	// BATCH ISSUANCE (organizer-pays)
+	// ============================================================
+
+	// InitiateBatchIssuance starts a certificate batch for an event.
+	// Free batches issue immediately; paid batches create a pending
+	// payment order. Idempotent per event.
+	InitiateBatchIssuance(
+		ctx context.Context,
+		userID string,
+		in InitiateBatchIssuanceInput,
+	) (*InitiateBatchIssuanceResult, error)
+
+	// IssueBatch issues all certificates for a paid batch. Invoked by
+	// the payment webhook adapter on successful payment.
+	IssueBatch(
+		ctx context.Context,
+		req domain.BatchIssuanceRequest,
+	) (*domain.BatchIssuanceResult, error)
 }
 
 // ============================================================
@@ -155,3 +178,4 @@ type UpdateTemplateInput struct {
 	Description *string
 	Design      *domain.TemplateDesign
 }
+

@@ -164,6 +164,15 @@ var (
 	ErrUnauthorized = errors.New("unauthorized")
 
 
+		// Certificate order errors
+	ErrCertificateContextRequired = errors.New("certificate context is required")
+	ErrInvalidOrderKind           = errors.New("invalid order kind")
+
+
+		// Certificate batch orders
+	ErrBatchContextRequired = errors.New("certificate batch context is required")
+	ErrBatchNotPending      = errors.New("certificate batch order is not pending")
+
 
 	
 )

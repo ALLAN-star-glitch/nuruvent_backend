@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/fiber/v3"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/handlerhelper"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 )
@@ -178,7 +179,6 @@ func (h *Handler) ListMine(c fiber.Ctx) error {
 	return response.Success(c, "Certificates retrieved", toCertificateListResponse(certs))
 }
 
-
 // Download handles GET /certificates/:id/download.
 //
 // Returns a 302 redirect to the certificate's PDF URL. Triggers
@@ -200,6 +200,106 @@ func (h *Handler) Download(c fiber.Ctx) error {
 	}
 
 	return c.Redirect().To(url)
+}
+
+// ============================================================
+// BATCH ISSUANCE (organizer-pays)
+// ============================================================
+
+// InitiateBatchIssuance handles POST /events/:id/certificates/issue.
+//
+// Resolves the template's price:
+//
+//   - price == 0 → issues all certificates immediately,
+//                  returns {type:"free", issued, reused, failed}
+//   - price > 0  → creates a pending payment order for the batch,
+//                  returns {type:"paid", order_id, amount_minor, currency}
+//
+// Idempotent: a repeat call returns the existing batch (free) or the
+// existing pending order (paid).
+func (h *Handler) InitiateBatchIssuance(c fiber.Ctx) error {
+	userID, err := handlerhelper.GetUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "Authentication required", nil)
+	}
+
+	eventID := c.Params("id")
+	if eventID == "" {
+		return response.BadRequest(c, "Event ID is required", nil)
+	}
+
+	var body InitiateBatchIssuanceRequest
+	if err := c.Bind().Body(&body); err != nil {
+		return response.BadRequest(c, "Invalid request body", fiber.Map{
+			"error": err.Error(),
+		})
+	}
+
+	if len(body.Recipients) == 0 {
+		return response.BadRequest(c, "At least one recipient is required", fiber.Map{
+			"field": "recipients",
+		})
+	}
+
+	recipients := make([]domain.BatchRecipient, 0, len(body.Recipients))
+	for i, r := range body.Recipients {
+		completedAt, err := time.Parse(time.RFC3339, r.CompletedAt)
+		if err != nil {
+			return response.BadRequest(c, "Invalid completed_at — expected RFC3339", fiber.Map{
+				"index": i,
+				"email": r.Email,
+			})
+		}
+		recipients = append(recipients, domain.BatchRecipient{
+			UserID:      r.UserID,
+			Name:        r.Name,
+			Email:       r.Email,
+			CompletedAt: completedAt,
+		})
+	}
+
+	eventDate, err := time.Parse(time.RFC3339, body.EventDate)
+	if err != nil {
+		return response.BadRequest(c, "Invalid event_date — expected RFC3339", fiber.Map{
+			"field": "event_date",
+		})
+	}
+
+	result, err := h.svc.InitiateBatchIssuance(c.Context(), userID, service.InitiateBatchIssuanceInput{
+		EventID:       eventID,
+		AccountID:     body.AccountID,
+		TemplateID:    body.TemplateID,
+		EventTitle:    body.EventTitle,
+		EventDate:     eventDate,
+		EventDuration: body.EventDuration,
+		IssuerName:    body.IssuerName,
+		Recipients:    recipients,
+	})
+	if err != nil {
+		return respondClassifiedError(c, "initiate batch issuance", err)
+	}
+
+	resp := InitiateBatchIssuanceResponse{
+		Type:          result.Type,
+		Issued:        result.Issued,
+		Reused:        result.Reused,
+		Failed:        result.Failed,
+		OrderID:       result.OrderID,
+		AmountMinor:   result.AmountMinor,
+		Currency:      result.Currency,
+		AttendeeCount: result.AttendeeCount,
+	}
+
+	status := fiber.StatusOK
+	if result.Type == "free" {
+		status = fiber.StatusCreated
+	}
+
+	return c.Status(status).JSON(fiber.Map{
+		"success": true,
+		"message": "Certificate batch initiated",
+		"data":    resp,
+	})
 }
 
 // ============================================================

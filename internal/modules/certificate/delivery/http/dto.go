@@ -151,3 +151,50 @@ type TemplateResponse struct {
 	CreatedAt   time.Time         `json:"created_at"`
 	UpdatedAt   time.Time         `json:"updated_at"`
 }
+
+// ============================================================
+// BATCH ISSUANCE (organizer-pays)
+// ============================================================
+
+// InitiateBatchIssuanceRequest is the body for
+// POST /events/:id/certificates/issue.
+type InitiateBatchIssuanceRequest struct {
+	AccountID     string             `json:"account_id" binding:"required,uuid"`
+	TemplateID    string             `json:"template_id,omitempty"`
+	EventTitle    string             `json:"event_title,omitempty"`
+	EventDate     string             `json:"event_date" binding:"required"` // RFC3339
+	EventDuration string             `json:"event_duration,omitempty"`
+	IssuerName    string             `json:"issuer_name,omitempty"`
+	Recipients    []BatchRecipientDTO `json:"recipients" binding:"required,min=1,dive"`
+}
+
+// BatchRecipientDTO is one recipient in the batch request.
+type BatchRecipientDTO struct {
+	UserID      string `json:"user_id,omitempty"`
+	Name        string `json:"name" binding:"required"`
+	Email       string `json:"email" binding:"required,email"`
+	CompletedAt string `json:"completed_at" binding:"required"` // RFC3339
+}
+
+// InitiateBatchIssuanceResponse is the response for
+// POST /events/:id/certificates/issue.
+//
+// Exactly one set of fields is populated:
+//   - type = "free" → issued, reused, failed, attendee_count
+//   - type = "paid" → order_id, amount_minor, currency, attendee_count
+type InitiateBatchIssuanceResponse struct {
+	Type string `json:"type"` // "free" | "paid"
+
+	// Free path
+	Issued int `json:"issued,omitempty"`
+	Reused int `json:"reused,omitempty"`
+	Failed int `json:"failed,omitempty"`
+
+	// Paid path
+	OrderID     string `json:"order_id,omitempty"`
+	AmountMinor int64  `json:"amount_minor,omitempty"`
+	Currency    string `json:"currency,omitempty"`
+
+	// Shared
+	AttendeeCount int `json:"attendee_count"`
+}

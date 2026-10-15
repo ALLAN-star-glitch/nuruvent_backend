@@ -46,17 +46,23 @@ func NewHandlers(svc certificateService.Service) *Handlers {
 
 // RegisterRoutes mounts the certificate module's main routes under the
 // given router (typically the /api/v1 group).
+//
+// optionalAuth is used on the /request endpoint so guest buyers can
+// request certificates with a matching guest_email.
 func RegisterRoutes(
 	r fiber.Router,
 	h *Handlers,
 	authMiddleware fiber.Handler,
 	authzMiddleware fiber.Handler,
+	optionalAuth fiber.Handler,
 ) {
 	// ---- Public (no auth) ----
 	r.Get("/certificates/verify/:code", h.Handler.Verify)
 
+
 	// ---- Certificates (auth + authz) ----
-	r.Post("/certificates", authMiddleware, authzMiddleware, h.Handler.Issue)
+		// Batch issuance (organizer-pays)
+	r.Post("/events/:id/certificates/issue", authMiddleware, authzMiddleware, h.Handler.InitiateBatchIssuance)
 	r.Post("/certificates/bulk", authMiddleware, authzMiddleware, h.Handler.IssueBulk)
 	r.Post("/certificates/:id/revoke", authMiddleware, authzMiddleware, h.Handler.RevokeByUser)
 	r.Get("/certificates/:id/download", authMiddleware, authzMiddleware, h.Handler.Download)
@@ -71,10 +77,6 @@ func RegisterRoutes(
 
 // RegisterUserRoutes mounts user-scoped certificate routes
 // (/me/certificates).
-//
-// ListMine is own-scope: authzMiddleware's fallback chain
-// (read/read_all/read_own) lets any of them through, and the service
-// enforces the own-scope query filter.
 func RegisterUserRoutes(
 	r fiber.Router,
 	h *Handlers,
@@ -86,9 +88,6 @@ func RegisterUserRoutes(
 
 // RegisterAccountRoutes mounts account-scoped certificate routes
 // (/accounts/:id/certificates).
-//
-// authzMiddleware resolves the domain from Params("id") plus the
-// "/accounts/" path segment → "account:<id>".
 func RegisterAccountRoutes(
 	r fiber.Router,
 	h *Handlers,

@@ -28,6 +28,7 @@ import (
 	paymentproviders "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/providers"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/infrastructure/providers/paystack"
 	paymentdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
+	paymentService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/registrationdomain"
 	registrationService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/registration/service"
 	teamService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/team/service"
@@ -40,18 +41,13 @@ import (
 
 	attendanceDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 
-
-
 	videoadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/video"
 	videoDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/video/videodomain"
 
-
-
 	certificateadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/certificate"
-certificateDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
-sharedstorage "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
+	certificateDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
+	sharedstorage "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
 
-certificateService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 )
 
 // ---- AUTH ADAPTERS ----
@@ -429,9 +425,9 @@ func NewCertificateStorageAdapter(
 // qualified attendees, without the events module ever importing the
 // certificate module's internals.
 func NewEventsCertificateIssuerAdapter(
-	certSvc certificateService.Service,
+	holder *events.CertificateServiceHolder,
 ) eventsDomain.CertificateIssuer {
-	return events.NewCertificateIssuerAdapter(certSvc)
+	return events.NewCertificateIssuerAdapter(holder)
 }
 
 
@@ -439,4 +435,82 @@ func NewEventsCertificateIssuerAdapter(
 // certificate module.
 func NewCertificatePDFAdapter() certificateDomain.PDFGenerator {
 	return certificateadapters.NewPDFAdapter()
+}
+
+
+// NewEventsAttendanceReaderAdapter wires the attendance service to the
+// events module's AttendanceReader port.
+//
+// Used by the events service to determine who attended an event so
+// certificates can be issued automatically.
+func NewEventsAttendanceReaderAdapter(
+	attendanceSvc attendanceService.Service,
+) eventsDomain.AttendanceReader {
+	return events.NewAttendanceReaderAdapter(attendanceSvc)
+}
+
+
+
+// ---- CERTIFICATE → PAYMENT ----
+
+// NewCertificatePaymentChargerAdapter wires the payment service to the
+// certificate module's PaymentCharger port.
+//
+// Used by the certificate service to create pending orders for paid
+// certificates.
+func NewCertificatePaymentChargerAdapter(
+	paymentSvc paymentService.Service,
+) certificateDomain.PaymentCharger {
+	return certificateadapters.NewPaymentChargerAdapter(paymentSvc)
+}
+
+// ---- PAYMENT → CERTIFICATE ----
+
+// NewPaymentCertificateIssuerAdapter wires the certificate service to
+// the payment module's CertificateIssuer port via a lazy holder —
+// breaks the payment ↔ certificate cycle.
+func NewPaymentCertificateIssuerAdapter(
+	holder *paymentadapters.CertificateServiceHolder,
+) paymentdomain.CertificateIssuer {
+	return paymentadapters.NewCertificateIssuerAdapter(holder)
+}
+
+// NewCertificateServiceHolder constructs the empty holder. Wire
+// populates it after graph construction via app.go.
+//
+// Breaks the payment → certificate → payment cycle. See
+// adapters/payment/certificate_issuer_holder.go.
+func NewCertificateServiceHolder() *paymentadapters.CertificateServiceHolder {
+	return paymentadapters.NewCertificateServiceHolder()
+}
+
+// NewCertificateAccountPriceResolverAdapter wires the shared DB to the
+// certificate module's AccountPriceResolver port.
+//
+// Reads accounts.certificate_price_minor directly. The account module
+// does not expose a service method for this yet.
+func NewCertificateAccountPriceResolverAdapter(
+	db *gorm.DB,
+) certificateDomain.AccountPriceResolver {
+	return certificateadapters.NewAccountPriceResolverAdapter(db)
+}
+
+
+// NewEventsCertificateServiceHolder constructs the empty holder. Wire
+// populates it after graph construction via app.go.
+//
+// Breaks the events → certificate → payment → registration → events
+// cycle. See adapters/events/certificate_issuer_holder.go.
+func NewEventsCertificateServiceHolder() *events.CertificateServiceHolder {
+	return events.NewCertificateServiceHolder()
+}
+
+// NewPaymentCertificateBatchIssuerAdapter wires the certificate service
+// to the payment module's CertificateBatchIssuer port via the same
+// lazy holder used by the legacy issuer.
+func NewPaymentCertificateBatchIssuerAdapter(
+	holder *paymentadapters.CertificateServiceHolder,
+) paymentdomain.CertificateBatchIssuer {
+	// Same adapter type — it implements both interfaces.
+	return paymentadapters.NewCertificateIssuerAdapter(holder)
 }

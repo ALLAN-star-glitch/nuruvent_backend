@@ -27,6 +27,23 @@ type OrderRepository interface {
 	// FindExpired returns orders that are still pending but past their
 	// deadline. Used by the expiry sweeper job.
 	FindExpired(ctx context.Context, before time.Time, limit int) ([]*Order, error)
+
+		// FindActiveByCertificateContext returns the pending certificate
+	// order for a completion, if any. Used to enforce the
+	// one-active-order-per-completion rule at the query level.
+	//
+	// Returns ErrOrderNotFound when none exists.
+	FindActiveByCertificateContext(
+		ctx context.Context,
+		contextType, contextID, recipientEmail string,
+	) (*Order, error)
+
+		// FindActiveByBatchEvent returns the pending certificate batch
+	// order for an event, if any. Used to prevent double-charging when
+	// an organizer retries the "issue certificates" action.
+	//
+	// Returns ErrOrderNotFound when none exists.
+	FindActiveByBatchEvent(ctx context.Context, eventID string) (*Order, error)
 }
 
 // ============================================================

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
 
@@ -142,12 +143,13 @@ type Service interface {
 	// CERTIFICATES
 	// ============================================================
 
-	// IssueCertificatesForEvent issues certificates for the supplied
-	// recipients on behalf of an event.
-	IssueCertificatesForEvent(
+		IssueCertificatesForEvent(
 		ctx context.Context,
+		userID string,
 		cmd IssueCertificatesForEventCommand,
-	) (*domain.IssueCertificatesResult, error)
+	) (*domain.InitiateBatchIssuanceResult, error)
+
+	
 
 
 	
@@ -591,3 +593,5 @@ type MediaInfo struct {
 	ContentType string
 	UploadedAt  string
 }
+
+

@@ -14,18 +14,19 @@ import "time"
 //   - account templates (is_system = FALSE, account_id set, slug NULL)
 type TemplateModel struct {
 	ID          string  `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
-	Slug        *string `gorm:"type:varchar(100);index"` // only set for system templates
+	Slug        *string `gorm:"type:varchar(100);index"`
 	Name        string  `gorm:"type:varchar(100);not null"`
 	DisplayName *string `gorm:"type:varchar(100)"`
 	Description *string `gorm:"type:text"`
 	PreviewURL  *string `gorm:"type:varchar(500)"`
 	IsActive    bool    `gorm:"default:true"`
 
-	// Account-scoped (added by migration 143)
 	AccountID *string `gorm:"type:uuid;index"`
 	Design    JSONB   `gorm:"type:jsonb;not null;default:'{}'"`
 	IsDefault bool    `gorm:"not null;default:false"`
 	IsSystem  bool    `gorm:"not null;default:false"`
+
+	PriceMinor *int64 `gorm:"column:price_minor"` // ← NEW
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

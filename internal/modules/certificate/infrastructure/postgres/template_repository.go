@@ -48,6 +48,7 @@ func (r *TemplateRepository) Update(ctx context.Context, t *domain.Template) err
 			"name":        t.Name,
 			"description": t.Description,
 			"design":      JSONB(design),
+			"price_minor": t.PriceMinor,
 			"is_default":  t.IsDefault,
 			"updated_at":  t.UpdatedAt,
 		})
@@ -169,6 +170,7 @@ func toTemplateModel(t *domain.Template) (*TemplateModel, error) {
         IsActive:    true,
         AccountID:   nullableString(t.AccountID),
         Design:      JSONB(design),
+		PriceMinor: t.PriceMinor,
         IsDefault:   t.IsDefault,
         IsSystem:    t.IsSystem,
         CreatedAt:   t.CreatedAt,
@@ -190,6 +192,7 @@ func toTemplateDomain(m *TemplateModel) (*domain.Template, error) {
         Name:        m.Name,
         Description: derefString(m.Description),
         Design:      design,
+		PriceMinor: m.PriceMinor,
         SystemSlug:  systemSlugValue(m.Slug),
         IsDefault:   m.IsDefault,
         IsSystem:    m.IsSystem,

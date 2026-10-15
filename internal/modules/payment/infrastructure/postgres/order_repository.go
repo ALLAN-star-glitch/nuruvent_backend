@@ -141,6 +141,30 @@ func (r *OrderRepository) FindExpired(
 	return orders, nil
 }
 
+
+// FindActiveByCertificateContext returns the pending certificate order
+// for a completion, if any.
+func (r *OrderRepository) FindActiveByCertificateContext(
+	ctx context.Context,
+	contextType, contextID, recipientEmail string,
+) (*paymentdomain.Order, error) {
+	var model OrderModel
+	err := r.db.WithContext(ctx).
+		Where("kind = ? AND status = ?", "certificate", string(paymentdomain.OrderStatusPending)).
+		Where("certificate_context->>'context_type' = ?", contextType).
+		Where("certificate_context->>'context_id' = ?", contextID).
+		Where("certificate_context->>'recipient_email' = ?", recipientEmail).
+		First(&model).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, paymentdomain.ErrOrderNotFound
+	}
+	if err != nil {
+		return nil, translateError(err, "find active certificate order")
+	}
+	return toOrderDomain(&model)
+}
+
 // ============================================================
 // ERROR TRANSLATION
 // ============================================================
@@ -163,4 +187,25 @@ func translateError(err error, op string) error {
 	}
 
 	return fmt.Errorf("%s: %w", op, err)
+}
+
+// FindActiveByBatchEvent returns the pending certificate batch order
+// for an event, if any.
+func (r *OrderRepository) FindActiveByBatchEvent(
+	ctx context.Context,
+	eventID string,
+) (*paymentdomain.Order, error) {
+	var model OrderModel
+	err := r.db.WithContext(ctx).
+		Where("kind = ? AND status = ?", "certificate_batch", string(paymentdomain.OrderStatusPending)).
+		Where("batch_context->>'event_id' = ?", eventID).
+		First(&model).Error
+
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, paymentdomain.ErrOrderNotFound
+	}
+	if err != nil {
+		return nil, translateError(err, "find active batch order")
+	}
+	return toOrderDomain(&model)
 }

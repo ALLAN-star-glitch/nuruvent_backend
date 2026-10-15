@@ -22,10 +22,11 @@ type Dependencies struct {
 	PDF     domain.PDFGenerator
 	Storage domain.ObjectStorage
 
+	// Phase 5: paid certificates
+	Payment       domain.PaymentCharger
+	AccountPrices domain.AccountPriceResolver
+
 	// VerifyBaseURL is the public base URL used to build the QR-code
 	// verification link. Comes from cfg.App.PublicURL.
 	VerifyBaseURL string
-
-	// Notification is reserved for Phase 4.
-	// Notification domain.NotificationSender
 }

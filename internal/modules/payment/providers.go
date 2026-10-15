@@ -116,7 +116,10 @@ func ProvideServiceDependencies(
 	registrationPricing paymentdomain.RegistrationPricingResolver,
 	registrationBilling paymentdomain.RegistrationBillingResolver,
 
+	certIssuer paymentdomain.CertificateIssuer,
+
 	eventsReader paymentdomain.EventsReader,
+	certBatchIssuer paymentdomain.CertificateBatchIssuer,
 
 	cfg *config.Config,
 
@@ -132,6 +135,7 @@ func ProvideServiceDependencies(
 		Providers:  registry,
 		Notifier:   notifier,
 		UnitOfWork: uow,
+		CertificateIssuer: certIssuer,
 
 		Registrations:       registrations,
 		RegistrationPricing: registrationPricing,
@@ -143,6 +147,7 @@ func ProvideServiceDependencies(
 
 		IDGenerator: idGen,
 		Clock:       clock,
+		CertificateBatchIssuer: certBatchIssuer,
 	}
 }
 

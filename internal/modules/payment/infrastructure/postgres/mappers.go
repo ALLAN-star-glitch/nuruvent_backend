@@ -27,9 +27,28 @@ func toOrderDomain(m *OrderModel) (*paymentdomain.Order, error) {
 		return nil, err
 	}
 
+	kind := paymentdomain.OrderKind(m.Kind)
+	if kind == "" {
+		kind = paymentdomain.OrderKindRegistration
+	}
+
+	certCtx, err := certContextFromJSON(m.CertificateContext)
+	if err != nil {
+		return nil, err
+	}
+
+	batchCtx, err := batchContextFromJSON(m.BatchContext)
+	if err != nil {
+		return nil, err
+	}
+
 	return paymentdomain.HydrateOrder(
 		m.ID,
-		m.RegistrationID,
+		kind,
+		certCtx,
+		batchCtx,
+		m.BatchAttendeeCount,
+		derefString(m.RegistrationID),
 		derefString(m.UserID),
 		derefString(m.GuestEmail),
 		m.Currency,
@@ -52,23 +71,34 @@ func toOrderDomain(m *OrderModel) (*paymentdomain.Order, error) {
 
 // toOrderModel converts a domain Order to an OrderModel.
 func toOrderModel(o *paymentdomain.Order) *OrderModel {
-	model := &OrderModel{
-		ID:              o.ID,
-		RegistrationID:  o.RegistrationID,
-		UserID:          nullableString(o.UserID),
-		GuestEmail:      nullableString(o.GuestEmail),
-		Currency:        o.Currency,
-		Subtotal:        o.Subtotal,
-		DiscountTotal:   o.DiscountTotal,
-		TotalAmount:     o.TotalAmount,
-		Status:          string(o.Status),
-		ExpiresAt:       o.ExpiresAt,
-		PaidAt:          o.PaidAt,
-		CancelledAt:     o.CancelledAt,
-		CreatedAt:       o.CreatedAt,
-		UpdatedAt:       o.UpdatedAt,
+	certCtxJSON, _ := certContextToJSON(o.CertificateCtx)
+	batchCtxJSON, _ := batchContextToJSON(o.BatchCtx)
 
-		// Billing
+	kind := o.Kind
+	if kind == "" {
+		kind = paymentdomain.OrderKindRegistration
+	}
+
+	model := &OrderModel{
+		ID:                 o.ID,
+		Kind:               string(kind),
+		RegistrationID:     nullableString(o.RegistrationID),
+		CertificateContext: certCtxJSON,
+		BatchContext:       batchCtxJSON,
+		BatchAttendeeCount: o.BatchAttendeeCount,
+		UserID:             nullableString(o.UserID),
+		GuestEmail:         nullableString(o.GuestEmail),
+		Currency:           o.Currency,
+		Subtotal:           o.Subtotal,
+		DiscountTotal:      o.DiscountTotal,
+		TotalAmount:        o.TotalAmount,
+		Status:             string(o.Status),
+		ExpiresAt:          o.ExpiresAt,
+		PaidAt:             o.PaidAt,
+		CancelledAt:        o.CancelledAt,
+		CreatedAt:          o.CreatedAt,
+		UpdatedAt:          o.UpdatedAt,
+
 		BilledAccountID: o.BilledAccountID,
 		PlatformFeeRate: o.PlatformFeeRate,
 		SettledAt:       o.SettledAt,

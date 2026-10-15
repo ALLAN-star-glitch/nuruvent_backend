@@ -14,16 +14,14 @@ import (
 
 // IssueCertificates handles POST /events/:id/certificates/issue.
 //
-// Issues certificates for the supplied recipients on behalf of the
-// event. The certificate module enforces idempotency per
-// (context_type, context_id, recipient) triple — re-issuing returns
-// the existing certificate rather than creating a duplicate.
+// Starts a certificate batch for the event. Free batches issue
+// immediately; paid batches create a pending payment order that the
+// organizer must settle before certificates are issued.
 //
-// Requires certificate:issue on the event's account. The route is
-// gated by authzMiddleware, which resolves the permission from the
-// path and method.
+// Idempotent per event.
 func (h *EventHandler) IssueCertificates(c fiber.Ctx) error {
-	if _, err := handlerhelper.GetUserID(c); err != nil {
+	userID, err := handlerhelper.GetUserID(c)
+	if err != nil {
 		return response.Unauthorized(c, "Authentication required", nil)
 	}
 
@@ -39,14 +37,40 @@ func (h *EventHandler) IssueCertificates(c fiber.Ctx) error {
 		})
 	}
 
+	// Validate mode.
+	mode := body.Mode
+	if mode == "" {
+		mode = service.IssueModeAdd
+	}
+	if mode != service.IssueModeAdd && mode != service.IssueModeReplace {
+		return response.BadRequest(c, "Invalid mode — must be 'add' or 'replace'", fiber.Map{
+			"field": "mode",
+		})
+	}
+	if mode == service.IssueModeReplace && len(body.Recipients) == 0 {
+		return response.BadRequest(c, "recipients is required when mode is 'replace'", fiber.Map{
+			"field": "recipients",
+		})
+	}
+
+	// Parse recipients.
 	recipients := make([]service.IssueCertificateRecipientInput, 0, len(body.Recipients))
 	for i, r := range body.Recipients {
-		completedAt, err := time.Parse(time.RFC3339, r.CompletedAt)
-		if err != nil {
-			return response.BadRequest(c, "Invalid completed_at — expected RFC3339", fiber.Map{
+		if r.Name == "" || r.Email == "" {
+			return response.BadRequest(c, "Each recipient must have name and email", fiber.Map{
 				"index": i,
-				"email": r.Email,
 			})
+		}
+		var completedAt time.Time
+		if r.CompletedAt != "" {
+			t, err := time.Parse(time.RFC3339, r.CompletedAt)
+			if err != nil {
+				return response.BadRequest(c, "Invalid completed_at — expected RFC3339", fiber.Map{
+					"index": i,
+					"email": r.Email,
+				})
+			}
+			completedAt = t
 		}
 		recipients = append(recipients, service.IssueCertificateRecipientInput{
 			UserID:      r.UserID,
@@ -61,21 +85,37 @@ func (h *EventHandler) IssueCertificates(c fiber.Ctx) error {
 		issuerName = "Nuruvent"
 	}
 
-	result, err := h.svc.IssueCertificatesForEvent(c.Context(), service.IssueCertificatesForEventCommand{
+	result, err := h.svc.IssueCertificatesForEvent(c.Context(), userID, service.IssueCertificatesForEventCommand{
 		EventID:       eventID,
 		TemplateID:    body.TemplateID,
 		EventDuration: body.EventDuration,
 		IssuerName:    issuerName,
+		Mode:          mode,
 		Recipients:    recipients,
 	})
 	if err != nil {
 		return respondClassifiedError(c, "issue certificates for this event", err)
 	}
 
-	return response.Created(c, "Certificates issued", IssueCertificatesResponse{
-		Issued: result.Issued,
-		Reused: result.Reused,
-		Failed: result.Failed,
-		Errors: result.Errors,
+	resp := IssueCertificatesResponse{
+		Type:          result.Type,
+		Issued:        result.Issued,
+		Reused:        result.Reused,
+		Failed:        result.Failed,
+		OrderID:       result.OrderID,
+		AmountMinor:   result.AmountMinor,
+		Currency:      result.Currency,
+		AttendeeCount: result.AttendeeCount,
+	}
+
+	status := fiber.StatusOK
+	if result.Type == "free" {
+		status = fiber.StatusCreated
+	}
+
+	return c.Status(status).JSON(fiber.Map{
+		"success": true,
+		"message": "Certificate batch initiated",
+		"data":    resp,
 	})
 }

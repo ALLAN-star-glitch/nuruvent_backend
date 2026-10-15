@@ -8,10 +8,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// OrderModel maps to the `orders` table.
 type OrderModel struct {
 	ID             string  `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
-	RegistrationID string  `gorm:"type:uuid;not null;index"`
+	Kind           string  `gorm:"type:varchar(20);not null;default:'registration';index"`
+	RegistrationID *string `gorm:"type:uuid;index"` // nullable now
 	UserID         *string `gorm:"type:uuid;index"`
 	GuestEmail     *string `gorm:"type:varchar(255)"`
 
@@ -25,22 +25,22 @@ type OrderModel struct {
 	PaidAt      *time.Time
 	CancelledAt *time.Time
 
-	// Billing — frozen at order creation.
-	//
-	// BilledAccountID is the account that receives the net proceeds.
-	// PlatformFeeRate is Nuruvent's cut at the moment the order was
-	// created. SettledAt and PayoutRef are written by the payout
-	// workflow (manual today; automated later).
 	BilledAccountID string     `gorm:"column:billed_account_id;type:uuid;not null;index"`
 	PlatformFeeRate float64    `gorm:"column:platform_fee_rate;type:numeric(5,4);not null;default:0.0450"`
 	SettledAt       *time.Time `gorm:"column:settled_at"`
 	PayoutRef       *string    `gorm:"column:payout_ref;type:varchar(255)"`
 
+	CertificateContext JSONB `gorm:"type:jsonb"` // ← NEW
+
+
+		// Batch order context (organizer-pays certificates).
+	BatchContext       JSONB `gorm:"type:jsonb"`
+	BatchAttendeeCount int   `gorm:"not null;default:0"`
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`
 
-	// Relations
 	Items []OrderItemModel `gorm:"foreignKey:OrderID"`
 }
 

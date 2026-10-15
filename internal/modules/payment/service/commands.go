@@ -183,3 +183,69 @@ type ListPaymentsResult struct {
 	Page     int
 	PageSize int
 }
+
+// ============================================================
+// CREATE CERTIFICATE ORDER
+// ============================================================
+
+// CreateCertificateOrderCommand is the input for
+// CreateCertificateOrder.
+//
+// The certificate module supplies all context. The payment module
+// stores it as JSONB and forwards it back to the certificate module
+// when the order is paid.
+type CreateCertificateOrderCommand struct {
+	// Certificate context — opaque to the payment module.
+	ContextType     string
+	ContextID       string
+	TemplateID      string
+	RecipientName   string
+	RecipientEmail  string
+	RecipientUserID string
+	CompletedAt     time.Time
+	AccountID       string
+
+	// Pricing
+	AmountMinor int64
+	Currency    string
+
+	// Ownership proof — mirrors CreateOrderCommand.
+	//   - ActorID set    → authenticated user; the order is theirs.
+	//   - GuestEmail set → guest; must match RecipientEmail.
+	ActorID    string
+	GuestEmail string
+}
+
+// ============================================================
+// CREATE CERTIFICATE BATCH ORDER
+// ============================================================
+
+// CreateCertificateBatchOrderCommand is the input for
+// CreateCertificateBatchOrder.
+//
+// The certificate module supplies the batch context. The payment
+// module computes nothing — the amount, recipients, and metadata are
+// all frozen by the caller.
+type CreateCertificateBatchOrderCommand struct {
+	EventID           string
+	AccountID         string
+	TemplateID        string
+	PricePerCertMinor int64
+
+	EventTitle    string
+	EventDate     time.Time
+	EventDuration string
+	IssuerName    string
+
+	Recipients []CertificateBatchRecipientInput
+
+	Currency string
+}
+
+// CertificateBatchRecipientInput is one attendee in the batch.
+type CertificateBatchRecipientInput struct {
+	UserID      string
+	Name        string
+	Email       string
+	CompletedAt time.Time
+}

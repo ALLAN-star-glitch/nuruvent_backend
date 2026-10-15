@@ -720,38 +720,55 @@ type ReorderSchedulesRequest struct {
 // IssueCertificatesRequest is the body for
 // POST /events/:id/certificates/issue.
 //
-// The caller supplies the recipient list. Later phases will allow
-// omitting it so the server derives qualified attendees from
-// attendance data.
+// Mode controls recipient resolution:
+//
+//   - "add" (default) — every attendee with a qualifying attendance
+//     status receives a certificate, PLUS any recipients supplied
+//     here. Duplicates removed.
+//
+//   - "replace" — only the caller-supplied recipients receive a
+//     certificate. Attendance is not consulted.
 type IssueCertificatesRequest struct {
-	// Recipients who should receive certificates. Must be non-empty.
-	Recipients []IssueCertificateRecipientDTO `json:"recipients" binding:"required,min=1,dive"`
+	Mode string `json:"mode,omitempty"`
 
-	// TemplateID is optional. Empty means use the account's default
-	// template, or a system template if none is set.
-	TemplateID string `json:"template_id,omitempty"`
+	// Recipients is optional in "add" mode. Required in "replace"
+	// mode.
+	Recipients []IssueCertificateRecipientDTO `json:"recipients,omitempty,dive"`
 
-	// IssuerName is the organization name printed on the certificate.
-	// Optional; defaults to "Nuruvent" if empty.
-	IssuerName string `json:"issuer_name,omitempty"`
-
-	// EventDuration is a human-readable duration string (e.g. "2 hours")
-	// rendered onto the certificate. Optional.
+	TemplateID    string `json:"template_id,omitempty"`
+	IssuerName    string `json:"issuer_name,omitempty"`
 	EventDuration string `json:"event_duration,omitempty"`
 }
 
 // IssueCertificateRecipientDTO is one recipient in the request.
 type IssueCertificateRecipientDTO struct {
 	UserID      string `json:"user_id,omitempty"`
-	Name        string `json:"name" binding:"required"`
-	Email       string `json:"email" binding:"required,email"`
-	CompletedAt string `json:"completed_at" binding:"required"` // RFC3339
+	Name        string `json:"name,omitempty"`
+	Email       string `json:"email" binding:"omitempty,email"`
+	CompletedAt string `json:"completed_at,omitempty"` // RFC3339
 }
 
-// IssueCertificatesResponse summarizes the issuance.
+
+
+// IssueCertificatesResponse summarizes the batch initiation.
+//
+// Exactly one set of fields is populated based on Type:
+//   - "free" → Issued, Reused, Failed
+//   - "paid" → OrderID, AmountMinor, Currency
 type IssueCertificatesResponse struct {
-	Issued int      `json:"issued"`
-	Reused int      `json:"reused"`
-	Failed int      `json:"failed"`
+	Type string `json:"type"` // "free" | "paid"
+
+	// Free path
+	Issued int      `json:"issued,omitempty"`
+	Reused int      `json:"reused,omitempty"`
+	Failed int      `json:"failed,omitempty"`
 	Errors []string `json:"errors,omitempty"`
+
+	// Paid path
+	OrderID     string `json:"order_id,omitempty"`
+	AmountMinor int64  `json:"amount_minor,omitempty"`
+	Currency    string `json:"currency,omitempty"`
+
+	// Shared
+	AttendeeCount int `json:"attendee_count"`
 }

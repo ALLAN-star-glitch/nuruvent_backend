@@ -24,8 +24,9 @@ import (
 
 type fakeService struct {
 	// Order
-	createOrderFunc func(ctx context.Context, cmd service.CreateOrderCommand) (*paymentdomain.Order, error)
-	getOrderFunc    func(ctx context.Context, orderID string) (*paymentdomain.Order, error)
+	createOrderFunc            func(ctx context.Context, cmd service.CreateOrderCommand) (*paymentdomain.Order, error)
+	createCertificateOrderFunc func(ctx context.Context, cmd service.CreateCertificateOrderCommand) (*paymentdomain.Order, error)
+	getOrderFunc               func(ctx context.Context, orderID string) (*paymentdomain.Order, error)
 
 	// Payment
 	initiateFunc      func(ctx context.Context, cmd service.InitiateCommand) (*paymentdomain.Payment, error)
@@ -37,11 +38,33 @@ type fakeService struct {
 
 	listPaymentsFunc    func(ctx context.Context, cmd service.ListPaymentsCommand) (*service.ListPaymentsResult, error)
 	getPaymentStatsFunc func(ctx context.Context, cmd service.PaymentStatsCommand) (*paymentdomain.PaymentStats, error)
+	createCertificateBatchOrderFunc func(ctx context.Context, cmd service.CreateCertificateBatchOrderCommand) (*paymentdomain.Order, error)
+}
+
+
+func (f *fakeService) CreateCertificateBatchOrder(
+	ctx context.Context,
+	cmd service.CreateCertificateBatchOrderCommand,
+) (*paymentdomain.Order, error) {
+	if f.createCertificateBatchOrderFunc != nil {
+		return f.createCertificateBatchOrderFunc(ctx, cmd)
+	}
+	return nil, nil
 }
 
 func (f *fakeService) CreateOrder(ctx context.Context, cmd service.CreateOrderCommand) (*paymentdomain.Order, error) {
 	if f.createOrderFunc != nil {
 		return f.createOrderFunc(ctx, cmd)
+	}
+	return nil, nil
+}
+
+func (f *fakeService) CreateCertificateOrder(
+	ctx context.Context,
+	cmd service.CreateCertificateOrderCommand,
+) (*paymentdomain.Order, error) {
+	if f.createCertificateOrderFunc != nil {
+		return f.createCertificateOrderFunc(ctx, cmd)
 	}
 	return nil, nil
 }
