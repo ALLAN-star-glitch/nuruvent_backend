@@ -123,6 +123,12 @@ const (
 	// REGISTRATION NOTIFICATION TYPES
 	// ============================================================
 	TypeRegistrationConfirmed NotificationType = "registration_confirmed"
+
+
+		// ============================================================
+	// CERTIFICATE NOTIFICATION TYPES
+	// ============================================================
+	TypeCertificateReady NotificationType = "certificate_ready"
 )
 
 func (t NotificationType) String() string {

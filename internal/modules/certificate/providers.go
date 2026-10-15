@@ -56,19 +56,24 @@ func ProvideDependencies(
 	storage certificateDomain.ObjectStorage,
 	payment certificateDomain.PaymentCharger,
 	accountPrices certificateDomain.AccountPriceResolver,
+	downloadTokens certificateDomain.DownloadTokenSigner, // ← NEW
+	notifier certificateDomain.NotificationSender,
 	cfg *config.Config,
 ) certificateService.Dependencies {
 	return certificateService.Dependencies{
-		Certificates:  certs,
-		Templates:     templates,
-		IDs:           ids,
-		Codes:         codes,
-		Clock:         clock,
-		Authz:         authz,
-		PDF:           pdf,
-		Storage:       storage,
-		Payment:       payment,
-		AccountPrices: accountPrices,
-		VerifyBaseURL: cfg.App.PublicURL,
+		Certificates:     certs,
+		Templates:        templates,
+		IDs:              ids,
+		Codes:            codes,
+		Clock:            clock,
+		Authz:            authz,
+		PDF:              pdf,
+		Storage:          storage,
+		Payment:          payment,
+		AccountPrices:    accountPrices,
+		DownloadTokens:   downloadTokens,             // ← NEW
+		DownloadTokenTTL: cfg.App.DownloadTokenTTL,   // ← NEW
+		VerifyBaseURL:    cfg.App.PublicURL,
+		Notifier: notifier, 
 	}
 }

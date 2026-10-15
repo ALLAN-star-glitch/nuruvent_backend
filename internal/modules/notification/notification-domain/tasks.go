@@ -39,6 +39,11 @@ const (
 	// REGISTRATION TASKS
 	// ============================================================
 	TaskRegistrationConfirmed = "notification:registration_confirmed"
+
+		// ============================================================
+	// CERTIFICATE TASKS
+	// ============================================================
+	TaskCertificateReady = "notification:certificate_ready"
 )
 
 
@@ -264,3 +269,21 @@ type RegistrationConfirmedTask struct {
 	JoinLinks          []RegistrationJoinLink // One per session
 }
 
+
+
+// CertificateReadyTask is sent to a certificate recipient when their
+// certificate is issued.
+//
+// The email contains a signed download link that works without
+// authenticating — necessary for guest recipients who have no
+// Nuruvent account.
+type CertificateReadyTask struct {
+	To              string // Recipient email
+	Name            string // Recipient name
+	EventTitle      string // Rendered in the subject and body
+	IssuerName      string // Organization name
+	DownloadURL     string // Signed URL (works for guests too)
+	VerifyURL       string // Public verification URL
+	DashboardURL    string // Optional — link to /me/certificates
+	ExpiresIn       string // Human-readable link validity ("90 days")
+}

@@ -191,6 +191,13 @@ type AppConfig struct {
 	// is redeemed on nuruvent.com but the meeting page runs on
 	// www.nuruvent.com and calls api.nuruvent.com.
 	CookieDomain string
+
+	// DownloadTokenSecret signs certificate download tokens.
+	// Falls back to JWT_SECRET if unset.
+	DownloadTokenSecret string
+	// DownloadTokenTTL is how long a signed download link stays valid.
+	// Defaults to 90 days.
+	DownloadTokenTTL time.Duration
 }
 
 // ============================================================

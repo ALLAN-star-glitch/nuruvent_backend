@@ -316,6 +316,10 @@ func InitializeApp() (*AppDependencies, error) {
 
 		NewPaymentCertificateBatchIssuerAdapter,
 
+		NewCertificateDownloadTokenSignerAdapter,
+
+		NewCertificateNotificationAdapter,
+
 
 
 		// ============================================================

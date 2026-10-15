@@ -92,7 +92,7 @@ func (s *serviceImpl) InitiateBatchIssuance(
 	// 3. Free path — issue immediately.
 	// ------------------------------------------------------------
 	if pricePerCert == 0 {
-		result, err := s.issueBatch(ctx, domain.BatchIssuanceRequest{
+		result, err := s.IssueBatch(ctx, domain.BatchIssuanceRequest{
 			EventID:          in.EventID,
 			AccountID:        in.AccountID,
 			TemplateID:       tmpl.ID,

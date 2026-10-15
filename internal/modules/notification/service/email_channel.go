@@ -246,6 +246,9 @@ func (c *EmailChannel) getTemplateName(notifType notificationdomain.Notification
 	case notificationdomain.TypeRefundIssued:
 		return "refund-issued"
 
+	case notificationdomain.TypeCertificateReady:
+		return "certificate-ready"
+
 			// ============================================================
 	// REGISTRATION NOTIFICATIONS
 	// ============================================================
@@ -484,6 +487,15 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["payment_id"] = req.Meta["payment_id"]
 		data["order_id"] = req.Meta["order_id"]
 
+	case notificationdomain.TypeCertificateReady:
+		data["name"] = req.Meta["name"]
+		data["event_title"] = req.Meta["event_title"]
+		data["issuer_name"] = req.Meta["issuer_name"]
+		data["download_url"] = req.Meta["download_url"]
+		data["verify_url"] = req.Meta["verify_url"]
+		data["dashboard_url"] = req.Meta["dashboard_url"]
+		data["expires_in"] = req.Meta["expires_in"]
+
 	case notificationdomain.TypeRefundIssued:
 		data["name"] = req.Meta["name"]
 		data["amount"] = req.Meta["amount"]
@@ -503,6 +515,8 @@ func (c *EmailChannel) prepareTemplateData(req notificationdomain.ChannelRequest
 		data["event_id"] = req.Meta["event_id"]
 		data["links"] = req.Meta["links"]
 		}
+
+		
 
 	
 

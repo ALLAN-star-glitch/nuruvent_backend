@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log"
 	"strings"
 
@@ -879,6 +880,47 @@ func encodeJoinLinksFromTask(links []notificationdomain.RegistrationJoinLink) st
 		parts = append(parts, l.SessionTitle+fieldSep+l.URL)
 	}
 	return strings.Join(parts, rowSep)
+}
+
+
+// HandleCertificateReady processes a queued certificate-ready task.
+// The notification service sends an email to the recipient with a
+// signed download link.
+func (w *NotificationWorker) HandleCertificateReady(
+	ctx context.Context,
+	t *asynq.Task,
+) error {
+	var payload notificationdomain.CertificateReadyTask
+	if err := json.Unmarshal(t.Payload(), &payload); err != nil {
+		return fmt.Errorf("unmarshal certificate ready task: %w", err)
+	}
+
+	log.Printf("[NotificationWorker] Processing certificate ready for %s (event=%s)",
+		payload.To, payload.EventTitle)
+
+	req := notificationdomain.ChannelRequest{
+		To:      payload.To,
+		Subject: "Your certificate for " + payload.EventTitle + " is ready",
+		Type:    notificationdomain.TypeCertificateReady,
+		Meta: map[string]string{
+			"name":          payload.Name,
+			"event_title":   payload.EventTitle,
+			"issuer_name":   payload.IssuerName,
+			"download_url":  payload.DownloadURL,
+			"verify_url":    payload.VerifyURL,
+			"dashboard_url": payload.DashboardURL,
+			"expires_in":    payload.ExpiresIn,
+		},
+	}
+
+	if err := w.emailChannel.Send(ctx, req); err != nil {
+		log.Printf("[NotificationWorker] Failed to send certificate ready to %s: %v",
+			payload.To, err)
+		return err
+	}
+
+	log.Printf("[NotificationWorker] Certificate ready email sent to %s", payload.To)
+	return nil
 }
 
 

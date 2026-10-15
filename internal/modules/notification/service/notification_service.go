@@ -1116,6 +1116,69 @@ func (s *notificationService) sendRegistrationConfirmedSync(
 	return ch.Send(ctx, channelReq)
 }
 
+
+
+// SendCertificateReady notifies a certificate recipient that their
+// certificate is available. The email contains a signed download link
+// that works without authentication.
+func (s *notificationService) SendCertificateReady(
+	ctx context.Context,
+	req notificationdomain.SendCertificateReadyRequest,
+) error {
+	_, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("[NotificationService] SendCertificateReady to=%s event=%s",
+		req.To, req.EventTitle)
+
+	if s.async && s.taskEnqueuer != nil {
+		task := notificationdomain.CertificateReadyTask{
+			To:           req.To,
+			Name:         req.Name,
+			EventTitle:   req.EventTitle,
+			IssuerName:   req.IssuerName,
+			DownloadURL:  req.DownloadURL,
+			VerifyURL:    req.VerifyURL,
+			DashboardURL: req.DashboardURL,
+			ExpiresIn:    req.ExpiresIn,
+		}
+		if err := s.taskEnqueuer.EnqueueCertificateReady(ctx, task); err != nil {
+			log.Printf("[NotificationService] Failed to enqueue certificate ready task: %v, falling back to sync", err)
+			return s.sendCertificateReadySync(ctx, req)
+		}
+		return nil
+	}
+	return s.sendCertificateReadySync(ctx, req)
+}
+
+func (s *notificationService) sendCertificateReadySync(
+	ctx context.Context,
+	req notificationdomain.SendCertificateReadyRequest,
+) error {
+	ch, err := s.getChannel(notificationdomain.ChannelEmail)
+	if err != nil {
+		return err
+	}
+
+	channelReq := notificationdomain.ChannelRequest{
+		To:      req.To,
+		Subject: "Your certificate for " + req.EventTitle + " is ready",
+		Type:    notificationdomain.TypeCertificateReady,
+		Meta: map[string]string{
+			"name":           req.Name,
+			"event_title":    req.EventTitle,
+			"issuer_name":    req.IssuerName,
+			"download_url":   req.DownloadURL,
+			"verify_url":     req.VerifyURL,
+			"dashboard_url":  req.DashboardURL,
+			"expires_in":     req.ExpiresIn,
+		},
+	}
+	return ch.Send(ctx, channelReq)
+}
+
 // toNotificationJoinLinks converts the service-level link type to the
 // domain task type. They're identical today; kept as a helper so the
 // two can diverge without breaking callers.

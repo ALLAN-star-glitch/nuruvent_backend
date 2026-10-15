@@ -66,6 +66,10 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
 	mux.HandleFunc(notificationdomain.TaskWelcomeInstitutionKYC, notificationWorker.HandleWelcomeInstitutionKYC)
 	mux.HandleFunc(notificationdomain.TaskNewPersonalAccountRegistration, notificationWorker.HandleNewPersonalAccountRegistration)
 	mux.HandleFunc(notificationdomain.TaskNewInstitutionAccountRegistration, notificationWorker.HandleNewInstitutionAccountRegistration)
+		// ============================================================
+	// CERTIFICATE TASK HANDLERS
+	// ============================================================
+	mux.HandleFunc(notificationdomain.TaskCertificateReady, notificationWorker.HandleCertificateReady)
 
 	// ============================================================
 	// ✅ TEAM INVITATION TASK HANDLERS (UPDATED)

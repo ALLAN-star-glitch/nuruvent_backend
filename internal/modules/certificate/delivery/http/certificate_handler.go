@@ -329,3 +329,52 @@ func parseCertificateFilter(c fiber.Ctx) domain.CertificateFilter {
 	}
 	return f
 }
+
+// ============================================================
+// DOWNLOAD BY TOKEN (public)
+// ============================================================
+
+// DownloadByToken handles GET /certificates/download/:token.
+//
+// Public — the signed token in the URL is the credential. Used by
+// certificate emails so recipients (registered or guest) can download
+// their PDF without authenticating.
+func (h *Handler) DownloadByToken(c fiber.Ctx) error {
+	token := c.Params("token")
+	if token == "" {
+		return response.BadRequest(c, "Token is required", nil)
+	}
+
+	url, err := h.svc.DownloadByToken(c.Context(), token)
+	if err != nil {
+		return respondClassifiedError(c, "download certificate", err)
+	}
+
+	return c.Redirect().To(url)
+}
+
+// ============================================================
+// SEND (manual re-send)
+// ============================================================
+
+// SendCertificate handles POST /certificates/:id/send.
+//
+// Regenerates the download link and re-enqueues the certificate
+// email. Authorized for the recipient and for account admins.
+func (h *Handler) SendCertificate(c fiber.Ctx) error {
+	userID, err := handlerhelper.GetUserID(c)
+	if err != nil {
+		return response.Unauthorized(c, "Authentication required", nil)
+	}
+
+	id := c.Params("id")
+	if id == "" {
+		return response.BadRequest(c, "Certificate ID is required", nil)
+	}
+
+	if err := h.svc.SendCertificateEmail(c.Context(), userID, id); err != nil {
+		return respondClassifiedError(c, "send certificate email", err)
+	}
+
+	return response.Success(c, "Certificate email sent", nil)
+}

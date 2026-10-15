@@ -35,37 +35,32 @@ func NewHandlers(svc certificateService.Service) *Handlers {
 //     including own-vs-all scope (ListMine vs ListByAccount) which
 //     the middleware cannot express.
 //
-// Both must pass. If you remove either, one class of authorization
-// breaks.
+// Both must pass.
 //
 // ROUTE ORDERING
 //
-// /certificates/verify/:code MUST be registered before any other
-// /certificates/* route, otherwise Fiber captures "verify" as the
-// certificate ID.
+// Public routes (verify, download-by-token) MUST be registered before
+// any /:id route, otherwise Fiber captures the static segment as an
+// ID. The batch issuance route (/events/:id/certificates/issue) is
+// registered by the events module, not here.
 
 // RegisterRoutes mounts the certificate module's main routes under the
 // given router (typically the /api/v1 group).
-//
-// optionalAuth is used on the /request endpoint so guest buyers can
-// request certificates with a matching guest_email.
 func RegisterRoutes(
 	r fiber.Router,
 	h *Handlers,
 	authMiddleware fiber.Handler,
 	authzMiddleware fiber.Handler,
-	optionalAuth fiber.Handler,
 ) {
 	// ---- Public (no auth) ----
 	r.Get("/certificates/verify/:code", h.Handler.Verify)
-
+	r.Get("/certificates/download/:token", h.Handler.DownloadByToken)
 
 	// ---- Certificates (auth + authz) ----
-		// Batch issuance (organizer-pays)
-	r.Post("/events/:id/certificates/issue", authMiddleware, authzMiddleware, h.Handler.InitiateBatchIssuance)
 	r.Post("/certificates/bulk", authMiddleware, authzMiddleware, h.Handler.IssueBulk)
 	r.Post("/certificates/:id/revoke", authMiddleware, authzMiddleware, h.Handler.RevokeByUser)
 	r.Get("/certificates/:id/download", authMiddleware, authzMiddleware, h.Handler.Download)
+		r.Post("/certificates/:id/send", authMiddleware, authzMiddleware, h.Handler.SendCertificate)
 
 	// ---- Templates (auth + authz) ----
 	r.Post("/certificate-templates", authMiddleware, authzMiddleware, h.Handler.CreateTemplate)
@@ -73,6 +68,7 @@ func RegisterRoutes(
 	r.Put("/certificate-templates/:id", authMiddleware, authzMiddleware, h.Handler.UpdateTemplate)
 	r.Delete("/certificate-templates/:id", authMiddleware, authzMiddleware, h.Handler.DeleteTemplate)
 	r.Post("/certificate-templates/:id/default", authMiddleware, authzMiddleware, h.Handler.SetDefaultTemplate)
+	
 }
 
 // RegisterUserRoutes mounts user-scoped certificate routes

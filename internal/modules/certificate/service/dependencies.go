@@ -3,14 +3,16 @@
 package service
 
 import (
+	"time"
+
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
 )
 
 // Dependencies bundles every outbound port the certificate service
 // needs.
 type Dependencies struct {
-	Certificates domain.CertificateRepository
-	Templates    domain.TemplateRepository
+	Certificates  domain.CertificateRepository
+	Templates     domain.TemplateRepository
 
 	IDs   domain.IDGenerator
 	Codes domain.VerificationCodeGenerator
@@ -18,15 +20,17 @@ type Dependencies struct {
 
 	Authz domain.AuthorizationChecker
 
-	// Phase 2: PDF rendering + storage
 	PDF     domain.PDFGenerator
 	Storage domain.ObjectStorage
 
-	// Phase 5: paid certificates
 	Payment       domain.PaymentCharger
 	AccountPrices domain.AccountPriceResolver
 
-	// VerifyBaseURL is the public base URL used to build the QR-code
-	// verification link. Comes from cfg.App.PublicURL.
+	// Phase 4: signed download tokens
+	DownloadTokens   domain.DownloadTokenSigner
+	DownloadTokenTTL time.Duration
+
 	VerifyBaseURL string
+
+	Notifier domain.NotificationSender
 }

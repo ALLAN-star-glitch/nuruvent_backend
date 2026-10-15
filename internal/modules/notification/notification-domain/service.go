@@ -183,6 +183,17 @@ type NotificationService interface {
 	// registration is confirmed and delivers their per-session join
 	// links.
 	SendRegistrationConfirmed(ctx context.Context, req SendRegistrationConfirmedRequest) error
+
+
+		// ============================================================
+	// CERTIFICATE NOTIFICATIONS
+	// ============================================================
+
+	// SendCertificateReady notifies a certificate recipient that their
+	// certificate is available. The email contains a signed download
+	// link that works without authentication — necessary for guest
+	// recipients.
+	SendCertificateReady(ctx context.Context, req SendCertificateReadyRequest) error
 }
 
 // ============================================================
@@ -435,4 +446,17 @@ type SendRegistrationConfirmedRequest struct {
 type RegistrationJoinLink struct {
 	SessionTitle string
 	URL          string
+}
+
+// SendCertificateReadyRequest carries the input for
+// SendCertificateReady.
+type SendCertificateReadyRequest struct {
+	To           string
+	Name         string
+	EventTitle   string
+	IssuerName   string
+	DownloadURL  string // signed, works without auth
+	VerifyURL    string
+	DashboardURL string
+	ExpiresIn    string
 }

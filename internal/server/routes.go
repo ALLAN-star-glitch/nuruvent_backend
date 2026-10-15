@@ -102,7 +102,7 @@ func SetupRoutes(
 	// authzMiddleware at the route level, plus service-level authz
 	// for own-vs-all scope decisions. See the doc comment in the
 	// module's routes.go for the rationale.
-	certificatehttp.RegisterRoutes(api, certificateHandler, authMiddleware, authzMiddleware, optionalAuth)
+	certificatehttp.RegisterRoutes(api, certificateHandler, authMiddleware, authzMiddleware)
 	certificatehttp.RegisterUserRoutes(api, certificateHandler, authMiddleware, authzMiddleware)
 	certificatehttp.RegisterAccountRoutes(api, certificateHandler, authMiddleware, authzMiddleware)
 

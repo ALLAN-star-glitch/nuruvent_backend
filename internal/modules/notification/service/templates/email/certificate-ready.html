@@ -1,0 +1,49 @@
+{{define "certificate-ready"}}
+<h1 class="title">Your <span class="highlight">Certificate</span> is Ready</h1>
+<p class="subtitle">Download it now</p>
+
+<div class="alert-success">
+    <div class="message">Certificate Issued</div>
+    <div class="sub">From {{.issuer_name}}</div>
+</div>
+
+<p class="greeting">Hello <span class="name">{{.name}}</span>,</p>
+<p class="body-text">
+    Your certificate for <span class="highlight">{{.event_title}}</span> is ready to download.
+</p>
+
+<div class="details-box">
+    <div class="row">
+        <span class="label">Event</span>
+        <span class="value">{{.event_title}}</span>
+    </div>
+    <div class="row">
+        <span class="label">Issued by</span>
+        <span class="value">{{.issuer_name}}</span>
+    </div>
+</div>
+
+<div style="text-align: center; margin: 32px 0;">
+    <a href="{{.download_url}}"
+       style="display: inline-block; background-color: #1A73E8; color: #ffffff; padding: 14px 32px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 16px;">
+        Download Certificate
+    </a>
+</div>
+
+<div class="alert-info">
+    <p>This download link is valid for <strong>{{.expires_in}}</strong>. You can also verify the certificate at any time.</p>
+</div>
+
+<p class="body-text text-muted text-center">
+    <a href="{{.verify_url}}" style="color: #1A73E8; text-decoration: none;">Verify this certificate →</a>
+</p>
+
+{{if .dashboard_url}}
+<p class="body-text text-muted text-center text-small">
+    Sign in to view all your certificates:
+    <a href="{{.dashboard_url}}" style="color: #1A73E8; text-decoration: none;">{{.dashboard_url}}</a>
+</p>
+{{end}}
+
+<p class="body-text text-muted text-center">Congratulations!</p>
+{{end}}

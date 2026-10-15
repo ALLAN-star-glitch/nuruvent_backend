@@ -4,18 +4,20 @@ package service
 
 import (
 	"context"
-	"errors"
-
+	"log"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
 )
 
 // IssueBatch is the public entry point invoked by the payment webhook
 // adapter after a batch order is paid. It builds the ExternalCompletion
-// for each recipient and delegates to IssueBulk.
+// for each recipient, delegates to IssueBulk, then enqueues a
+// certificate-ready email for each newly-issued certificate.
 //
 // Idempotent per recipient — existing certificates are returned
-// unchanged, so a webhook re-delivery cannot duplicate issuance.
+// unchanged, so a webhook re-delivery cannot duplicate issuance. Email
+// sending is also idempotent-friendly: certificates that were already
+// issued are skipped for email so retries don't re-send.
 func (s *serviceImpl) IssueBatch(
 	ctx context.Context,
 	req domain.BatchIssuanceRequest,
@@ -69,17 +71,62 @@ func (s *serviceImpl) IssueBatch(
 			result.Errors = append(result.Errors, item.Err.Error())
 		}
 	}
+
+	// Enqueue an email per newly-issued certificate. Already-issued
+	// certificates are skipped so retries don't spam recipients.
+	s.enqueueCertificateEmails(ctx, bulk)
+
 	return result, nil
 }
 
-// issueBatch is an internal alias for IssueBatch used by the free
-// path. Kept separate so the public method can validate independently.
-func (s *serviceImpl) issueBatch(
+// enqueueCertificateEmails enqueues a "certificate ready" email for
+// every certificate in the bulk result that was newly issued (not
+// reused) and has a valid recipient email.
+//
+// Failures are logged but never returned — email delivery must not
+// fail the batch.
+func (s *serviceImpl) enqueueCertificateEmails(
 	ctx context.Context,
-	req domain.BatchIssuanceRequest,
-) (*domain.BatchIssuanceResult, error) {
-	return s.IssueBatch(ctx, req)
+	bulk *BulkResult,
+) {
+	if s.deps.Notifier == nil {
+		return
+	}
+	for _, item := range bulk.Items {
+		if item.Certificate == nil || item.AlreadyHad || item.Err != nil {
+			continue
+		}
+		s.sendCertificateEmail(ctx, item.Certificate)
+	}
 }
 
-// compile-time assertion for the unused-errors import guard.
-var _ = errors.Is
+// sendCertificateEmail generates a signed download token and enqueues
+// the email. Errors are logged, never returned.
+func (s *serviceImpl) sendCertificateEmail(
+	ctx context.Context,
+	cert *domain.Certificate,
+) {
+	token, err := s.GenerateDownloadToken(ctx, cert)
+	if err != nil {
+		log.Printf("[CertificateService] generate download token for %s failed: %v", cert.ID, err)
+		return
+	}
+
+	downloadURL := s.buildDownloadURL(token)
+
+	if err := s.deps.Notifier.SendCertificate(ctx, domain.SendCertificateInput{
+		Certificate: cert,
+		DownloadURL: downloadURL,
+	}); err != nil {
+		log.Printf("[CertificateService] send certificate email for %s failed: %v", cert.ID, err)
+	}
+}
+
+// buildDownloadURL composes the public signed-download URL embedded in
+// the email.
+//
+// Example: https://api.nuruvent.com/api/v1/certificates/download/<token>
+func (s *serviceImpl) buildDownloadURL(token string) string {
+	base := trimTrailingSlash(s.deps.VerifyBaseURL)
+	return base + "/api/v1/certificates/download/" + token
+}

@@ -103,4 +103,6 @@ type TaskEnqueuer interface {
 	// EnqueueRegistrationConfirmed enqueues a registration-confirmed
 	// notification carrying the registrant's per-session join links.
 	EnqueueRegistrationConfirmed(ctx context.Context, task RegistrationConfirmedTask) error
+
+	EnqueueCertificateReady(ctx context.Context, task CertificateReadyTask) error
 }

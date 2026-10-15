@@ -135,6 +135,21 @@ type Service interface {
 		ctx context.Context,
 		req domain.BatchIssuanceRequest,
 	) (*domain.BatchIssuanceResult, error)
+
+		// DownloadByToken returns a URL to download the certificate
+	// authorized by a signed token. No authentication is required —
+	// the token itself is the credential.
+	DownloadByToken(ctx context.Context, token string) (string, error)
+
+		// SendCertificateEmail regenerates and re-sends the certificate
+	// email to the recipient.
+	//
+	// Authorized for the issuing account's admins and for the
+	// certificate's own recipient.
+	SendCertificateEmail(
+		ctx context.Context,
+		userID, certificateID string,
+	) error
 }
 
 // ============================================================

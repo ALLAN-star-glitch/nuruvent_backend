@@ -14,6 +14,13 @@ type NotificationSender interface {
 // SendCertificateInput carries everything the notification layer needs.
 type SendCertificateInput struct {
 	Certificate *Certificate
-	PDF         []byte
-	FileName    string
+
+	// DownloadURL is the signed download link embedded in the email.
+	// Works without authentication — necessary for guest recipients.
+	DownloadURL string
+
+	// PDF is optional. If set, the notification adapter may attach it.
+	// Currently unused — links are preferred for delivery size.
+	PDF      []byte
+	FileName string
 }

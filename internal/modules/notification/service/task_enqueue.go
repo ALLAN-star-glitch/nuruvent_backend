@@ -383,5 +383,29 @@ func (e *taskEnqueuer) EnqueueRegistrationConfirmed(
 	return nil
 }
 
+
+
+// EnqueueCertificateReady enqueues a certificate-ready notification
+// carrying the recipient's signed download URL.
+func (e *taskEnqueuer) EnqueueCertificateReady(
+	ctx context.Context,
+	task notificationdomain.CertificateReadyTask,
+) error {
+	log.Printf("📧 [TaskEnqueuer] Enqueuing certificate ready notification for %s", task.To)
+
+	payload, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to marshal task: %w", err)
+	}
+
+	if err := e.queue.Enqueue(ctx, notificationdomain.TaskCertificateReady, payload); err != nil {
+		log.Printf("❌ [TaskEnqueuer] Failed to enqueue certificate ready: %v", err)
+		return err
+	}
+
+	log.Printf("✅ [TaskEnqueuer] Certificate ready notification enqueued for %s", task.To)
+	return nil
+}
+
 // Ensure taskEnqueuer implements notificationdomain.TaskEnqueuer
 var _ notificationdomain.TaskEnqueuer = (*taskEnqueuer)(nil)

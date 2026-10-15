@@ -49,4 +49,10 @@ var (
 	ErrPaymentChargeFailed   = errors.New("failed to create certificate order")
 	ErrCertificateNotPayable = errors.New("certificate is not payable for this context")
 	ErrAccountPriceLookup    = errors.New("failed to resolve account certificate price")
+
+
+		// Download tokens
+	ErrInvalidDownloadToken = errors.New("invalid download token")
+	ErrExpiredDownloadToken = errors.New("download token has expired")
+	ErrDownloadTokenEmailMismatch = errors.New("download token recipient does not match certificate")
 )

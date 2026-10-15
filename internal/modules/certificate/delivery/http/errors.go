@@ -73,6 +73,26 @@ func classifyCertificateError(action string, err error) classifiedError {
 		}
 	}
 
+
+		if errors.Is(err, domain.ErrInvalidDownloadToken) {
+		return classifiedError{
+			Status:  fiber.StatusUnauthorized,
+			Message: "This download link is invalid or has expired",
+		}
+	}
+	if errors.Is(err, domain.ErrExpiredDownloadToken) {
+		return classifiedError{
+			Status:  fiber.StatusUnauthorized,
+			Message: "This download link has expired. Please request a new one.",
+		}
+	}
+	if errors.Is(err, domain.ErrDownloadTokenEmailMismatch) {
+		return classifiedError{
+			Status:  fiber.StatusUnauthorized,
+			Message: "This download link is not valid for this recipient.",
+		}
+	}
+
 	// ---------- VALIDATION ----------
 	if ce, ok := classifyValidationError(err); ok {
 		return ce

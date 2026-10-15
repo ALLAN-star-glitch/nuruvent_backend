@@ -514,3 +514,26 @@ func NewPaymentCertificateBatchIssuerAdapter(
 	// Same adapter type — it implements both interfaces.
 	return paymentadapters.NewCertificateIssuerAdapter(holder)
 }
+
+// NewCertificateDownloadTokenSignerAdapter wires the config secret
+// into the certificate module's DownloadTokenSigner port.
+func NewCertificateDownloadTokenSignerAdapter(
+	cfg *config.Config,
+) certificateDomain.DownloadTokenSigner {
+	return certificateadapters.NewDownloadTokenSignerAdapter(cfg.App.DownloadTokenSecret)
+}
+
+
+// NewCertificateNotificationAdapter wires the notification module's
+// service to the certificate module's NotificationSender port.
+func NewCertificateNotificationAdapter(
+	notifSvc notificationDomain.NotificationService,
+	cfg *config.Config,
+) certificateDomain.NotificationSender {
+	return certificateadapters.NewNotificationAdapter(
+		notifSvc,
+		cfg.App.PublicURL,
+		cfg.App.PublicURL+"/me/certificates",
+		cfg.App.DownloadTokenTTL,
+	)
+}
