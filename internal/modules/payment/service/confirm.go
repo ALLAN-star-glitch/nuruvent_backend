@@ -5,16 +5,26 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
 )
 
 // ConfirmPayment transitions a payment to succeeded and confirms the
-// associated registration. Idempotent — calling it twice for the same
-// payment is a no-op.
+// associated order's post-payment side effects (registration confirm,
+// certificate batch issuance).
 //
-// The webhook handler calls this after verifying the transaction with
-// the provider. It is not called directly by any HTTP endpoint.
+// Idempotent for the payment state transition: calling it twice for the
+// same payment will not double-transition.
+//
+// NOT idempotent-with-early-return for side effects. If the payment is
+// already succeeded (e.g. an earlier replay ran but the batch issuance
+// failed), we still attempt the batch reconciliation. IssueBatch is
+// expected to be idempotent on its own side (checks
+// certificate_batches.status == 'issued').
+//
+// Called by the webhook handler after verifying the transaction with
+// the provider.
 func (s *service) ConfirmPayment(ctx context.Context, paymentID string) error {
 	now := s.deps.Clock.Now()
 
@@ -26,8 +36,30 @@ func (s *service) ConfirmPayment(ctx context.Context, paymentID string) error {
 		return err
 	}
 
-	// Idempotent: already succeeded → no-op.
+	// ------------------------------------------------------------
+	// 1a. Already succeeded — skip the state transition but still
+	// reconcile post-payment side effects. This covers two cases:
+	//
+	//   (i)  A prior ConfirmPayment ran and completed everything.
+	//        IssueBatch should no-op.
+	//   (ii) A prior ConfirmPayment ran, transitioned the payment,
+	//        but the batch issuance failed or never ran. This replay
+	//        gives it another chance.
+	//
+	// IssueBatch is required to be idempotent; if it isn't, this will
+	// double-issue. See certificate/service/issue_batch.go.
+	// ------------------------------------------------------------
 	if payment.Status == paymentdomain.PaymentStatusSucceeded {
+		order, err := s.deps.Orders.FindByID(ctx, payment.OrderID)
+		if err == nil && order.Kind == paymentdomain.OrderKindCertificateBatch &&
+			s.deps.CertificateBatchIssuer != nil {
+			if err := s.deps.CertificateBatchIssuer.IssueBatch(ctx, order, payment); err != nil {
+				// Reconciliation catches this. Not fatal — the webhook
+				// will be marked processed and the operator can retry.
+				fmt.Printf("[ConfirmPayment] reconcile batch for already-succeeded payment %s: %v\n",
+					payment.ID, err)
+			}
+		}
 		return nil
 	}
 
@@ -85,12 +117,18 @@ func (s *service) ConfirmPayment(ctx context.Context, paymentID string) error {
 		}
 
 	case paymentdomain.OrderKindCertificateBatch:
-		if s.deps.CertificateBatchIssuer != nil {
-			if err := s.deps.CertificateBatchIssuer.IssueBatch(ctx, order, payment); err != nil {
-				// Reconciliation catches this. Not fatal.
-			}
-		}
+    if s.deps.CertificateBatchIssuer != nil {
+        if err := s.deps.CertificateBatchIssuer.IssueBatch(ctx, order, payment); err != nil {
+            // Reconciliation catches this. Not fatal — log so silent
+            // failures don't go unnoticed.
+            log.Printf("[ConfirmPayment] batch issuance for order %s failed: %v", order.ID, err)
+        }
+    }
 	}
+
+
+
+	
 
 	// ------------------------------------------------------------
 	// 6. Notify (best-effort)

@@ -140,7 +140,7 @@ func (r *TemplateRepository) FindDefaultForAccount(ctx context.Context, accountI
 func (r *TemplateRepository) FindSystemBySlug(ctx context.Context, slug domain.SystemTemplateSlug) (*domain.Template, error) {
 	var model TemplateModel
 	err := r.db.WithContext(ctx).
-		Where("system_slug = ? AND is_system = TRUE AND deleted_at IS NULL", string(slug)).
+		Where("slug = ? AND is_system = TRUE AND deleted_at IS NULL", string(slug)).
 		First(&model).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, domain.ErrTemplateNotFound
@@ -150,6 +150,8 @@ func (r *TemplateRepository) FindSystemBySlug(ctx context.Context, slug domain.S
 	}
 	return toTemplateDomain(&model)
 }
+
+
 
 // ============================================================
 // MAPPERS

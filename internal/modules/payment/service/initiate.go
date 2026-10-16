@@ -28,6 +28,12 @@ import (
 //
 // If the provider call fails, the payment is marked failed and the
 // error is returned.
+//
+// IMPORTANT: a successful provider.Initiate does NOT mean the payment
+// has succeeded. It only means the provider created a transaction. The
+// actual charge completes later and is reported via webhook. Never
+// transition the payment to succeeded from here — that breaks the
+// webhook-driven confirmation path (see ConfirmPayment).
 func (s *service) InitiatePayment(
 	ctx context.Context,
 	cmd InitiateCommand,
@@ -62,27 +68,24 @@ func (s *service) InitiatePayment(
 		}
 	}
 
-
-			// ------------------------------------------------------------
-		// 2b. Pending payment check — only one live payment per order
-		// ------------------------------------------------------------
-		// If a fresh pending payment already exists for this order, return
-		// it. This prevents double-charges when a client retries with a
-		// different idempotency key or switches providers.
-		existingPending, err := s.deps.Payments.FindPendingByOrder(ctx, order.ID)
-		if err == nil && existingPending != nil {
-			// If the existing payment is expired, mark it failed and proceed.
-			if existingPending.IsExpired(now) {
-				if failErr := existingPending.MarkFailed("payment expired", now); failErr == nil {
-					_ = s.deps.Payments.Update(ctx, existingPending)
-				}
-			} else {
-				// Fresh pending payment — return it.
-				return existingPending, nil
+	// ------------------------------------------------------------
+	// 2b. Pending payment check — only one live payment per order
+	// ------------------------------------------------------------
+	// If a fresh pending payment already exists for this order, return
+	// it. This prevents double-charges when a client retries with a
+	// different idempotency key or switches providers.
+	existingPending, err := s.deps.Payments.FindPendingByOrder(ctx, order.ID)
+	if err == nil && existingPending != nil {
+		if existingPending.IsExpired(now) {
+			if failErr := existingPending.MarkFailed("payment expired", now); failErr == nil {
+				_ = s.deps.Payments.Update(ctx, existingPending)
 			}
-		} else if err != nil && !errors.Is(err, paymentdomain.ErrPaymentNotFound) {
-			return nil, fmt.Errorf("pending payment check: %w", err)
+		} else {
+			return existingPending, nil
 		}
+	} else if err != nil && !errors.Is(err, paymentdomain.ErrPaymentNotFound) {
+		return nil, fmt.Errorf("pending payment check: %w", err)
+	}
 
 	// ------------------------------------------------------------
 	// 3. Resolve the provider before any state change
@@ -145,26 +148,28 @@ func (s *service) InitiatePayment(
 	}
 
 	// ------------------------------------------------------------
-	// 7. Update the payment with the provider's reference
+	// 7. Update the payment with the provider's metadata
 	// ------------------------------------------------------------
+	// The payment STAYS pending. We only stash references and URLs
+	// returned by the provider for tracing and for the client to
+	// resume the checkout flow. The status transition to succeeded
+	// happens exclusively in ConfirmPayment (webhook-driven).
 	if result.ProviderReference != "" {
 		payment.ProviderReference = result.ProviderReference
 	}
-
 	if result.RedirectURL != "" {
-		payment.RedirectURL = result.RedirectURL  
+		payment.RedirectURL = result.RedirectURL
+	}
+	if result.AccessCode != "" {
+		payment.AccessCode = result.AccessCode
 	}
 
-	if result.AccessCode != "" {
-    payment.AccessCode = result.AccessCode   
-}
-
-	// If the provider immediately succeeded (rare, but possible for
-	// pre-authorized charges), transition state accordingly.
+	// Defensive: if a provider claims immediate success (pre-authorized
+	// charges), do NOT mark succeeded here — the webhook is still
+	// authoritative and will call ConfirmPayment. Log for visibility.
 	if result.Status == paymentdomain.PaymentStatusSucceeded {
-		if err := payment.MarkSucceeded(result.ProviderReference, now); err != nil {
-			return nil, err
-		}
+		fmt.Printf("[InitiatePayment] provider %s reported immediate success for payment %s; awaiting webhook confirmation\n",
+			provider.Name(), payment.ID)
 	}
 
 	payment.UpdatedAt = now

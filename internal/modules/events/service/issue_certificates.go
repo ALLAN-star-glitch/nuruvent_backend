@@ -105,7 +105,7 @@ func (s *eventService) resolveCertificateRecipients(
 		return nil, domain.ErrInvalidIssueMode
 	}
 
-	return fillCompletedAt(recipients, event.StartDate), nil
+	return fillCompletedAt(recipients, event.StartDate, time.Now().UTC()), nil
 }
 
 func toDomainRecipients(
@@ -158,14 +158,36 @@ func mergeRecipients(
 	return out
 }
 
+// fillCompletedAt ensures every recipient has a CompletedAt value.
+//
+// Fallback rules:
+//   - If the caller supplied a CompletedAt, keep it — but clamp to
+//     "now" if it is in the future. The certificate domain rejects
+//     future CompletedAt values (a certificate cannot be issued for a
+//     completion that has not happened yet), and an over-eager caller
+//     should not be able to wedge the batch.
+//   - If the caller left it zero and the event's start date is in the
+//     past, use the event start date — the natural completion time.
+//   - If the caller left it zero and the event is future-dated,
+//     fall back to "now". The certificate is being issued now, so that
+//     is the honest and valid completion timestamp.
 func fillCompletedAt(
 	recipients []domain.CertificateRecipient,
 	eventStart time.Time,
+	now time.Time,
 ) []domain.CertificateRecipient {
 	out := make([]domain.CertificateRecipient, len(recipients))
 	for i, r := range recipients {
-		if r.CompletedAt.IsZero() {
-			r.CompletedAt = eventStart
+		switch {
+		case r.CompletedAt.IsZero():
+			if eventStart.After(now) {
+				r.CompletedAt = now
+			} else {
+				r.CompletedAt = eventStart
+			}
+		case r.CompletedAt.After(now):
+			// Explicit value but in the future — clamp.
+			r.CompletedAt = now
 		}
 		out[i] = r
 	}

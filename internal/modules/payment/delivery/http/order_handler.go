@@ -103,6 +103,8 @@ func (h *Handler) PaystackWebhook(c fiber.Ctx) error {
 		return response.BadRequest(c, "Empty webhook payload", nil)
 	}
 
+	
+
 	// Collect headers as a map.
 	headers := make(map[string]string)
 	c.Request().Header.VisitAll(func(k, v []byte) {

@@ -45,35 +45,8 @@ type Config struct {
 // PAYMENT BILLING
 // ============================================================
 
-// PaymentBillingConfig holds the platform's fee model.
-//
-// Fee model:
-//   Nuruvent takes a platform fee on every successful payment.
-//   The payment provider charges a processing fee on top.
-//   Both are snapshotted at different points:
-//     - Platform rate   → on orders, at creation time
-//     - Processing rate → on payments, at initiation time
-//
-// All rates are decimal fractions (0.045 = 4.5%).
-//
-// On a KES 1,000 M-Pesa ticket:
-//   amount           = 100000  (minor units)
-//   platform_fee     =   4500  (4.5%)
-//   processing_fee   =   3500  (3.5%)
-//   net_to_organizer =  92000
-//
-// Override via env vars:
-//   PAYMENT_PLATFORM_FEE_RATE               (default 0.045)
-//   PAYMENT_PROCESSING_FEE_RATE_MPESA       (default 0.035)
-//   PAYMENT_PROCESSING_FEE_RATE_CARD_LOCAL  (default 0.035)
-//   PAYMENT_PROCESSING_FEE_RATE_CARD_INTL   (default 0.045)
 type PaymentBillingConfig struct {
-	// PlatformFeeRate is Nuruvent's cut of every successful payment.
-	PlatformFeeRate float64
-
-	// ProcessingFeeRates are the provider's rates, keyed by payment
-	// method / card type. The provider adapter picks the right rate
-	// at initiation and the value is snapshotted onto the payment.
+	PlatformFeeRate            float64
 	ProcessingFeeRateMpesa     float64
 	ProcessingFeeRateCardLocal float64
 	ProcessingFeeRateCardIntl  float64
@@ -83,7 +56,6 @@ type PaymentBillingConfig struct {
 // PAYSTACK
 // ============================================================
 
-// PaystackConfig holds credentials for the Paystack payment gateway.
 type PaystackConfig struct {
 	SecretKey string
 	PublicKey string
@@ -99,26 +71,11 @@ func (c PaystackConfig) IsConfigured() bool {
 // ZOOM (webhook-only)
 // ============================================================
 
-// ZoomConfig holds credentials for the Zoom webhook integration.
-//
-// This config is used by the attendance module's Zoom webhook
-// provider to verify signatures on incoming participant events.
-//
-// The OAuth credentials used for connecting host accounts live in
-// VideoConfig.ZoomOAuth, because they belong to the video module.
 type ZoomConfig struct {
-	// SecretToken is the app's Secret Token from the Zoom
-	// Marketplace's Feature → Event Subscriptions page. It signs
-	// every webhook delivery (HMAC-SHA256).
 	SecretToken string
-
-	// Enabled turns webhook processing on or off. When false, the
-	// attendance module will not register a Zoom provider.
-	Enabled bool
+	Enabled     bool
 }
 
-// IsConfigured reports whether the minimum required credentials are
-// present for the Zoom webhook integration to operate.
 func (c ZoomConfig) IsConfigured() bool {
 	return c.Enabled && c.SecretToken != ""
 }
@@ -127,28 +84,12 @@ func (c ZoomConfig) IsConfigured() bool {
 // VIDEO (OAuth + encryption)
 // ============================================================
 
-// VideoConfig holds everything the video module needs to operate:
-// per-platform OAuth credentials and the encryption key used to
-// protect tokens at rest.
 type VideoConfig struct {
-	// EncryptionKey is a base64- or hex-encoded 32-byte key used to
-	// encrypt OAuth tokens before storing them.
-	//
-	// Required. Without it, the video module cannot start.
-	EncryptionKey string
-
-	// ZoomOAuth carries the Zoom General App's OAuth credentials.
-	// Used when hosts connect their own Zoom accounts.
-	ZoomOAuth VideoOAuthPlatformConfig
-
-	// GoogleMeetOAuth is reserved for the eventual Google Meet
-	// integration. Leaving it unconfigured keeps the platform
-	// disabled.
+	EncryptionKey   string
+	ZoomOAuth       VideoOAuthPlatformConfig
 	GoogleMeetOAuth VideoOAuthPlatformConfig
 }
 
-// VideoOAuthPlatformConfig is the set of OAuth credentials for one
-// video platform.
 type VideoOAuthPlatformConfig struct {
 	ClientID     string
 	ClientSecret string
@@ -156,15 +97,10 @@ type VideoOAuthPlatformConfig struct {
 	Enabled      bool
 }
 
-// IsConfigured reports whether the platform has enough credentials to
-// operate.
 func (c VideoOAuthPlatformConfig) IsConfigured() bool {
 	return c.Enabled && c.ClientID != "" && c.ClientSecret != "" && c.RedirectURI != ""
 }
 
-// IsConfigured reports whether the video module has the minimum
-// required credentials. Only the encryption key is strictly required;
-// individual platforms enable themselves.
 func (c VideoConfig) IsConfigured() bool {
 	return c.EncryptionKey != ""
 }
@@ -173,23 +109,8 @@ func (c VideoConfig) IsConfigured() bool {
 // APP
 // ============================================================
 
-// AppConfig holds application-level settings that aren't tied to a
-// specific subsystem.
 type AppConfig struct {
-	// PublicURL is the base URL of the public-facing app. Used to
-	// build join links, confirmation links, etc.
-	PublicURL string
-
-	// CookieDomain is the domain scope for auth cookies.
-	//
-	// Leave empty in local dev (host-only cookies for localhost).
-	// In production, set to ".nuruvent.com" so the cookie is sent to
-	// every subdomain: nuruvent.com, www.nuruvent.com, api.nuruvent.com.
-	//
-	// Without this, cookies set on one subdomain are not visible to
-	// the others — which breaks the guest join flow, where the token
-	// is redeemed on nuruvent.com but the meeting page runs on
-	// www.nuruvent.com and calls api.nuruvent.com.
+	PublicURL    string
 	CookieDomain string
 
 	// DownloadTokenSecret signs certificate download tokens.
@@ -361,6 +282,15 @@ func Load() *Config {
 		App: AppConfig{
 			PublicURL:    getEnv("APP_PUBLIC_URL", "http://localhost:3000"),
 			CookieDomain: getEnv("APP_COOKIE_DOMAIN", ""),
+
+			// Signed certificate download links.
+			// Secret falls back to JWT_SECRET so a single-secret
+			// deployment still works. TTL defaults to 90 days.
+			DownloadTokenSecret: getEnv(
+				"DOWNLOAD_TOKEN_SECRET",
+				getEnv("JWT_SECRET", "change-this-in-production"),
+			),
+			DownloadTokenTTL: getEnvDuration("DOWNLOAD_TOKEN_TTL", 90*24*time.Hour),
 		},
 		Supabase: SupabaseConfig{
 			URL:               getEnv("SUPABASE_URL", ""),
@@ -461,8 +391,7 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 }
 
 // getEnvFloat reads a float64 from the environment. Returns fallback
-// if the variable is unset or not parseable. Used for payment rates
-// where precision matters (0.045 = 4.5%).
+// if the variable is unset or not parseable.
 func getEnvFloat(key string, fallback float64) float64 {
 	if value := os.Getenv(key); value != "" {
 		parsed, err := strconv.ParseFloat(value, 64)

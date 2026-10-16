@@ -199,7 +199,10 @@ func (h *Handler) Download(c fiber.Ctx) error {
 		return respondClassifiedError(c, "download certificate", err)
 	}
 
-	return c.Redirect().To(url)
+	// Return the URL as JSON rather than a 302. The browser cannot
+	// read a cross-origin redirect body (Supabase CORS), so the
+	// frontend fetches this endpoint and then opens the URL directly.
+	return response.Success(c, "Download URL", fiber.Map{"url": url})
 }
 
 // ============================================================

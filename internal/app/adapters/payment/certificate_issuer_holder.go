@@ -109,12 +109,15 @@ func (a *CertificateIssuerAdapter) IssueFromPaidOrder(
 	return nil
 }
 
-// Add to the CertificateIssuerAdapter struct — no new field, same holder.
-
 // IssueBatch implements paymentdomain.CertificateBatchIssuer.
 //
 // Invoked by ConfirmPayment when a certificate_batch order is paid.
 // Forwards the frozen batch context to the certificate service.
+//
+// IssueBulk (called inside svc.IssueBatch) collects per-item failures
+// rather than aborting the whole batch. This method inspects the
+// returned result and surfaces any failures as an error so upstream
+// callers don't silently succeed on zero certificates.
 func (a *CertificateIssuerAdapter) IssueBatch(
 	ctx context.Context,
 	order *paymentdomain.Order,
@@ -142,7 +145,7 @@ func (a *CertificateIssuerAdapter) IssueBatch(
 		})
 	}
 
-	_, err := svc.IssueBatch(ctx, certdomain.BatchIssuanceRequest{
+	result, err := svc.IssueBatch(ctx, certdomain.BatchIssuanceRequest{
 		EventID:          bc.EventID,
 		AccountID:        bc.AccountID,
 		TemplateID:       bc.TemplateID,
@@ -156,9 +159,17 @@ func (a *CertificateIssuerAdapter) IssueBatch(
 	if err != nil {
 		return fmt.Errorf("issue batch for order %s: %w", order.ID, err)
 	}
+
+	// IssueBulk collects per-item errors instead of failing the whole
+	// batch. Surface them so callers don't silently succeed on zero
+	// certificates.
+	if result.Failed > 0 {
+		return fmt.Errorf("issue batch for order %s: %d failed (issued=%d reused=%d): %v",
+			order.ID, result.Failed, result.Issued, result.Reused, result.Errors)
+	}
+
 	return nil
 }
-
 
 // compile-time assertion
 var _ paymentdomain.CertificateIssuer = (*CertificateIssuerAdapter)(nil)
