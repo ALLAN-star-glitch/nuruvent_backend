@@ -96,6 +96,7 @@ func (r *OrderRepository) FindActiveByRegistration(
 	err := r.db.WithContext(ctx).
 		Preload("Items").
 		Where("registration_id = ? AND status = ?", registrationID, string(paymentdomain.OrderStatusPending)).
+		Where("expires_at > NOW()").
 		First(&model).Error
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -151,6 +152,7 @@ func (r *OrderRepository) FindActiveByCertificateContext(
 	var model OrderModel
 	err := r.db.WithContext(ctx).
 		Where("kind = ? AND status = ?", "certificate", string(paymentdomain.OrderStatusPending)).
+		Where("expires_at > NOW()").                              // ← ADD THIS LINE
 		Where("certificate_context->>'context_type' = ?", contextType).
 		Where("certificate_context->>'context_id' = ?", contextID).
 		Where("certificate_context->>'recipient_email' = ?", recipientEmail).
@@ -198,6 +200,7 @@ func (r *OrderRepository) FindActiveByBatchEvent(
 	var model OrderModel
 	err := r.db.WithContext(ctx).
 		Where("kind = ? AND status = ?", "certificate_batch", string(paymentdomain.OrderStatusPending)).
+		Where("expires_at > NOW()").
 		Where("batch_context->>'event_id' = ?", eventID).
 		First(&model).Error
 

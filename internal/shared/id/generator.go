@@ -10,9 +10,11 @@ type Generator interface {
 
 
 
+
 // UUIDGenerator produces random UUID v4 strings.
 type UUIDGenerator struct{}
 
 func NewUUIDGenerator() *UUIDGenerator { return &UUIDGenerator{} }
 
 func (*UUIDGenerator) NewID() string { return uuid.NewString() }
+
