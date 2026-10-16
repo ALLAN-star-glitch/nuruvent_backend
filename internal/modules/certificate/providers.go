@@ -5,13 +5,13 @@ package certificate
 import (
 	"github.com/google/wire"
 
+	certificateHTTP "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/delivery/http"
 	certificateDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
 	certificateClock "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/infrastructure/clock"
 	certificateID "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/infrastructure/id"
 	certificatePostgres "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/infrastructure/postgres"
 	certificateVC "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/infrastructure/verificationcode"
 	certificateService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
-	certificateHTTP "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/delivery/http"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
@@ -40,7 +40,7 @@ var ProviderSet = wire.NewSet(
 	// Service — returns the Service interface directly.
 	certificateService.NewService,
 
-		// HTTP handlers
+	// HTTP handlers
 	certificateHTTP.NewHandlers,
 )
 
@@ -56,7 +56,7 @@ func ProvideDependencies(
 	storage certificateDomain.ObjectStorage,
 	payment certificateDomain.PaymentCharger,
 	accountPrices certificateDomain.AccountPriceResolver,
-	downloadTokens certificateDomain.DownloadTokenSigner, // ← NEW
+	downloadTokens certificateDomain.DownloadTokenSigner,
 	notifier certificateDomain.NotificationSender,
 	cfg *config.Config,
 ) certificateService.Dependencies {
@@ -71,9 +71,15 @@ func ProvideDependencies(
 		Storage:          storage,
 		Payment:          payment,
 		AccountPrices:    accountPrices,
-		DownloadTokens:   downloadTokens,             // ← NEW
-		DownloadTokenTTL: cfg.App.DownloadTokenTTL,   // ← NEW
-		VerifyBaseURL:    cfg.App.PublicURL,
-		Notifier: notifier, 
+		DownloadTokens:   downloadTokens,
+		DownloadTokenTTL: cfg.App.DownloadTokenTTL,
+
+		// Frontend URL — for QR verify links.
+		VerifyBaseURL: cfg.App.PublicURL,
+
+		// Backend API URL — for signed download links in emails.
+		DownloadBaseURL: cfg.App.APIURL,
+
+		Notifier: notifier,
 	}
 }

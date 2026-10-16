@@ -124,9 +124,7 @@ func (s *serviceImpl) sendCertificateEmail(
 
 // buildDownloadURL composes the public signed-download URL embedded in
 // the email.
-//
-// Example: https://api.nuruvent.com/api/v1/certificates/download/<token>
 func (s *serviceImpl) buildDownloadURL(token string) string {
-	base := trimTrailingSlash(s.deps.VerifyBaseURL)
+	base := trimTrailingSlash(s.deps.DownloadBaseURL)
 	return base + "/api/v1/certificates/download/" + token
 }

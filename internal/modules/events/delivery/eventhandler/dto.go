@@ -57,6 +57,7 @@ type CreateDraftRequest struct {
 	// Monetization
 	IsFeatured          bool    `json:"is_featured"`
 	CertificateEnabled  bool    `json:"certificate_enabled"`
+	
 	CertificatePrice    float64 `json:"certificate_price"`
 	CertificateTemplateID string `json:"certificate_template_id"`
 
@@ -611,6 +612,8 @@ type EventResponse struct {
 	IsFeatured         bool    `json:"is_featured"`
 	CertificateEnabled bool    `json:"certificate_enabled"`
 	CertificatePrice   float64 `json:"certificate_price,omitempty"`
+
+	CertificateTemplateID string `json:"certificate_template_id,omitempty"`
 
 	// Speakers & Materials
 	Speakers  []SpeakerDTO  `json:"speakers,omitempty"`

@@ -64,10 +64,11 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 		InviteOnly:    event.InviteOnly,
 		InvitedEmails: event.InvitedEmails,
 
-		// Monetization
+				// Monetization
 		IsFeatured:         event.IsFeatured,
 		CertificateEnabled: event.CertificateEnabled,
 		CertificatePrice:   event.CertificatePrice,
+		CertificateTemplateID: derefString(event.CertificateTemplateID),
 
 		// Media
 		ImageURL:     event.ImageURL,
@@ -416,4 +417,12 @@ func buildEventStatusDTO(es *domain.EventStatus) *EventStatusDTO {
 		Icon:        es.Icon,
 		IsFinal:     es.IsFinal,
 	}
+}
+
+// derefString returns the pointed-to string, or "" for nil.
+func derefString(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return *p
 }

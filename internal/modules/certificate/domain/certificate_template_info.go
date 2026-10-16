@@ -8,6 +8,10 @@ package domain
 // These entries populate the certificate_templates table with the
 // Nuruvent-provided defaults. Account-owned templates are created at
 // runtime through the service and are not part of this registry.
+//
+// The `Slug` is the internal identifier used by code and by the
+// certificate resolver. The `Name` is the customer-facing label shown
+// in pickers and previews — it must not leak the internal identifier.
 type CertificateTemplateInfo struct {
 	Slug        string
 	Name        string
@@ -23,7 +27,7 @@ type CertificateTemplateInfo struct {
 var certificateTemplateRegistry = []CertificateTemplateInfo{
 	{
 		Slug:        string(SystemTemplateDefault),
-		Name:        "cert_template_default",
+		Name:        "Standard Completion Certificate",
 		DisplayName: "Standard Completion Certificate",
 		Description: "Standard certificate template for events",
 		PreviewURL:  "https://cdn.example.com/templates/default-preview.png",
@@ -31,7 +35,7 @@ var certificateTemplateRegistry = []CertificateTemplateInfo{
 	},
 	{
 		Slug:        string(SystemTemplateProfessional),
-		Name:        "cert_template_professional",
+		Name:        "Professional Certificate",
 		DisplayName: "Professional Certificate",
 		Description: "Professional certificate template for CPD events",
 		PreviewURL:  "https://cdn.example.com/templates/professional-preview.png",
@@ -39,7 +43,7 @@ var certificateTemplateRegistry = []CertificateTemplateInfo{
 	},
 	{
 		Slug:        string(SystemTemplatePremium),
-		Name:        "cert_template_premium",
+		Name:        "Premium Certificate",
 		DisplayName: "Premium Certificate",
 		Description: "Premium certificate template with enhanced design",
 		PreviewURL:  "https://cdn.example.com/templates/premium-preview.png",

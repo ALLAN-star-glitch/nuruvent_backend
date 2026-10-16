@@ -31,13 +31,8 @@ type Config struct {
 	OpenRouter  OpenRouterConfig
 	NuruOnboardingNoticeEmails NuruventOnboardingNoticeEmails
 
-	// PaymentBilling holds the platform's fee model.
 	PaymentBilling PaymentBillingConfig
 
-	// AutoFetchMeetAttendance enables the background poller that
-	// fetches Google Meet attendance for live meetings. Off by
-	// default; enable per environment with
-	// AUTO_FETCH_MEET_ATTENDANCE=true.
 	AutoFetchMeetAttendance bool
 }
 
@@ -110,12 +105,24 @@ func (c VideoConfig) IsConfigured() bool {
 // ============================================================
 
 type AppConfig struct {
-	PublicURL    string
+	// PublicURL is the public-facing frontend URL. Used in QR codes,
+	// verify pages, and any link a human clicks in a browser.
+	PublicURL string
+
+	// APIURL is the backend API URL. Used for endpoints that must hit
+	// the API directly — signed certificate download links, external
+	// webhook URLs registered with third parties, etc.
+	//
+	// Distinct from PublicURL because those two things usually live on
+	// different hosts (www.nuruvent.com vs api.nuruvent.com).
+	APIURL string
+
 	CookieDomain string
 
 	// DownloadTokenSecret signs certificate download tokens.
 	// Falls back to JWT_SECRET if unset.
 	DownloadTokenSecret string
+
 	// DownloadTokenTTL is how long a signed download link stays valid.
 	// Defaults to 90 days.
 	DownloadTokenTTL time.Duration
@@ -281,11 +288,9 @@ func Load() *Config {
 		},
 		App: AppConfig{
 			PublicURL:    getEnv("APP_PUBLIC_URL", "http://localhost:3000"),
+			APIURL:       getEnv("APP_API_URL", "http://localhost:8080"),
 			CookieDomain: getEnv("APP_COOKIE_DOMAIN", ""),
 
-			// Signed certificate download links.
-			// Secret falls back to JWT_SECRET so a single-secret
-			// deployment still works. TTL defaults to 90 days.
 			DownloadTokenSecret: getEnv(
 				"DOWNLOAD_TOKEN_SECRET",
 				getEnv("JWT_SECRET", "change-this-in-production"),
@@ -326,7 +331,6 @@ func Load() *Config {
 		},
 	}
 
-	// Database: prefer DATABASE_URL, fall back to individual fields.
 	dbURL := getEnv("DATABASE_URL", "")
 	if dbURL != "" {
 		cfg.Database.URL = dbURL
@@ -390,8 +394,6 @@ func getEnvDuration(key string, defaultValue time.Duration) time.Duration {
 	return defaultValue
 }
 
-// getEnvFloat reads a float64 from the environment. Returns fallback
-// if the variable is unset or not parseable.
 func getEnvFloat(key string, fallback float64) float64 {
 	if value := os.Getenv(key); value != "" {
 		parsed, err := strconv.ParseFloat(value, 64)
