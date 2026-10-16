@@ -22,6 +22,94 @@ func NewTemplateRepository(db *gorm.DB) *TemplateRepository {
 }
 
 // ============================================================
+// DESIGN SERIALISATION
+// ============================================================
+//
+// domain.TemplateDesign deliberately has no JSON tags (domain purity
+// rule). The HTTP DTO uses snake_case. To keep the two sides in sync
+// — and to avoid a postgres→http import — we mirror the DTO's tags
+// in a local struct. Any change here must be reflected in
+// delivery/http/dto.go's TemplateDesignDTO.
+
+type designJSON struct {
+	BackgroundColor string `json:"background_color"`
+	TextColor       string `json:"text_color"`
+	AccentColor     string `json:"accent_color"`
+	FontFamily      string `json:"font_family"`
+
+	LogoURL       string `json:"logo_url"`
+	SealURL       string `json:"seal_url"`
+	SignatureURL  string `json:"signature_url"`
+	BackgroundURL string `json:"background_url"`
+
+	SignatoryName  string `json:"signatory_name"`
+	SignatoryTitle string `json:"signatory_title"`
+
+	TitleText    string `json:"title_text"`
+	SubtitleText string `json:"subtitle_text"`
+	BodyText     string `json:"body_text"`
+	FooterText   string `json:"footer_text"`
+
+	QRPosition string `json:"qr_position"`
+
+	BorderStyle   string `json:"border_style"`
+	BorderColor   string `json:"border_color"`
+	SignatureLine bool   `json:"signature_line"`
+	WatermarkText string `json:"watermark_text"`
+	VerifyBadge   bool   `json:"verify_badge"`
+}
+
+func designToJSON(d domain.TemplateDesign) designJSON {
+	return designJSON{
+		BackgroundColor: d.BackgroundColor,
+		TextColor:       d.TextColor,
+		AccentColor:     d.AccentColor,
+		FontFamily:      d.FontFamily,
+		LogoURL:         d.LogoURL,
+		SealURL:         d.SealURL,
+		SignatureURL:    d.SignatureURL,
+		BackgroundURL:   d.BackgroundURL,
+		SignatoryName:   d.SignatoryName,
+		SignatoryTitle:  d.SignatoryTitle,
+		TitleText:       d.TitleText,
+		SubtitleText:    d.SubtitleText,
+		BodyText:        d.BodyText,
+		FooterText:      d.FooterText,
+		QRPosition:      d.QRPosition,
+		BorderStyle:   d.BorderStyle,
+		BorderColor:   d.BorderColor,
+		SignatureLine: d.SignatureLine,
+		WatermarkText: d.WatermarkText,
+		VerifyBadge:   d.VerifyBadge,
+	}
+}
+
+func designFromJSON(d designJSON) domain.TemplateDesign {
+	return domain.TemplateDesign{
+		BackgroundColor: d.BackgroundColor,
+		TextColor:       d.TextColor,
+		AccentColor:     d.AccentColor,
+		FontFamily:      d.FontFamily,
+		LogoURL:         d.LogoURL,
+		SealURL:         d.SealURL,
+		SignatureURL:    d.SignatureURL,
+		BackgroundURL:   d.BackgroundURL,
+		SignatoryName:   d.SignatoryName,
+		SignatoryTitle:  d.SignatoryTitle,
+		TitleText:       d.TitleText,
+		SubtitleText:    d.SubtitleText,
+		BodyText:        d.BodyText,
+		FooterText:      d.FooterText,
+		QRPosition:      d.QRPosition,
+		BorderStyle:   d.BorderStyle,
+		BorderColor:   d.BorderColor,
+		SignatureLine: d.SignatureLine,
+		WatermarkText: d.WatermarkText,
+		VerifyBadge:   d.VerifyBadge,
+	}
+}
+
+// ============================================================
 // WRITE
 // ============================================================
 
@@ -37,7 +125,7 @@ func (r *TemplateRepository) Create(ctx context.Context, t *domain.Template) err
 }
 
 func (r *TemplateRepository) Update(ctx context.Context, t *domain.Template) error {
-	design, err := json.Marshal(t.Design)
+	design, err := json.Marshal(designToJSON(t.Design))
 	if err != nil {
 		return err
 	}
@@ -151,72 +239,70 @@ func (r *TemplateRepository) FindSystemBySlug(ctx context.Context, slug domain.S
 	return toTemplateDomain(&model)
 }
 
-
-
 // ============================================================
 // MAPPERS
 // ============================================================
 
 func toTemplateModel(t *domain.Template) (*TemplateModel, error) {
-    design, err := json.Marshal(t.Design)
-    if err != nil {
-        return nil, err
-    }
-    return &TemplateModel{
-        ID:          t.ID,
-        Slug:        slugPtr(t.SystemSlug),
-        Name:        t.Name,
-        DisplayName: nil, // domain doesn't expose display_name; set to NULL
-        Description: nullableString(t.Description),
-        PreviewURL:  nil,
-        IsActive:    true,
-        AccountID:   nullableString(t.AccountID),
-        Design:      JSONB(design),
-		PriceMinor: t.PriceMinor,
-        IsDefault:   t.IsDefault,
-        IsSystem:    t.IsSystem,
-        CreatedAt:   t.CreatedAt,
-        UpdatedAt:   t.UpdatedAt,
-        DeletedAt:   t.DeletedAt,
-    }, nil
+	design, err := json.Marshal(designToJSON(t.Design))
+	if err != nil {
+		return nil, err
+	}
+	return &TemplateModel{
+		ID:          t.ID,
+		Slug:        slugPtr(t.SystemSlug),
+		Name:        t.Name,
+		DisplayName: nil, // domain doesn't expose display_name; set to NULL
+		Description: nullableString(t.Description),
+		PreviewURL:  nil,
+		IsActive:    true,
+		AccountID:   nullableString(t.AccountID),
+		Design:      JSONB(design),
+		PriceMinor:  t.PriceMinor,
+		IsDefault:   t.IsDefault,
+		IsSystem:    t.IsSystem,
+		CreatedAt:   t.CreatedAt,
+		UpdatedAt:   t.UpdatedAt,
+		DeletedAt:   t.DeletedAt,
+	}, nil
 }
 
 func toTemplateDomain(m *TemplateModel) (*domain.Template, error) {
-    design := domain.TemplateDesign{}
-    if len(m.Design) > 0 {
-        if err := json.Unmarshal(m.Design, &design); err != nil {
-            return nil, err
-        }
-    }
-    return &domain.Template{
-        ID:          m.ID,
-        AccountID:   derefString(m.AccountID),
-        Name:        m.Name,
-        Description: derefString(m.Description),
-        Design:      design,
-		PriceMinor: m.PriceMinor,
-        SystemSlug:  systemSlugValue(m.Slug),
-        IsDefault:   m.IsDefault,
-        IsSystem:    m.IsSystem,
-        CreatedAt:   m.CreatedAt,
-        UpdatedAt:   m.UpdatedAt,
-        DeletedAt:   m.DeletedAt,
-    }, nil
+	var dj designJSON
+	if len(m.Design) > 0 {
+		if err := json.Unmarshal(m.Design, &dj); err != nil {
+			return nil, err
+		}
+	}
+	return &domain.Template{
+		ID:          m.ID,
+		AccountID:   derefString(m.AccountID),
+		Name:        m.Name,
+		Description: derefString(m.Description),
+		Design:      designFromJSON(dj),
+		PriceMinor:  m.PriceMinor,
+		SystemSlug:  systemSlugValue(m.Slug),
+		IsDefault:   m.IsDefault,
+		IsSystem:    m.IsSystem,
+		CreatedAt:   m.CreatedAt,
+		UpdatedAt:   m.UpdatedAt,
+		DeletedAt:   m.DeletedAt,
+	}, nil
 }
 
 func slugPtr(s domain.SystemTemplateSlug) *string {
-    if s == "" {
-        return nil
-    }
-    v := string(s)
-    return &v
+	if s == "" {
+		return nil
+	}
+	v := string(s)
+	return &v
 }
 
 func systemSlugValue(p *string) domain.SystemTemplateSlug {
-    if p == nil {
-        return ""
-    }
-    return domain.SystemTemplateSlug(*p)
+	if p == nil {
+		return ""
+	}
+	return domain.SystemTemplateSlug(*p)
 }
 
 func systemSlugPtr(s domain.SystemTemplateSlug) *string {
@@ -226,4 +312,3 @@ func systemSlugPtr(s domain.SystemTemplateSlug) *string {
 	v := string(s)
 	return &v
 }
-

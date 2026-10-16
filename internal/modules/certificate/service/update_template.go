@@ -9,18 +9,18 @@ import (
 )
 
 // UpdateTemplate implements Service.UpdateTemplate.
+//
+// Tier restrictions are re-applied on every update, so switching to a
+// lower tier strips fields that tier doesn't allow.
 func (s *serviceImpl) UpdateTemplate(
 	ctx context.Context,
-	userID, templateID string,
+	userID string,
+	templateID string,
 	in UpdateTemplateInput,
 ) (*domain.Template, error) {
 	tmpl, err := s.deps.Templates.FindByID(ctx, templateID)
 	if err != nil {
 		return nil, err
-	}
-
-	if tmpl.IsSystem {
-		return nil, domain.ErrCannotEditSystemTemplate
 	}
 
 	ok, err := s.deps.Authz.CanManageTemplates(ctx, userID, tmpl.AccountID)
@@ -31,6 +31,16 @@ func (s *serviceImpl) UpdateTemplate(
 		return nil, domain.ErrForbidden
 	}
 
+	if tmpl.IsSystem {
+		return nil, domain.ErrForbidden
+	}
+
+	// Resolve the tier (may have changed).
+	tier, err := s.resolveTierSlug(ctx, in.TierTemplateID)
+	if err != nil {
+		return nil, err
+	}
+
 	if in.Name != nil {
 		tmpl.Name = *in.Name
 	}
@@ -38,9 +48,9 @@ func (s *serviceImpl) UpdateTemplate(
 		tmpl.Description = *in.Description
 	}
 	if in.Design != nil {
-		tmpl.Design = *in.Design
+		tmpl.Design = domain.SanitizeDesign(tier, *in.Design)
 	}
-	if in.PriceMinor != nil { // ← NEW
+	if in.PriceMinor != nil {
 		tmpl.PriceMinor = in.PriceMinor
 	}
 

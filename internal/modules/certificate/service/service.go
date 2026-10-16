@@ -176,20 +176,23 @@ type BulkResult struct {
 // INPUT TYPES
 // ============================================================
 
-// CreateTemplateInput carries the fields a caller supplies when
-// creating a template. AccountID is filled by the service from the
-// authz check.
+// CreateTemplateInput carries the caller-supplied fields for a new
+// account template.
 type CreateTemplateInput struct {
-	AccountID   string
-	Name        string
-	Description string
-	Design      domain.TemplateDesign
-	PriceMinor  *int64 // nil = fall back to account default; 0 = free; >0 = fixed
+	AccountID      string
+	Name           string
+	Description    string
+	Design         domain.TemplateDesign
+	PriceMinor     *int64
+	TierTemplateID string // ← NEW: system template ID chosen as the tier
 }
 
+// UpdateTemplateInput carries the patch for an existing account
+// template. Nil fields are left unchanged.
 type UpdateTemplateInput struct {
-	Name        *string
-	Description *string
-	Design      *domain.TemplateDesign
-	PriceMinor  *int64
+	Name           *string
+	Description    *string
+	Design         *domain.TemplateDesign
+	PriceMinor     *int64
+	TierTemplateID string // ← NEW
 }

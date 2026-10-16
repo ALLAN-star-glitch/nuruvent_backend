@@ -132,6 +132,12 @@ type TemplateDesignDTO struct {
 	FooterText   string `json:"footer_text,omitempty"`
 
 	QRPosition string `json:"qr_position,omitempty"`
+
+	BorderStyle   string `json:"border_style,omitempty"`
+	BorderColor   string `json:"border_color,omitempty"`
+	SignatureLine bool   `json:"signature_line,omitempty"`
+	WatermarkText string `json:"watermark_text,omitempty"`
+	VerifyBadge   bool   `json:"verify_badge,omitempty"`
 }
 
 // ============================================================

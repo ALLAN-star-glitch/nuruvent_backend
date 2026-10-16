@@ -182,5 +182,12 @@ func designToDTO(d domain.TemplateDesign) TemplateDesignDTO {
 		BodyText:        d.BodyText,
 		FooterText:      d.FooterText,
 		QRPosition:      d.QRPosition,
+
+		// New in 153
+		BorderStyle:   d.BorderStyle,
+		BorderColor:   d.BorderColor,
+		SignatureLine: d.SignatureLine,
+		WatermarkText: d.WatermarkText,
+		VerifyBadge:   d.VerifyBadge,
 	}
 }

@@ -65,6 +65,19 @@ type TemplateDesign struct {
 
 	// QR placement hint (renderer-defined coordinates)
 	QRPosition string
+
+		// Border
+	BorderStyle string
+	BorderColor string
+
+	// Signature
+	SignatureLine bool
+
+	// Watermark
+	WatermarkText string
+
+	// Badge
+	VerifyBadge bool
 }
 
 // Template is a reusable certificate design owned by an account.
