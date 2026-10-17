@@ -9,22 +9,14 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
 )
 
-// PermissionAdapter bridges auth's PermissionChecker to the certificate
-// module's domain.AuthorizationChecker port.
-//
-// The adapter translates the certificate module's (userID, accountID)
-// call shape into auth's (userID, domain, resource, action) shape, and
-// maps each certificate concern to the right permission check.
 type PermissionAdapter struct {
 	perm authDomain.PermissionChecker
 }
 
-// NewPermissionAdapter constructs a PermissionAdapter.
 func NewPermissionAdapter(perm authDomain.PermissionChecker) *PermissionAdapter {
 	return &PermissionAdapter{perm: perm}
 }
 
-// CanManageTemplates maps to certificate:create / update / delete.
 func (a *PermissionAdapter) CanManageTemplates(ctx context.Context, userID, accountID string) (bool, error) {
 	return a.perm.HasAnyPermission(ctx, userID, authDomain.AccountDomain(accountID),
 		authDomain.ResourceCertificate.String(),
@@ -34,7 +26,6 @@ func (a *PermissionAdapter) CanManageTemplates(ctx context.Context, userID, acco
 	)
 }
 
-// CanIssue maps to certificate:issue.
 func (a *PermissionAdapter) CanIssue(ctx context.Context, userID, accountID string) (bool, error) {
 	return a.perm.HasPermission(ctx, userID, authDomain.AccountDomain(accountID),
 		authDomain.ResourceCertificate.String(),
@@ -42,7 +33,6 @@ func (a *PermissionAdapter) CanIssue(ctx context.Context, userID, accountID stri
 	)
 }
 
-// CanReadAll maps to certificate:read (account-wide).
 func (a *PermissionAdapter) CanReadAll(ctx context.Context, userID, accountID string) (bool, error) {
 	return a.perm.HasPermission(ctx, userID, authDomain.AccountDomain(accountID),
 		authDomain.ResourceCertificate.String(),
@@ -50,13 +40,6 @@ func (a *PermissionAdapter) CanReadAll(ctx context.Context, userID, accountID st
 	)
 }
 
-// CanReadOwn maps to certificate:read_own.
-//
-// NOTE: this action is not currently in DefaultAccountPermissions for
-// any role. Learners get certificate:read (see authdomain). If the
-// policy later adds certificate:read_own, this adapter will pick it up
-// automatically. For now, fall back to certificate:read so a learner
-// can list their own certificates.
 func (a *PermissionAdapter) CanReadOwn(ctx context.Context, userID, accountID string) (bool, error) {
 	return a.perm.HasAnyPermission(ctx, userID, authDomain.AccountDomain(accountID),
 		authDomain.ResourceCertificate.String(),
@@ -65,7 +48,6 @@ func (a *PermissionAdapter) CanReadOwn(ctx context.Context, userID, accountID st
 	)
 }
 
-// CanDownload maps to certificate:download.
 func (a *PermissionAdapter) CanDownload(ctx context.Context, userID, accountID string) (bool, error) {
 	return a.perm.HasAnyPermission(ctx, userID, authDomain.AccountDomain(accountID),
 		authDomain.ResourceCertificate.String(),
@@ -74,8 +56,6 @@ func (a *PermissionAdapter) CanDownload(ctx context.Context, userID, accountID s
 	)
 }
 
-// CanRevoke maps to certificate:update (revocation is an update to a
-// certificate's state).
 func (a *PermissionAdapter) CanRevoke(ctx context.Context, userID, accountID string) (bool, error) {
 	return a.perm.HasAnyPermission(ctx, userID, authDomain.AccountDomain(accountID),
 		authDomain.ResourceCertificate.String(),
@@ -84,5 +64,19 @@ func (a *PermissionAdapter) CanRevoke(ctx context.Context, userID, accountID str
 	)
 }
 
-// compile-time assertion
+// CanManageSystemTemplates checks the PLATFORM domain, where super_admin
+// and admin roles live. Account-level roles (account_admin, trainer,
+// learner) have no grants in the platform domain, so this correctly
+// returns false for them.
+func (a *PermissionAdapter) CanManageSystemTemplates(ctx context.Context, userID string) (bool, error) {
+	return a.perm.HasAnyPermission(
+		ctx,
+		userID,
+		authDomain.DomainPlatform, // <- literal "platform"
+		authDomain.ResourceCertificate.String(),
+		authDomain.ActionManage.String(),
+		authDomain.ActionCreate.String(),
+	)
+}
+
 var _ domain.AuthorizationChecker = (*PermissionAdapter)(nil)

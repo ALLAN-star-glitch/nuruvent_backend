@@ -28,6 +28,7 @@ type Config struct {
 	OpenAI      OpenAIConfig
 	Gemini      GeminiConfig
 	Groq        GroqConfig
+	Gotenberg   GotenbergConfig
 	OpenRouter  OpenRouterConfig
 	NuruOnboardingNoticeEmails NuruventOnboardingNoticeEmails
 
@@ -98,6 +99,11 @@ func (c VideoOAuthPlatformConfig) IsConfigured() bool {
 
 func (c VideoConfig) IsConfigured() bool {
 	return c.EncryptionKey != ""
+}
+
+
+type GotenbergConfig struct {
+	URL string
 }
 
 // ============================================================
@@ -296,6 +302,9 @@ func Load() *Config {
 				getEnv("JWT_SECRET", "change-this-in-production"),
 			),
 			DownloadTokenTTL: getEnvDuration("DOWNLOAD_TOKEN_TTL", 90*24*time.Hour),
+		},
+		Gotenberg: GotenbergConfig{
+			URL: getEnv("GOTENBERG_URL", "http://localhost:3001"),
 		},
 		Supabase: SupabaseConfig{
 			URL:               getEnv("SUPABASE_URL", ""),

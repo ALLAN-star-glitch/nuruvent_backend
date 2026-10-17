@@ -14,6 +14,7 @@ services:
       DB_PORT: 5432
       REDIS_URL: redis://nuruvent-redis:6379
       CASBIN_MODEL: /app/configs/casbin/model.conf
+      GOTENBERG_URL: http://gotenberg:3000
     ports:
       - "8080:8080"
     volumes:
@@ -70,6 +71,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+    networks:
+      - nuruvent-network
+
+
+  # ============================================
+  # GOTENBERG (HTML to PDF Renderer)
+  # ============================================
+  gotenberg:
+    image: gotenberg/gotenberg:8-chromium
+    container_name: nuruvent-gotenberg
+    ports:
+      - "3001:3000" # Maps your Mac's 3001 to the container's 3000
     restart: unless-stopped
     networks:
       - nuruvent-network

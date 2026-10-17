@@ -35,9 +35,6 @@ func (s SystemTemplateSlug) IsValid() bool {
 }
 
 // TemplateDesign is the renderable design of a certificate template.
-//
-// The domain owns the shape of this struct; the GORM adapter is
-// responsible for marshaling it to and from the JSONB "design" column.
 type TemplateDesign struct {
 	// Visual
 	BackgroundColor string
@@ -55,18 +52,16 @@ type TemplateDesign struct {
 	SignatoryName  string
 	SignatoryTitle string
 
-	// Layout slots — placeholders in the rendered PDF. Each is a
-	// template string that may reference Metadata keys, e.g.
-	// "Awarded to {{recipient_name}}".
+	// Layout slots
 	TitleText    string
 	SubtitleText string
 	BodyText     string
 	FooterText   string
 
-	// QR placement hint (renderer-defined coordinates)
+	// QR placement hint
 	QRPosition string
 
-		// Border
+	// Border
 	BorderStyle string
 	BorderColor string
 
@@ -82,19 +77,16 @@ type TemplateDesign struct {
 
 // Template is a reusable certificate design owned by an account.
 type Template struct {
-	ID          string
-	AccountID   string
+	ID string
+	
+	// AccountID is nil for system templates, and set for account-owned templates.
+	AccountID   *string 
+	
 	Name        string
 	Description string
 	Design      TemplateDesign
 
 	// PriceMinor is the optional template-level certificate price.
-	//
-	//   nil = no override; use the account's default price
-	//   0   = explicitly free for certificates using this template
-	//   >0  = template-specific price in minor units
-	//
-	// Stored in certificate_templates.price_minor (nullable).
 	PriceMinor *int64
 
 	// SystemSlug is non-empty for templates Nuruvent ships with. Such
@@ -102,7 +94,6 @@ type Template struct {
 	SystemSlug SystemTemplateSlug
 
 	// IsDefault marks the account's default template for new issuances.
-	// At most one default per account (enforced by repository).
 	IsDefault bool
 
 	// IsSystem mirrors SystemSlug != "" but is stored so listings and
@@ -116,13 +107,15 @@ type Template struct {
 
 // Validate checks the template's invariants.
 func (t Template) Validate() error {
-	if strings.TrimSpace(t.AccountID) == "" && !t.IsSystem {
+	if !t.IsSystem && (t.AccountID == nil || strings.TrimSpace(*t.AccountID) == "") {
 		return ErrAccountIDRequired
 	}
 	if strings.TrimSpace(t.Name) == "" {
 		return ErrTemplateNameRequired
 	}
-	if t.IsSystem && !t.SystemSlug.IsValid() {
+	// Only validate the slug if one was set. Admin-created system
+	// templates don't need a slug — they use the generic name + price.
+	if t.IsSystem && t.SystemSlug != "" && !t.SystemSlug.IsValid() {
 		return ErrInvalidSystemTemplateSlug
 	}
 	return nil

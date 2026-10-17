@@ -18,16 +18,28 @@ func (s *serviceImpl) DeleteTemplate(
 		return err
 	}
 
+	// ---- 1. Authorization ----
 	if tmpl.IsSystem {
-		return domain.ErrCannotDeleteSystemTemplate
-	}
-
-	ok, err := s.deps.Authz.CanManageTemplates(ctx, userID, tmpl.AccountID)
-	if err != nil {
-		return err
-	}
-	if !ok {
-		return domain.ErrForbidden
+		// System templates can only be deleted by platform admins.
+		ok, err := s.deps.Authz.CanManageSystemTemplates(ctx, userID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return domain.ErrForbidden
+		}
+	} else {
+		// Account templates require account-level permission.
+		if tmpl.AccountID == nil {
+			return domain.ErrForbidden
+		}
+		ok, err := s.deps.Authz.CanManageTemplates(ctx, userID, *tmpl.AccountID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return domain.ErrForbidden
+		}
 	}
 
 	return s.deps.Templates.SoftDelete(ctx, templateID)

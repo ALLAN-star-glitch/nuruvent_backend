@@ -106,6 +106,10 @@ func SetupRoutes(
 	certificatehttp.RegisterUserRoutes(api, certificateHandler, authMiddleware, authzMiddleware)
 	certificatehttp.RegisterAccountRoutes(api, certificateHandler, authMiddleware, authzMiddleware)
 
+	// Admin system-template routes (platform domain, super_admin only)
+    certificatehttp.RegisterAdminRoutes(api, certificateHandler, authMiddleware, authzMiddleware)
+	
+
 	// ================================================
 	// 4. 404 Handler - Must be LAST
 	// ================================================

@@ -30,19 +30,12 @@ func (s *serviceImpl) ListTemplates(
 		return nil, err
 	}
 
-	systemTemplates := make([]*domain.Template, 0, len(domain.AllSystemTemplates))
-	for _, slug := range domain.AllSystemTemplates {
-		t, err := s.deps.Templates.FindSystemBySlug(ctx, slug)
-		if err != nil {
-			// A missing system template is not fatal — skip and
-			// keep the list usable. Admin-level seeding should
-			// ensure all three exist.
-			continue
-		}
-		systemTemplates = append(systemTemplates, t)
+	// Fetch ALL system templates (not just the 3 built-in slugs).
+	systemTemplates, err := s.deps.Templates.FindAllSystem(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	// Account templates first, then system templates.
 	out := make([]*domain.Template, 0, len(accountTemplates)+len(systemTemplates))
 	out = append(out, accountTemplates...)
 	out = append(out, systemTemplates...)

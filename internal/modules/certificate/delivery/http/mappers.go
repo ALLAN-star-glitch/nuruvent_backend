@@ -97,13 +97,21 @@ func toTemplateResponse(t *domain.Template) TemplateResponse {
 	if t == nil {
 		return TemplateResponse{}
 	}
+	
+	// AccountID is a pointer now. System templates have nil AccountID,
+	// which we surface as an empty string in the response.
+	accountID := ""
+	if t.AccountID != nil {
+		accountID = *t.AccountID
+	}
+	
 	return TemplateResponse{
 		ID:          t.ID,
-		AccountID:   t.AccountID,
+		AccountID:   accountID,
 		Name:        t.Name,
 		Description: t.Description,
 		Design:      designToDTO(t.Design),
-		PriceMinor:  t.PriceMinor, // ← NEW
+		PriceMinor:  t.PriceMinor,
 		SystemSlug:  string(t.SystemSlug),
 		IsDefault:   t.IsDefault,
 		IsSystem:    t.IsSystem,

@@ -74,8 +74,12 @@ func (s *serviceImpl) resolveTemplate(
 		if err != nil {
 			return nil, err
 		}
-		if t.AccountID != c.AccountID && !t.IsSystem {
-			return nil, domain.ErrTemplateNotFound
+		// System templates are accessible to any account.
+		// Otherwise the template must belong to this account.
+		if !t.IsSystem {
+			if t.AccountID == nil || *t.AccountID != c.AccountID {
+				return nil, domain.ErrTemplateNotFound
+			}
 		}
 		return t, nil
 	}

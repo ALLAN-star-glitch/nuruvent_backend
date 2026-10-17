@@ -221,7 +221,7 @@ func InitializeApp() (*AppDependencies, error) {
 	cryptoGenerator := verificationcode.NewCryptoGenerator()
 	clockSystemClock := clock.NewSystemClock()
 	authorizationChecker := NewCertificatePermissionAdapter(permissionChecker)
-	pdfGenerator := NewCertificatePDFAdapter()
+	pdfGenerator := NewCertificatePDFAdapter(configConfig)
 	objectStorage := NewCertificateStorageAdapter(client)
 	paymentCharger := NewCertificatePaymentChargerAdapter(service19)
 	accountPriceResolver := NewCertificateAccountPriceResolverAdapter(db)

@@ -433,8 +433,8 @@ func NewEventsCertificateIssuerAdapter(
 
 // NewCertificatePDFAdapter constructs the PDF adapter for the
 // certificate module.
-func NewCertificatePDFAdapter() certificateDomain.PDFGenerator {
-	return certificateadapters.NewPDFAdapter()
+func NewCertificatePDFAdapter(cfg *config.Config) certificateDomain.PDFGenerator {
+	return certificateadapters.NewGotenbergAdapter(cfg.Gotenberg.URL)
 }
 
 

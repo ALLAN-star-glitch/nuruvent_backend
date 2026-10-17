@@ -24,12 +24,6 @@ func NewTemplateRepository(db *gorm.DB) *TemplateRepository {
 // ============================================================
 // DESIGN SERIALISATION
 // ============================================================
-//
-// domain.TemplateDesign deliberately has no JSON tags (domain purity
-// rule). The HTTP DTO uses snake_case. To keep the two sides in sync
-// — and to avoid a postgres→http import — we mirror the DTO's tags
-// in a local struct. Any change here must be reflected in
-// delivery/http/dto.go's TemplateDesignDTO.
 
 type designJSON struct {
 	BackgroundColor string `json:"background_color"`
@@ -76,11 +70,11 @@ func designToJSON(d domain.TemplateDesign) designJSON {
 		BodyText:        d.BodyText,
 		FooterText:      d.FooterText,
 		QRPosition:      d.QRPosition,
-		BorderStyle:   d.BorderStyle,
-		BorderColor:   d.BorderColor,
-		SignatureLine: d.SignatureLine,
-		WatermarkText: d.WatermarkText,
-		VerifyBadge:   d.VerifyBadge,
+		BorderStyle:     d.BorderStyle,
+		BorderColor:     d.BorderColor,
+		SignatureLine:   d.SignatureLine,
+		WatermarkText:   d.WatermarkText,
+		VerifyBadge:     d.VerifyBadge,
 	}
 }
 
@@ -101,11 +95,11 @@ func designFromJSON(d designJSON) domain.TemplateDesign {
 		BodyText:        d.BodyText,
 		FooterText:      d.FooterText,
 		QRPosition:      d.QRPosition,
-		BorderStyle:   d.BorderStyle,
-		BorderColor:   d.BorderColor,
-		SignatureLine: d.SignatureLine,
-		WatermarkText: d.WatermarkText,
-		VerifyBadge:   d.VerifyBadge,
+		BorderStyle:     d.BorderStyle,
+		BorderColor:     d.BorderColor,
+		SignatureLine:   d.SignatureLine,
+		WatermarkText:   d.WatermarkText,
+		VerifyBadge:     d.VerifyBadge,
 	}
 }
 
@@ -154,7 +148,7 @@ func (r *TemplateRepository) Update(ctx context.Context, t *domain.Template) err
 func (r *TemplateRepository) SoftDelete(ctx context.Context, id string) error {
 	res := r.db.WithContext(ctx).
 		Model(&TemplateModel{}).
-		Where("id = ? AND is_system = FALSE", id).
+		Where("id = ?", id).
 		Update("deleted_at", gorm.Expr("NOW()"))
 	if res.Error != nil {
 		return translateError(res.Error, "delete template")
@@ -239,6 +233,26 @@ func (r *TemplateRepository) FindSystemBySlug(ctx context.Context, slug domain.S
 	return toTemplateDomain(&model)
 }
 
+
+func (r *TemplateRepository) FindAllSystem(ctx context.Context) ([]*domain.Template, error) {
+	var models []TemplateModel
+	err := r.db.WithContext(ctx).
+		Where("is_system = TRUE AND deleted_at IS NULL").
+		Order("created_at DESC").
+		Find(&models).Error
+	if err != nil {
+		return nil, translateError(err, "list system templates")
+	}
+	out := make([]*domain.Template, 0, len(models))
+	for i := range models {
+		t, err := toTemplateDomain(&models[i])
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
 // ============================================================
 // MAPPERS
 // ============================================================
@@ -256,7 +270,7 @@ func toTemplateModel(t *domain.Template) (*TemplateModel, error) {
 		Description: nullableString(t.Description),
 		PreviewURL:  nil,
 		IsActive:    true,
-		AccountID:   nullableString(t.AccountID),
+		AccountID:   t.AccountID, // <-- FIXED: Already a *string, DB column is nullable
 		Design:      JSONB(design),
 		PriceMinor:  t.PriceMinor,
 		IsDefault:   t.IsDefault,
@@ -276,7 +290,7 @@ func toTemplateDomain(m *TemplateModel) (*domain.Template, error) {
 	}
 	return &domain.Template{
 		ID:          m.ID,
-		AccountID:   derefString(m.AccountID),
+		AccountID:   m.AccountID, // <-- FIXED: Already a *string
 		Name:        m.Name,
 		Description: derefString(m.Description),
 		Design:      designFromJSON(dj),

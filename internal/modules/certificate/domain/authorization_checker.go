@@ -40,4 +40,9 @@ type AuthorizationChecker interface {
 
 	// CanRevoke reports whether userID can revoke a certificate.
 	CanRevoke(ctx context.Context, userID, accountDomain string) (bool, error)
+
+
+	// CanManageSystemTemplates reports whether userID can create or manage
+	// system-wide templates (only available to super_admins/admins).
+	CanManageSystemTemplates(ctx context.Context, userID string) (bool, error)
 }

@@ -116,6 +116,14 @@ func main() {
 			Deps:        []string{},
 		},
 
+
+		{
+			Name:        "super_admins",
+			Fn:          authseeder.SeedSuperAdmins,
+			Description: "Promote specific users to platform super_admin",
+			Deps:        []string{"permissions"},
+		},
+
 		// ============================================================
 		// EVENT SEEDERS - Lookup Data
 		// ============================================================

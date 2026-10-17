@@ -22,4 +22,6 @@ type TemplateRepository interface {
 
 	// ClearDefault unsets any existing default for the account.
 	ClearDefault(ctx context.Context, accountID string) error
+
+	FindAllSystem(ctx context.Context) ([]*Template, error)
 }

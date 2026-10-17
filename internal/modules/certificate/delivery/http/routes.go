@@ -8,44 +8,14 @@ import (
 	certificateService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 )
 
-// Handlers bundles the certificate module's HTTP handlers.
 type Handlers struct {
 	Handler *Handler
 }
 
-// NewHandlers constructs all handlers.
 func NewHandlers(svc certificateService.Service) *Handlers {
 	return &Handlers{Handler: NewHandler(svc)}
 }
 
-// ============================================================
-// ROUTE REGISTRATION
-// ============================================================
-//
-// NOTE ON AUTHZ
-//
-// Certificate routes use BOTH authzMiddleware and service-level authz
-// (via domain.AuthorizationChecker). They are not redundant:
-//
-//   - authzMiddleware enforces the coarse "does the caller hold any
-//     certificate permission in this account" gate at the edge. It
-//     resolves (resource, action) from URL+method.
-//
-//   - Service-level Authz.CanX enforces the fine-grained decision,
-//     including own-vs-all scope (ListMine vs ListByAccount) which
-//     the middleware cannot express.
-//
-// Both must pass.
-//
-// ROUTE ORDERING
-//
-// Public routes (verify, download-by-token) MUST be registered before
-// any /:id route, otherwise Fiber captures the static segment as an
-// ID. The batch issuance route (/events/:id/certificates/issue) is
-// registered by the events module, not here.
-
-// RegisterRoutes mounts the certificate module's main routes under the
-// given router (typically the /api/v1 group).
 func RegisterRoutes(
 	r fiber.Router,
 	h *Handlers,
@@ -60,19 +30,22 @@ func RegisterRoutes(
 	r.Post("/certificates/bulk", authMiddleware, authzMiddleware, h.Handler.IssueBulk)
 	r.Post("/certificates/:id/revoke", authMiddleware, authzMiddleware, h.Handler.RevokeByUser)
 	r.Get("/certificates/:id/download", authMiddleware, authzMiddleware, h.Handler.Download)
-		r.Post("/certificates/:id/send", authMiddleware, authzMiddleware, h.Handler.SendCertificate)
+	r.Post("/certificates/:id/send", authMiddleware, authzMiddleware, h.Handler.SendCertificate)
 
 	// ---- Templates (auth + authz) ----
 	r.Post("/certificate-templates", authMiddleware, authzMiddleware, h.Handler.CreateTemplate)
 	r.Get("/certificate-templates", authMiddleware, authzMiddleware, h.Handler.ListTemplates)
+
+	// Media routes (register BEFORE /:id to avoid conflicts)
+	r.Post("/certificate-templates/:id/upload", authMiddleware, authzMiddleware, h.Handler.UploadTemplateImage)
+	r.Delete("/certificate-templates/media", authMiddleware, authzMiddleware, h.Handler.DeleteTemplateImage)
+
+	// Template CRUD by ID
 	r.Put("/certificate-templates/:id", authMiddleware, authzMiddleware, h.Handler.UpdateTemplate)
 	r.Delete("/certificate-templates/:id", authMiddleware, authzMiddleware, h.Handler.DeleteTemplate)
 	r.Post("/certificate-templates/:id/default", authMiddleware, authzMiddleware, h.Handler.SetDefaultTemplate)
-	
 }
 
-// RegisterUserRoutes mounts user-scoped certificate routes
-// (/me/certificates).
 func RegisterUserRoutes(
 	r fiber.Router,
 	h *Handlers,
@@ -82,8 +55,6 @@ func RegisterUserRoutes(
 	r.Get("/me/certificates", authMiddleware, authzMiddleware, h.Handler.ListMine)
 }
 
-// RegisterAccountRoutes mounts account-scoped certificate routes
-// (/accounts/:id/certificates).
 func RegisterAccountRoutes(
 	r fiber.Router,
 	h *Handlers,
@@ -91,4 +62,23 @@ func RegisterAccountRoutes(
 	authzMiddleware fiber.Handler,
 ) {
 	r.Get("/accounts/:id/certificates", authMiddleware, authzMiddleware, h.Handler.ListByAccount)
+}
+
+
+// RegisterAdminRoutes mounts platform-admin certificate-template routes.
+// Casbin's domain resolver sees /api/v1/admin/* → platform domain,
+// so only super_admin (and admin if granted) can pass.
+func RegisterAdminRoutes(
+	r fiber.Router,
+	h *Handlers,
+	authMiddleware fiber.Handler,
+	authzMiddleware fiber.Handler,
+) {
+	r.Get("/admin/certificate-templates", authMiddleware, authzMiddleware, h.Handler.ListSystemTemplates)
+	r.Post("/admin/certificate-templates", authMiddleware, authzMiddleware, h.Handler.CreateSystemTemplate)
+	r.Put("/admin/certificate-templates/:id", authMiddleware, authzMiddleware, h.Handler.UpdateTemplate)
+	r.Delete("/admin/certificate-templates/:id", authMiddleware, authzMiddleware, h.Handler.DeleteTemplate)
+
+	r.Post("/admin/certificate-templates/:id/upload", authMiddleware, authzMiddleware, h.Handler.UploadTemplateImage)
+	r.Delete("/admin/certificate-templates/media", authMiddleware, authzMiddleware, h.Handler.DeleteTemplateImage)
 }

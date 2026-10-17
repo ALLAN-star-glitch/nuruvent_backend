@@ -27,7 +27,12 @@ func (s *serviceImpl) SetDefaultTemplate(
 		return domain.ErrCannotEditSystemTemplate
 	}
 
-	ok, err := s.deps.Authz.CanManageTemplates(ctx, userID, tmpl.AccountID)
+	// Guard: a non-system template must have an owner.
+	if tmpl.AccountID == nil {
+		return domain.ErrForbidden
+	}
+
+	ok, err := s.deps.Authz.CanManageTemplates(ctx, userID, *tmpl.AccountID)
 	if err != nil {
 		return err
 	}
@@ -35,7 +40,7 @@ func (s *serviceImpl) SetDefaultTemplate(
 		return domain.ErrForbidden
 	}
 
-	if err := s.deps.Templates.ClearDefault(ctx, tmpl.AccountID); err != nil {
+	if err := s.deps.Templates.ClearDefault(ctx, *tmpl.AccountID); err != nil {
 		return err
 	}
 

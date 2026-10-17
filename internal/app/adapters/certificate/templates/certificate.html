@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=Inter:wght@400;500&display=swap');
+
+    @page {
+      size: 11.69in 8.27in;
+      margin: 0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 11.68in;
+      height: 8.26in;
+      background-color: {{.BackgroundColor}};
+      color: {{.TextColor}};
+      font-family: 'Inter', sans-serif;
+      overflow: hidden;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* ============================================ */
+    /* WATERMARK — faint, centered, behind content  */
+    /* ============================================ */
+    .watermark {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) rotate(-25deg);
+      font-family: 'Playfair Display', serif;
+      font-size: 140px;
+      font-weight: 700;
+      letter-spacing: 8px;
+      text-transform: uppercase;
+      color: {{.AccentColor}};
+      opacity: 0.06;
+      z-index: 0;
+      pointer-events: none;
+      white-space: nowrap;
+      user-select: none;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* Background Image Overlay */
+    .bg-image {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: url('{{.BackgroundURL}}');
+      background-size: cover;
+      background-position: center;
+      opacity: 0.15;
+      z-index: 0;
+    }
+
+    /* Optional Border */
+    .border-frame {
+      position: absolute;
+      top: 0.3in; left: 0.3in; right: 0.3in; bottom: 0.3in;
+      border: {{if eq .BorderStyle "double"}}4px double {{else}}2px solid {{end}} {{.BorderColor}};
+      z-index: 1;
+      pointer-events: none;
+    }
+    .border-frame-inner {
+      position: absolute;
+      top: 0.1in; left: 0.1in; right: 0.1in; bottom: 0.1in;
+      border: 1px solid {{.BorderColor}};
+    }
+
+    /* Main Content Container */
+    .content {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 0.8in 1in;
+    }
+
+    /* Logo */
+    .logo {
+      position: absolute;
+      top: 0.5in;
+      left: 0.5in;
+      height: 0.8in;
+      object-fit: contain;
+      z-index: 3;
+    }
+
+    /* Typography */
+    .title {
+      font-family: 'Playfair Display', serif;
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: {{.AccentColor}};
+    }
+
+    .accent-line {
+      width: 2.5in;
+      height: 3px;
+      background-color: {{.AccentColor}};
+      margin: 0.2in auto;
+    }
+
+    .subtitle {
+      font-size: 18px;
+      margin-bottom: 0.2in;
+    }
+
+    .recipient {
+      font-family: 'Playfair Display', serif;
+      font-size: 52px;
+      font-weight: 700;
+      color: {{.AccentColor}};
+      margin-bottom: 0.1in;
+    }
+
+    .body-text {
+      font-size: 18px;
+      max-width: 8in;
+      text-align: center;
+      line-height: 1.5;
+      margin-top: 0.2in;
+    }
+
+    /* Bottom Section (Signature & QR) */
+    .bottom-row {
+      margin-top: auto;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-bottom: 0.6in;
+    }
+
+    .signature-block {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      min-width: 3in;
+    }
+    .signature-image {
+      height: 0.7in;
+      margin-bottom: 5px;
+      object-fit: contain;
+    }
+    .signature-line {
+      width: 100%;
+      border-top: 1px solid {{.TextColor}};
+      margin-bottom: 5px;
+      opacity: 0.5;
+    }
+    .signatory-name {
+      font-weight: 600;
+      font-size: 16px;
+    }
+    .signatory-title {
+      font-size: 14px;
+      color: #666;
+    }
+
+    /* QR Code Block */
+    .qr-block {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: white;
+      padding: 10px;
+      border-radius: 12px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+      border: 1px solid #eee;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    
+    .qr-image {
+      width: 1.2in;
+      height: 1.2in;
+      object-fit: contain;
+      display: block;
+    }
+    
+    .verify-badge {
+      margin-top: 8px;
+      font-size: 12px;
+      font-weight: bold;
+      color: {{.AccentColor}};
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    /* Footer */
+    .footer {
+      position: absolute;
+      bottom: 0.3in;
+      font-size: 12px;
+      color: #888;
+      text-align: center;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  {{if .WatermarkText}}<div class="watermark">{{.WatermarkText}}</div>{{end}}
+
+  {{if .BackgroundURL}}<div class="bg-image"></div>{{end}}
+
+  {{if ne .BorderStyle "none"}}
+    <div class="border-frame">
+      {{if eq .BorderStyle "double"}}<div class="border-frame-inner"></div>{{end}}
+    </div>
+  {{end}}
+
+  {{if .LogoURL}}<img src="{{.LogoURL}}" class="logo" />{{end}}
+
+  <div class="content">
+    <div class="title">{{.TitleText}}</div>
+    <div class="accent-line"></div>
+
+    <div class="subtitle">{{.SubtitleText}}</div>
+    <div class="recipient">{{.RecipientName}}</div>
+
+    <div class="body-text">{{.BodyText}}</div>
+
+    <div class="bottom-row">
+      <div class="signature-block">
+        {{if .SignatureURL}}<img src="{{.SignatureURL}}" class="signature-image" />{{end}}
+        {{if .SignatureLine}}<div class="signature-line"></div>{{end}}
+        {{if .SignatoryName}}<div class="signatory-name">{{.SignatoryName}}</div>{{end}}
+        {{if .SignatoryTitle}}<div class="signatory-title">{{.SignatoryTitle}}</div>{{end}}
+      </div>
+
+      <div class="qr-block">
+        <img src="{{.QRCodeDataURL}}" class="qr-image" />
+        {{if .VerifyBadge}}<div class="verify-badge">✓ Verified</div>{{end}}
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    {{.FooterText}}
+    {{if .VerificationCode}}
+      <br><span style="font-family: monospace; font-size: 10px; opacity: 0.7; margin-top: 4px; display: inline-block;">ID: {{.VerificationCode}}</span>
+    {{end}}
+  </div>
+</body>
+</html>

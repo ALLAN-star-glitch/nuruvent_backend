@@ -151,17 +151,28 @@ func designFromDTO(d TemplateDesignDTO) domain.TemplateDesign {
 		TextColor:       d.TextColor,
 		AccentColor:     d.AccentColor,
 		FontFamily:      d.FontFamily,
-		LogoURL:         d.LogoURL,
-		SealURL:         d.SealURL,
-		SignatureURL:    d.SignatureURL,
-		BackgroundURL:   d.BackgroundURL,
-		SignatoryName:   d.SignatoryName,
-		SignatoryTitle:  d.SignatoryTitle,
-		TitleText:       d.TitleText,
-		SubtitleText:    d.SubtitleText,
-		BodyText:        d.BodyText,
-		FooterText:      d.FooterText,
-		QRPosition:      d.QRPosition,
+
+		LogoURL:       d.LogoURL,
+		SealURL:       d.SealURL,
+		SignatureURL:  d.SignatureURL,
+		BackgroundURL: d.BackgroundURL,
+
+		SignatoryName:  d.SignatoryName,
+		SignatoryTitle: d.SignatoryTitle,
+
+		TitleText:    d.TitleText,
+		SubtitleText: d.SubtitleText,
+		BodyText:     d.BodyText,
+		FooterText:   d.FooterText,
+
+		QRPosition: d.QRPosition,
+
+		// ADD THESE LINES:
+		BorderStyle:   d.BorderStyle,
+		BorderColor:   d.BorderColor,
+		SignatureLine: d.SignatureLine,
+		WatermarkText: d.WatermarkText,
+		VerifyBadge:   d.VerifyBadge,
 	}
 }
 
@@ -171,19 +182,23 @@ func designToDTO(d domain.TemplateDesign) TemplateDesignDTO {
 		TextColor:       d.TextColor,
 		AccentColor:     d.AccentColor,
 		FontFamily:      d.FontFamily,
-		LogoURL:         d.LogoURL,
-		SealURL:         d.SealURL,
-		SignatureURL:    d.SignatureURL,
-		BackgroundURL:   d.BackgroundURL,
-		SignatoryName:   d.SignatoryName,
-		SignatoryTitle:  d.SignatoryTitle,
-		TitleText:       d.TitleText,
-		SubtitleText:    d.SubtitleText,
-		BodyText:        d.BodyText,
-		FooterText:      d.FooterText,
-		QRPosition:      d.QRPosition,
 
-		// New in 153
+		LogoURL:       d.LogoURL,
+		SealURL:       d.SealURL,
+		SignatureURL:  d.SignatureURL,
+		BackgroundURL: d.BackgroundURL,
+
+		SignatoryName:  d.SignatoryName,
+		SignatoryTitle: d.SignatoryTitle,
+
+		TitleText:    d.TitleText,
+		SubtitleText: d.SubtitleText,
+		BodyText:     d.BodyText,
+		FooterText:   d.FooterText,
+
+		QRPosition: d.QRPosition,
+
+		// ADD THESE LINES:
 		BorderStyle:   d.BorderStyle,
 		BorderColor:   d.BorderColor,
 		SignatureLine: d.SignatureLine,
@@ -191,3 +206,4 @@ func designToDTO(d domain.TemplateDesign) TemplateDesignDTO {
 		VerifyBadge:   d.VerifyBadge,
 	}
 }
+

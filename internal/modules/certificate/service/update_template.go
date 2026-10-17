@@ -23,24 +23,42 @@ func (s *serviceImpl) UpdateTemplate(
 		return nil, err
 	}
 
-	ok, err := s.deps.Authz.CanManageTemplates(ctx, userID, tmpl.AccountID)
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, domain.ErrForbidden
-	}
-
+	// ---- 1. Authorization ----
 	if tmpl.IsSystem {
-		return nil, domain.ErrForbidden
+		// System templates can only be edited by platform admins.
+		ok, err := s.deps.Authz.CanManageSystemTemplates(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, domain.ErrForbidden
+		}
+	} else {
+		// Account templates require account-level permission.
+		if tmpl.AccountID == nil {
+			return nil, domain.ErrForbidden
+		}
+		ok, err := s.deps.Authz.CanManageTemplates(ctx, userID, *tmpl.AccountID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return nil, domain.ErrForbidden
+		}
 	}
 
-	// Resolve the tier (may have changed).
-	tier, err := s.resolveTierSlug(ctx, in.TierTemplateID)
-	if err != nil {
-		return nil, err
+	// ---- 2. Resolve the tier ----
+	// System templates don't have a parent tier (they are the tiers).
+	// Account templates resolve their chosen tier to enforce restrictions.
+	var tier domain.SystemTemplateSlug
+	if !tmpl.IsSystem {
+		tier, err = s.resolveTierSlug(ctx, in.TierTemplateID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
+	// ---- 3. Apply updates ----
 	if in.Name != nil {
 		tmpl.Name = *in.Name
 	}
@@ -56,6 +74,7 @@ func (s *serviceImpl) UpdateTemplate(
 
 	tmpl.UpdatedAt = s.deps.Clock.Now().UTC()
 
+	// ---- 4. Validate and persist ----
 	if err := tmpl.Validate(); err != nil {
 		return nil, err
 	}

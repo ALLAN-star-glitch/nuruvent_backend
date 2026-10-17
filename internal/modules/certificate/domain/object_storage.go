@@ -11,4 +11,12 @@ type ObjectStorage interface {
 
 	// Delete removes an object. Missing objects are not an error.
 	Delete(ctx context.Context, key string) error
+
+
+	UploadPDF(ctx context.Context, path string, pdfBytes []byte) (string, error)
+	GetPublicURL(path string) string
+	
+	// ADD THESE: For handling template images (logo, seal, signature, background)
+	UploadTemplateImage(ctx context.Context, templateID string, filename string, contentType string, fileData []byte) (string, error)
+	DeleteFileByURL(ctx context.Context, url string) error
 }

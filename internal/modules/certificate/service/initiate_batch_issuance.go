@@ -23,11 +23,6 @@ type InitiateBatchIssuanceInput struct {
 }
 
 // InitiateBatchIssuanceResult is what the caller gets back.
-//
-//   - If the batch is free (template price = 0), the certificates
-//     are issued immediately and Type = "free" with a certificate count.
-//   - If the batch is paid, a pending payment order is created and
-//     Type = "paid" with the order ID and amount.
 type InitiateBatchIssuanceResult struct {
 	Type string // "free" | "paid"
 
@@ -37,26 +32,13 @@ type InitiateBatchIssuanceResult struct {
 	Failed int
 
 	// Paid path
-	OrderID     string
-	AmountMinor int64
-	Currency    string
+	OrderID       string
+	AmountMinor   int64
+	Currency      string
 	AttendeeCount int
 }
 
 // InitiateBatchIssuance starts a certificate batch for an event.
-//
-// The certificate module:
-//  1. Resolves the template (or falls back to the account's default).
-//  2. Reads its price.
-//  3. If the price is zero → issues all certificates immediately.
-//  4. If the price is positive → creates a pending payment order in
-//     the payment module. Issuance happens later, when the payment
-//     webhook fires.
-//
-// Idempotent on both paths:
-//   - Free path: existing certificates are returned.
-//   - Paid path: an existing pending order for the same event is
-//     returned.
 func (s *serviceImpl) InitiateBatchIssuance(
 	ctx context.Context,
 	userID string,
@@ -154,8 +136,12 @@ func (s *serviceImpl) resolveTemplateForBatch(
 		if err != nil {
 			return nil, err
 		}
-		if t.AccountID != accountID && !t.IsSystem {
-			return nil, domain.ErrTemplateNotFound
+		// System templates are accessible to any account.
+		// Otherwise the template must belong to this account.
+		if !t.IsSystem {
+			if t.AccountID == nil || *t.AccountID != accountID {
+				return nil, domain.ErrTemplateNotFound
+			}
 		}
 		return t, nil
 	}
