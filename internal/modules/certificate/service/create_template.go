@@ -5,6 +5,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
 )
@@ -42,6 +43,8 @@ func (s *serviceImpl) CreateTemplate(
 		tier       domain.SystemTemplateSlug
 		priceMinor *int64
 	)
+
+		fmt.Printf("[DEBUG] CreateTemplate Input: IsSystem=%v, SystemSlug=%q, AccountID=%q\n", in.IsSystem, in.SystemSlug, in.AccountID)
 
 	if in.IsSystem {
 		// System templates: platform-admin check, no account required.
@@ -106,20 +109,28 @@ func (s *serviceImpl) CreateTemplate(
 	design.NormalizeBackground()
 
 	// ---- 3. Build the template ----
-	now := s.deps.Clock.Now().UTC()
-	tmpl := &domain.Template{
-		ID:          s.deps.IDs.NewID(),
-		AccountID:   accountID,
-		Name:        in.Name,
-		Description: in.Description,
-		Design:      design,
-		PriceMinor:  priceMinor,
-		SystemSlug:  tier,
-		IsDefault:   false,
-		IsSystem:    in.IsSystem,
-		CreatedAt:   now,
-		UpdatedAt:   now,
-	}
+// SystemSlug is only set for system templates. Account templates use
+// `tier` for design restriction purposes but must NOT carry the slug
+// on the Template row — Validate() rejects that.
+var systemSlugForTemplate domain.SystemTemplateSlug
+if in.IsSystem {
+    systemSlugForTemplate = tier
+}
+
+now := s.deps.Clock.Now().UTC()
+tmpl := &domain.Template{
+    ID:          s.deps.IDs.NewID(),
+    AccountID:   accountID,
+    Name:        in.Name,
+    Description: in.Description,
+    Design:      design,
+    PriceMinor:  priceMinor,
+    SystemSlug:  systemSlugForTemplate,   // ← FIX
+    IsDefault:   false,
+    IsSystem:    in.IsSystem,
+    CreatedAt:   now,
+    UpdatedAt:   now,
+}
 
 	// ---- 4. Validate ----
 	if err := tmpl.Validate(); err != nil {

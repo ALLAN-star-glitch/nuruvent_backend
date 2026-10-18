@@ -28,6 +28,7 @@ func (h *Handler) CreateTemplate(c fiber.Ctx) error {
 			"error": err.Error(),
 		})
 	}
+	
 
 	tmpl, err := h.svc.CreateTemplate(c.Context(), userID, service.CreateTemplateInput{
 		AccountID:      body.AccountID,
