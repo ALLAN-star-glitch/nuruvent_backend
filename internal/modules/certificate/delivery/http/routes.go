@@ -46,13 +46,21 @@ func RegisterRoutes(
 	r.Post("/certificate-templates/:id/default", authMiddleware, authzMiddleware, h.Handler.SetDefaultTemplate)
 }
 
+// RegisterUserRoutes mounts self-service certificate routes.
+//
+// These routes are scoped to the authenticated user, not to an account.
+// They use authMiddleware only — authzMiddleware requires an :accountId
+// path parameter to derive a Casbin domain, and /me/* has none.
+//
+// ListMine filters by recipient_user_id inside the service, so a caller
+// can only ever see their own certificates.
 func RegisterUserRoutes(
 	r fiber.Router,
 	h *Handlers,
 	authMiddleware fiber.Handler,
 	authzMiddleware fiber.Handler,
 ) {
-	r.Get("/me/certificates", authMiddleware, authzMiddleware, h.Handler.ListMine)
+	r.Get("/me/certificates", authMiddleware, h.Handler.ListMine)
 }
 
 func RegisterAccountRoutes(
@@ -63,7 +71,6 @@ func RegisterAccountRoutes(
 ) {
 	r.Get("/accounts/:id/certificates", authMiddleware, authzMiddleware, h.Handler.ListByAccount)
 }
-
 
 // RegisterAdminRoutes mounts platform-admin certificate-template routes.
 // Casbin's domain resolver sees /api/v1/admin/* → platform domain,

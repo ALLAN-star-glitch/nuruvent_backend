@@ -9,17 +9,15 @@ import (
 )
 
 // ListMine implements Service.ListMine.
+//
+// Self-service: returns certificates where recipient_user_id = caller.
+// No Casbin check — this is scoped by identity, not by account role.
+// The repository's ListByRecipient applies the recipient_user_id filter,
+// so a caller can only ever see their own certificates.
 func (s *serviceImpl) ListMine(
 	ctx context.Context,
 	userID string,
 	f domain.CertificateFilter,
 ) ([]*domain.Certificate, error) {
-	ok, err := s.deps.Authz.CanReadOwn(ctx, userID, "")
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, domain.ErrForbidden
-	}
 	return s.deps.Certificates.ListByRecipient(ctx, userID, f)
 }
