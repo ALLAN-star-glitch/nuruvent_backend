@@ -61,7 +61,8 @@ var (
 var ErrPDFPending = errors.New("pdf: rendering in progress")
 
 
-
 var (
 	ErrSystemTemplateSlugRequired = errors.New("system template requires a valid slug")
 )
+
+var ErrSystemTemplateAlreadyExists = errors.New("a system template already exists for this tier")

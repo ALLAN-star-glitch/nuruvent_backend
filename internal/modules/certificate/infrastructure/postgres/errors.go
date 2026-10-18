@@ -19,10 +19,16 @@ func translateError(err error, op string) error {
 	}
 
 	if isUniqueViolation(err) {
-		// Both identity-partial-indexes and verification_code collisions
-		// surface here. We can't distinguish which index from the driver
-		// without parsing the constraint name — the caller (application
-		// service) treats them as ErrAlreadyIssued to remain idempotent.
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			// The unique index on system_slug was already dropped in
+			// migration 157, so this shouldn't fire anymore. But keep
+			// the guard for safety if it's ever re-added.
+			if pgErr.ConstraintName == "idx_system_templates_unique_slug" {
+				return fmt.Errorf("%w: %s", domain.ErrSystemTemplateAlreadyExists, op)
+			}
+		}
+		// Certificate identity / verification_code collisions.
 		return fmt.Errorf("%w: %s", domain.ErrAlreadyIssued, op)
 	}
 
@@ -38,7 +44,6 @@ func isUniqueViolation(err error) bool {
 	if errors.As(err, &pgErr) {
 		return pgErr.Code == "23505"
 	}
-	// Fallback for drivers that don't expose pgconn.PgError
 	return strings.Contains(err.Error(), "duplicate key value violates unique constraint")
 }
 
