@@ -4,7 +4,6 @@ package http
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/gofiber/fiber/v3"
@@ -180,13 +179,15 @@ func (h *Handler) ListMine(c fiber.Ctx) error {
 
 	return response.Success(c, "Certificates retrieved", toCertificateListResponse(certs))
 }
-
 // Download handles GET /certificates/:id/download.
 //
-// Returns a 302 redirect to the certificate's PDF URL. Triggers
-// rendering on first call.
-// internal/modules/certificate/delivery/http/certificate_handler.go
-
+// Returns the cached PDF URL (200) if the certificate has already
+// been rendered, otherwise enqueues a render job and returns 202
+// with { status: "rendering" }.
+//
+// The frontend polls this same endpoint until it receives 200 with
+// a URL. Rendering is deduplicated server-side via Asynq TaskID, so
+// repeated polls do not create duplicate jobs.
 func (h *Handler) Download(c fiber.Ctx) error {
 	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
@@ -201,13 +202,10 @@ func (h *Handler) Download(c fiber.Ctx) error {
 	url, err := h.svc.DownloadURL(c.Context(), userID, id)
 	if err != nil {
 		if errors.Is(err, domain.ErrPDFPending) {
-			// Signal to the frontend that rendering is in progress
 			return c.Status(fiber.StatusAccepted).JSON(fiber.Map{
 				"success": true,
-				"message": "Certificate is being prepared",
 				"data": fiber.Map{
-					"status":    "rendering",
-					"poll_url":  fmt.Sprintf("/api/v1/certificates/%s/download-status", id),
+					"status": "rendering",
 				},
 			})
 		}
