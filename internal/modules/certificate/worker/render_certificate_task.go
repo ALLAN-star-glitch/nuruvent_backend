@@ -25,21 +25,18 @@ func NewRenderCertificateHandler(svc certservice.Service) *RenderCertificateHand
 func (h *RenderCertificateHandler) ProcessTask(ctx context.Context, task *asynq.Task) error {
 	var job certdomain.CertificateRenderJob
 
-
-	// first, ummarshal the job 
 	if err := json.Unmarshal(task.Payload(), &job); err != nil {
+		log.Printf("[worker] UNMARSHAL FAILED: %v", err)
 		return fmt.Errorf("unmarshal render job: %w", err)
 	}
 
 	log.Printf("[worker] rendering certificate %s", job.CertificateID)
 
-
-	// with the unmarshalled job, we can now call render certificate using ctx and the certificate id in the unmarshalled job
 	if err := h.svc.RenderCertificatePDF(ctx, job.CertificateID); err != nil {
-		// Returning an error triggers Asynq's retry with backoff
+		log.Printf("[worker] RENDER FAILED %s: %v", job.CertificateID, err)
 		return fmt.Errorf("render certificate %s: %w", job.CertificateID, err)
 	}
 
-	log.Printf("[worker] certificate %s rendered", job.CertificateID)
+	log.Printf("[worker] certificate %s rendered OK", job.CertificateID)
 	return nil
 }
