@@ -81,17 +81,20 @@ func (s *serviceImpl) authorizeDownload(
 func (s *serviceImpl) renderAndStore(
 	ctx context.Context,
 	cert *domain.Certificate,
-) (string, error) {
-	tmpl, err := s.deps.Templates.FindByID(ctx, cert.TemplateID)
+) (string, error) { //return pdf url or err
+	tmpl, err := s.deps.Templates.FindByID(ctx, cert.TemplateID) // find templates
 	if err != nil {
 		return "", err
 	}
 
+	//formarting the verify url: base url + verify + verification code
 	verifyURL := fmt.Sprintf("%s/verify/%s",
 		trimTrailingSlash(s.deps.VerifyBaseURL),
 		cert.VerificationCode.String(),
 	)
 
+
+	// get the pdf bytes - render the pdf (from certificate, template, verify url)
 	pdfBytes, err := s.deps.PDF.Render(ctx, domain.RenderInput{
 		Certificate: cert,
 		Template:    tmpl,
@@ -100,9 +103,9 @@ func (s *serviceImpl) renderAndStore(
 	if err != nil {
 		return "", fmt.Errorf("render pdf: %w", err)
 	}
-
-	objectKey := fmt.Sprintf("certificates/%s/%s.pdf", cert.AccountID, cert.ID)
-	url, err := s.deps.Storage.Put(ctx, objectKey, pdfBytes, "application/pdf")
+ 
+	objectKey := fmt.Sprintf("certificates/%s/%s.pdf", cert.AccountID, cert.ID) // key - required by put function
+	url, err := s.deps.Storage.Put(ctx, objectKey, pdfBytes, "application/pdf") // call put that will call upload - return url
 	if err != nil {
 		return "", fmt.Errorf("upload pdf: %w", err)
 	}
