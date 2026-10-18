@@ -13,6 +13,7 @@ import (
 	paymentadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/payment"
 	registrationadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/registration"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/team"
+	"github.com/hibiken/asynq"
 	"gorm.io/gorm"
 
 	accountDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/account/accountdomain"
@@ -47,7 +48,6 @@ import (
 	certificateadapters "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/certificate"
 	certificateDomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
 	sharedstorage "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/storage"
-
 )
 
 // ---- AUTH ADAPTERS ----
@@ -550,4 +550,12 @@ func NewCertificateAccountReaderAdapter(
 	accountSvc accountService.Service,
 ) certificateDomain.AccountReader {
 	return certificateadapters.NewAccountReaderAdapter(accountSvc)
+}
+
+// NewCertificateRenderQueueAdapter wraps the Asynq client for
+// the certificate module's RenderJobQueue port.
+func NewCertificateRenderQueueAdapter(
+	client *asynq.Client,
+) certificateDomain.RenderJobQueue {
+	return certificateadapters.NewRenderQueueAdapter(client)
 }

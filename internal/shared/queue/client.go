@@ -6,31 +6,31 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
+	notificationdomain "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
-type client struct {
+// NewAsynqClient is the raw client — the single source of truth.
+func NewAsynqClient(cfg *config.Config) (*asynq.Client, error) {
+	opt, err := asynq.ParseRedisURI(cfg.GetRedisURL())
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewClient(opt), nil
+}
+
+// TaskQueueWrapper wraps *asynq.Client as the notification TaskQueue.
+type TaskQueueWrapper struct {
 	client *asynq.Client
 }
 
-func NewClient(cfg *config.Config) notificationdomain.TaskQueue {
-	redisURL := cfg.GetRedisURL()
-
-	// Parse URI cleanly to handle both host:port and full redis:// URLs
-	opt, err := asynq.ParseRedisURI(redisURL)
-	if err != nil {
-		log.Fatalf("❌ Failed to parse Redis URL for Asynq: %v", err)
-	}
-
-	c := asynq.NewClient(opt)
-	return &client{client: c}
+func NewTaskQueue(client *asynq.Client) notificationdomain.TaskQueue {
+	return &TaskQueueWrapper{client: client}
 }
 
-// Enqueue implements notificationdomain.TaskQueue
-func (c *client) Enqueue(ctx context.Context, taskType string, payload []byte) error {
+func (w *TaskQueueWrapper) Enqueue(ctx context.Context, taskType string, payload []byte) error {
 	task := asynq.NewTask(taskType, payload)
-	info, err := c.client.Enqueue(task)
+	info, err := w.client.Enqueue(task)
 	if err != nil {
 		log.Printf("Failed to enqueue task %s: %v", taskType, err)
 		return err
@@ -39,10 +39,9 @@ func (c *client) Enqueue(ctx context.Context, taskType string, payload []byte) e
 	return nil
 }
 
-// EnqueueDelayed implements notificationdomain.TaskQueue
-func (c *client) EnqueueDelayed(ctx context.Context, taskType string, payload []byte, delaySeconds int) error {
+func (w *TaskQueueWrapper) EnqueueDelayed(ctx context.Context, taskType string, payload []byte, delaySeconds int) error {
 	task := asynq.NewTask(taskType, payload)
-	info, err := c.client.Enqueue(task, asynq.ProcessIn(time.Duration(delaySeconds)*time.Second))
+	info, err := w.client.Enqueue(task, asynq.ProcessIn(time.Duration(delaySeconds)*time.Second))
 	if err != nil {
 		log.Printf("Failed to enqueue delayed task %s: %v", taskType, err)
 		return err
@@ -51,6 +50,9 @@ func (c *client) EnqueueDelayed(ctx context.Context, taskType string, payload []
 	return nil
 }
 
-func (c *client) Close() error {
-	return c.client.Close()
+
+
+
+func (w *TaskQueueWrapper) Close() error {
+	return w.client.Close()
 }

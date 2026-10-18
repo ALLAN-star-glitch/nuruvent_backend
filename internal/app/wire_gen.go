@@ -94,7 +94,11 @@ func InitializeApp() (*AppDependencies, error) {
 	roleManager := authorization.NewRoleManager(enforcer)
 	policyManager := authorization.NewPolicyManager(enforcer)
 	repository := postgres.NewPostgresRepository(db)
-	taskQueue := queue.NewClient(configConfig)
+	asynqClient, err := queue.NewAsynqClient(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	taskQueue := queue.NewTaskQueue(asynqClient)
 	queueService := NewQueueAdapter(taskQueue)
 	tokenService := jwt.NewTokenService(configConfig)
 	taskEnqueuer := service.NewTaskEnqueuer(taskQueue)
@@ -228,7 +232,8 @@ func InitializeApp() (*AppDependencies, error) {
 	downloadTokenSigner := NewCertificateDownloadTokenSignerAdapter(configConfig)
 	notificationSender := NewCertificateNotificationAdapter(notificationService, configConfig)
 	accountReader := NewCertificateAccountReaderAdapter(service14)
-	dependencies4 := certificate.ProvideDependencies(certificateRepository, templateRepository, idUUIDGenerator, cryptoGenerator, clockSystemClock, authorizationChecker, pdfGenerator, objectStorage, paymentCharger, accountPriceResolver, downloadTokenSigner, notificationSender, accountReader, configConfig)
+	renderJobQueue := NewCertificateRenderQueueAdapter(asynqClient)
+	dependencies4 := certificate.ProvideDependencies(certificateRepository, templateRepository, idUUIDGenerator, cryptoGenerator, clockSystemClock, authorizationChecker, pdfGenerator, objectStorage, paymentCharger, accountPriceResolver, downloadTokenSigner, notificationSender, accountReader, renderJobQueue, configConfig)
 	service20 := service11.NewService(dependencies4)
 	handlers2 := http5.NewHandlers(service20)
 	appDependencies := provideAppDependencies(configConfig, db, app, client, redisClient, aiClient, enforcer, permissionChecker, roleManager, policyManager, service12, tokenService, service14, serviceService, service17, service13, notificationService, authHandler, accountHandler, teamHandler, eventHandler, aiService, serviceAIService, organizerProvider, accountdomainPermissionChecker, httpHandler, service18, handler3, orderHandler, service19, handlers, service15, httpHandlers, service16, eventsServiceHolder, accountServiceHolder, service20, handlers2, paymentCertificateServiceHolder, certificateServiceHolder)

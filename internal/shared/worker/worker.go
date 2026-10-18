@@ -3,61 +3,66 @@ package worker
 import (
 	"log"
 
+	certservice "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
+	certwork "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/worker"
+	certadapter "github.com/ALLAN-star-glitch/nuruvent-backend/internal/app/adapters/certificate"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/notification-domain"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/notification/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	"github.com/hibiken/asynq"
 )
 
-
-
-// StartEmbeddedWorker initializes and starts the Asynq worker server asynchronously.
-// It returns a shutdown function to gracefully drain and stop tasks when the API exits.
-func StartEmbeddedWorker(cfg *config.Config) func() {
-	log.Println("🚀 Initializing embedded notification worker...")
+// StartEmbeddedWorker initializes and starts the Asynq worker server.
+// It returns a shutdown function to gracefully stop the worker.
+//
+// certSvc is used by the certificate render task handler. Pass nil
+// if the certificate module is not initialized (e.g., during tests).
+func StartEmbeddedWorker(
+	cfg *config.Config,
+	certSvc certservice.Service,
+) func() {
+	log.Println("🚀 Initializing embedded worker...")
 
 	log.Printf("📧 Email Configuration:")
 	log.Printf("   API Key: %s", maskString(cfg.Email.APIKey))
 	log.Printf("   From: %s", cfg.Email.From)
-
 	if cfg.Email.APIKey == "" {
 		log.Printf("⚠️ WARNING: EMAIL_API_KEY is empty! Check your configuration")
 	}
 
-
-	
-
-	// 1. Create Email Channel & Worker
+	// 1. Notification worker (existing)
 	emailConfig := service.EmailChannelConfig{
 		EMAIL_API_KEY: cfg.Email.APIKey,
 		EMAIL_FROM:    cfg.Email.From,
 	}
-
 	emailChannel := service.NewEmailChannel(emailConfig)
 	notificationWorker := service.NewNotificationWorker(emailChannel)
 
-	// 2. Parse Redis URL cleanly via Asynq native parser
+	// 2. Redis options
 	redisURL := cfg.GetRedisURL()
 	redisOpt, err := asynq.ParseRedisURI(redisURL)
 	if err != nil {
 		log.Fatalf("Failed to parse Redis URI for Asynq worker (%s): %v", redisURL, err)
 	}
 
-	// Initialize Asynq server with parsed options
+	// 3. Asynq server — add "certificates" queue
 	srv := asynq.NewServer(
 		redisOpt,
 		asynq.Config{
 			Concurrency: 10,
 			Queues: map[string]int{
-				"critical": 6,
-				"default":  3,
-				"low":      1,
+				"critical":     6,
+				"certificates": 4, // NEW — dedicated render slots
+				"default":      3,
+				"low":          1,
 			},
 		},
 	)
 
-	// 4. Register Task Handlers
+	// 4. Register task handlers
 	mux := asynq.NewServeMux()
+
+	// Notification tasks (all existing)
 	mux.HandleFunc(notificationdomain.TaskVerificationOTP, notificationWorker.HandleVerificationOTP)
 	mux.HandleFunc(notificationdomain.TaskWelcomeIndividual, notificationWorker.HandleWelcomeIndividual)
 	mux.HandleFunc(notificationdomain.TaskWelcomeInstitution, notificationWorker.HandleWelcomeInstitution)
@@ -66,36 +71,30 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
 	mux.HandleFunc(notificationdomain.TaskWelcomeInstitutionKYC, notificationWorker.HandleWelcomeInstitutionKYC)
 	mux.HandleFunc(notificationdomain.TaskNewPersonalAccountRegistration, notificationWorker.HandleNewPersonalAccountRegistration)
 	mux.HandleFunc(notificationdomain.TaskNewInstitutionAccountRegistration, notificationWorker.HandleNewInstitutionAccountRegistration)
-		// ============================================================
-	// CERTIFICATE TASK HANDLERS
-	// ============================================================
 	mux.HandleFunc(notificationdomain.TaskCertificateReady, notificationWorker.HandleCertificateReady)
-
-	// ============================================================
-	// ✅ TEAM INVITATION TASK HANDLERS (UPDATED)
-	// ============================================================
-	// NO ROLE - Roles are inherited from account level
-	// NO OTP - Uses accept link or registration link with token
 	mux.HandleFunc(notificationdomain.TaskTeamInviteExistingUser, notificationWorker.HandleTeamInviteExistingUser)
 	mux.HandleFunc(notificationdomain.TaskTeamInviteRegistration, notificationWorker.HandleTeamInviteRegistration)
 	mux.HandleFunc(notificationdomain.TaskTeamInviteAccepted, notificationWorker.HandleTeamInviteAccepted)
 	mux.HandleFunc(notificationdomain.TaskTeamInviteDeclined, notificationWorker.HandleTeamInviteDeclined)
-
-	// ============================================================
-	// PAYMENT TASK HANDLERS
-	// ============================================================
 	mux.HandleFunc(notificationdomain.TaskPaymentInitiated, notificationWorker.HandlePaymentInitiated)
 	mux.HandleFunc(notificationdomain.TaskPaymentSucceeded, notificationWorker.HandlePaymentSucceeded)
 	mux.HandleFunc(notificationdomain.TaskPaymentFailed, notificationWorker.HandlePaymentFailed)
 	mux.HandleFunc(notificationdomain.TaskPaymentExpired, notificationWorker.HandlePaymentExpired)
 	mux.HandleFunc(notificationdomain.TaskRefundIssued, notificationWorker.HandleRefundIssued)
-
-
 	mux.HandleFunc(notificationdomain.TaskRegistrationConfirmed, notificationWorker.HandleRegistrationConfirmed)
+
+	// Certificate PDF render (NEW)
+	if certSvc != nil {
+		renderHandler := certwork.NewRenderCertificateHandler(certSvc)
+		mux.Handle(certadapter.TaskTypeRenderCertificate, renderHandler)
+		log.Println("✅ Certificate render handler registered")
+	} else {
+		log.Println("⚠️ Certificate service not provided — render task disabled")
+	}
 
 	log.Println("✅ All task handlers registered")
 	log.Println("📋 Registered tasks:")
-	log.Printf("   - %s (unified for all OTP purposes)", notificationdomain.TaskVerificationOTP)
+	log.Printf("   - %s", notificationdomain.TaskVerificationOTP)
 	log.Printf("   - %s", notificationdomain.TaskWelcomeIndividual)
 	log.Printf("   - %s", notificationdomain.TaskWelcomeInstitution)
 	log.Printf("   - %s", notificationdomain.TaskPasswordResetConfirm)
@@ -103,47 +102,38 @@ func StartEmbeddedWorker(cfg *config.Config) func() {
 	log.Printf("   - %s", notificationdomain.TaskWelcomeInstitutionKYC)
 	log.Printf("   - %s", notificationdomain.TaskNewPersonalAccountRegistration)
 	log.Printf("   - %s", notificationdomain.TaskNewInstitutionAccountRegistration)
+	log.Printf("   - %s", notificationdomain.TaskCertificateReady)
+	log.Printf("   - %s", notificationdomain.TaskTeamInviteExistingUser)
+	log.Printf("   - %s", notificationdomain.TaskTeamInviteRegistration)
+	log.Printf("   - %s", notificationdomain.TaskTeamInviteAccepted)
+	log.Printf("   - %s", notificationdomain.TaskTeamInviteDeclined)
+	log.Printf("   - %s", notificationdomain.TaskPaymentInitiated)
+	log.Printf("   - %s", notificationdomain.TaskPaymentSucceeded)
+	log.Printf("   - %s", notificationdomain.TaskPaymentFailed)
+	log.Printf("   - %s", notificationdomain.TaskPaymentExpired)
+	log.Printf("   - %s", notificationdomain.TaskRefundIssued)
+	log.Printf("   - %s", notificationdomain.TaskRegistrationConfirmed)
+	if certSvc != nil {
+		log.Printf("   - %s (certificate PDF render)", certadapter.TaskTypeRenderCertificate)
+	}
 
-	// ✅ TEAM INVITATION TASKS (UPDATED)
-	log.Println("   📋 Team Invitation Tasks (NO ROLE, NO OTP):")
-	log.Printf("   - %s (existing users - accept link)", notificationdomain.TaskTeamInviteExistingUser)
-	log.Printf("   - %s (new users - registration link)", notificationdomain.TaskTeamInviteRegistration)
-	log.Printf("   - %s (admin notification - accepted)", notificationdomain.TaskTeamInviteAccepted)
-	log.Printf("   - %s (admin notification - declined)", notificationdomain.TaskTeamInviteDeclined)
-
-	// ✅ PAYMENT TASKS
-	log.Println("   💳 Payment Tasks:")
-	log.Printf("   - %s (initiated)", notificationdomain.TaskPaymentInitiated)
-	log.Printf("   - %s (succeeded)", notificationdomain.TaskPaymentSucceeded)
-	log.Printf("   - %s (failed)", notificationdomain.TaskPaymentFailed)
-	log.Printf("   - %s (expired)", notificationdomain.TaskPaymentExpired)
-	log.Printf("   - %s (refund issued)", notificationdomain.TaskRefundIssued)
-
-
-
-	
-	// ✅ REGISTRATION TASKS
-	log.Println("   📝 Registration Tasks:")
-	log.Printf("   - %s (confirmed with join links)", notificationdomain.TaskRegistrationConfirmed)
-
-	// 5. Start Worker in a Background Goroutine
+	// 5. Start the worker
 	go func() {
-		log.Println("🚀 Asynq notification worker active. Listening for tasks...")
-		log.Printf("📊 Queue priorities: critical=6, default=3, low=1")
+		log.Println("🚀 Worker active. Listening for tasks...")
+		log.Printf("📊 Queue priorities: critical=6, certificates=4, default=3, low=1")
 		if err := srv.Run(mux); err != nil {
-			log.Printf("❌ Asynq worker execution stopped: %v", err)
+			log.Printf("❌ Worker execution stopped: %v", err)
 		}
 	}()
 
-	// 6. Return closure for clean shutdown
+	// 6. Shutdown closure
 	return func() {
-		log.Println("🛑 Shutting down embedded Asynq worker...")
+		log.Println("🛑 Shutting down embedded worker...")
 		srv.Shutdown()
 		log.Println("✅ Embedded worker stopped")
 	}
 }
 
-// maskString masks a string for logging (shows first 4 and last 4 characters)
 func maskString(s string) string {
 	if s == "" {
 		return "[EMPTY]"
@@ -153,4 +143,3 @@ func maskString(s string) string {
 	}
 	return s[:4] + "..." + s[len(s)-4:]
 }
-

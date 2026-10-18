@@ -67,6 +67,8 @@ type Service interface {
 	DeleteTemplateImage(ctx context.Context, url string) error
 
 	ListSystemTemplates(ctx context.Context) ([]*domain.Template, error)
+
+	RenderCertificatePDF(ctx context.Context, certificateID string) error
 }
 
 // ============================================================

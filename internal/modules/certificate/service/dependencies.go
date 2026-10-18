@@ -45,4 +45,6 @@ type Dependencies struct {
 	// Accounts resolves account metadata (e.g. issuer name) when
 	// issuing certificates on behalf of an organizer.
 	Accounts domain.AccountReader
+
+	RenderJobs domain.RenderJobQueue
 }

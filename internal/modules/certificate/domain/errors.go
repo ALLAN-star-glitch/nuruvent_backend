@@ -55,4 +55,7 @@ var (
 	ErrInvalidDownloadToken = errors.New("invalid download token")
 	ErrExpiredDownloadToken = errors.New("download token has expired")
 	ErrDownloadTokenEmailMismatch = errors.New("download token recipient does not match certificate")
+	
 )
+
+var ErrPDFPending = errors.New("pdf: rendering in progress")

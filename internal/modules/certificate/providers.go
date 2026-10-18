@@ -1,5 +1,3 @@
-// internal/modules/certificate/providers.go
-
 package certificate
 
 import (
@@ -56,7 +54,8 @@ func ProvideDependencies(
 	accountPrices certificateDomain.AccountPriceResolver,
 	downloadTokens certificateDomain.DownloadTokenSigner,
 	notifier certificateDomain.NotificationSender,
-	accounts certificateDomain.AccountReader, // <-- NEW
+	accounts certificateDomain.AccountReader,
+	renderJobs certificateDomain.RenderJobQueue, // <-- NEW
 	cfg *config.Config,
 ) certificateService.Dependencies {
 	return certificateService.Dependencies{
@@ -76,7 +75,8 @@ func ProvideDependencies(
 		VerifyBaseURL:   cfg.App.PublicURL,
 		DownloadBaseURL: cfg.App.APIURL,
 
-		Notifier: notifier,
-		Accounts: accounts, // <-- NEW
+		Notifier:   notifier,
+		Accounts:   accounts,
+		RenderJobs: renderJobs, // <-- NEW
 	}
 }

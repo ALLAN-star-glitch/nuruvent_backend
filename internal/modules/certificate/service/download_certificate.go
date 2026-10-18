@@ -22,24 +22,32 @@ import (
 //
 // Guests (no account) are out of scope for Phase 2 — signed download
 // links are a Phase 3 concern.
-func (s *serviceImpl) DownloadURL(
-	ctx context.Context,
-	userID, certificateID string,
-) (string, error) {
+
+
+func (s *serviceImpl) DownloadURL(ctx context.Context, userID, certificateID string) (string, error) {
 	cert, err := s.deps.Certificates.FindByID(ctx, certificateID)
 	if err != nil {
 		return "", err
 	}
-
 	if err := s.authorizeDownload(ctx, userID, cert); err != nil {
 		return "", err
 	}
 
-	// Cache hit: return the existing URL.
+	// Cache hit
 	if cert.PDFURL != "" {
 		return cert.PDFURL, nil
 	}
 
+	// Cache miss → enqueue (idempotent — the adapter swallows conflicts)
+	if s.deps.RenderJobs != nil {
+		_ = s.deps.RenderJobs.EnqueueRender(ctx, domain.CertificateRenderJob{
+			CertificateID: cert.ID,
+			AccountID:     cert.AccountID,
+		})
+		return "", domain.ErrPDFPending
+	}
+
+	// Dev fallback
 	return s.renderAndStore(ctx, cert)
 }
 
