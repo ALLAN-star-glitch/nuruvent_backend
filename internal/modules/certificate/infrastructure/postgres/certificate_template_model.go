@@ -27,8 +27,9 @@ type CertificateTemplateModel struct {
 	PreviewURL  string `gorm:"type:varchar(500)"`
 	IsActive    bool   `gorm:"default:true"`
 
-	// System-template flags added by migration 143.
-	IsSystem bool `gorm:"not null;default:false"`
+	// System-template flags added by migrations 143 and 156.
+	IsSystem   bool   `gorm:"not null;default:false"`
+	SystemSlug string `gorm:"column:system_slug;type:varchar(20);not null;default:''"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

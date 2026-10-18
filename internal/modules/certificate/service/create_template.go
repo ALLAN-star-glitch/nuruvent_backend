@@ -15,11 +15,17 @@ import (
 //
 //   - System templates (in.IsSystem == true): only platform admins can
 //     create them. They have no AccountID and are globally visible to
-//     every account. Used by Nuruvent staff to seed pricing tiers.
+//     every account. The tier is taken from in.SystemSlug, which MUST
+//     be one of the three known slugs. The price is derived from the
+//     slug via domain.PriceForSlug — callers cannot set an arbitrary
+//     price, which guarantees system templates always map back to a
+//     known tier.
 //
 //   - Account templates (in.IsSystem == false): created by an account
 //     admin. AccountID is required; the caller must hold
-//     certificate:create/update/delete in that account.
+//     certificate:create/update/delete in that account. The tier comes
+//     from TierTemplateID (a system template); in.SystemSlug MUST be
+//     empty.
 //
 // In both modes the chosen tier determines which design fields are
 // permitted. Fields outside the tier's allowlist are stripped before
@@ -30,11 +36,15 @@ func (s *serviceImpl) CreateTemplate(
 	userID string,
 	in CreateTemplateInput,
 ) (*domain.Template, error) {
-	// ---- 1. Authorization ----
-	var accountID *string
+	// ---- 1. Authorization + tier resolution ----
+	var (
+		accountID  *string
+		tier       domain.SystemTemplateSlug
+		priceMinor *int64
+	)
 
 	if in.IsSystem {
-		// System templates: platform-level check, no account required.
+		// System templates: platform-admin check, no account required.
 		ok, err := s.deps.Authz.CanManageSystemTemplates(ctx, userID)
 		if err != nil {
 			return nil, err
@@ -42,13 +52,32 @@ func (s *serviceImpl) CreateTemplate(
 		if !ok {
 			return nil, domain.ErrForbidden
 		}
+
+		// Slug is required and must be a known tier.
+		if in.SystemSlug == "" {
+			return nil, domain.ErrSystemTemplateSlugRequired
+		}
+		if !in.SystemSlug.IsValid() {
+			return nil, domain.ErrInvalidSystemTemplateSlug
+		}
+
+		tier = in.SystemSlug
+
+		// Price is derived from the slug, NOT from the request. This is
+		// the invariant that makes tiers canonical.
+		p := domain.PriceForSlug(in.SystemSlug)
+		priceMinor = &p
 	} else {
 		// Account templates: standard account-level check.
 		if in.AccountID == "" {
 			return nil, errors.New("account_id is required for account templates")
 		}
+		if in.SystemSlug != "" {
+			return nil, domain.ErrInvalidSystemTemplateSlug
+		}
+
 		accountID = &in.AccountID
-		
+
 		ok, err := s.deps.Authz.CanManageTemplates(ctx, userID, in.AccountID)
 		if err != nil {
 			return nil, err
@@ -56,46 +85,48 @@ func (s *serviceImpl) CreateTemplate(
 		if !ok {
 			return nil, domain.ErrForbidden
 		}
-	}
 
-	// ---- 2. Resolve the tier ----
-	//
-	// For account templates, the tier is a system template the organizer
-	// picked. For system templates, there is no parent tier — the admin
-	// is defining the tier itself.
-	var tier domain.SystemTemplateSlug
-	if !in.IsSystem {
-		var err error
+		// Resolve the parent tier's slug for design restrictions.
+		// err is already declared above by the authz call.
 		tier, err = s.resolveTierSlug(ctx, in.TierTemplateID)
 		if err != nil {
 			return nil, err
 		}
+
+		priceMinor = in.PriceMinor
 	}
 
-	// ---- 3. Enforce the tier's design restrictions ----
+	// ---- 2. Enforce the tier's design restrictions ----
 	design := domain.SanitizeDesign(tier, in.Design)
 
-	// ---- 4. Build the template ----
+	// ---- 2b. Normalize background settings (opacity / size / position) ----
+	// Ensures opacity is clamped to [1..100], size/position are valid
+	// enums, and non-http background URLs are dropped — regardless of
+	// what the caller sent.
+	design.NormalizeBackground()
+
+	// ---- 3. Build the template ----
 	now := s.deps.Clock.Now().UTC()
 	tmpl := &domain.Template{
 		ID:          s.deps.IDs.NewID(),
-		AccountID:   accountID, // <-- Uses the pointer we set above
+		AccountID:   accountID,
 		Name:        in.Name,
 		Description: in.Description,
 		Design:      design,
-		PriceMinor:  in.PriceMinor,
+		PriceMinor:  priceMinor,
+		SystemSlug:  tier,
 		IsDefault:   false,
 		IsSystem:    in.IsSystem,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
 
-	// ---- 5. Validate ----
+	// ---- 4. Validate ----
 	if err := tmpl.Validate(); err != nil {
 		return nil, err
 	}
 
-	// ---- 6. Persist ----
+	// ---- 5. Persist ----
 	if err := s.deps.Templates.Create(ctx, tmpl); err != nil {
 		return nil, err
 	}

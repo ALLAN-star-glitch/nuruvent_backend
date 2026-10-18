@@ -63,15 +63,15 @@ type CertificateResponse struct {
 
 // IssueBulkResponse summarizes a bulk issuance.
 type IssueBulkResponse struct {
-	Succeeded int                        `json:"succeeded"`
-	Failed    int                        `json:"failed"`
-	Reused    int                        `json:"reused"`
-	Items     []IssueBulkItemResponse    `json:"items"`
+	Succeeded int                     `json:"succeeded"`
+	Failed    int                     `json:"failed"`
+	Reused    int                     `json:"reused"`
+	Items     []IssueBulkItemResponse `json:"items"`
 }
 
 // IssueBulkItemResponse is one result inside a bulk issuance.
 type IssueBulkItemResponse struct {
-	CertificateID string `json:"certificate_id,omitempty"`
+	CertificateID    string `json:"certificate_id,omitempty"`
 	VerificationCode string `json:"verification_code,omitempty"`
 	RecipientEmail   string `json:"recipient_email"`
 	AlreadyHad       bool   `json:"already_had,omitempty"`
@@ -95,20 +95,42 @@ type VerifyResponse struct {
 // TEMPLATE REQUESTS
 // ============================================================
 
-// CreateTemplateRequest is the body for POST /certificate-templates.
+// CreateTemplateRequest is the body for POST /certificate-templates
+// and POST /admin/certificate-templates.
+//
+// System templates (IsSystem == true):
+//   - SystemSlug is REQUIRED (one of: "default", "professional", "premium").
+//   - PriceMinor is IGNORED — the price is derived from the slug.
+//   - AccountID is IGNORED.
+//
+// Account templates (IsSystem == false):
+//   - AccountID is REQUIRED.
+//   - TierTemplateID points at the parent system template.
+//   - SystemSlug MUST be empty.
 type CreateTemplateRequest struct {
-	AccountID   string             `json:"account_id" binding:"required,uuid"`
-	Name        string             `json:"name" binding:"required,max=100"`
-	Description string             `json:"description,omitempty"`
-	Design      TemplateDesignDTO  `json:"design"`
-	PriceMinor  *int64             `json:"price_minor,omitempty"` // ← NEW
+	AccountID      string            `json:"account_id,omitempty"`
+	Name           string            `json:"name" binding:"required,max=100"`
+	Description    string            `json:"description,omitempty"`
+	Design         TemplateDesignDTO `json:"design"`
+	PriceMinor     *int64            `json:"price_minor,omitempty"`
+	TierTemplateID string            `json:"tier_template_id,omitempty"`
+	IsSystem       bool              `json:"is_system,omitempty"`
+	SystemSlug     string            `json:"system_slug,omitempty"`
 }
 
+// UpdateTemplateRequest is the body for PATCH /certificate-templates/:id
+// and PATCH /admin/certificate-templates/:id.
+//
+// SystemSlug is optional — nil means "keep current slug". When provided
+// on a system template it changes the tier (and the derived price).
+// Must be nil on account templates.
 type UpdateTemplateRequest struct {
-	Name        *string            `json:"name,omitempty"`
-	Description *string            `json:"description,omitempty"`
-	Design      *TemplateDesignDTO `json:"design,omitempty"`
-	PriceMinor  *int64             `json:"price_minor,omitempty"` // ← NEW
+	Name           *string            `json:"name,omitempty"`
+	Description    *string            `json:"description,omitempty"`
+	Design         *TemplateDesignDTO `json:"design,omitempty"`
+	PriceMinor     *int64             `json:"price_minor,omitempty"`
+	TierTemplateID string             `json:"tier_template_id,omitempty"`
+	SystemSlug     *string            `json:"system_slug,omitempty"`
 }
 
 // TemplateDesignDTO mirrors domain.TemplateDesign on the wire.
@@ -122,6 +144,10 @@ type TemplateDesignDTO struct {
 	SealURL       string `json:"seal_url,omitempty"`
 	SignatureURL  string `json:"signature_url,omitempty"`
 	BackgroundURL string `json:"background_url,omitempty"`
+
+	BackgroundOpacity  int    `json:"background_opacity,omitempty"`
+	BackgroundSize     string `json:"background_size,omitempty"`
+	BackgroundPosition string `json:"background_position,omitempty"`
 
 	SignatoryName  string `json:"signatory_name,omitempty"`
 	SignatoryTitle string `json:"signatory_title,omitempty"`
@@ -151,7 +177,7 @@ type TemplateResponse struct {
 	Name        string            `json:"name"`
 	Description string            `json:"description,omitempty"`
 	Design      TemplateDesignDTO `json:"design"`
-	PriceMinor  *int64            `json:"price_minor,omitempty"` // ← NEW
+	PriceMinor  *int64            `json:"price_minor,omitempty"`
 	SystemSlug  string            `json:"system_slug,omitempty"`
 	IsDefault   bool              `json:"is_default"`
 	IsSystem    bool              `json:"is_system"`
@@ -166,12 +192,12 @@ type TemplateResponse struct {
 // InitiateBatchIssuanceRequest is the body for
 // POST /events/:id/certificates/issue.
 type InitiateBatchIssuanceRequest struct {
-	AccountID     string             `json:"account_id" binding:"required,uuid"`
-	TemplateID    string             `json:"template_id,omitempty"`
-	EventTitle    string             `json:"event_title,omitempty"`
-	EventDate     string             `json:"event_date" binding:"required"` // RFC3339
-	EventDuration string             `json:"event_duration,omitempty"`
-	IssuerName    string             `json:"issuer_name,omitempty"`
+	AccountID     string              `json:"account_id" binding:"required,uuid"`
+	TemplateID    string              `json:"template_id,omitempty"`
+	EventTitle    string              `json:"event_title,omitempty"`
+	EventDate     string              `json:"event_date" binding:"required"` // RFC3339
+	EventDuration string              `json:"event_duration,omitempty"`
+	IssuerName    string              `json:"issuer_name,omitempty"`
 	Recipients    []BatchRecipientDTO `json:"recipients" binding:"required,min=1,dive"`
 }
 
@@ -185,10 +211,6 @@ type BatchRecipientDTO struct {
 
 // InitiateBatchIssuanceResponse is the response for
 // POST /events/:id/certificates/issue.
-//
-// Exactly one set of fields is populated:
-//   - type = "free" → issued, reused, failed, attendee_count
-//   - type = "paid" → order_id, amount_minor, currency, attendee_count
 type InitiateBatchIssuanceResponse struct {
 	Type string `json:"type"` // "free" | "paid"
 

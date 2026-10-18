@@ -94,24 +94,54 @@ type BulkResult struct {
 // ============================================================
 
 // CreateTemplateInput carries the caller-supplied fields for a new template.
+//
+// System templates (IsSystem == true):
+//   - SystemSlug is REQUIRED and must be one of the three known tiers
+//     (default / professional / premium).
+//   - PriceMinor is IGNORED — the price is derived from SystemSlug via
+//     domain.PriceForSlug. This keeps system template prices canonical
+//     and prevents orphan tiers.
+//   - AccountID and TierTemplateID are ignored.
+//
+// Account templates (IsSystem == false):
+//   - AccountID is REQUIRED.
+//   - TierTemplateID points at the parent system template; its slug is
+//     used to enforce design restrictions.
+//   - SystemSlug MUST be empty — account templates cannot claim a tier.
 type CreateTemplateInput struct {
 	AccountID      string
 	Name           string
 	Description    string
 	Design         domain.TemplateDesign
 	PriceMinor     *int64
-	TierTemplateID string 
-	
+	TierTemplateID string
+
 	// IsSystem determines if this is a global system template (created by an admin).
 	// If true, AccountID is ignored, and platform-admin authorization is required.
-	IsSystem       bool   
+	IsSystem bool
+
+	// SystemSlug is the tier for system templates. Required when
+	// IsSystem == true. Must be empty when IsSystem == false.
+	SystemSlug domain.SystemTemplateSlug
 }
 
-// UpdateTemplateInput carries the patch for an existing account template.
+// UpdateTemplateInput carries the patch for an existing template.
+//
+// System templates:
+//   - SystemSlug is optional. If provided it changes the tier (and the
+//     derived price). If omitted, the current slug is kept.
+//   - PriceMinor is ignored for system templates.
+//
+// Account templates:
+//   - SystemSlug MUST be nil. The tier comes from TierTemplateID.
 type UpdateTemplateInput struct {
 	Name           *string
 	Description    *string
 	Design         *domain.TemplateDesign
 	PriceMinor     *int64
 	TierTemplateID string
+
+	// SystemSlug changes the tier of a system template. Nil = keep current.
+	// Must be nil for account templates.
+	SystemSlug *domain.SystemTemplateSlug
 }

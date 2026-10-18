@@ -59,3 +59,9 @@ var (
 )
 
 var ErrPDFPending = errors.New("pdf: rendering in progress")
+
+
+
+var (
+	ErrSystemTemplateSlugRequired = errors.New("system template requires a valid slug")
+)

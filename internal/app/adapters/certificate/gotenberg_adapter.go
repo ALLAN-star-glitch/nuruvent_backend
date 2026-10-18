@@ -60,59 +60,71 @@ func (a *GotenbergAdapter) Render(
 	cert := in.Certificate
 
 	title := substitute(design.TitleText, cert)
-	if title == "" { title = "Certificate of Completion" }
+	if title == "" {
+		title = "Certificate of Completion"
+	}
 
 	subtitle := substitute(design.SubtitleText, cert)
-	if subtitle == "" { subtitle = "This certifies that" }
+	if subtitle == "" {
+		subtitle = "This certifies that"
+	}
 
 	body := substitute(design.BodyText, cert)
-	if body == "" { body = substitute("has successfully completed {{context_title}} on {{context_date}}.", cert) }
+	if body == "" {
+		body = substitute("has successfully completed {{context_title}} on {{context_date}}.", cert)
+	}
 
 	footer := substitute(design.FooterText, cert)
 
 	// 3. Build Data Model for HTML
 	data := struct {
-		BackgroundColor string
-		TextColor       string
-		AccentColor     string
-		BorderColor     string
-		BorderStyle     string
-		LogoURL         string
-		BackgroundURL   string
-		SignatureURL    string
-		TitleText       string
-		SubtitleText    string
-		BodyText        string
-		RecipientName   string
-		SignatoryName   string
-		SignatoryTitle  string
-		SignatureLine   bool
-		QRCodeDataURL   template.URL // Use template.URL to prevent HTML escaping of the Base64 string
-		VerifyBadge     bool
-		WatermarkText    string
-		FooterText      string
-		VerificationCode string
+		BackgroundColor    string
+		TextColor          string
+		AccentColor        string
+		BorderColor        string
+		BorderStyle        string
+		LogoURL            string
+		BackgroundURL      string
+		BackgroundOpacity  int
+		BackgroundSize     string
+		BackgroundPosition string
+		SignatureURL       string
+		TitleText          string
+		SubtitleText       string
+		BodyText           string
+		RecipientName      string
+		SignatoryName      string
+		SignatoryTitle     string
+		SignatureLine      bool
+		QRCodeDataURL      template.URL // Use template.URL to prevent HTML escaping of the Base64 string
+		VerifyBadge        bool
+		WatermarkText      string
+		FooterText         string
+		VerificationCode   string
 	}{
-		BackgroundColor: fallback(design.BackgroundColor, "#FFFFFF"),
-		TextColor:       fallback(design.TextColor, "#1A1A1A"),
-		AccentColor:     fallback(design.AccentColor, "#0A6EBD"),
-		BorderColor:     fallback(design.BorderColor, fallback(design.AccentColor, "#0A6EBD")),
-		BorderStyle:     fallback(design.BorderStyle, "none"),
-		LogoURL:         design.LogoURL,
-		BackgroundURL:   design.BackgroundURL,
-		SignatureURL:    design.SignatureURL,
-		TitleText:       strings.ToUpper(title),
-		SubtitleText:    subtitle,
-		BodyText:        body,
-		RecipientName:   strings.TrimSpace(cert.RecipientName),
-		SignatoryName:   substitute(design.SignatoryName, cert),
-		SignatoryTitle:  substitute(design.SignatoryTitle, cert),
-		SignatureLine:   design.SignatureLine,
-		QRCodeDataURL:   template.URL(qrDataURL),
-		VerifyBadge:     design.VerifyBadge,
-		WatermarkText:    design.WatermarkText,
-		FooterText:      fallback(footer, in.VerifyURL),
-		VerificationCode: string(cert.VerificationCode),
+		BackgroundColor:    fallback(design.BackgroundColor, "#FFFFFF"),
+		TextColor:          fallback(design.TextColor, "#1A1A1A"),
+		AccentColor:        fallback(design.AccentColor, "#0A6EBD"),
+		BorderColor:        fallback(design.BorderColor, fallback(design.AccentColor, "#0A6EBD")),
+		BorderStyle:        fallback(design.BorderStyle, "none"),
+		LogoURL:            design.LogoURL,
+		BackgroundURL:      design.BackgroundURL,
+		BackgroundOpacity:  clampOpacity(design.BackgroundOpacity),
+		BackgroundSize:     fallback(design.BackgroundSize, "cover"),
+		BackgroundPosition: fallback(design.BackgroundPosition, "center"),
+		SignatureURL:       design.SignatureURL,
+		TitleText:          strings.ToUpper(title),
+		SubtitleText:       subtitle,
+		BodyText:           body,
+		RecipientName:      strings.TrimSpace(cert.RecipientName),
+		SignatoryName:      substitute(design.SignatoryName, cert),
+		SignatoryTitle:     substitute(design.SignatoryTitle, cert),
+		SignatureLine:      design.SignatureLine,
+		QRCodeDataURL:      template.URL(qrDataURL),
+		VerifyBadge:        design.VerifyBadge,
+		WatermarkText:      design.WatermarkText,
+		FooterText:         fallback(footer, in.VerifyURL),
+		VerificationCode:   string(cert.VerificationCode),
 	}
 
 	// 4. Render HTML to string
@@ -156,7 +168,9 @@ func (a *GotenbergAdapter) Render(
 }
 
 func substitute(s string, cert *certdomain.Certificate) string {
-	if s == "" { return "" }
+	if s == "" {
+		return ""
+	}
 	repl := map[string]string{
 		"{{recipient_name}}":   cert.RecipientName,
 		"{{context_title}}":    cert.Metadata.Get(certdomain.MetadataKeyContextTitle),
@@ -164,13 +178,30 @@ func substitute(s string, cert *certdomain.Certificate) string {
 		"{{context_duration}}": cert.Metadata.Get(certdomain.MetadataKeyContextDuration),
 		"{{issuer_name}}":      cert.Metadata.Get(certdomain.MetadataKeyIssuerName),
 	}
-	for k, v := range repl { s = strings.ReplaceAll(s, k, v) }
+	for k, v := range repl {
+		s = strings.ReplaceAll(s, k, v)
+	}
 	return s
 }
 
 func fallback(s, def string) string {
-	if strings.TrimSpace(s) == "" { return def }
+	if strings.TrimSpace(s) == "" {
+		return def
+	}
 	return s
+}
+
+// clampOpacity defends against legacy rows or un-normalized designs.
+// The service layer already calls NormalizeBackground on save, but old
+// rows might still carry 0 / negative / >100 values.
+func clampOpacity(n int) int {
+	if n <= 0 {
+		return 8
+	}
+	if n > 100 {
+		return 100
+	}
+	return n
 }
 
 var _ certdomain.PDFGenerator = (*GotenbergAdapter)(nil)

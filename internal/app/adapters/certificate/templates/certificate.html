@@ -50,15 +50,16 @@
       print-color-adjust: exact;
     }
 
-    /* Background Image Overlay */
+    /* Background Image Overlay — own layer, user-controlled opacity */
     .bg-image {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
       background-image: url('{{.BackgroundURL}}');
-      background-size: cover;
-      background-position: center;
-      opacity: 0.08;
+      background-size: {{.BackgroundSize}};
+      background-position: {{.BackgroundPosition}};
+      opacity: {{.BackgroundOpacity}}%;
       z-index: 0;
+      pointer-events: none;
     }
 
     /* Optional Border */
@@ -200,14 +201,14 @@
       -webkit-print-color-adjust: exact;
       print-color-adjust: exact;
     }
-    
+
     .qr-image {
       width: 1.2in;
       height: 1.2in;
       object-fit: contain;
       display: block;
     }
-    
+
     .verify-badge {
       margin-top: 8px;
       font-size: 12px;
@@ -242,7 +243,7 @@
   {{if .LogoURL}}<img src="{{.LogoURL}}" class="logo" />{{end}}
 
   <div class="content">
-    
+
     <div class="cert-body">
       <div class="title">{{.TitleText}}</div>
       <div class="accent-line"></div>

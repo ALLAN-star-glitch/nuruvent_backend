@@ -11,7 +11,11 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/response"
 )
 
-// Create handles POST /certificate-templates.
+// CreateTemplate handles POST /certificate-templates.
+//
+// Account-scope endpoint. IsSystem and SystemSlug are forced to
+// false/"" here so callers cannot sneak a system template through the
+// account route — that only happens via /admin/certificate-templates.
 func (h *Handler) CreateTemplate(c fiber.Ctx) error {
 	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
@@ -26,12 +30,15 @@ func (h *Handler) CreateTemplate(c fiber.Ctx) error {
 	}
 
 	tmpl, err := h.svc.CreateTemplate(c.Context(), userID, service.CreateTemplateInput{
-	AccountID:   body.AccountID,
-	Name:        body.Name,
-	Description: body.Description,
-	Design:      designFromDTO(body.Design),
-	PriceMinor:  body.PriceMinor, // ← NEW
-})
+		AccountID:      body.AccountID,
+		Name:           body.Name,
+		Description:    body.Description,
+		Design:         designFromDTO(body.Design),
+		PriceMinor:     body.PriceMinor,
+		TierTemplateID: body.TierTemplateID,
+		IsSystem:       false, // account route — force
+		SystemSlug:     "",    // account route — force
+	})
 	if err != nil {
 		return respondClassifiedError(c, "create template", err)
 	}
@@ -66,7 +73,12 @@ func (h *Handler) ListTemplates(c fiber.Ctx) error {
 	})
 }
 
-// Update handles PUT /certificate-templates/:id.
+// UpdateTemplate handles PUT /certificate-templates/:id and
+// PUT /admin/certificate-templates/:id.
+//
+// The same handler serves both routes; the service branches on
+// tmpl.IsSystem and enforces the correct slug rules for each. The
+// handler just passes TierTemplateID and SystemSlug through.
 func (h *Handler) UpdateTemplate(c fiber.Ctx) error {
 	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
@@ -86,13 +98,18 @@ func (h *Handler) UpdateTemplate(c fiber.Ctx) error {
 	}
 
 	in := service.UpdateTemplateInput{
-	Name:        body.Name,
-	Description: body.Description,
-	PriceMinor:  body.PriceMinor, // ← NEW
-}
+		Name:           body.Name,
+		Description:    body.Description,
+		PriceMinor:     body.PriceMinor,
+		TierTemplateID: body.TierTemplateID,
+	}
 	if body.Design != nil {
 		d := designFromDTO(*body.Design)
 		in.Design = &d
+	}
+	if body.SystemSlug != nil {
+		slug := domain.SystemTemplateSlug(*body.SystemSlug)
+		in.SystemSlug = &slug
 	}
 
 	tmpl, err := h.svc.UpdateTemplate(c.Context(), userID, id, in)
@@ -103,7 +120,12 @@ func (h *Handler) UpdateTemplate(c fiber.Ctx) error {
 	return response.Success(c, "Template updated", toTemplateResponse(tmpl))
 }
 
-// Delete handles DELETE /certificate-templates/:id.
+// DeleteTemplate handles DELETE /certificate-templates/:id and
+// DELETE /admin/certificate-templates/:id.
+//
+// The service rejects system templates with
+// domain.ErrCannotDeleteSystemTemplate, so the same handler is safe
+// for both scopes.
 func (h *Handler) DeleteTemplate(c fiber.Ctx) error {
 	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
@@ -122,7 +144,7 @@ func (h *Handler) DeleteTemplate(c fiber.Ctx) error {
 	return response.Success(c, "Template deleted", nil)
 }
 
-// SetDefault handles POST /certificate-templates/:id/default.
+// SetDefaultTemplate handles POST /certificate-templates/:id/default.
 func (h *Handler) SetDefaultTemplate(c fiber.Ctx) error {
 	userID, err := handlerhelper.GetUserID(c)
 	if err != nil {
@@ -140,70 +162,3 @@ func (h *Handler) SetDefaultTemplate(c fiber.Ctx) error {
 
 	return response.Success(c, "Default template set", nil)
 }
-
-// ============================================================
-// MAPPERS
-// ============================================================
-
-func designFromDTO(d TemplateDesignDTO) domain.TemplateDesign {
-	return domain.TemplateDesign{
-		BackgroundColor: d.BackgroundColor,
-		TextColor:       d.TextColor,
-		AccentColor:     d.AccentColor,
-		FontFamily:      d.FontFamily,
-
-		LogoURL:       d.LogoURL,
-		SealURL:       d.SealURL,
-		SignatureURL:  d.SignatureURL,
-		BackgroundURL: d.BackgroundURL,
-
-		SignatoryName:  d.SignatoryName,
-		SignatoryTitle: d.SignatoryTitle,
-
-		TitleText:    d.TitleText,
-		SubtitleText: d.SubtitleText,
-		BodyText:     d.BodyText,
-		FooterText:   d.FooterText,
-
-		QRPosition: d.QRPosition,
-
-		// ADD THESE LINES:
-		BorderStyle:   d.BorderStyle,
-		BorderColor:   d.BorderColor,
-		SignatureLine: d.SignatureLine,
-		WatermarkText: d.WatermarkText,
-		VerifyBadge:   d.VerifyBadge,
-	}
-}
-
-func designToDTO(d domain.TemplateDesign) TemplateDesignDTO {
-	return TemplateDesignDTO{
-		BackgroundColor: d.BackgroundColor,
-		TextColor:       d.TextColor,
-		AccentColor:     d.AccentColor,
-		FontFamily:      d.FontFamily,
-
-		LogoURL:       d.LogoURL,
-		SealURL:       d.SealURL,
-		SignatureURL:  d.SignatureURL,
-		BackgroundURL: d.BackgroundURL,
-
-		SignatoryName:  d.SignatoryName,
-		SignatoryTitle: d.SignatoryTitle,
-
-		TitleText:    d.TitleText,
-		SubtitleText: d.SubtitleText,
-		BodyText:     d.BodyText,
-		FooterText:   d.FooterText,
-
-		QRPosition: d.QRPosition,
-
-		// ADD THESE LINES:
-		BorderStyle:   d.BorderStyle,
-		BorderColor:   d.BorderColor,
-		SignatureLine: d.SignatureLine,
-		WatermarkText: d.WatermarkText,
-		VerifyBadge:   d.VerifyBadge,
-	}
-}
-

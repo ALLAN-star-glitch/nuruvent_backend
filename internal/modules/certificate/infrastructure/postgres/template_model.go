@@ -10,8 +10,8 @@ import "time"
 // The table is shared with the events module (which references it via
 // events.certificate_template_id) and holds both:
 //
-//   - system templates (is_system = TRUE, slug set, account_id NULL)
-//   - account templates (is_system = FALSE, account_id set, slug NULL)
+//   - system templates (is_system = TRUE, slug set, system_slug set, account_id NULL)
+//   - account templates (is_system = FALSE, account_id set, slug NULL, system_slug '')
 type TemplateModel struct {
 	ID          string  `gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
 	Slug        *string `gorm:"type:varchar(100);index"`
@@ -26,12 +26,17 @@ type TemplateModel struct {
 	IsDefault bool    `gorm:"not null;default:false"`
 	IsSystem  bool    `gorm:"not null;default:false"`
 
-	PriceMinor *int64 `gorm:"column:price_minor"` // ← NEW
+	// SystemSlug is the tier identifier for system templates:
+	// "default", "professional", or "premium". Empty for account
+	// templates. This is distinct from Slug — Slug is a URL-safe
+	// identifier used for stable lookup, SystemSlug is the tier.
+	SystemSlug string `gorm:"column:system_slug;type:varchar(20);not null;default:''"`
+
+	PriceMinor *int64 `gorm:"column:price_minor"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt *time.Time `gorm:"index"`
 }
 
-// TableName pins the model to the existing table.
 func (TemplateModel) TableName() string { return "certificate_templates" }

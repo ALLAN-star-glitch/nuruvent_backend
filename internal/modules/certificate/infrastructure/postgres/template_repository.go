@@ -36,6 +36,12 @@ type designJSON struct {
 	SignatureURL  string `json:"signature_url"`
 	BackgroundURL string `json:"background_url"`
 
+	// Background image behavior — persisted so the renderer honours
+	// the user's opacity/size/position choices.
+	BackgroundOpacity  int    `json:"background_opacity"`
+	BackgroundSize     string `json:"background_size"`
+	BackgroundPosition string `json:"background_position"`
+
 	SignatoryName  string `json:"signatory_name"`
 	SignatoryTitle string `json:"signatory_title"`
 
@@ -63,18 +69,23 @@ func designToJSON(d domain.TemplateDesign) designJSON {
 		SealURL:         d.SealURL,
 		SignatureURL:    d.SignatureURL,
 		BackgroundURL:   d.BackgroundURL,
-		SignatoryName:   d.SignatoryName,
-		SignatoryTitle:  d.SignatoryTitle,
-		TitleText:       d.TitleText,
-		SubtitleText:    d.SubtitleText,
-		BodyText:        d.BodyText,
-		FooterText:      d.FooterText,
-		QRPosition:      d.QRPosition,
-		BorderStyle:     d.BorderStyle,
-		BorderColor:     d.BorderColor,
-		SignatureLine:   d.SignatureLine,
-		WatermarkText:   d.WatermarkText,
-		VerifyBadge:     d.VerifyBadge,
+
+		BackgroundOpacity:  d.BackgroundOpacity,
+		BackgroundSize:     d.BackgroundSize,
+		BackgroundPosition: d.BackgroundPosition,
+
+		SignatoryName:  d.SignatoryName,
+		SignatoryTitle: d.SignatoryTitle,
+		TitleText:      d.TitleText,
+		SubtitleText:   d.SubtitleText,
+		BodyText:       d.BodyText,
+		FooterText:     d.FooterText,
+		QRPosition:     d.QRPosition,
+		BorderStyle:    d.BorderStyle,
+		BorderColor:    d.BorderColor,
+		SignatureLine:  d.SignatureLine,
+		WatermarkText:  d.WatermarkText,
+		VerifyBadge:    d.VerifyBadge,
 	}
 }
 
@@ -88,18 +99,23 @@ func designFromJSON(d designJSON) domain.TemplateDesign {
 		SealURL:         d.SealURL,
 		SignatureURL:    d.SignatureURL,
 		BackgroundURL:   d.BackgroundURL,
-		SignatoryName:   d.SignatoryName,
-		SignatoryTitle:  d.SignatoryTitle,
-		TitleText:       d.TitleText,
-		SubtitleText:    d.SubtitleText,
-		BodyText:        d.BodyText,
-		FooterText:      d.FooterText,
-		QRPosition:      d.QRPosition,
-		BorderStyle:     d.BorderStyle,
-		BorderColor:     d.BorderColor,
-		SignatureLine:   d.SignatureLine,
-		WatermarkText:   d.WatermarkText,
-		VerifyBadge:     d.VerifyBadge,
+
+		BackgroundOpacity:  d.BackgroundOpacity,
+		BackgroundSize:     d.BackgroundSize,
+		BackgroundPosition: d.BackgroundPosition,
+
+		SignatoryName:  d.SignatoryName,
+		SignatoryTitle: d.SignatoryTitle,
+		TitleText:      d.TitleText,
+		SubtitleText:   d.SubtitleText,
+		BodyText:       d.BodyText,
+		FooterText:     d.FooterText,
+		QRPosition:     d.QRPosition,
+		BorderStyle:    d.BorderStyle,
+		BorderColor:    d.BorderColor,
+		SignatureLine:  d.SignatureLine,
+		WatermarkText:  d.WatermarkText,
+		VerifyBadge:    d.VerifyBadge,
 	}
 }
 
@@ -132,6 +148,8 @@ func (r *TemplateRepository) Update(ctx context.Context, t *domain.Template) err
 			"design":      JSONB(design),
 			"price_minor": t.PriceMinor,
 			"is_default":  t.IsDefault,
+			"slug":        slugPtr(t.SystemSlug),
+			"system_slug": string(t.SystemSlug),
 			"updated_at":  t.UpdatedAt,
 		})
 	if res.Error != nil {
@@ -233,7 +251,6 @@ func (r *TemplateRepository) FindSystemBySlug(ctx context.Context, slug domain.S
 	return toTemplateDomain(&model)
 }
 
-
 func (r *TemplateRepository) FindAllSystem(ctx context.Context) ([]*domain.Template, error) {
 	var models []TemplateModel
 	err := r.db.WithContext(ctx).
@@ -253,6 +270,7 @@ func (r *TemplateRepository) FindAllSystem(ctx context.Context) ([]*domain.Templ
 	}
 	return out, nil
 }
+
 // ============================================================
 // MAPPERS
 // ============================================================
@@ -270,11 +288,12 @@ func toTemplateModel(t *domain.Template) (*TemplateModel, error) {
 		Description: nullableString(t.Description),
 		PreviewURL:  nil,
 		IsActive:    true,
-		AccountID:   t.AccountID, // <-- FIXED: Already a *string, DB column is nullable
+		AccountID:   t.AccountID,
 		Design:      JSONB(design),
 		PriceMinor:  t.PriceMinor,
 		IsDefault:   t.IsDefault,
 		IsSystem:    t.IsSystem,
+		SystemSlug:  string(t.SystemSlug),
 		CreatedAt:   t.CreatedAt,
 		UpdatedAt:   t.UpdatedAt,
 		DeletedAt:   t.DeletedAt,
@@ -290,12 +309,12 @@ func toTemplateDomain(m *TemplateModel) (*domain.Template, error) {
 	}
 	return &domain.Template{
 		ID:          m.ID,
-		AccountID:   m.AccountID, // <-- FIXED: Already a *string
+		AccountID:   m.AccountID,
 		Name:        m.Name,
 		Description: derefString(m.Description),
 		Design:      designFromJSON(dj),
 		PriceMinor:  m.PriceMinor,
-		SystemSlug:  systemSlugValue(m.Slug),
+		SystemSlug:  domain.SystemTemplateSlug(m.SystemSlug),
 		IsDefault:   m.IsDefault,
 		IsSystem:    m.IsSystem,
 		CreatedAt:   m.CreatedAt,
@@ -305,21 +324,6 @@ func toTemplateDomain(m *TemplateModel) (*domain.Template, error) {
 }
 
 func slugPtr(s domain.SystemTemplateSlug) *string {
-	if s == "" {
-		return nil
-	}
-	v := string(s)
-	return &v
-}
-
-func systemSlugValue(p *string) domain.SystemTemplateSlug {
-	if p == nil {
-		return ""
-	}
-	return domain.SystemTemplateSlug(*p)
-}
-
-func systemSlugPtr(s domain.SystemTemplateSlug) *string {
 	if s == "" {
 		return nil
 	}

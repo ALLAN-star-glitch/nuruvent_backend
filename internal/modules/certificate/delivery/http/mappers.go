@@ -3,8 +3,8 @@
 package http
 
 import (
-	certificateService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
+	certificateService "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/service"
 )
 
 // ============================================================
@@ -97,14 +97,14 @@ func toTemplateResponse(t *domain.Template) TemplateResponse {
 	if t == nil {
 		return TemplateResponse{}
 	}
-	
-	// AccountID is a pointer now. System templates have nil AccountID,
+
+	// AccountID is a pointer. System templates have nil AccountID,
 	// which we surface as an empty string in the response.
 	accountID := ""
 	if t.AccountID != nil {
 		accountID = *t.AccountID
 	}
-	
+
 	return TemplateResponse{
 		ID:          t.ID,
 		AccountID:   accountID,
@@ -117,5 +117,63 @@ func toTemplateResponse(t *domain.Template) TemplateResponse {
 		IsSystem:    t.IsSystem,
 		CreatedAt:   t.CreatedAt,
 		UpdatedAt:   t.UpdatedAt,
+	}
+}
+
+// designToDTO converts a domain design to its wire form.
+func designToDTO(d domain.TemplateDesign) TemplateDesignDTO {
+	return TemplateDesignDTO{
+		BackgroundColor:    d.BackgroundColor,
+		TextColor:          d.TextColor,
+		AccentColor:        d.AccentColor,
+		FontFamily:         d.FontFamily,
+		LogoURL:            d.LogoURL,
+		SealURL:            d.SealURL,
+		SignatureURL:       d.SignatureURL,
+		BackgroundURL:      d.BackgroundURL,
+		BackgroundOpacity:  d.BackgroundOpacity,
+		BackgroundSize:     d.BackgroundSize,
+		BackgroundPosition: d.BackgroundPosition,
+		SignatoryName:      d.SignatoryName,
+		SignatoryTitle:     d.SignatoryTitle,
+		TitleText:          d.TitleText,
+		SubtitleText:       d.SubtitleText,
+		BodyText:           d.BodyText,
+		FooterText:         d.FooterText,
+		QRPosition:         d.QRPosition,
+		BorderStyle:        d.BorderStyle,
+		BorderColor:        d.BorderColor,
+		SignatureLine:      d.SignatureLine,
+		WatermarkText:      d.WatermarkText,
+		VerifyBadge:        d.VerifyBadge,
+	}
+}
+
+// designFromDTO converts the wire form back to a domain design.
+func designFromDTO(d TemplateDesignDTO) domain.TemplateDesign {
+	return domain.TemplateDesign{
+		BackgroundColor:    d.BackgroundColor,
+		TextColor:          d.TextColor,
+		AccentColor:        d.AccentColor,
+		FontFamily:         d.FontFamily,
+		LogoURL:            d.LogoURL,
+		SealURL:            d.SealURL,
+		SignatureURL:       d.SignatureURL,
+		BackgroundURL:      d.BackgroundURL,
+		BackgroundOpacity:  d.BackgroundOpacity,
+		BackgroundSize:     d.BackgroundSize,
+		BackgroundPosition: d.BackgroundPosition,
+		SignatoryName:      d.SignatoryName,
+		SignatoryTitle:     d.SignatoryTitle,
+		TitleText:          d.TitleText,
+		SubtitleText:       d.SubtitleText,
+		BodyText:           d.BodyText,
+		FooterText:         d.FooterText,
+		QRPosition:         d.QRPosition,
+		BorderStyle:        d.BorderStyle,
+		BorderColor:        d.BorderColor,
+		SignatureLine:      d.SignatureLine,
+		WatermarkText:      d.WatermarkText,
+		VerifyBadge:        d.VerifyBadge,
 	}
 }

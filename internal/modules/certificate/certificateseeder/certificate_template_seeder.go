@@ -17,6 +17,11 @@ import (
 // Idempotent: upserts by slug. On existing rows, only the metadata
 // columns are updated — design and is_system are preserved so an
 // accidentally-modified system template doesn't get silently reset.
+//
+// SystemSlug is always kept in sync with the seeder's slug. This is
+// what makes the tier invariant hold: system templates derive their
+// price and design restrictions from system_slug, and the unique
+// index on system_slug enforces one template per tier.
 func SeedCertificateTemplates(db *gorm.DB) error {
 	log.Println("🌱 Seeding certificate templates...")
 
@@ -33,6 +38,9 @@ func SeedCertificateTemplates(db *gorm.DB) error {
 			existing.Description = info.Description
 			existing.PreviewURL = info.PreviewURL
 			existing.IsActive = info.IsActive
+			// Keep system_slug aligned with the canonical slug so the
+			// unique-per-tier invariant never drifts.
+			existing.SystemSlug = info.Slug
 			if err := db.Save(&existing).Error; err != nil {
 				return err
 			}
@@ -40,7 +48,7 @@ func SeedCertificateTemplates(db *gorm.DB) error {
 			continue
 		}
 
-		// Create new — explicitly mark as a system template.
+		// Create new — explicitly mark as a system template with its tier slug.
 		tmpl := &postgres.CertificateTemplateModel{
 			Slug:        info.Slug,
 			Name:        info.Name,
@@ -49,6 +57,7 @@ func SeedCertificateTemplates(db *gorm.DB) error {
 			PreviewURL:  info.PreviewURL,
 			IsActive:    info.IsActive,
 			IsSystem:    true,
+			SystemSlug:  info.Slug,
 		}
 		if err := db.Create(tmpl).Error; err != nil {
 			return err

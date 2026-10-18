@@ -34,6 +34,27 @@ func (s SystemTemplateSlug) IsValid() bool {
 	return false
 }
 
+// PriceForSlug returns the canonical price (in minor units) for a
+// system template slug. This is the single source of truth for tier
+// pricing — system templates derive their price from their slug, never
+// the other way around.
+func PriceForSlug(s SystemTemplateSlug) int64 {
+	switch s {
+	case SystemTemplateDefault:
+		return 2000
+	case SystemTemplateProfessional:
+		return 4000
+	case SystemTemplatePremium:
+		return 6000
+	}
+	return 0
+}
+
+// DefaultBackgroundOpacity is applied when the caller does not set a
+// background opacity (0 / unset). Chosen to keep text legible on top of
+// full-bleed patterns.
+const DefaultBackgroundOpacity = 8
+
 // TemplateDesign is the renderable design of a certificate template.
 type TemplateDesign struct {
 	// Visual
@@ -47,6 +68,11 @@ type TemplateDesign struct {
 	SealURL       string
 	SignatureURL  string
 	BackgroundURL string
+
+	// Background image behavior
+	BackgroundOpacity  int    // 0–100. 0 = use default (8)
+	BackgroundSize     string // "cover" | "contain" | "auto"
+	BackgroundPosition string // "center" | "top" | "bottom"
 
 	// Signature printed name
 	SignatoryName  string
@@ -75,18 +101,63 @@ type TemplateDesign struct {
 	VerifyBadge bool
 }
 
+// NormalizeBackground applies safe defaults and clamps to valid ranges.
+// Call this before persisting or rendering. Safe to call on legacy
+// designs that predate the background fields.
+//
+// Rules:
+//   - Opacity <= 0 → DefaultBackgroundOpacity
+//   - Opacity > 100 → 100
+//   - Size → one of "cover", "contain", "auto" (default "cover")
+//   - Position → one of "center", "top", "bottom" (default "center")
+//   - BackgroundURL is cleared unless it starts with http:// or https://
+func (d *TemplateDesign) NormalizeBackground() {
+	if d.BackgroundOpacity <= 0 {
+		d.BackgroundOpacity = DefaultBackgroundOpacity
+	}
+	if d.BackgroundOpacity > 100 {
+		d.BackgroundOpacity = 100
+	}
+
+	d.BackgroundSize = normalizeEnum(d.BackgroundSize, "cover", "contain", "auto")
+	d.BackgroundPosition = normalizeEnum(d.BackgroundPosition, "center", "top", "bottom")
+
+	if !isHTTPURL(d.BackgroundURL) {
+		d.BackgroundURL = ""
+	}
+}
+
+// normalizeEnum returns v if it matches one of allowed (case-insensitive),
+// otherwise returns allowed[0].
+func normalizeEnum(v string, allowed ...string) string {
+	v = strings.ToLower(strings.TrimSpace(v))
+	for _, a := range allowed {
+		if v == a {
+			return v
+		}
+	}
+	return allowed[0]
+}
+
+// isHTTPURL reports whether s is a plausible http(s) URL.
+func isHTTPURL(s string) bool {
+	return strings.HasPrefix(s, "http://") || strings.HasPrefix(s, "https://")
+}
+
 // Template is a reusable certificate design owned by an account.
 type Template struct {
 	ID string
-	
+
 	// AccountID is nil for system templates, and set for account-owned templates.
-	AccountID   *string 
-	
+	AccountID *string
+
 	Name        string
 	Description string
 	Design      TemplateDesign
 
 	// PriceMinor is the optional template-level certificate price.
+	// For system templates this is always derived from SystemSlug via
+	// PriceForSlug — never set directly.
 	PriceMinor *int64
 
 	// SystemSlug is non-empty for templates Nuruvent ships with. Such
@@ -106,17 +177,32 @@ type Template struct {
 }
 
 // Validate checks the template's invariants.
+//
+// System templates MUST have a valid slug — the slug defines the tier,
+// and the tier defines what design features are permitted. Account
+// templates must NOT carry a slug.
 func (t Template) Validate() error {
-	if !t.IsSystem && (t.AccountID == nil || strings.TrimSpace(*t.AccountID) == "") {
-		return ErrAccountIDRequired
+	if t.IsSystem {
+		// System templates: slug is mandatory and must be one of the
+		// three known tiers.
+		if t.SystemSlug == "" {
+			return ErrSystemTemplateSlugRequired
+		}
+		if !t.SystemSlug.IsValid() {
+			return ErrInvalidSystemTemplateSlug
+		}
+	} else {
+		// Account templates: no slug, must have an owning account.
+		if t.SystemSlug != "" {
+			return ErrInvalidSystemTemplateSlug
+		}
+		if t.AccountID == nil || strings.TrimSpace(*t.AccountID) == "" {
+			return ErrAccountIDRequired
+		}
 	}
+
 	if strings.TrimSpace(t.Name) == "" {
 		return ErrTemplateNameRequired
-	}
-	// Only validate the slug if one was set. Admin-created system
-	// templates don't need a slug — they use the generic name + price.
-	if t.IsSystem && t.SystemSlug != "" && !t.SystemSlug.IsValid() {
-		return ErrInvalidSystemTemplateSlug
 	}
 	return nil
 }
