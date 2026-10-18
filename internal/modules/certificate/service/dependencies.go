@@ -41,4 +41,8 @@ type Dependencies struct {
 	DownloadBaseURL string
 
 	Notifier domain.NotificationSender
+
+	// Accounts resolves account metadata (e.g. issuer name) when
+	// issuing certificates on behalf of an organizer.
+	Accounts domain.AccountReader
 }

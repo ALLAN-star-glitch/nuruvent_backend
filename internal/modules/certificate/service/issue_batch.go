@@ -32,6 +32,24 @@ func (s *serviceImpl) IssueBatch(
 		return &domain.BatchIssuanceResult{}, nil
 	}
 
+	// ------------------------------------------------------------
+	// Resolve the issuer name.
+	//
+	// Precedence:
+	//   1. Explicit req.IssuerName (caller override)
+	//   2. Account's display name (from the account module)
+	//   3. Safe fallback to the platform name
+	// ------------------------------------------------------------
+	issuerName := req.IssuerName
+	if issuerName == "" && s.deps.Accounts != nil {
+		if name, err := s.deps.Accounts.GetAccountName(ctx, req.AccountID); err == nil && name != "" {
+			issuerName = name
+		}
+	}
+	if issuerName == "" {
+		issuerName = "Nuruvent"
+	}
+
 	completions := make([]domain.ExternalCompletion, 0, len(req.Recipients))
 	for _, r := range req.Recipients {
 		completions = append(completions, domain.ExternalCompletion{
@@ -47,7 +65,7 @@ func (s *serviceImpl) IssueBatch(
 				domain.MetadataKeyContextTitle:    req.EventTitle,
 				domain.MetadataKeyContextDate:     req.EventDate.UTC().Format("2006-01-02"),
 				domain.MetadataKeyContextDuration: req.EventDuration,
-				domain.MetadataKeyIssuerName:      req.IssuerName,
+				domain.MetadataKeyIssuerName:      issuerName, // resolved name
 				domain.MetadataKeyRecipientName:   r.Name,
 			},
 			TemplateID:       req.TemplateID,

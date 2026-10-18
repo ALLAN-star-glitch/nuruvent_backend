@@ -16,7 +16,7 @@ func SeedSuperAdmins(db *gorm.DB) error {
 
 	// 👇 Add real user IDs here.
 	superAdminUserIDs := []string{
-		"5887abbd-68ec-4815-9807-5c83f491c18f", // allanmathenge67@gmail.com
+		"409b8414-0852-450b-8217-480936b09c48",
 		// "another-uuid-here",
 	}
 

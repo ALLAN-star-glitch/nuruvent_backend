@@ -15,7 +15,6 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
-// ProviderSet is the certificate module's wire provider set.
 var ProviderSet = wire.NewSet(
 	// Persistence
 	certificatePostgres.NewCertificateRepository,
@@ -37,14 +36,13 @@ var ProviderSet = wire.NewSet(
 	// Service dependencies bundle
 	ProvideDependencies,
 
-	// Service — returns the Service interface directly.
+	// Service
 	certificateService.NewService,
 
 	// HTTP handlers
 	certificateHTTP.NewHandlers,
 )
 
-// ProvideDependencies assembles the service.Dependencies bundle.
 func ProvideDependencies(
 	certs certificateDomain.CertificateRepository,
 	templates certificateDomain.TemplateRepository,
@@ -58,6 +56,7 @@ func ProvideDependencies(
 	accountPrices certificateDomain.AccountPriceResolver,
 	downloadTokens certificateDomain.DownloadTokenSigner,
 	notifier certificateDomain.NotificationSender,
+	accounts certificateDomain.AccountReader, // <-- NEW
 	cfg *config.Config,
 ) certificateService.Dependencies {
 	return certificateService.Dependencies{
@@ -74,12 +73,10 @@ func ProvideDependencies(
 		DownloadTokens:   downloadTokens,
 		DownloadTokenTTL: cfg.App.DownloadTokenTTL,
 
-		// Frontend URL — for QR verify links.
-		VerifyBaseURL: cfg.App.PublicURL,
-
-		// Backend API URL — for signed download links in emails.
+		VerifyBaseURL:   cfg.App.PublicURL,
 		DownloadBaseURL: cfg.App.APIURL,
 
 		Notifier: notifier,
+		Accounts: accounts, // <-- NEW
 	}
 }

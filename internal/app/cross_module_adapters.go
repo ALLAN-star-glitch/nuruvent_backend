@@ -537,3 +537,17 @@ func NewCertificateNotificationAdapter(
 		cfg.App.DownloadTokenTTL,
 	)
 }
+
+// ---- CERTIFICATE ADAPTERS ----
+
+// NewCertificateAccountReaderAdapter bridges the account service to the
+// certificate module's AccountReader port.
+//
+// Used by the certificate service to resolve the organizer's account
+// name for certificates (so recipients see the organizer, not the
+// platform).
+func NewCertificateAccountReaderAdapter(
+	accountSvc accountService.Service,
+) certificateDomain.AccountReader {
+	return certificateadapters.NewAccountReaderAdapter(accountSvc)
+}

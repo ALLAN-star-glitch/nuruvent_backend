@@ -41,7 +41,6 @@ func NewClient(supabaseURL, serviceKey string, bucketConfig BucketConfig) *Clien
 }
 
 // NewClientFromConfig creates a new storage client from app config
-// ✅ Takes *config.Config directly
 func NewClientFromConfig(cfg *config.Config) *Client {
 	bucketConfig := BucketConfig{
 		Events:       cfg.Supabase.BucketEvent,
@@ -59,7 +58,6 @@ func NewClientFromConfig(cfg *config.Config) *Client {
 }
 
 // NewClientFromSupabaseConfig creates a new storage client from Supabase config
-// ✅ Kept for backward compatibility or direct use
 func NewClientFromSupabaseConfig(supabaseConfig *config.SupabaseConfig) *Client {
 	bucketConfig := BucketConfig{
 		Events:       supabaseConfig.BucketEvent,
@@ -94,10 +92,17 @@ func (c *Client) GetBucket(bucketType string) (string, error) {
 	}
 }
 
-// UploadFile uploads a file to Supabase Storage
+// UploadFile uploads a file to Supabase Storage.
+//
+// Uses Upsert=true so re-uploads to the same path overwrite the
+// existing object. Without this, re-rendering a certificate PDF
+// (e.g. after a template design change) fails with
+// "The resource already exists".
 func (c *Client) UploadFile(ctx context.Context, bucket, path string, file io.Reader, contentType string) (string, error) {
+	upsert := true
 	opts := storage_go.FileOptions{
 		ContentType: &contentType,
+		Upsert:      &upsert,
 	}
 
 	_, err := c.client.UploadFile(bucket, path, file, opts)

@@ -320,6 +320,8 @@ func InitializeApp() (*AppDependencies, error) {
 
 		NewCertificateNotificationAdapter,
 
+		NewCertificateAccountReaderAdapter,
+
 
 
 		// ============================================================
