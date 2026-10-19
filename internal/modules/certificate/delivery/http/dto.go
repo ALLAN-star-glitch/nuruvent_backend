@@ -80,6 +80,7 @@ type IssueBulkItemResponse struct {
 
 // VerifyResponse is the public verification response. Deliberately
 // smaller than CertificateResponse — no internal IDs.
+// VerifyResponse is the public verification response.
 type VerifyResponse struct {
 	VerificationCode string            `json:"verification_code"`
 	RecipientName    string            `json:"recipient_name"`
@@ -89,6 +90,7 @@ type VerifyResponse struct {
 	CompletedAt      time.Time         `json:"completed_at"`
 	IssuedAt         time.Time         `json:"issued_at"`
 	Status           string            `json:"status"`
+	IssuerName       string            `json:"issuer_name,omitempty"` // <-- ADD THIS
 }
 
 // ============================================================

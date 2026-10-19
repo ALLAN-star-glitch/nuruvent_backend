@@ -8,14 +8,23 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/certificate/domain"
 )
 
-// GetByCode implements Service.GetByCode.
-func (s *serviceImpl) GetByCode(
-	ctx context.Context,
-	code string,
-) (*domain.Certificate, error) {
-	vc, err := domain.NewVerificationCode(code)
+func (s *serviceImpl) GetByCode(ctx context.Context, code string) (*domain.Certificate, error) {
+	cert, err := s.deps.Certificates.FindByVerificationCode(ctx, domain.VerificationCode(code))
 	if err != nil {
 		return nil, err
 	}
-	return s.deps.Certificates.FindByVerificationCode(ctx, vc)
+
+	// Fetch the account name to use as the Issuer on the public page.
+	// This overrides any stale issuer_name stored in metadata.
+	if s.deps.Accounts != nil && cert.AccountID != "" {
+		accName, err := s.deps.Accounts.GetAccountName(ctx, cert.AccountID)
+		if err == nil && accName != "" {
+			if cert.Metadata == nil {
+				cert.Metadata = make(domain.Metadata)
+			}
+			cert.Metadata[domain.MetadataKeyIssuerName] = accName
+		}
+	}
+
+	return cert, nil
 }

@@ -48,6 +48,7 @@ func toVerifyResponse(c *domain.Certificate) VerifyResponse {
 		CompletedAt:      c.CompletedAt,
 		IssuedAt:         c.IssuedAt,
 		Status:           string(c.Status),
+		IssuerName:       c.Metadata.Get(domain.MetadataKeyIssuerName), // <-- MAP THIS
 	}
 }
 
