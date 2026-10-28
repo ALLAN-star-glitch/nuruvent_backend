@@ -515,21 +515,50 @@ func (h *AuthHandler) Login(c fiber.Ctx) error {
 	ipAddress := c.IP()
 	userAgent := c.Get("User-Agent")
 
-	user, _, err := h.service.LoginUser(c.Context(), req.Email, req.Password, ipAddress, userAgent)
-if err != nil {
-	if errors.Is(err, authdomain.ErrGuestPasswordLogin) {
-		return response.Conflict(c,
-			"This account has no password. Use the link in your email to sign in, or reset your password.",
-			fiber.Map{"reason": "guest_account"})
+	user, otp, err := h.service.LoginUser(c.Context(), req.Email, req.Password, ipAddress, userAgent)
+	if err != nil {
+		if errors.Is(err, authdomain.ErrGuestPasswordLogin) {
+			return response.Conflict(c,
+				"This account has no password. Use the link in your email to sign in, or reset your password.",
+				fiber.Map{"reason": "guest_account"})
+		}
+		if errors.Is(err, authdomain.ErrInvalidCredentials) {
+			return response.Unauthorized(c, "Invalid credentials", nil)
+		}
+		if errors.Is(err, authdomain.ErrUserInactive) {
+			return response.Unauthorized(c, "Account is inactive", nil)
+		}
+		return response.InternalError(c, "Login failed", fiber.Map{"error": err.Error()})
 	}
-	if errors.Is(err, authdomain.ErrInvalidCredentials) {
-		return response.Unauthorized(c, "Invalid credentials", nil)
+
+	// ─────────────────────────────────────────────────────────────
+	// TEMP: Zoom Marketplace reviewer bypass.
+	// If otp is empty, this login skipped 2FA — issue tokens now
+	// and return the full AuthResponse so the reviewer gets a
+	// session immediately. Remove after Zoom approval.
+	// ─────────────────────────────────────────────────────────────
+	if otp == "" {
+		log.Printf("⚠️  2FA bypass triggered for %s (Zoom reviewer)", user.Email)
+
+		accessToken, refreshToken, err := h.service.GenerateTokens(c.Context(), user)
+		if err != nil {
+			return response.InternalError(c, "Login failed", fiber.Map{"error": err.Error()})
+		}
+
+		h.setAccessTokenCookie(c, accessToken)
+		h.setRefreshTokenCookie(c, refreshToken)
+
+		return response.Success(c, "Login successful", AuthResponse{
+			TokenResponse: TokenResponse{
+				AccessToken:  accessToken,
+				RefreshToken: refreshToken,
+				TokenType:    "Bearer",
+				ExpiresIn:    int64(h.config.JWT.AccessExpiration.Seconds()),
+			},
+			User: NewUserResponse(user, h.service, c.Context()),
+		})
 	}
-	if errors.Is(err, authdomain.ErrUserInactive) {
-		return response.Unauthorized(c, "Account is inactive", nil)
-	}
-	return response.InternalError(c, "Login failed", fiber.Map{"error": err.Error()})
-}
+	// ─────────────────────────────────────────────────────────────
 
 	return response.Success(c, "2FA verification required", TwoFactorResponse{
 		Requires2FA: true,

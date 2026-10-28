@@ -24,9 +24,6 @@ func (s *service) LoginUser(ctx context.Context, email, password, ipAddress, use
 		return nil, "", authdomain.ErrInvalidCredentials
 	}
 
-	// Guest accounts have no password. Reject early so the frontend
-	// can route them to the "set password" flow instead of showing
-	// a generic "invalid credentials" message.
 	if !user.CanLoginWithPassword() {
 		return nil, "", authdomain.ErrGuestPasswordLogin
 	}
@@ -38,6 +35,19 @@ func (s *service) LoginUser(ctx context.Context, email, password, ipAddress, use
 	if !user.IsActiveUser() {
 		return nil, "", authdomain.ErrUserInactive
 	}
+
+	// ─────────────────────────────────────────────────────────────
+	// TEMP: Zoom Marketplace reviewer bypass.
+	// Skips 2FA for the reviewer test account so they can log in
+	// with just email + password. The empty OTP signals the handler
+	// to issue tokens directly instead of requesting 2FA.
+	// Remove after Zoom approval.
+	// ─────────────────────────────────────────────────────────────
+	if user.Email == "zoom-review@nuruvent.com" {
+		log.Printf("⚠️  2FA bypass used for %s (Zoom reviewer)", user.Email)
+		return user, "", nil
+	}
+	// ─────────────────────────────────────────────────────────────
 
 	// Generate OTP
 	otp := s.GenerateOTP()
