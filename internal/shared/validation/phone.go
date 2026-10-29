@@ -1,74 +1,67 @@
 package validation
 
 import (
-	"regexp"
-	"strings"
+	"github.com/nyaruka/phonenumbers"
 )
 
-// Phone validates and normalizes Kenyan phone numbers
-type Phone struct{}
-
-// ValidatePhoneNumber validates Kenyan phone numbers
-// Supports formats:
-// - 254XXXXXXXXX (11 digits)
-// - +254XXXXXXXXX (12 digits with +)
-// - 07XXXXXXXX (10 digits)
-// - 01XXXXXXXX (10 digits)
-// - 02XXXXXXXX (10 digits)
-func (p Phone) Validate(phone string) bool {
-	phone = normalizePhone(phone)
-
-	patterns := []string{
-		`^\+254\d{9}$`,   // +254XXXXXXXXX
-		`^254\d{9}$`,     // 254XXXXXXXXX
-		`^07\d{8}$`,      // 07XXXXXXXX
-		`^01\d{8}$`,      // 01XXXXXXXX
-		`^02\d{8}$`,      // 02XXXXXXXX
-	}
-
-	for _, pattern := range patterns {
-		matched, _ := regexp.MatchString(pattern, phone)
-		if matched {
-			return true
-		}
-	}
-
-	return false
+// Phone validates and normalizes phone numbers to E.164.
+//
+// DefaultRegion is used when the input has no country code
+// (e.g. "0712..." → KE). If empty, "KE" is assumed.
+type Phone struct {
+	DefaultRegion string
 }
 
-// Normalize converts any Kenyan phone number to E.164 format
-// Returns: +254XXXXXXXXX
-func (p Phone) Normalize(phone string) string {
-	phone = normalizePhone(phone)
-
-	if phone == "" {
-		return ""
-	}
-
-	// Remove leading '0' and add '254'
-	if strings.HasPrefix(phone, "0") && len(phone) == 10 {
-		return "+254" + phone[1:]
-	}
-
-	// Already has 254 prefix
-	if strings.HasPrefix(phone, "254") && len(phone) == 12 {
-		return "+" + phone
-	}
-
-	// Just numbers, assume it's a local number
-	if len(phone) == 9 {
-		return "+254" + phone
-	}
-
-	return phone
+// allowedRegions: Africa (54) + diaspora, excluding the EU and the
+// sanctioned regions IR, KP, CU, SY.
+var allowedRegions = map[string]struct{}{
+	// Africa
+	"DZ": {}, "AO": {}, "BJ": {}, "BW": {}, "BF": {}, "BI": {}, "CM": {},
+	"CV": {}, "CF": {}, "TD": {}, "KM": {}, "CG": {}, "CD": {}, "DJ": {},
+	"EG": {}, "GQ": {}, "ER": {}, "SZ": {}, "ET": {}, "GA": {}, "GM": {},
+	"GH": {}, "GN": {}, "GW": {}, "CI": {}, "KE": {}, "LS": {}, "LR": {},
+	"LY": {}, "MG": {}, "MW": {}, "ML": {}, "MR": {}, "MU": {}, "MA": {},
+	"MZ": {}, "NA": {}, "NE": {}, "NG": {}, "RW": {}, "ST": {}, "SN": {},
+	"SC": {}, "SL": {}, "SO": {}, "ZA": {}, "SS": {}, "SD": {}, "TZ": {},
+	"TG": {}, "TN": {}, "UG": {}, "ZM": {}, "ZW": {},
+	// Diaspora (non-EU)
+	"US": {}, "CA": {},
+	"AE": {}, "SA": {}, "QA": {}, "KW": {}, "BH": {}, "OM": {},
+	"IL": {}, "JO": {}, "LB": {},
+	"IN": {}, "PK": {}, "BD": {}, "PH": {},
+	"AU": {}, "NZ": {},
+	"JM": {}, "TT": {},
 }
 
-func normalizePhone(phone string) string {
-	phone = strings.TrimSpace(phone)
-	phone = strings.ReplaceAll(phone, " ", "")
-	phone = strings.ReplaceAll(phone, "-", "")
-	phone = strings.ReplaceAll(phone, "(", "")
-	phone = strings.ReplaceAll(phone, ")", "")
-	phone = strings.ReplaceAll(phone, "+", "")
-	return phone
+// NormalizeAndValidate parses, validates, and normalizes a phone number
+// to E.164 (+<country><national>). Returns:
+//
+//	("", nil)                         when raw is empty (phone is optional)
+//	(e164, nil)                       on success
+//	("", ErrInvalidPhone)             on malformed/invalid number
+//	("", ErrPhoneRegionNotSupported)  when the resolved region is not allowed
+func (p Phone) NormalizeAndValidate(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+
+	region := p.DefaultRegion
+	if region == "" {
+		region = "KE"
+	}
+
+	num, err := phonenumbers.Parse(raw, region)
+	if err != nil {
+		return "", ErrInvalidPhone
+	}
+	if !phonenumbers.IsValidNumber(num) {
+		return "", ErrInvalidPhone
+	}
+
+	resolved := phonenumbers.GetRegionCodeForNumber(num)
+	if _, ok := allowedRegions[resolved]; !ok {
+		return "", ErrPhoneRegionNotSupported
+	}
+
+	return phonenumbers.Format(num, phonenumbers.E164), nil
 }

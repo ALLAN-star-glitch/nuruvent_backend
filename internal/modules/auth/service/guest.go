@@ -139,6 +139,14 @@ func (s *service) CreateGuestUser(
 	//    matching the existing signup flow.
 	var accountID string
 	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+		// Normalize + uniqueness-check phone BEFORE insert.
+		// Guests usually have no phone (""), which passes through as-is.
+		normalizedPhone, nerr := s.normalizeAndCheckPhone(txCtx, guest.Phone)
+		if nerr != nil {
+			return nerr
+		}
+		guest.Phone = normalizedPhone
+
 		if err := s.repo.CreateUser(txCtx, guest); err != nil {
 			if isUniqueViolation(err) {
 				return errGuestRace

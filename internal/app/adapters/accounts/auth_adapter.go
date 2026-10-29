@@ -84,3 +84,10 @@ func (a *AuthAdapter) UserExists(ctx context.Context, email string) (bool, error
 
 	return exists, nil
 }
+
+
+// NormalizeAndCheckPhone validates + normalizes a phone number (E.164) and
+// rejects numbers already held by another active user.
+func (a *AuthAdapter) NormalizeAndCheckPhone(ctx context.Context, raw string) (string, error) {
+	return a.authSvc.NormalizeAndCheckPhone(ctx, raw)
+}

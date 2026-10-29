@@ -1,4 +1,4 @@
-// pkg/validation/validator.go
+
 package validation
 
 // Validator provides all validation methods
@@ -13,9 +13,10 @@ type Validator struct {
 }
 
 // New creates a new validator instance
+// New creates a new validator instance
 func New() *Validator {
 	return &Validator{
-		Phone:    Phone{},
+		Phone:    Phone{DefaultRegion: "KE"},
 		Password: Password{},
 		Email:    Email{},
 		UUID:     UUID{},

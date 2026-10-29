@@ -68,21 +68,20 @@ func (s *service) RegisterUser(ctx context.Context, req RegisterRequest) error {
 			return fmt.Errorf("user with email '%s' already exists. A new OTP has been sent to your email", req.Email)
 		}
 
-
-		// if user is inactive 
+		// if user is inactive
 
 		if err := s.repo.ReactivateUser(ctx, existingUser.ID); err != nil {
 			return fmt.Errorf("failed to reactivate user: %w", err)
 		}
 	}
 
-	// Check phone uniqueness
-	exists, err = s.repo.UserExistsByPhone(ctx, req.Phone)
-	if err != nil {
-		return err
-	}
-	if exists {
-		return authdomain.ErrInvalidPhone
+	// Check phone uniqueness (normalize first so different formats don't slip through)
+	if req.Phone != "" {
+		normalized, err := s.normalizeAndCheckPhone(ctx, req.Phone)
+		if err != nil {
+			return err
+		}
+		req.Phone = normalized
 	}
 
 	// Generate & Store OTP
@@ -190,10 +189,10 @@ func (s *service) RegisterWithInvitation(
 	}
 
 	// 4. Resolve the invited account type. Invited users are neither
-//    self-service personal nor institution signups — they arrived via
-//    a team invitation. Using a dedicated type makes the signup path
-//    explicit in the DB and prevents accidental classification as a
-//    personal signup.
+	//    self-service personal nor institution signups — they arrived via
+	//    a team invitation. Using a dedicated type makes the signup path
+	//    explicit in the DB and prevents accidental classification as a
+	//    personal signup.
 	accountTypeID, err := s.getAccountTypeID(ctx, types.AccountTypeInvitedName)
 	if err != nil || accountTypeID == "" {
 		return nil, nil, fmt.Errorf("failed to resolve invited account type ID: %w", err)
@@ -206,6 +205,8 @@ func (s *service) RegisterWithInvitation(
 
 	// 5. Build the user entity. Email is marked verified because the
 	//    invitation token was delivered to it.
+	//    Invited users have no phone at creation time — the empty phone
+	//    passes through normalizeAndCheckPhone as ("", nil).
 	user, err := authdomain.NewUser(
 		invitation.Email,
 		string(hashedPassword),
@@ -224,6 +225,12 @@ func (s *service) RegisterWithInvitation(
 
 	// 6. Persist the user (no account, no personal team).
 	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+		normalizedPhone, nerr := s.normalizeAndCheckPhone(txCtx, user.Phone)
+		if nerr != nil {
+			return nerr
+		}
+		user.Phone = normalizedPhone
+
 		if err := s.repo.CreateUser(txCtx, user); err != nil {
 			return fmt.Errorf("failed to save user: %w", err)
 		}
@@ -387,7 +394,6 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	user, err := authdomain.NewUser(cleanEmail, string(hashedPassword), cleanName, cleanPhone, accountTypeID)
 	user.Username = username
 
-
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to construct user entity: %w", err)
 	}
@@ -401,6 +407,16 @@ func (s *service) VerifyOTPAndCreateUser(ctx context.Context, email, otp string)
 	// ============================================================
 	log.Printf("[VerifyOTPAndCreateUser] Starting database transaction...")
 	err = s.repo.WithTransaction(ctx, func(txCtx context.Context) error {
+		// Normalize + uniqueness-check phone BEFORE insert.
+		// The check runs inside the tx so it sees any pending writes from
+		// concurrent requests; the DB unique index is the hard backstop.
+		normalizedPhone, nerr := s.normalizeAndCheckPhone(txCtx, user.Phone)
+		if nerr != nil {
+			log.Printf("[VerifyOTPAndCreateUser] Phone check failed: %v", nerr)
+			return nerr
+		}
+		user.Phone = normalizedPhone
+
 		// Create Core User
 		log.Printf("[VerifyOTPAndCreateUser] Creating user: %s", cleanEmail)
 		if err := s.repo.CreateUser(txCtx, user); err != nil {
