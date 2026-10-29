@@ -710,3 +710,32 @@ func (s *service) allocateUsername(ctx context.Context, email string) (string, e
 	}
 	return "", fmt.Errorf("could not allocate a unique username for %s", email)
 }
+
+
+// CheckAvailability validates if an email or phone is already in use
+// before the user proceeds to the next step of a multi-step form.
+func (s *service) CheckAvailability(ctx context.Context, email, phone string) error {
+	// 1. Check email
+	if email != "" {
+		exists, err := s.repo.UserExistsByEmail(ctx, email)
+		if err != nil {
+			return fmt.Errorf("check email: %w", err)
+		}
+		if exists {
+			return authdomain.ErrUserExists
+		}
+	}
+
+	// 2. Check phone (if provided)
+	if phone != "" {
+		normalized, err := s.normalizeAndCheckPhone(ctx, phone)
+		if err != nil {
+			return err
+		}
+		// Note: normalizeAndCheckPhone already calls UserExistsByPhone internally
+		// so if it returns nil, the phone is valid and available.
+		_ = normalized
+	}
+
+	return nil
+}

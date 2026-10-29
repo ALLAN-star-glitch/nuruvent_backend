@@ -149,6 +149,7 @@ type Service interface {
 
 	IssueSessionForUser(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error)
 
+	CheckAvailability(ctx context.Context, email, phone string) error
 
 	
 }

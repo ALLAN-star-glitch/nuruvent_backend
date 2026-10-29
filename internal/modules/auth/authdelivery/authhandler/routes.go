@@ -18,6 +18,7 @@ func (h *AuthHandler) RegisterRoutes(
 		public.Post("/register", h.Register)
 		public.Post("/verify-otp", h.VerifyOTP)
 		public.Post("/resend-otp", h.ResendOTP)
+		public.Post("/check-availability", h.CheckAvailability)
 
 		// ---- INVITATION SIGNUP (no OTP) ----
 		// The invitee's email is read from the invitation record; the

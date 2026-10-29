@@ -813,3 +813,37 @@ func (h *AuthHandler) VerifyResetOTP(c fiber.Ctx) error {
 
 	return response.Success(c, "Password reset successfully", nil)
 }
+
+// CheckAvailability checks if email/phone is already in use
+// @Summary Check availability
+// @Description Check if an email or phone is already registered before proceeding
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body CheckAvailabilityRequest true "Email and/or Phone"
+// @Success 200 {object} response.BaseResponse
+// @Failure 409 {object} response.BaseResponse
+// @Router /api/v1/auth/check-availability [post]
+func (h *AuthHandler) CheckAvailability(c fiber.Ctx) error {
+	var req CheckAvailabilityRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request", fiber.Map{"error": err.Error()})
+	}
+
+	if err := h.service.CheckAvailability(c.Context(), req.Email, req.Phone); err != nil {
+		switch {
+		case errors.Is(err, authdomain.ErrUserExists):
+			return response.Conflict(c, "This email is already registered.", nil)
+		case errors.Is(err, authdomain.ErrPhoneAlreadyRegistered):
+			return response.Conflict(c, "This phone number is already registered.", nil)
+		case errors.Is(err, authdomain.ErrInvalidPhone):
+			return response.BadRequest(c, "Please enter a valid phone number.", nil)
+		case errors.Is(err, authdomain.ErrPhoneRegionNotSupported):
+			return response.BadRequest(c, "Phone numbers from this region are not supported yet.", nil)
+		default:
+			return response.InternalError(c, "Failed to check availability", fiber.Map{"error": err.Error()})
+		}
+	}
+
+	return response.Success(c, "Available", nil)
+}
