@@ -22,14 +22,17 @@ func main() {
 	defer database.Close()
 
 	// --- 1. Empty-string phones: dry-run count, then NULL them if applying ---
+	// Soft-deleted users are excluded so the backfill matches the partial
+	// unique index predicate (deleted_at IS NULL).
 	var emptyCount int64
-	if err := db.Raw(`SELECT COUNT(*) FROM users WHERE phone = ''`).Scan(&emptyCount).Error; err != nil {
+	if err := db.Raw(`SELECT COUNT(*) FROM users WHERE phone = '' AND deleted_at IS NULL`).
+		Scan(&emptyCount).Error; err != nil {
 		log.Fatalf("count empty phones: %v", err)
 	}
 	fmt.Printf("empty-string phones: %d\n", emptyCount)
 
 	if *apply && emptyCount > 0 {
-		if err := db.Exec(`UPDATE users SET phone = NULL, updated_at = NOW() WHERE phone = ''`).Error; err != nil {
+		if err := db.Exec(`UPDATE users SET phone = NULL, updated_at = NOW() WHERE phone = '' AND deleted_at IS NULL`).Error; err != nil {
 			log.Fatalf("normalize empty phones: %v", err)
 		}
 		log.Printf("normalized %d empty-string phones to NULL", emptyCount)
@@ -37,6 +40,8 @@ func main() {
 	fmt.Println()
 
 	// --- 2. Normalize remaining non-null, non-empty phones to E.164 ---
+	// Only live users are considered; soft-deleted rows are out of scope,
+	// matching the partial unique index.
 	v := validation.New()
 
 	type row struct {
@@ -45,7 +50,11 @@ func main() {
 	}
 
 	var rows []row
-	if err := db.Raw(`SELECT id, phone FROM users WHERE phone IS NOT NULL AND phone <> '' ORDER BY created_at ASC`).
+	if err := db.Raw(`SELECT id, phone FROM users
+	                  WHERE phone IS NOT NULL
+	                    AND phone <> ''
+	                    AND deleted_at IS NULL
+	                  ORDER BY created_at ASC`).
 		Scan(&rows).Error; err != nil {
 		log.Fatalf("select users: %v", err)
 	}

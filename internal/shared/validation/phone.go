@@ -65,3 +65,4 @@ func (p Phone) NormalizeAndValidate(raw string) (string, error) {
 
 	return phonenumbers.Format(num, phonenumbers.E164), nil
 }
+
