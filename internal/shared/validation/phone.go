@@ -12,10 +12,10 @@ type Phone struct {
 	DefaultRegion string
 }
 
-// allowedRegions: Africa (54) + diaspora, excluding the EU and the
+// allowedRegions: Africa (54) + diaspora
 // sanctioned regions IR, KP, CU, SY.
 var allowedRegions = map[string]struct{}{
-	// Africa
+	// Africa (54)
 	"DZ": {}, "AO": {}, "BJ": {}, "BW": {}, "BF": {}, "BI": {}, "CM": {},
 	"CV": {}, "CF": {}, "TD": {}, "KM": {}, "CG": {}, "CD": {}, "DJ": {},
 	"EG": {}, "GQ": {}, "ER": {}, "SZ": {}, "ET": {}, "GA": {}, "GM": {},
@@ -24,6 +24,7 @@ var allowedRegions = map[string]struct{}{
 	"MZ": {}, "NA": {}, "NE": {}, "NG": {}, "RW": {}, "ST": {}, "SN": {},
 	"SC": {}, "SL": {}, "SO": {}, "ZA": {}, "SS": {}, "SD": {}, "TZ": {},
 	"TG": {}, "TN": {}, "UG": {}, "ZM": {}, "ZW": {},
+	
 	// Diaspora (non-EU)
 	"US": {}, "CA": {},
 	"AE": {}, "SA": {}, "QA": {}, "KW": {}, "BH": {}, "OM": {},
@@ -31,6 +32,13 @@ var allowedRegions = map[string]struct{}{
 	"IN": {}, "PK": {}, "BD": {}, "PH": {},
 	"AU": {}, "NZ": {},
 	"JM": {}, "TT": {},
+
+	// Europe (Now allowed via Google Meet)
+	"GB": {}, "DE": {}, "FR": {}, "NL": {}, "IE": {}, "IT": {}, "ES": {}, "PT": {},
+	"BE": {}, "CH": {}, "AT": {}, "SE": {}, "NO": {}, "DK": {}, "FI": {},
+	"PL": {}, "CZ": {}, "GR": {}, "HU": {}, "RO": {}, "BG": {}, "HR": {},
+	"SK": {}, "SI": {}, "EE": {}, "LV": {}, "LT": {}, "LU": {}, "MT": {}, "CY": {},
+	// (You can add the rest of the EU here)
 }
 
 // NormalizeAndValidate parses, validates, and normalizes a phone number
