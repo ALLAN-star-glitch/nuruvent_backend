@@ -11,6 +11,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/authorization"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 	sharedRedis "github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/redis"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/validation"
 )
 
 // ============================================================
@@ -124,6 +125,10 @@ type Service interface {
 	GetUserByEmail(ctx context.Context, email string) (*authdomain.User, error)
 	UserExists(ctx context.Context, email string) (bool, error)
 	GetTokenContext(ctx context.Context, user *authdomain.User) (*authdomain.TokenContext, error)
+	// NormalizeAndCheckPhone validates + normalizes a phone number to E.164
+	// and rejects numbers already held by another active user.
+	// Returns "" when raw is empty (phone is optional).
+	NormalizeAndCheckPhone(ctx context.Context, raw string) (string, error)
 
 	// GetUserByIDWithAccount retrieves a user by ID with their account ID.
 	// Returns: user, accountID, error.
@@ -143,6 +148,10 @@ type Service interface {
 
 
 	IssueSessionForUser(ctx context.Context, userID string, ttl time.Duration) (string, time.Time, error)
+
+	CheckAvailability(ctx context.Context, email, phone string) error
+
+	
 }
 
 // ============================================================
@@ -189,6 +198,7 @@ type service struct {
 	notifSvc      authdomain.NotificationService
 	enforcer      *authorization.Enforcer
 	teamSvc       TeamService
+	validator    *validation.Validator
 }
 
 func NewService(
@@ -216,6 +226,7 @@ func NewService(
 		notifSvc:      notifSvc,
 		enforcer:      enforcer,
 		teamSvc:       teamSvc,
+		validator: validation.New(),
 	}
 }
 

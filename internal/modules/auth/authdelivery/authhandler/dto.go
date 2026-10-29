@@ -255,3 +255,9 @@ func NewAuthResponse(user *authdomain.User, accessToken, refreshToken string, in
 		Institution: NewInstitutionResponse(institution),
 	}
 }
+
+
+type CheckAvailabilityRequest struct {
+	Email string `json:"email"`
+	Phone string `json:"phone"`
+}

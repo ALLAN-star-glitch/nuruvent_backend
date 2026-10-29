@@ -14,6 +14,12 @@ type AuthService interface {
 
     // UserExists checks if a user exists by email
     UserExists(ctx context.Context, email string) (bool, error)
+
+
+    // NormalizeAndCheckPhone validates + normalizes a phone number to E.164
+	// and rejects numbers already held by another active user.
+	// Returns "" when raw is empty (phone is optional).
+	NormalizeAndCheckPhone(ctx context.Context, raw string) (string, error)
 }
 
 // UserResult represents a user from auth service

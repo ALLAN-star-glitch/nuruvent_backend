@@ -197,7 +197,13 @@ func (r *PostgresRepository) GetUserByID(ctx context.Context, id string) (*authd
 
 func (r *PostgresRepository) CreateUser(ctx context.Context, user *authdomain.User) error {
 	model := ToUserModel(user)
-	return r.db.WithContext(ctx).Create(model).Error
+	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
+		if isUniqueViolation(err) && strings.Contains(err.Error(), "users_phone_unique") {
+			return authdomain.ErrPhoneAlreadyRegistered
+		}
+		return err
+	}
+	return nil
 }
 
 func (r *PostgresRepository) UpdateUser(ctx context.Context, user *authdomain.User) error {

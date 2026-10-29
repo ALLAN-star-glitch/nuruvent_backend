@@ -164,8 +164,19 @@ func (h *AuthHandler) Register(c fiber.Ctx) error {
 	}
 
 	if err := h.service.RegisterUser(c.Context(), svcReq); err != nil {
-		return response.BadRequest(c, err.Error(), nil)
-	}
+    switch {
+    case errors.Is(err, authdomain.ErrPhoneAlreadyRegistered):
+        return response.Conflict(c, "This phone number is already registered.", nil)
+    case errors.Is(err, authdomain.ErrInvalidPhone):
+        return response.BadRequest(c, "Please enter a valid phone number.", nil)
+    case errors.Is(err, authdomain.ErrPhoneRegionNotSupported):
+        return response.BadRequest(c, "Phone numbers from this region are not supported yet.", nil)
+    case errors.Is(err, authdomain.ErrUserExists):
+        return response.Conflict(c, "An account with this email already exists.", nil)
+    default:
+        return response.BadRequest(c, err.Error(), nil)
+    }
+}
 
 	return response.Success(c, "OTP sent successfully", OTPResponse{
 		Email:     req.Email,
@@ -214,12 +225,6 @@ func (h *AuthHandler) RegisterWithInvitation(c fiber.Ctx) error {
 			"error":    msg,
 			"strength": validator.Password.StrengthLabel(validator.Password.Score(req.Password)),
 		})
-	}
-	if req.Phone != "" {
-		if !validator.Phone.Validate(req.Phone) {
-			return response.BadRequest(c, "invalid Kenyan phone number", nil)
-		}
-		req.Phone = validator.Phone.Normalize(req.Phone)
 	}
 
 	user, result, err := h.service.RegisterWithInvitation(
@@ -287,14 +292,6 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 		return errors.New("name is required")
 	}
 
-	if req.Phone == "" {
-		return errors.New("phone is required")
-	}
-	if !validator.Phone.Validate(req.Phone) {
-		return errors.New("invalid Kenyan phone number")
-	}
-	req.Phone = validator.Phone.Normalize(req.Phone)
-
 	if req.AccountType == "" {
 		req.AccountType = types.AccountTypePersonalName
 	}
@@ -331,12 +328,20 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 			return errors.New("invalid institution email format")
 		}
 		if req.InstitutionPhone == "" {
-			return errors.New("institution_phone is required for institution accounts")
-		}
-		if !validator.Phone.Validate(req.InstitutionPhone) {
-			return errors.New("invalid institution phone number")
-		}
-		req.InstitutionPhone = validator.Phone.Normalize(req.InstitutionPhone)
+				return errors.New("institution_phone is required for institution accounts")
+			}
+			normalizedInstitutionPhone, err := validator.Phone.NormalizeAndValidate(req.InstitutionPhone)
+			if err != nil {
+				switch {
+				case errors.Is(err, validation.ErrInvalidPhone):
+					return errors.New("invalid institution phone number")
+				case errors.Is(err, validation.ErrPhoneRegionNotSupported):
+					return errors.New("institution phone numbers from this region are not supported yet")
+				default:
+					return err
+				}
+			}
+			req.InstitutionPhone = normalizedInstitutionPhone
 		if req.InstitutionType == "" {
 			return errors.New("institution_type is required for institution accounts")
 		}
@@ -382,10 +387,18 @@ func (h *AuthHandler) VerifyOTP(c fiber.Ctx) error {
 
 	user, result, err := h.service.VerifyOTPAndCreateUser(c.Context(), req.Email, req.OTP)
 	if err != nil {
-		if errors.Is(err, authdomain.ErrInvalidOTP) {
+		switch {
+		case errors.Is(err, authdomain.ErrInvalidOTP):
 			return response.Unauthorized(c, "Invalid or expired OTP", nil)
+		case errors.Is(err, authdomain.ErrPhoneAlreadyRegistered):
+			return response.Conflict(c, "This phone number was just registered by another account. Please choose a different number.", nil)
+		case errors.Is(err, authdomain.ErrInvalidPhone):
+			return response.BadRequest(c, "Please enter a valid phone number.", nil)
+		case errors.Is(err, authdomain.ErrPhoneRegionNotSupported):
+			return response.BadRequest(c, "Phone numbers from this region are not supported yet.", nil)
+		default:
+			return response.BadRequest(c, err.Error(), nil)
 		}
-		return response.BadRequest(c, err.Error(), nil)
 	}
 
 	var accessToken, refreshToken string
@@ -799,4 +812,38 @@ func (h *AuthHandler) VerifyResetOTP(c fiber.Ctx) error {
 	}
 
 	return response.Success(c, "Password reset successfully", nil)
+}
+
+// CheckAvailability checks if email/phone is already in use
+// @Summary Check availability
+// @Description Check if an email or phone is already registered before proceeding
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body CheckAvailabilityRequest true "Email and/or Phone"
+// @Success 200 {object} response.BaseResponse
+// @Failure 409 {object} response.BaseResponse
+// @Router /api/v1/auth/check-availability [post]
+func (h *AuthHandler) CheckAvailability(c fiber.Ctx) error {
+	var req CheckAvailabilityRequest
+	if err := c.Bind().Body(&req); err != nil {
+		return response.BadRequest(c, "Invalid request", fiber.Map{"error": err.Error()})
+	}
+
+	if err := h.service.CheckAvailability(c.Context(), req.Email, req.Phone); err != nil {
+		switch {
+		case errors.Is(err, authdomain.ErrUserExists):
+			return response.Conflict(c, "This email is already registered.", nil)
+		case errors.Is(err, authdomain.ErrPhoneAlreadyRegistered):
+			return response.Conflict(c, "This phone number is already registered.", nil)
+		case errors.Is(err, authdomain.ErrInvalidPhone):
+			return response.BadRequest(c, "Please enter a valid phone number.", nil)
+		case errors.Is(err, authdomain.ErrPhoneRegionNotSupported):
+			return response.BadRequest(c, "Phone numbers from this region are not supported yet.", nil)
+		default:
+			return response.InternalError(c, "Failed to check availability", fiber.Map{"error": err.Error()})
+		}
+	}
+
+	return response.Success(c, "Available", nil)
 }

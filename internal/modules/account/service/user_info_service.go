@@ -285,7 +285,16 @@ func (s *accountService) applyProfileUpdates(ctx context.Context, user *accountd
 	}
 
 	if updates.Phone != nil {
-		user.Phone = strings.TrimSpace(*updates.Phone)
+		raw := strings.TrimSpace(*updates.Phone)
+		if raw == "" {
+			user.Phone = ""
+		} else {
+			normalized, err := s.authSvc.NormalizeAndCheckPhone(ctx, raw)
+			if err != nil {
+				return err
+			}
+			user.Phone = normalized
+		}
 	}
 
 	if updates.Bio != nil {

@@ -13,6 +13,7 @@ require (
 	github.com/johnfercher/maroto/v2 v2.4.3
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.12.3
+	github.com/nyaruka/phonenumbers v1.8.1
 	github.com/redis/go-redis/v9 v9.21.0
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	github.com/stretchr/testify v1.12.1

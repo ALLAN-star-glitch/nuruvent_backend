@@ -10,6 +10,7 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/jwt"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/postgres"
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/auth/service"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/validation"
 )
 
 // ProviderSet contains all auth module dependencies
@@ -40,6 +41,9 @@ var ProviderSet = wire.NewSet(
 	// authdomain.RoleManager, authdomain.PolicyManager,
 	// authdomain.TokenService, authdomain.NotificationService
 	service.NewService,
+
+
+	validation.New,
 
 	// ============================================================
 	// Delivery Layer

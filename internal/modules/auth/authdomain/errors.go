@@ -28,7 +28,11 @@ var (
 var (
 	ErrInvalidEmail    = errors.New("invalid email address")
 	ErrInvalidPassword = errors.New("invalid password")
-	ErrInvalidPhone    = errors.New("invalid phone number")
+
+    ErrInvalidPhone             = errors.New("invalid phone number")
+    ErrPhoneRegionNotSupported  = errors.New("phone region not supported")
+	ErrPhoneAlreadyRegistered   = errors.New("oops! phone already registered")
+
 	ErrWeakPassword    = errors.New("password too weak")
 )
 
@@ -149,3 +153,5 @@ var (
 	// setting a password through the forgot-password flow.
 	ErrGuestPasswordLogin = errors.New("this account has no password; use the link from your email to sign in, or reset your password")
 )
+
+
