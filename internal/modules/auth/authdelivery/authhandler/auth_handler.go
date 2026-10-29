@@ -328,8 +328,20 @@ func (h *AuthHandler) validateRegisterRequest(req *RegisterRequest) error {
 			return errors.New("invalid institution email format")
 		}
 		if req.InstitutionPhone == "" {
-			return errors.New("institution_phone is required for institution accounts")
-		}
+				return errors.New("institution_phone is required for institution accounts")
+			}
+			normalizedInstitutionPhone, err := validator.Phone.NormalizeAndValidate(req.InstitutionPhone)
+			if err != nil {
+				switch {
+				case errors.Is(err, validation.ErrInvalidPhone):
+					return errors.New("invalid institution phone number")
+				case errors.Is(err, validation.ErrPhoneRegionNotSupported):
+					return errors.New("institution phone numbers from this region are not supported yet")
+				default:
+					return err
+				}
+			}
+			req.InstitutionPhone = normalizedInstitutionPhone
 		if req.InstitutionType == "" {
 			return errors.New("institution_type is required for institution accounts")
 		}
