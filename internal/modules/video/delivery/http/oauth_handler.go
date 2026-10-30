@@ -79,9 +79,39 @@ func (h *OAuthHandler) Callback(c fiber.Ctx) error {
 
 	target := result.ReturnURL
 	if target == "" {
-		target = "/"
+		target = "/dashboard"
 	}
-	return c.Redirect().To(target)
+
+	// 1. Determine the base frontend URL based on the environment.
+	frontendBase := "https://www.nuruvent.com" // Production fallback
+	host := c.Hostname()
+	if strings.Contains(host, "localhost") || strings.Contains(host, "127.0.0.1") {
+		frontendBase = "http://localhost:3000"
+	} else if strings.Contains(host, "staging") {
+		frontendBase = "https://staging.nuruvent.com"
+	}
+
+	// 2. Build the final absolute URL.
+	var finalURL string
+	if strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://") {
+		// If the frontend already sent an absolute URL, use it as-is.
+		finalURL = target
+	} else {
+		// Otherwise, prepend the base URL (ensuring only one slash).
+		if !strings.HasPrefix(target, "/") {
+			target = "/" + target
+		}
+		finalURL = frontendBase + target
+	}
+
+	// 3. Append the success flag so the frontend can show a toast.
+	separator := "?"
+	if strings.Contains(finalURL, "?") {
+		separator = "&"
+	}
+	finalURL = finalURL + separator + "video_connected=true"
+
+	return c.Redirect().To(finalURL)
 }
 
 // wantsJSON reports whether the request asked for a JSON response.
