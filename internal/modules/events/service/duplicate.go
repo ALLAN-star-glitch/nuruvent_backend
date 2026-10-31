@@ -131,9 +131,6 @@ func (s *eventService) getOriginalEvent(ctx context.Context, id string) (*domain
 
 // checkDuplicatePermission performs an account-domain permission check
 // for event duplication.
-//
-// POST-REVAMP: single Casbin check against the target account domain.
-// Teams are not authorization domains.
 func (s *eventService) checkDuplicatePermission(ctx context.Context, original *domain.Event, cmd DuplicateEventCommand) error {
 	userID := cmd.CreatedBy
 	if userID == "" {
@@ -294,6 +291,7 @@ func (s *eventService) convertSchedulesToInputWithDate(schedules []domain.EventS
 			SessionNumber: sch.SessionNumber,
 			Location:      sch.Location,
 			IsVirtual:     sch.IsVirtual,
+			Platform:      sch.Platform,
 			ZoomLink:      sch.ZoomLink,
 			MeetLink:      sch.MeetLink,
 			MaxAttendees:  sch.MaxAttendees,
@@ -326,6 +324,7 @@ func (s *eventService) convertSchedulesToInput(schedules []domain.EventSchedule)
 			SessionNumber: sch.SessionNumber,
 			Location:      sch.Location,
 			IsVirtual:     sch.IsVirtual,
+			Platform:      sch.Platform,
 			ZoomLink:      sch.ZoomLink,
 			MeetLink:      sch.MeetLink,
 			MaxAttendees:  sch.MaxAttendees,
@@ -334,31 +333,29 @@ func (s *eventService) convertSchedulesToInput(schedules []domain.EventSchedule)
 	return inputs
 }
 
-// convertRecurrenceToInput converts recurrence from domain to input.
+// convertRecurrenceToInput converts the domain RecurrenceRule back into
+// the service-layer RecurrenceInput DTO.
+//
+// Returns nil if the event has no recurrence rule.
 func (s *eventService) convertRecurrenceToInput(event *domain.Event) *RecurrenceInput {
-	if !event.IsRecurring {
+	if event.RecurrenceRule == nil {
 		return nil
 	}
 
-	var endsOn *string
-	if event.RecurrenceEndsOn != nil {
-		d := event.RecurrenceEndsOn.Format("2006-01-02")
-		endsOn = &d
-	}
+	rule := event.RecurrenceRule
 
-	var pattern string
-	if event.RecurrencePatternID != nil {
-		pattern = *event.RecurrencePatternID
+	var endDate *string
+	if !rule.EndDate.IsZero() {
+		d := rule.EndDate.Format("2006-01-02")
+		endDate = &d
 	}
 
 	return &RecurrenceInput{
-		Pattern:     pattern,
-		Interval:    event.RecurrenceInterval,
-		DaysOfWeek:  event.RecurrenceDaysOfWeek,
-		DayOfMonth:  event.RecurrenceDayOfMonth,
-		WeekOfMonth: event.RecurrenceWeekOfMonth,
-		EndsOn:      endsOn,
-		Occurrences: event.RecurrenceOccurrences,
+		Frequency:  rule.Frequency,
+		Interval:   rule.Interval,
+		DaysOfWeek: rule.DaysOfWeek,
+		EndDate:    endDate,
+		Count:      rule.Count,
 	}
 }
 

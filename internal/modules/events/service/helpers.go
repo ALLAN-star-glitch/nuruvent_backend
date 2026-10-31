@@ -38,8 +38,6 @@ func (s *eventService) convertSchedules(inputs []ScheduleInput) ([]domain.EventS
 			endDate = &parsed
 		}
 
-		// ScheduleInput.ID is *string; EventSchedule.ID is string.
-		// Dereference only when non-nil, otherwise leave empty (new schedule).
 		var id string
 		if input.ID != nil {
 			id = *input.ID
@@ -62,13 +60,6 @@ func (s *eventService) convertSchedules(inputs []ScheduleInput) ([]domain.EventS
 			MaxAttendees:  input.MaxAttendees,
 		}
 
-		// Defensive: a brand-new schedule (no ID) that arrives without a
-		// session_number gets a positional placeholder. Without this,
-		// multiple 0s would sort to the same slot and the unique index
-		// (event_id, session_number) would reject the insert.
-		//
-		// This is a placeholder, not a final value — the caller's
-		// renumbering (or the user's drag-to-reorder) will overwrite it.
 		if id == "" && schedules[i].SessionNumber == 0 {
 			schedules[i].SessionNumber = i + 1
 		}
@@ -151,44 +142,28 @@ func (s *eventService) convertMaterials(inputs []MaterialInput) ([]domain.EventM
 	return materials, nil
 }
 
-// applyRecurrence applies recurrence to an event.
-func (s *eventService) applyRecurrence(ctx context.Context, event *domain.Event, input *RecurrenceInput) error {
+// buildRecurrenceRule maps the service-layer DTO to the domain value object.
+func buildRecurrenceRule(input *RecurrenceInput) *domain.RecurrenceRule {
 	if input == nil {
 		return nil
 	}
-	if input.Pattern == "" {
-		return errors.New("recurrence pattern is required")
+
+	rule := &domain.RecurrenceRule{
+		Frequency:  input.Frequency,
+		Interval:   input.Interval,
+		DaysOfWeek: input.DaysOfWeek,
+		Count:      input.Count,
 	}
 
-	pattern, err := s.repo.GetRecurrencePatternBySlug(ctx, input.Pattern)
-	if err != nil {
-		return fmt.Errorf("failed to resolve recurrence pattern %q: %w", input.Pattern, err)
-	}
-	if pattern == nil {
-		return fmt.Errorf("unknown recurrence pattern: %q", input.Pattern)
-	}
-	if !pattern.IsActive {
-		return fmt.Errorf("recurrence pattern %q is not active", input.Pattern)
-	}
-
-	event.IsRecurring = true
-	event.RecurrencePatternID = &pattern.ID
-	event.RecurrencePatternSlug = pattern.Slug
-	event.RecurrenceInterval = input.Interval
-	event.RecurrenceDaysOfWeek = input.DaysOfWeek
-	event.RecurrenceDayOfMonth = input.DayOfMonth
-	event.RecurrenceWeekOfMonth = input.WeekOfMonth
-	event.RecurrenceOccurrences = input.Occurrences
-
-	if input.EndsOn != nil && *input.EndsOn != "" {
-		endsOn, err := time.Parse("2006-01-02", *input.EndsOn)
-		if err != nil {
-			return fmt.Errorf("invalid recurrence ends_on: %w", err)
+	if input.EndDate != nil && *input.EndDate != "" {
+		if t, err := time.Parse(time.RFC3339, *input.EndDate); err == nil {
+			rule.EndDate = t
+		} else if t, err := time.Parse("2006-01-02", *input.EndDate); err == nil {
+			rule.EndDate = t
 		}
-		event.RecurrenceEndsOn = &endsOn
 	}
 
-	return nil
+	return rule
 }
 
 // applySEO applies SEO to an event.
@@ -218,12 +193,8 @@ func (s *eventService) applySEO(event *domain.Event, input *SEOInput) {
 // ============================================================
 // PERMISSION HELPERS (shared across services)
 // ============================================================
+
 // validateUpdatePermission checks whether the user may update this event.
-//
-// Resolution order:
-//   1. Unrestricted: account_admin has event:update_all → allow.
-//   2. Own-only: trainer has event:update_own AND owns this event → allow.
-//   3. Otherwise → deny.
 func (s *eventService) validateUpdatePermission(ctx context.Context, event *domain.Event, userID string) error {
 	if event == nil {
 		return errors.New("event is nil")
@@ -260,13 +231,7 @@ func (s *eventService) validateUpdatePermission(ctx context.Context, event *doma
 	return domain.ErrForbidden
 }
 
-
 // resolveEventAccountID returns the account ID that owns the event.
-//
-// The events table has no account_id column today, so the account is
-// resolved through the event's team. If the schema later gains a direct
-// account_id on events (and the repository populates it on load), that
-// value is used directly and no team lookup happens.
 func (s *eventService) resolveEventAccountID(ctx context.Context, event *domain.Event) (string, error) {
 	if event == nil {
 		return "", errors.New("event is nil")
@@ -293,9 +258,6 @@ func (s *eventService) resolveEventAccountID(ctx context.Context, event *domain.
 
 // validateViewCreatorPermission checks whether the user may see the
 // event's creator details.
-//
-// Returns false on denial. Permission-check errors are logged and treated
-// as denial (fail closed).
 func (s *eventService) validateViewCreatorPermission(ctx context.Context, event *domain.Event, userID string) bool {
 	if event == nil {
 		return false
@@ -337,7 +299,6 @@ func (s *eventService) getEventAndCheckUpdatePermission(ctx context.Context, eve
 
 	return event, nil
 }
-
 
 // canViewCreatorInfo checks whether a user may see creator info for an event.
 func (s *eventService) canViewCreatorInfo(ctx context.Context, userID string, event *domain.Event) bool {
@@ -383,10 +344,6 @@ func (s *eventService) getOrganizerInfo(ctx context.Context, event *domain.Event
 
 // checkEventCreatePermission is the shared authorization check used by
 // CreateDraft, CreateEvent, and any other event-creation path.
-//
-// POST-REVAMP: single check against the account domain. The teamID and
-// teamType arguments are accepted for signature compatibility but are no
-// longer used for authorization.
 func (s *eventService) checkEventCreatePermission(
 	ctx context.Context,
 	userID, teamID, teamType, accountID string,
@@ -437,30 +394,17 @@ func (s *eventService) isEmptyTeam(team domain.TeamFilter) bool {
 // ============================================================
 
 // TeamInfo represents basic team information for handlers.
-//
-// Note: this is a read-only DTO for display and query purposes. It is not
-// used for authorization. If you need the team's parent account ID, call
-// the repository's AccountIDForTeam method directly.
 type TeamInfo struct {
 	ID        string
 	Type      string // "personal" or "institution"
 	AccountID string
-
-
 }
+
 // ============================================================
 // EVENT DERIVATION FROM SCHEDULES
 // ============================================================
-//
-// Event-level timing, venue, and virtual/hybrid flags are derived from
-// the schedules. Schedules are the single source of truth. The client
-// may still send these fields on create/update — they are ignored.
-//
-// Called after schedules are populated, and on update when
-// cmd.Schedules is non-nil.
 
 // deriveEventFromSchedules computes event-level fields from schedules.
-// No-op when there are no schedules.
 func deriveEventFromSchedules(event *domain.Event) {
 	if event == nil || len(event.Schedules) == 0 {
 		return
@@ -481,11 +425,12 @@ func deriveEventFromSchedules(event *domain.Event) {
 		event.EndDate = &latestEnd
 	}
 
-	// 2. Multi-day detection.
+	// 2. Multi-day detection (does any SINGLE session span days?).
 	event.IsMultiDay = computeIsMultiDay(event.Schedules)
 
-	// 3. Duration = sum of (end - start) across schedules, in minutes.
-	event.Duration = computeTotalDurationMinutes(event.Schedules)
+	// 3. Duration = FIRST session's duration, in minutes.
+	//    For a series, the total duration is misleading on the card.
+	event.Duration = computeEventDurationMinutes(event.Schedules)
 
 	// 4. Virtual / hybrid / platform.
 	event.IsVirtual, event.IsHybrid = computeVirtualFlags(event.Schedules)
@@ -505,7 +450,6 @@ func deriveEventFromSchedules(event *domain.Event) {
 // ------------------------------------------------------------
 
 // firstScheduleStart returns the earliest start datetime across schedules.
-// Combines StartDate + StartTime in the schedule's timezone.
 func firstScheduleStart(schedules []domain.EventSchedule) time.Time {
 	var earliest time.Time
 	for _, s := range schedules {
@@ -556,7 +500,7 @@ func scheduleEndDateTime(s domain.EventSchedule) time.Time {
 }
 
 // combineDateAndClock merges a date with an "HH:MM:SS" string in the
-// given IANA timezone. Falls back to UTC if the timezone can't be loaded.
+// given IANA timezone.
 func combineDateAndClock(date time.Time, clock, tz string) time.Time {
 	loc := time.UTC
 	if tz != "" {
@@ -565,7 +509,6 @@ func combineDateAndClock(date time.Time, clock, tz string) time.Time {
 		}
 	}
 
-	// Parse the clock string. Accept "15:04:05" and "15:04".
 	parsed, err := time.Parse("15:04:05", clock)
 	if err != nil {
 		parsed, err = time.Parse("15:04", clock)
@@ -579,8 +522,7 @@ func combineDateAndClock(date time.Time, clock, tz string) time.Time {
 	)
 }
 
-// scheduleStartClock extracts the "HH:MM:SS" start of a schedule. Falls
-// back to parsing StartTime if needed.
+// scheduleStartClock extracts the "HH:MM:SS" start of a schedule.
 func scheduleStartClock(s domain.EventSchedule) string {
 	if s.StartTime != "" {
 		return s.StartTime
@@ -588,50 +530,45 @@ func scheduleStartClock(s domain.EventSchedule) string {
 	return ""
 }
 
-// computeIsMultiDay reports whether any schedule spans more than one day,
-// or whether the schedules as a whole span more than one calendar day.
+// computeIsMultiDay reports whether ANY single schedule spans more
+// than one calendar day (i.e., crosses midnight within one session).
+//
+// A series of ten sessions on ten different dates is NOT multi-day —
+// each session is single-day. Multi-day means "one session starts on
+// day X and ends on day Y > X".
 func computeIsMultiDay(schedules []domain.EventSchedule) bool {
-	var minDay, maxDay string
 	for _, s := range schedules {
-		if s.StartDate.IsZero() {
-			continue
-		}
-		d := s.StartDate.Format("2006-01-02")
-		if minDay == "" || d < minDay {
-			minDay = d
-		}
-		if maxDay == "" || d > maxDay {
-			maxDay = d
-		}
-
-		// Schedule itself spans days?
-		if s.EndDate != nil && !s.EndDate.IsZero() && !s.EndDate.Equal(s.StartDate) {
+		if s.EndDate != nil && !s.EndDate.IsZero() &&
+			!s.EndDate.Equal(s.StartDate) {
 			return true
 		}
 	}
-	return minDay != "" && maxDay != "" && minDay != maxDay
+	return false
 }
 
-// computeTotalDurationMinutes sums (end - start) across schedules, in
-// minutes. Schedules with unparseable times contribute 0.
-func computeTotalDurationMinutes(schedules []domain.EventSchedule) int {
-	total := 0
-	for _, s := range schedules {
-		start := scheduleStartDateTime(s)
-		end := scheduleEndDateTime(s)
-		if start.IsZero() || end.IsZero() || end.Before(start) {
-			continue
-		}
-		total += int(end.Sub(start).Minutes())
+// computeEventDurationMinutes returns the wall-clock duration of the
+// first session, in minutes.
+//
+// For a single-session event, that's the obvious answer. For a
+// multi-session series, the FIRST session's duration is a better
+// summary than the sum across all sessions — the sum would render as
+// "20 hours" for ten 2-hour sessions, which is misleading on a
+// discovery card.
+func computeEventDurationMinutes(schedules []domain.EventSchedule) int {
+	if len(schedules) == 0 {
+		return 0
 	}
-	return total
+
+	s := schedules[0]
+	start := scheduleStartDateTime(s)
+	end := scheduleEndDateTime(s)
+	if start.IsZero() || end.IsZero() || end.Before(start) {
+		return 0
+	}
+	return int(end.Sub(start).Minutes())
 }
 
 // computeVirtualFlags returns (allVirtual, isHybrid).
-//
-//   - All virtual   → IsVirtual = true, IsHybrid = false
-//   - All in-person → IsVirtual = false, IsHybrid = false
-//   - Mixed         → IsVirtual = false, IsHybrid = true
 func computeVirtualFlags(schedules []domain.EventSchedule) (bool, bool) {
 	virtual, inPerson := 0, 0
 	for _, s := range schedules {
@@ -707,8 +644,6 @@ func applyVenueFromSchedules(event *domain.Event, schedules []domain.EventSchedu
 		}
 		event.InPersonLocation = s.Location
 		event.VenueName = s.Location
-		// We only have a free-text location string, so don't attempt
-		// to split into street/city/country. That's a future feature.
 		return
 	}
 }

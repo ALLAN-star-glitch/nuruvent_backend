@@ -45,6 +45,8 @@ import (
 //
 // Rules:
 //   - In-person schedules are skipped.
+//   - Schedules more than 30 days out are skipped — the daily sweep
+//     provisions them as their start date approaches.
 //   - Schedules with a manual link and no valid meeting are skipped
 //     (true manual mode).
 //   - Schedules with a valid meeting are updated on the platform
@@ -76,6 +78,21 @@ func (s *eventService) attachVideoMeetings(
 		sched := &event.Schedules[i]
 
 		if !sched.IsVirtual {
+			continue
+		}
+
+		// Skip schedules that are more than 30 days out. They will be
+		// provisioned by the daily sweep as their start date
+		// approaches. This prevents creating dozens (or hundreds) of
+		// meetings for far-future events, most of which may never be
+		// used.
+		//
+		// If StartDate is zero (invalid state), we don't skip — the
+		// schedule needs a meeting regardless.
+		if !sched.StartDate.IsZero() &&
+			sched.StartDate.After(time.Now().Add(30*24*time.Hour)) {
+			log.Printf("video: schedule %d is >30 days out; deferring to sweep",
+				sched.SessionNumber)
 			continue
 		}
 

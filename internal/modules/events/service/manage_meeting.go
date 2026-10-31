@@ -21,10 +21,20 @@ import (
 // If every virtual schedule already has a meeting, the call is a no-op
 // and returns the event unchanged.
 //
+// Schedules more than 30 days out are skipped by
+// attachVideoMeetings; they are provisioned by the daily sweep as
+// their start date approaches.
+//
 // platformOverride is an optional fallback for schedules whose
 // platform column is empty. It is only used when the schedule itself
 // does not carry a platform. An empty string means "use whatever the
 // schedule already has."
+//
+// Persistence strategy: any meetings successfully created are persisted
+// even when attachVideoMeetings reports a per-schedule error. This
+// prevents orphaned meetings on the platform (which would happen if
+// we returned before the repo write). The caller still receives the
+// error so retries can fill the gaps.
 func (s *eventService) CreateEventMeeting(
 	ctx context.Context,
 	eventID, userID, platformOverride string,
@@ -43,16 +53,31 @@ func (s *eventService) CreateEventMeeting(
 		return nil, domain.ErrEventScheduleRequired
 	}
 
-	if err := s.attachVideoMeetings(ctx, event, userID, platformOverride); err != nil {
-		return nil, fmt.Errorf("create meeting: %w", err)
-	}
+	attachErr := s.attachVideoMeetings(ctx, event, userID, platformOverride)
 
 	// Re-derive event-level fields (zoom_link, virtual_platform_url,
 	// etc.) from the freshly populated schedules.
+	//
+	// Done even on partial failure so the successfully-created
+	// meetings persist.
 	deriveEventFromSchedules(event)
 
-	if err := s.repo.UpdateEvent(ctx, event); err != nil {
-		return nil, fmt.Errorf("create meeting: persist: %w", err)
+	// Persist whatever was created, regardless of whether
+	// attachVideoMeetings hit an error on some schedule.
+	//
+	// Without this, a partial failure (e.g., schedule 35 of 40 fails)
+	// would leave schedules 1–34 with real meetings on Google/Zoom
+	// but no video_meeting_id in the DB. Those meetings become
+	// orphans, and the next retry creates a fresh set, resulting in
+	// a pile of abandoned meetings on the host's account.
+	if updateErr := s.repo.UpdateEvent(ctx, event); updateErr != nil {
+		// Persistence failure is more severe than a per-schedule
+		// attach failure. Return it directly.
+		return nil, fmt.Errorf("create meeting: persist: %w", updateErr)
+	}
+
+	if attachErr != nil {
+		return nil, fmt.Errorf("create meeting: %w", attachErr)
 	}
 
 	if reloaded, err := s.repo.GetEventByID(ctx, eventID); err == nil && reloaded != nil {
@@ -92,13 +117,11 @@ func (s *eventService) DeleteEventMeeting(
 	for _, idx := range targets {
 		sched := &event.Schedules[idx]
 
-		// Guard: schedulesWithMeetings already filters these, but
-		// be defensive so a bug elsewhere never causes a panic.
 		if sched.VideoMeetingID == nil || *sched.VideoMeetingID == "" {
 			continue
 		}
 
-		externalID := *sched.VideoMeetingID // capture BEFORE clearing
+		externalID := *sched.VideoMeetingID
 		platform := virtualPlatformForSchedule(*sched, "")
 
 		err := s.video.DeleteMeeting(ctx, domain.VideoMeetingDeleteRequest{
@@ -108,7 +131,6 @@ func (s *eventService) DeleteEventMeeting(
 		})
 		if err != nil {
 			log.Printf("⚠️ delete meeting %s: %v", externalID, err)
-			// Continue — clear the local state regardless.
 		}
 
 		sched.VideoMeetingID = nil
@@ -117,8 +139,6 @@ func (s *eventService) DeleteEventMeeting(
 			externalID, sched.SessionNumber)
 	}
 
-	// Re-derive event-level fields from the now-cleared schedules so
-	// the event's zoom_link / virtual_platform_url reflect reality.
 	deriveEventFromSchedules(event)
 
 	if err := s.repo.UpdateEvent(ctx, event); err != nil {
@@ -165,7 +185,7 @@ func (s *eventService) RegenerateEventMeeting(
 			continue
 		}
 
-		externalID := *sched.VideoMeetingID // capture BEFORE clearing
+		externalID := *sched.VideoMeetingID
 		platform := virtualPlatformForSchedule(*sched, "")
 
 		err := s.video.DeleteMeeting(ctx, domain.VideoMeetingDeleteRequest{

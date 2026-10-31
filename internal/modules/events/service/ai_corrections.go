@@ -12,28 +12,14 @@ import (
 )
 
 // ============================================================
-// CORRECTION ENGINE — v11.2
+// CORRECTION ENGINE — v11.3
 // ============================================================
 //
-// The prompt is the source of truth. The corrector enforces the
-// three-shape contract but does NOT drop a model-inferred recurrence
-// just because the toggle was off. It only repairs genuine
-// contradictions:
-//
-//   - is_recurring = true with multiple schedules -> series.
-//   - is_recurring = false with a stray recurrence -> drop it.
-//
-// v11.1 normalizes platform-named virtual locations ("Virtual on
-// Zoom") to the platform-agnostic label "Virtual". The platform is
-// chosen downstream by the video integration.
-//
-// v11.2 makes the recurrence toggle a reinforcement, not an
-// override. When the caller supplies a recurrence block:
-//   - If the AI produced no recurrence, use the caller's block.
-//   - If the AI produced one, keep the AI's values and only fill
-//     fields it left empty (interval, days_of_week, ends_on, ...).
-// This means toggling the UI on for a prompt that already describes
-// the cadence produces the same draft as leaving it off.
+// v11.3 migrates the recurrence DTO from the old shape
+// (pattern/day_of_month/week_of_month/ends_on/occurrences) to the
+// new shape (frequency/end_date/count). Both the AI output contract
+// and the domain RecurrenceRule now agree on the same field names,
+// so the toggle echo, corrections, and downstream mapping all align.
 
 func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string, error) {
 	warnings := make([]string, 0)
@@ -96,7 +82,7 @@ func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string,
 
 	// --- weekday alignment (SHAPE B only) --------------------
 	if d.Shape() == ShapeRecurring && d.Recurrence != nil &&
-		d.Recurrence.Pattern == "weekly" &&
+		d.Recurrence.Frequency == "weekly" &&
 		len(d.Recurrence.DaysOfWeek) > 0 &&
 		len(d.Schedules) > 0 {
 		warnings = append(warnings,
@@ -147,9 +133,6 @@ func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string,
 // SHAPE REPAIR
 // ============================================================
 
-// repairShape enforces the three-shape contract without overriding
-// the model's shape decision based on the toggle. It only repairs
-// genuine contradictions.
 func repairShape(d *GeneratedEventDraft, cctx correctionContext) ([]string, error) {
 	var warnings []string
 
@@ -170,10 +153,24 @@ func repairShape(d *GeneratedEventDraft, cctx correctionContext) ([]string, erro
 	}
 
 	// Contradiction: is_recurring = true with multiple schedules.
-	// Prefer the schedules (series) and drop the recurrence.
+	//
+	// The AI may have produced multiple explicit schedules that DO
+	// follow the cadence described by the recurrence rule. In that
+	// case, the recurrence is the truth — the schedules are just the
+	// expanded occurrences. Collapse to 1 and keep the recurrence.
+	//
+	// If the schedules do NOT follow the recurrence cadence, treat
+	// as a series and drop the recurrence.
 	if d.IsRecurring && len(d.Schedules) > 1 {
+		if d.Recurrence != nil && schedulesMatchRecurrence(d.Schedules, d.Recurrence) {
+			warnings = append(warnings, fmt.Sprintf(
+				"Collapsed %d expanded schedules to the first; recurrence rule kept.",
+				len(d.Schedules)))
+			d.Schedules = d.Schedules[:1]
+			return warnings, nil
+		}
 		warnings = append(warnings, fmt.Sprintf(
-			"Model returned is_recurring=true with %d schedules; treating as a series and dropping recurrence.",
+			"Model returned is_recurring=true with %d schedules that don't match the recurrence; treating as a series and dropping recurrence.",
 			len(d.Schedules)))
 		d.IsRecurring = false
 		d.Recurrence = nil
@@ -391,7 +388,7 @@ func parseDurationFromPrompt(prompt string) (time.Duration, bool) {
 }
 
 // ============================================================
-// RECURRENCE CORRECTION — v11.2
+// RECURRENCE CORRECTION — v11.3
 // ============================================================
 
 func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string {
@@ -406,17 +403,13 @@ func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string 
 	}
 
 	// ---- Caller-supplied block (toggle ON) ----
-	// The toggle reinforces; it does not override. If the AI read
-	// the prompt and produced a coherent recurrence, keep it. Use
-	// the caller's block only to (a) build a recurrence when the
-	// AI produced none, or (b) fill fields the AI left empty.
 	if cctx.Request.Recurrence != nil {
 		src := cctx.Request.Recurrence
 
 		if d.Recurrence == nil {
 			rec := &GeneratedRecurrence{
-				Pattern:  strings.ToLower(strings.TrimSpace(src.Pattern)),
-				Interval: src.Interval,
+				Frequency: strings.ToLower(strings.TrimSpace(src.Frequency)),
+				Interval:  src.Interval,
 			}
 			if rec.Interval < 1 {
 				rec.Interval = 1
@@ -424,19 +417,12 @@ func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string 
 			if len(src.DaysOfWeek) > 0 {
 				rec.DaysOfWeek = dedupeStrings(normalizeWeekdays(src.DaysOfWeek))
 			}
-			if src.DayOfMonth != nil {
-				rec.DayOfMonth = src.DayOfMonth
+			if src.EndDate != nil && *src.EndDate != "" {
+				endDate := *src.EndDate
+				rec.EndDate = &endDate
 			}
-			if src.WeekOfMonth != nil && *src.WeekOfMonth != "" {
-				wom := *src.WeekOfMonth
-				rec.WeekOfMonth = &wom
-			}
-			if src.EndsOn != nil && *src.EndsOn != "" {
-				endsOn := *src.EndsOn
-				rec.EndsOn = &endsOn
-			}
-			if src.Occurrences != nil {
-				rec.Occurrences = src.Occurrences
+			if src.Count != nil {
+				rec.Count = src.Count
 			}
 			d.Recurrence = rec
 			warnings = append(warnings,
@@ -456,30 +442,20 @@ func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string 
 			r.DaysOfWeek = dedupeStrings(normalizeWeekdays(src.DaysOfWeek))
 			filled = append(filled, "days_of_week")
 		}
-		if r.DayOfMonth == nil && src.DayOfMonth != nil {
-			r.DayOfMonth = src.DayOfMonth
-			filled = append(filled, "day_of_month")
+		if r.EndDate == nil && src.EndDate != nil && *src.EndDate != "" {
+			endDate := *src.EndDate
+			r.EndDate = &endDate
+			filled = append(filled, "end_date")
 		}
-		if r.WeekOfMonth == nil && src.WeekOfMonth != nil && *src.WeekOfMonth != "" {
-			wom := *src.WeekOfMonth
-			r.WeekOfMonth = &wom
-			filled = append(filled, "week_of_month")
-		}
-		if r.EndsOn == nil && src.EndsOn != nil && *src.EndsOn != "" {
-			endsOn := *src.EndsOn
-			r.EndsOn = &endsOn
-			filled = append(filled, "ends_on")
-		}
-		if r.Occurrences == nil && src.Occurrences != nil {
-			r.Occurrences = src.Occurrences
-			filled = append(filled, "occurrences")
+		if r.Count == nil && src.Count != nil {
+			r.Count = src.Count
+			filled = append(filled, "count")
 		}
 		if len(filled) > 0 {
 			warnings = append(warnings, fmt.Sprintf(
 				"Filled missing recurrence fields from the toggle: %s.",
 				strings.Join(filled, ", ")))
 		}
-		// Fall through to the normalisation below.
 	}
 
 	// ---- Model-inferred path ----
@@ -488,7 +464,7 @@ func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string 
 	}
 
 	r := d.Recurrence
-	r.Pattern = strings.ToLower(strings.TrimSpace(r.Pattern))
+	r.Frequency = strings.ToLower(strings.TrimSpace(r.Frequency))
 	if r.Interval < 1 {
 		r.Interval = 1
 	}
@@ -509,22 +485,16 @@ func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string 
 	}
 	r.DaysOfWeek = dedupeStrings(normalized)
 
-	switch r.Pattern {
+	switch r.Frequency {
 	case "daily":
 		r.DaysOfWeek = nil
-		r.DayOfMonth = nil
-		r.WeekOfMonth = nil
 	case "weekly":
-		r.DayOfMonth = nil
-		r.WeekOfMonth = nil
+		// nothing extra
 	case "monthly":
 		r.DaysOfWeek = nil
-	case "custom":
-	default:
 	}
 
-	if (r.Pattern == "weekly" || r.Pattern == "custom") &&
-		len(r.DaysOfWeek) == 0 && len(d.Schedules) > 0 {
+	if r.Frequency == "weekly" && len(r.DaysOfWeek) == 0 && len(d.Schedules) > 0 {
 		if t, err := time.Parse("2006-01-02", d.Schedules[0].StartDate); err == nil {
 			if day := weekdayName(t.Weekday()); day != "" {
 				r.DaysOfWeek = []string{day}
@@ -534,9 +504,9 @@ func correctRecurrence(d *GeneratedEventDraft, cctx correctionContext) []string 
 		}
 	}
 
-	if r.EndsOn == nil && r.Occurrences == nil {
+	if r.EndDate == nil && r.Count == nil {
 		warnings = append(warnings,
-			"Recurrence has no end condition (ends_on and occurrences both null); will be retried.")
+			"Recurrence has no end condition (end_date and count both null); will be retried.")
 	}
 
 	return warnings
@@ -684,9 +654,6 @@ func normalizeTags(in []string) []string {
 	return out
 }
 
-// namesPlatform reports whether a virtual location string names a
-// specific platform. Such strings are replaced with "Virtual" so
-// the downstream video integration can pick the platform.
 func namesPlatform(loc string) bool {
 	l := strings.ToLower(loc)
 	for _, p := range []string{"zoom", "meet", "teams", "webex", "jitsi"} {
@@ -818,4 +785,86 @@ func truncateAt(s string, n int) string {
 		return cut[:idx]
 	}
 	return cut
+}
+
+// schedulesMatchRecurrence reports whether the given schedules follow
+// the cadence described by the recurrence rule. This is used to decide
+// whether to keep the recurrence (as SHAPE B) or fall back to series.
+//
+// The check is intentionally lenient — we just verify:
+//   1. Schedules are sorted by date
+//   2. The gap between consecutive schedules matches the interval
+//   3. All schedules fall on days listed in DaysOfWeek (for weekly)
+//
+// If the AI's schedules violate any of these, we assume the AI is
+// describing a series (arbitrary dates) rather than a recurrence.
+func schedulesMatchRecurrence(
+	schedules []GeneratedSchedule,
+	rule *GeneratedRecurrence,
+) bool {
+	if len(schedules) < 2 || rule == nil {
+		return true // nothing to validate
+	}
+
+	// Parse all start dates.
+	dates := make([]time.Time, 0, len(schedules))
+	for _, s := range schedules {
+		t, err := time.Parse("2006-01-02", s.StartDate)
+		if err != nil {
+			return false
+		}
+		dates = append(dates, t)
+	}
+
+	// Check ordering.
+	for i := 1; i < len(dates); i++ {
+		if !dates[i].After(dates[i-1]) {
+			return false
+		}
+	}
+
+	switch rule.Frequency {
+	case "daily":
+		// Gap must equal Interval days.
+		expected := time.Duration(rule.Interval) * 24 * time.Hour
+		for i := 1; i < len(dates); i++ {
+			if dates[i].Sub(dates[i-1]) != expected {
+				return false
+			}
+		}
+
+	case "weekly":
+		// Gap between same-weekday dates must be 7×Interval days.
+		// We allow multiple weekdays per week (e.g., "Mon + Thu"), so
+		// we check that every date's weekday is in DaysOfWeek.
+		allowed := make(map[time.Weekday]bool, len(rule.DaysOfWeek))
+		for _, day := range rule.DaysOfWeek {
+			if wd := parseWeekdayName(day); wd >= 0 {
+				allowed[wd] = true
+			}
+		}
+		if len(allowed) == 0 {
+			return false
+		}
+		for _, d := range dates {
+			if !allowed[d.Weekday()] {
+				return false
+			}
+		}
+
+	case "monthly":
+		// Gap between consecutive dates must be Interval months.
+		for i := 1; i < len(dates); i++ {
+			monthsDiff := (dates[i].Year()-dates[i-1].Year())*12 +
+				int(dates[i].Month()-dates[i-1].Month())
+			if monthsDiff != rule.Interval {
+				return false
+			}
+		}
+
+	default:
+		return false
+	}
+
+	return true
 }

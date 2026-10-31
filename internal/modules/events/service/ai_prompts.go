@@ -71,19 +71,97 @@ SHAPE C — SERIES (distinct sessions)
 STEP 2 — SHAPE DECISION RULES
 ================================================================
 
-- More than one specific calendar date in the prompt -> SERIES,
-  UNLESS the dates follow a fixed cadence ("every Monday").
-- Cadence words ("every X", "weekly", "monthly", "for N weeks")
-  -> RECURRING, even if the prompt names multiple dates.
-- A list of arbitrary dates with no cadence -> SERIES.
-- Do NOT invent a recurrence pattern to cover arbitrary dates.
-  Recurrence is for rhythms; a list of dates is a series.
-- If the user message supplies a recurrence block (toggle was on),
-  that block is authoritative: SHAPE B, echo the values exactly,
-  return exactly 1 schedule.
-- When in doubt between RECURRING and SERIES: if the dates follow a
-  fixed cadence, choose RECURRING; if arbitrary, choose SERIES.
+Read the prompt carefully. The FIRST thing you decide is the shape.
 
+**RECURRING signals (SHAPE B) — look for these first:**
+- "every [day]" — "every Monday", "every Friday"
+- "weekly", "monthly", "daily", "bi-weekly"
+- "every other [day]"
+- "for N weeks/months/days" — this is a COUNT of recurrences, not a series
+- "each [day/week/month]"
+- "once a week"
+- "twice a week"
+- Any cadence word PLUS a count or end date
+
+**SERIES signals (SHAPE C) — distinct calendar dates:**
+- Explicit dates listed: "on Dec 5, 6, and 7"
+- Different topics per session: "Day 1 covers X, Day 2 covers Y, Day 3 covers Z"
+- Different formats per session: "Day 1 is virtual, Day 2 is in-person"
+- Multiple dates that do NOT follow a fixed cadence
+- Numbered sessions with distinct content: "Session 1: intro, Session 2: advanced"
+
+**ONE-OFF signals (SHAPE A):**
+- Exactly one date mentioned
+- No cadence words, no list of dates
+
+================================================================
+CRITICAL DECISION EXAMPLES
+================================================================
+
+Read these carefully. They are the exact patterns you must get right.
+
+Example A: "A weekly data science class every Tuesday evening for 6 weeks, starting in mid-November 2026."
+→ SHAPE B (RECURRING)
+→ Why: "weekly" + "every Tuesday" + "for 6 weeks"
+→ Output: 1 schedule + recurrence { frequency: "weekly", interval: 1, days_of_week: ["tuesday"], count: 6 }
+→ Do NOT output 6 schedules. "For 6 weeks" is the COUNT, not the schedule list.
+
+Example B: "A 3-day bootcamp on December 5, 6, and 7. Day 1: Docker, Day 2: Kubernetes, Day 3: CI/CD."
+→ SHAPE C (SERIES)
+→ Why: Three explicit dates + three distinct topics
+→ Output: 3 schedules, is_recurring: false, recurrence: null
+→ Do NOT output a recurrence rule. The dates are arbitrary, not a cadence.
+
+Example C: "A monthly board meeting for 3 months."
+→ SHAPE B (RECURRING)
+→ Why: "monthly" + "for 3 months"
+→ Output: 1 schedule + recurrence { frequency: "monthly", interval: 1, count: 3 }
+→ Do NOT output 3 schedules.
+
+Example D: "A workshop on November 15."
+→ SHAPE A (ONE-OFF)
+→ Why: One date, no cadence
+→ Output: 1 schedule, is_recurring: false, recurrence: null
+
+Example E: "Weekly Python class every Monday at 6 PM until December 15, 2026."
+→ SHAPE B (RECURRING)
+→ Why: "Weekly" + "every Monday" + "until [date]"
+→ Output: 1 schedule + recurrence { frequency: "weekly", interval: 1, days_of_week: ["monday"], end_date: "2026-12-15" }
+→ Do NOT output a list of every Monday between now and December 15.
+
+Example F: "A 6-week Python bootcamp starting November 10."
+→ SHAPE B (RECURRING)
+→ Why: "6-week" + "starting [date]" implies weekly cadence
+→ Output: 1 schedule + recurrence { frequency: "weekly", interval: 1, days_of_week: [weekday of Nov 10], count: 6 }
+→ Do NOT output 6 explicit schedules.
+
+================================================================
+THE ONE NON-NEGOTIABLE RULE
+================================================================
+
+If the prompt contains a cadence word ("weekly", "monthly", "daily", "every X") AND a count or end date, the output MUST be SHAPE B (recurrence), never SHAPE C (series).
+
+"Series" means the dates are arbitrary and each session is distinct.
+"Recurrence" means the sessions are interchangeable repetitions on a fixed rhythm.
+
+================================================================
+IF THE USER SUPPLIED A RECURRENCE BLOCK
+================================================================
+
+If the user message includes a recurrence block (toggle was on), that block is authoritative:
+- Force SHAPE B
+- Echo the recurrence values exactly (do not modify interval, days_of_week, count, or end_date)
+- Return exactly 1 schedule
+
+================================================================
+WHEN IN DOUBT
+================================================================
+
+Between RECURRING and SERIES, ask yourself: "Are the sessions interchangeable?"
+- Yes (same content, different dates) → RECURRING
+- No (different content per session) → SERIES
+
+================================================================
 ================================================================
 STEP 3 — RETURN THIS JSON
 ================================================================
@@ -131,13 +209,11 @@ Ticket:
 
 Recurrence:
 {
-  "pattern":       "daily" | "weekly" | "monthly" | "custom",
-  "interval":      number,
-  "days_of_week":  [string],
-  "day_of_month":  number | null,
-  "week_of_month": "first" | "second" | "third" | "fourth" | "last" | null,
-  "ends_on":       "YYYY-MM-DD" | null,
-  "occurrences":   number | null
+  "frequency":    "daily" | "weekly" | "monthly",
+  "interval":     number,
+  "days_of_week": [string],
+  "end_date":     "YYYY-MM-DD" | null,
+  "count":        number | null
 }
 
 ================================================================
@@ -166,25 +242,20 @@ SCHEDULES
   in-person sessions.
 
 RECURRENCE (only when is_recurring = true)
-- pattern MUST be one of: daily, weekly, monthly, custom.
+- frequency MUST be one of: daily, weekly, monthly.
 - "every N days" -> daily, interval N.
-- "every other Friday" -> weekly, interval 2, days_of_week
-  ["friday"].
+- "every other Friday" -> weekly, interval 2, days_of_week ["friday"].
 - "twice a week" -> weekly, two weekdays.
 - "every Monday" -> weekly, interval 1, days_of_week ["monday"].
-- Never use pattern "custom" unless the prompt genuinely mixes
-  patterns. Prefer the closest daily/weekly/monthly.
 - Weekdays MUST be full lowercase names: "monday", "tuesday",
   "wednesday", "thursday", "friday", "saturday", "sunday".
-- When pattern is weekly, the canonical schedule's start_date MUST
+- When frequency is weekly, the canonical schedule's start_date MUST
   already fall on one of the days in days_of_week. Choose the
   earliest such date on or after today.
-- When pattern is monthly, set EXACTLY ONE of day_of_month or
-  week_of_month.
-- At least one of ends_on or occurrences MUST be set when
+- At least one of end_date or count MUST be set when
   is_recurring = true. Derive it from the prompt. If the prompt
-  says "for 6 weeks", occurrences = 6. If it says "until December
-  15", ends_on = that date.
+  says "for 6 weeks", count = 6. If it says "until December 15",
+  end_date = that date.
 - When is_recurring = false, recurrence MUST be null.
 
 TICKETS
@@ -268,7 +339,7 @@ func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string 
 	if req.Recurrence != nil {
 		b.WriteString("The user supplied an explicit recurrence (SHAPE B).\n")
 		b.WriteString("Set is_recurring = true, return EXACTLY 1 schedule, and echo these values unchanged:\n")
-		b.WriteString("    pattern:       " + req.Recurrence.Pattern + "\n")
+		b.WriteString("    frequency:     " + req.Recurrence.Frequency + "\n")
 		if req.Recurrence.Interval > 0 {
 			b.WriteString(fmt.Sprintf("    interval:      %d\n", req.Recurrence.Interval))
 		}
@@ -278,21 +349,13 @@ func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string 
 				strings.Join(req.Recurrence.DaysOfWeek, ", "),
 			))
 		}
-		if req.Recurrence.DayOfMonth != nil {
+		if req.Recurrence.EndDate != nil && *req.Recurrence.EndDate != "" {
 			b.WriteString(fmt.Sprintf(
-				"    day_of_month:  %d\n", *req.Recurrence.DayOfMonth))
+				"    end_date:      %s\n", *req.Recurrence.EndDate))
 		}
-		if req.Recurrence.WeekOfMonth != nil && *req.Recurrence.WeekOfMonth != "" {
+		if req.Recurrence.Count != nil {
 			b.WriteString(fmt.Sprintf(
-				"    week_of_month: %s\n", *req.Recurrence.WeekOfMonth))
-		}
-		if req.Recurrence.EndsOn != nil && *req.Recurrence.EndsOn != "" {
-			b.WriteString(fmt.Sprintf(
-				"    ends_on:       %s\n", *req.Recurrence.EndsOn))
-		}
-		if req.Recurrence.Occurrences != nil {
-			b.WriteString(fmt.Sprintf(
-				"    occurrences:   %d\n", *req.Recurrence.Occurrences))
+				"    count:         %d\n", *req.Recurrence.Count))
 		}
 		b.WriteString("\n")
 	} else {
@@ -361,7 +424,7 @@ func buildFixPrompt(
 	if strings.Contains(lower, "recurrence") || strings.Contains(lower, "weekday") {
 		b.WriteString("\nRe-read the SHAPE rules. Multiple specific dates are SHAPE C (series,")
 		b.WriteString(" is_recurring=false, multiple schedules). Cadence words are SHAPE B.")
-		b.WriteString(" Recurrence needs ends_on or occurrences.\n")
+		b.WriteString(" Recurrence needs end_date or count.\n")
 	}
 	if strings.Contains(lower, "schedule") {
 		b.WriteString("\nRe-read the SHAPE decision. Honour the contract for the chosen shape.\n")

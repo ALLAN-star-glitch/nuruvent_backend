@@ -131,26 +131,17 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 	}
 
 	// Set Recurrence
-	if event.IsRecurring {
+	if event.IsRecurring && event.RecurrenceRule != nil {
 		recurrence := &RecurrenceDTO{
-			Interval:    event.RecurrenceInterval,
-			DaysOfWeek:  event.RecurrenceDaysOfWeek,
-			Occurrences: 0,
+			Frequency:  event.RecurrenceRule.Frequency,
+			Interval:   event.RecurrenceRule.Interval,
+			DaysOfWeek: event.RecurrenceRule.DaysOfWeek,
 		}
-		if event.RecurrencePatternID != nil {
-			recurrence.Pattern = event.RecurrencePatternSlug
+		if !event.RecurrenceRule.EndDate.IsZero() {
+			recurrence.EndDate = event.RecurrenceRule.EndDate.Format("2006-01-02")
 		}
-		if event.RecurrenceDayOfMonth != nil {
-			recurrence.DayOfMonth = *event.RecurrenceDayOfMonth
-		}
-		if event.RecurrenceWeekOfMonth != nil {
-			recurrence.WeekOfMonth = *event.RecurrenceWeekOfMonth
-		}
-		if event.RecurrenceEndsOn != nil {
-			recurrence.EndsOn = event.RecurrenceEndsOn.Format("2006-01-02")
-		}
-		if event.RecurrenceOccurrences != nil {
-			recurrence.Occurrences = *event.RecurrenceOccurrences
+		if event.RecurrenceRule.Count != nil {
+			recurrence.Count = *event.RecurrenceRule.Count
 		}
 		resp.Recurrence = recurrence
 	}

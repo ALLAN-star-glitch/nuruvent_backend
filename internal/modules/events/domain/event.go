@@ -3,6 +3,7 @@ package domain
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -21,6 +22,21 @@ const (
 	// VisibilityUnlisted - Anyone with the direct link can view
 	VisibilityUnlisted Visibility = "unlisted"
 )
+
+// ============================================================
+// RECURRENCE VALUE OBJECT
+// ============================================================
+
+// RecurrenceRule defines how an event's schedules should be
+// generated. It is a generation rule, not persistent state; once
+// schedules exist, this rule is only used for edits.
+type RecurrenceRule struct {
+	Frequency  string    // "daily", "weekly", "monthly"
+	Interval   int       // every N units (e.g., every 2 weeks)
+	DaysOfWeek []string  // for weekly recurrence: ["monday", "wednesday"]
+	EndDate    time.Time // hard stop for generation
+	Count      *int      // optional: stop after N occurrences
+}
 
 // ============================================================
 // EVENT - Aggregate Root
@@ -67,21 +83,14 @@ type Event struct {
 	// ============================================================
 	StartDate   time.Time
 	EndDate     *time.Time
-	Date        time.Time   // ← new: derived, date portion of StartDate
-	Time        string      // ← new: derived, "HH:MM:SS" of first schedule
-	Duration    int         // ← new: derived, sum of session durations in minutes
+	Date        time.Time   // ← derived, date portion of first schedule
+	Time        string      // ← derived, "HH:MM:SS" of first schedule
+	Duration    int         // ← derived, sum of session durations in minutes
 	IsMultiDay  bool
-	IsRecurring bool
+	IsRecurring bool // ← derived: true if RecurrenceRule is set
 
 	// Recurrence
-	RecurrencePatternID   *string
-	RecurrenceInterval    int
-	RecurrencePatternSlug string
-	RecurrenceEndsOn      *time.Time
-	RecurrenceOccurrences *int
-	RecurrenceDaysOfWeek  []string
-	RecurrenceDayOfMonth  *int
-	RecurrenceWeekOfMonth *string
+	RecurrenceRule *RecurrenceRule // ← replaces the 9 flat fields
 
 	// Venue
 	VenueName          string
@@ -235,31 +244,19 @@ type EventSchedule struct {
 
 	// Platform is the video provider chosen for this schedule.
 	// One of "zoom", "google_meet", or "" when not yet chosen.
-	//
-	// Populated by the frontend when the host selects a provider,
-	// and written back by the video integration service after a
-	// meeting is auto-created. Used in preference to URL-shape
-	// inference so that subsequent updates route to the correct
-	// provider even after the join URL has been persisted.
 	Platform string
 
 	ZoomLink string
 	MeetLink string
 
 	// VideoMeetingID is the Nuruvent UUID of the auto-created
-    // meeting for this schedule. Points at video_meetings.id.
-    //
-    // Nil for manual links, in-person schedules, and legacy rows
-    // that predate this column's correct semantics.
-    VideoMeetingID *string
+	// meeting for this schedule. Points at video_meetings.id.
+	VideoMeetingID *string
 
-    // VideoMeetingExternalID is the platform-side identifier for the
-    // meeting — "spaces/ot0nSSlGgp4B" for Google Meet, the numeric
-    // meeting ID for Zoom. Matches video_meetings.external_id.
-    //
-    // Populated at creation time. Attendance sync reads this directly
-    // so it never has to re-parse the join URL.
-    VideoMeetingExternalID string
+	// VideoMeetingExternalID is the platform-side identifier for the
+	// meeting — "spaces/ot0nSSlGgp4B" for Google Meet, the numeric
+	// meeting ID for Zoom. Matches video_meetings.external_id.
+	VideoMeetingExternalID string
 
 	MaxAttendees *int
 }
@@ -424,6 +421,114 @@ func NewEvent(
 }
 
 // ============================================================
+// RECURRENCE LOGIC
+// ============================================================
+
+// ExpandRecurrence generates a slice of time.Time dates based on
+// the rule. It's a pure function — no I/O, fully unit-testable.
+func (e *Event) ExpandRecurrence(startDate time.Time) ([]time.Time, error) {
+	if e.RecurrenceRule == nil {
+		return []time.Time{startDate}, nil
+	}
+
+	rule := e.RecurrenceRule
+	if rule.Interval < 1 {
+		rule.Interval = 1
+	}
+
+	var dates []time.Time
+	current := startDate
+	count := 0
+	maxCount := 0
+	if rule.Count != nil {
+		maxCount = *rule.Count
+	}
+
+	for {
+		// Stop conditions
+		if !rule.EndDate.IsZero() && current.After(rule.EndDate) {
+			break
+		}
+		if maxCount > 0 && count >= maxCount {
+			break
+		}
+		if count > 1000 {
+			// Safety valve: prevent runaway generation
+			return nil, fmt.Errorf("recurrence generated too many occurrences; check the rule")
+		}
+
+		// Add current date if it matches
+		switch rule.Frequency {
+		case "daily":
+			dates = append(dates, current)
+			current = current.AddDate(0, 0, rule.Interval)
+		case "weekly":
+			// For weekly, add dates for each specified day of week
+			for _, day := range rule.DaysOfWeek {
+				daysAhead := daysUntil(current.Weekday(), day)
+				occurrence := current.AddDate(0, 0, daysAhead)
+				if !rule.EndDate.IsZero() && occurrence.After(rule.EndDate) {
+					continue
+				}
+				if maxCount > 0 && count >= maxCount {
+					break
+				}
+				dates = append(dates, occurrence)
+				count++
+			}
+			current = current.AddDate(0, 0, 7*rule.Interval)
+		case "monthly":
+			dates = append(dates, current)
+			current = current.AddDate(0, rule.Interval, 0)
+		default:
+			return nil, fmt.Errorf("unknown recurrence frequency: %s", rule.Frequency)
+		}
+
+		// Increment count for daily/monthly (weekly increments per-day above)
+		if rule.Frequency != "weekly" {
+			count++
+		}
+	}
+
+	if len(dates) == 0 {
+		return nil, fmt.Errorf("recurrence rule generated no dates")
+	}
+
+	return dates, nil
+}
+
+// daysUntil returns the number of days from currentWeekday to targetWeekday
+func daysUntil(currentWeekday time.Weekday, targetDay string) int {
+	target := parseWeekday(targetDay)
+	if target < 0 {
+		return 0
+	}
+	diff := (target - int(currentWeekday) + 7) % 7
+	return diff
+}
+
+func parseWeekday(s string) int {
+	switch strings.ToLower(s) {
+	case "sunday":
+		return 0
+	case "monday":
+		return 1
+	case "tuesday":
+		return 2
+	case "wednesday":
+		return 3
+	case "thursday":
+		return 4
+	case "friday":
+		return 5
+	case "saturday":
+		return 6
+	default:
+		return -1
+	}
+}
+
+// ============================================================
 // VALIDATION METHODS
 // ============================================================
 
@@ -463,38 +568,22 @@ func (e *Event) ValidateForPublish() error {
 	// ============================================================
 	// 3. SCHEDULE CHECKS
 	// ============================================================
-	if len(e.Schedules) == 0 {
-		validationErrors = append(validationErrors, "at least one schedule is required for published events")
-	} else {
-		for i, schedule := range e.Schedules {
-			if schedule.StartDate.IsZero() {
-				validationErrors = append(validationErrors, fmt.Sprintf("schedule %d: start date is required", i+1))
-			}
-			if schedule.StartTime == "" {
-				validationErrors = append(validationErrors, fmt.Sprintf("schedule %d: start time is required", i+1))
-			}
-			if schedule.EndTime == "" {
-				validationErrors = append(validationErrors, fmt.Sprintf("schedule %d: end time is required", i+1))
-			}
-
-			// Virtual schedules require either a manual link or an
-			// explicit platform so the video integration knows which
-			// provider to call. A manual link means the host pasted
-			// the URL themselves; an explicit platform means Nuruvent
-			// will create the meeting.
-			if schedule.IsVirtual {
-				hasManualLink := schedule.ZoomLink != "" || schedule.MeetLink != ""
-
-				if !hasManualLink && schedule.Platform == "" {
-					validationErrors = append(validationErrors,
-						fmt.Sprintf("schedule %d: choose a video platform (zoom or google_meet) for virtual sessions", i+1))
-				}
-
-				if schedule.Platform != "" && !IsValidVideoPlatform(schedule.Platform) {
-					validationErrors = append(validationErrors,
-						fmt.Sprintf("schedule %d: unsupported platform %q", i+1, schedule.Platform))
-				}
-			}
+	if len(e.Schedules) == 0 && e.RecurrenceRule == nil {
+		validationErrors = append(validationErrors, "at least one schedule or a recurrence rule is required for published events")
+	} else if e.RecurrenceRule != nil {
+		// Validate the rule
+		rule := e.RecurrenceRule
+		if rule.Frequency != "daily" && rule.Frequency != "weekly" && rule.Frequency != "monthly" {
+			validationErrors = append(validationErrors, "recurrence frequency must be daily, weekly, or monthly")
+		}
+		if rule.Interval < 1 {
+			validationErrors = append(validationErrors, "recurrence interval must be >= 1")
+		}
+		if rule.Frequency == "weekly" && len(rule.DaysOfWeek) == 0 {
+			validationErrors = append(validationErrors, "recurrence rule for weekly events must specify at least one day of week")
+		}
+		if rule.EndDate.IsZero() && rule.Count == nil {
+			validationErrors = append(validationErrors, "recurrence rule must have an end date or count")
 		}
 	}
 
@@ -513,11 +602,25 @@ func (e *Event) ValidateForPublish() error {
 		}
 	}
 
-	hasMeetingLink := hasEventLevelLink || hasScheduleLevelLink
+		hasMeetingLink := hasEventLevelLink || hasScheduleLevelLink
 
-	if e.IsVirtual && !hasMeetingLink {
+	// A virtual event needs either:
+	//   - a manual meeting link (zoom_link or meet_link), OR
+	//   - a platform selection on at least one schedule (the video
+	//     module will provision the meeting), OR
+	//   - a recurrence rule (schedules will be generated, each with
+	//     a platform choice that gets provisioned).
+	hasPlatformSelection := false
+	for _, schedule := range e.Schedules {
+		if schedule.Platform != "" {
+			hasPlatformSelection = true
+			break
+		}
+	}
+
+	if e.IsVirtual && !hasMeetingLink && !hasPlatformSelection && e.RecurrenceRule == nil {
 		validationErrors = append(validationErrors,
-			"meeting link is required for virtual events. Provide zoom_link or meet_link at event level or in at least one schedule")
+			"meeting link or platform is required for virtual events. Provide zoom_link, meet_link, or select a platform (zoom/google_meet) on at least one schedule")
 	}
 
 	if !e.IsVirtual && !e.IsHybrid && e.InPersonLocation == "" {
@@ -589,32 +692,7 @@ func (e *Event) ValidateForPublish() error {
 	}
 
 	// ============================================================
-	// 9. RECURRENCE CHECKS
-	// ============================================================
-	if e.IsRecurring {
-		if e.RecurrencePatternID == nil || *e.RecurrencePatternID == "" {
-			validationErrors = append(validationErrors, "recurrence pattern is required for recurring events")
-		}
-
-		// Compare on the SLUG, not the ID (which is a UUID).
-		switch e.RecurrencePatternSlug {
-		case "weekly":
-			if len(e.RecurrenceDaysOfWeek) == 0 {
-				validationErrors = append(validationErrors, "days of week are required for weekly recurrence")
-			}
-		case "monthly":
-			if e.RecurrenceDayOfMonth == nil && e.RecurrenceWeekOfMonth == nil {
-				validationErrors = append(validationErrors, "day of month or week of month is required for monthly recurrence")
-			}
-		}
-
-		if e.RecurrenceEndsOn == nil && e.RecurrenceOccurrences == nil {
-			validationErrors = append(validationErrors, "recurrence must have an end date or number of occurrences")
-		}
-	}
-
-	// ============================================================
-	// 10. ACCESS & PRIVACY CHECKS
+	// 9. ACCESS & PRIVACY CHECKS
 	// ============================================================
 	if e.Visibility == "" {
 		validationErrors = append(validationErrors, "visibility is required (public, private, unlisted)")
@@ -624,7 +702,7 @@ func (e *Event) ValidateForPublish() error {
 	}
 
 	// ============================================================
-	// 11. RETURN ERRORS
+	// 10. RETURN ERRORS
 	// ============================================================
 	if len(validationErrors) > 0 {
 		return fmt.Errorf("validation failed: %s", strings.Join(validationErrors, "; "))
@@ -806,6 +884,7 @@ func (e *Event) RemoveTicket(ticketID string) {
 
 func (e *Event) AddSchedule(schedule EventSchedule) {
 	e.Schedules = append(e.Schedules, schedule)
+	e.RecalculateDates()
 	e.UpdatedAt = time.Now()
 }
 
@@ -813,9 +892,37 @@ func (e *Event) RemoveSchedule(scheduleID string) {
 	for i, s := range e.Schedules {
 		if s.ID == scheduleID {
 			e.Schedules = append(e.Schedules[:i], e.Schedules[i+1:]...)
+			e.RecalculateDates()
 			e.UpdatedAt = time.Now()
 			return
 		}
+	}
+}
+
+// RecalculateDates derives StartDate, EndDate, and Date from the
+// current Schedules slice. Must be called after Add, Remove, or
+// bulk regeneration.
+func (e *Event) RecalculateDates() {
+	if len(e.Schedules) == 0 {
+		return
+	}
+
+	// Sort by start date
+	sort.Slice(e.Schedules, func(i, j int) bool {
+		return e.Schedules[i].StartDate.Before(e.Schedules[j].StartDate)
+	})
+
+	e.StartDate = e.Schedules[0].StartDate
+	e.Date = time.Date(
+		e.StartDate.Year(), e.StartDate.Month(), e.StartDate.Day(),
+		0, 0, 0, 0, e.StartDate.Location(),
+	)
+
+	last := e.Schedules[len(e.Schedules)-1].StartDate
+	if last.After(e.StartDate) {
+		e.EndDate = &last
+	} else {
+		e.EndDate = nil
 	}
 }
 

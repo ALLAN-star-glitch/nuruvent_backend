@@ -137,10 +137,8 @@ func (s *eventService) attemptGenerate(
 
 	var parsed GeneratedEventDraft
 	if err := json.Unmarshal([]byte(cleaned), &parsed); err != nil {
-		// Parse failures are now retryable: return as a validation
-		// error so the caller can retry with the fix prompt, rather
-		// than a fatal 502. If the retry also fails to parse, the
-		// caller surfaces a structured error.
+		// Parse failures are retryable: return as a validation error
+		// so the caller can retry with the fix prompt.
 		return nil, nil, []string{fmt.Sprintf(
 			"response was not valid JSON: %v", err)}, nil
 	}
@@ -290,10 +288,10 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 		if d.Recurrence == nil {
 			errs = append(errs, "is_recurring is true but recurrence block is missing")
 		} else {
-			switch d.Recurrence.Pattern {
-			case "weekly", "custom":
+			switch d.Recurrence.Frequency {
+			case "weekly":
 				if len(d.Recurrence.DaysOfWeek) == 0 {
-					errs = append(errs, "weekly/custom recurrence requires days_of_week")
+					errs = append(errs, "weekly recurrence requires days_of_week")
 				}
 				for _, day := range d.Recurrence.DaysOfWeek {
 					if !isValidFullWeekday(day) {
@@ -301,21 +299,18 @@ func (s *eventService) checkPublishReadiness(d *GeneratedEventDraft) []string {
 							"invalid weekday %q — use full lowercase name", day))
 					}
 				}
-			case "monthly":
-				hasDay := d.Recurrence.DayOfMonth != nil
-				hasWeek := d.Recurrence.WeekOfMonth != nil && *d.Recurrence.WeekOfMonth != ""
-				if !hasDay && !hasWeek {
-					errs = append(errs, "monthly recurrence requires day_of_month or week_of_month")
-				}
 			case "daily":
+				// no additional fields required
+			case "monthly":
+				// monthly requires only interval and (end_date|count)
 			default:
 				errs = append(errs, fmt.Sprintf(
-					"invalid recurrence pattern %q", d.Recurrence.Pattern))
+					"invalid recurrence frequency %q", d.Recurrence.Frequency))
 			}
 
-			if d.Recurrence.EndsOn == nil && d.Recurrence.Occurrences == nil {
+			if d.Recurrence.EndDate == nil && d.Recurrence.Count == nil {
 				errs = append(errs,
-					"recurrence requires ends_on or occurrences — derive it from the prompt")
+					"recurrence requires end_date or count — derive it from the prompt")
 			}
 		}
 	} else if d.Recurrence != nil {
@@ -379,8 +374,6 @@ func applyRequestDefaults(req GenerateEventDraftRequest) GenerateEventDraftReque
 	if req.MaxCapacity == 0 {
 		req.MaxCapacity = 5000
 	}
-	// v9: do NOT silently truncate ticket type IDs here. Validation
-	// below rejects > 10 explicitly.
 	return req
 }
 

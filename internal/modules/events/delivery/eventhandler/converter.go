@@ -266,18 +266,17 @@ func convertMaterialRequestsToInputs(reqs []MaterialRequest) []service.MaterialI
 	return inputs
 }
 
+
 func convertRecurrenceRequestToInput(req *RecurrenceRequest) *service.RecurrenceInput {
 	if req == nil {
 		return nil
 	}
 	return &service.RecurrenceInput{
-		Pattern:     req.Pattern,
-		Interval:    req.Interval,
-		DaysOfWeek:  req.DaysOfWeek,
-		DayOfMonth:  req.DayOfMonth,
-		WeekOfMonth: stringPtr(req.WeekOfMonth),
-		EndsOn:      stringPtr(req.EndsOn),
-		Occurrences: req.Occurrences,
+		Frequency:  req.Frequency,
+		Interval:   req.Interval,
+		DaysOfWeek: req.DaysOfWeek,
+		EndDate:    stringPtr(req.EndDate),
+		Count:      req.Count,
 	}
 }
 

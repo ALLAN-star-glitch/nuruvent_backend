@@ -559,3 +559,14 @@ func NewCertificateRenderQueueAdapter(
 ) certificateDomain.RenderJobQueue {
 	return certificateadapters.NewRenderQueueAdapter(client)
 }
+
+// NewEventsQueueAdapter bridges the notification module's TaskQueue
+// port to the events module's local TaskQueue port.
+//
+// The events service uses this to enqueue background tasks like
+// video provisioning without importing the notification module.
+func NewEventsQueueAdapter(
+	q notificationDomain.TaskQueue,
+) eventsDomain.TaskQueue {
+	return events.NewQueueAdapter(q)
+}

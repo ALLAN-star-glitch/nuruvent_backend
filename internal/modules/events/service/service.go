@@ -130,6 +130,12 @@ type Service interface {
 	ListEventIDsByTeam(ctx context.Context, userID, teamID string) ([]string, error)
 
 
+	ListEventIDsWithUnprovisionedSchedules(
+		ctx context.Context,
+		withinDays int,
+	) ([]string, error)
+
+
 		// ResolveEventAccount returns the account UUID that owns the event's
 	// team.
 	//
@@ -486,13 +492,11 @@ type ScheduleInput struct {
 }
 
 type RecurrenceInput struct {
-	Pattern     string
-	Interval    int
-	DaysOfWeek  []string
-	DayOfMonth  *int
-	WeekOfMonth *string
-	EndsOn      *string
-	Occurrences *int
+	Frequency  string   // "daily", "weekly", "monthly"
+	Interval   int
+	DaysOfWeek []string
+	EndDate    *string  // ISO8601 string
+	Count      *int     // optional override for occurrences
 }
 
 type TicketInput struct {

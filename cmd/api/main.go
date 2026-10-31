@@ -67,7 +67,11 @@ func main() {
 	application.SetupRoutes()
 
 	// 5. Start embedded Asynq worker
-	stopWorker := worker.StartEmbeddedWorker(cfg, application.CertificateService)
+		stopWorker := worker.StartEmbeddedWorker(
+		cfg,
+		application.CertificateService,
+		application.EventsService, 
+	)
 	defer stopWorker()
 
 	// 6. Start the Google Meet attendance poller.

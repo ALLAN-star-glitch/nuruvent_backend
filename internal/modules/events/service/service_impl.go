@@ -10,19 +10,20 @@ import (
 )
 
 type eventService struct {
-	repo           domain.Repository
-	permChecker    domain.PermissionChecker
-	mediaSvc       domain.MediaService
-	userInfo       domain.UserInfoProvider
-	validator      *validation.Validator
-	organizer      domain.OrganizerProvider
-	aiSvc          AIService
-	attendance     domain.AttendanceRegistrar
-	video          domain.VideoMeetingCreator
-	videoIdentity  domain.VideoIdentityProvider
-	teamMembership domain.TeamMembershipChecker
-	certIssuer     domain.CertificateIssuer 
-	attendanceReader  domain.AttendanceReader
+	repo             domain.Repository
+	permChecker      domain.PermissionChecker
+	mediaSvc         domain.MediaService
+	userInfo         domain.UserInfoProvider
+	validator        *validation.Validator
+	organizer        domain.OrganizerProvider
+	aiSvc            AIService
+	attendance       domain.AttendanceRegistrar
+	video            domain.VideoMeetingCreator
+	videoIdentity    domain.VideoIdentityProvider
+	teamMembership   domain.TeamMembershipChecker
+	certIssuer       domain.CertificateIssuer
+	attendanceReader domain.AttendanceReader
+	queue            domain.TaskQueue // ← NEW
 }
 
 func NewService(
@@ -36,23 +37,25 @@ func NewService(
 	video domain.VideoMeetingCreator,
 	videoIdentity domain.VideoIdentityProvider,
 	teamMembership domain.TeamMembershipChecker,
-	certIssuer domain.CertificateIssuer, 
+	certIssuer domain.CertificateIssuer,
 	attendanceReader domain.AttendanceReader,
+	queue domain.TaskQueue, // ← NEW
 ) Service {
 	return &eventService{
-		repo:           repo,
-		permChecker:    permChecker,
-		mediaSvc:       mediaSvc,
-		userInfo:       userInfo,
-		validator:      validation.New(),
-		organizer:      organizerProvider,
-		aiSvc:          aiSvc,
-		attendance:     attendance,
-		video:          video,
-		videoIdentity:  videoIdentity,
-		teamMembership: teamMembership,
-		certIssuer:     certIssuer, 
+		repo:             repo,
+		permChecker:      permChecker,
+		mediaSvc:         mediaSvc,
+		userInfo:         userInfo,
+		validator:        validation.New(),
+		organizer:        organizerProvider,
+		aiSvc:            aiSvc,
+		attendance:       attendance,
+		video:            video,
+		videoIdentity:    videoIdentity,
+		teamMembership:   teamMembership,
+		certIssuer:       certIssuer,
 		attendanceReader: attendanceReader,
+		queue:            queue, // ← NEW
 	}
 }
 
@@ -62,4 +65,12 @@ func NewService(
 
 func (s *eventService) GetCategories(ctx context.Context) ([]*domain.Category, error) {
 	return s.repo.GetAllCategories(ctx)
+}
+
+
+func (s *eventService) ListEventIDsWithUnprovisionedSchedules(
+	ctx context.Context,
+	withinDays int,
+) ([]string, error) {
+	return s.repo.ListEventIDsWithUnprovisionedSchedules(ctx, withinDays)
 }
