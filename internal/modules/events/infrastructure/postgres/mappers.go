@@ -75,6 +75,14 @@ func fromJSONBToMapInterface(j JSONB) map[string]interface{} {
 // ============================================================
 
 // toModelEvent converts domain.Event to EventModel
+// Only the changed sections are shown. Everything else in mappers.go
+// stays exactly as you had it.
+
+// ============================================================
+// DOMAIN ENTITY → DATABASE MODEL MAPPERS
+// ============================================================
+
+// toModelEvent converts domain.Event to EventModel
 func toModelEvent(event *domain.Event) *EventModel {
 	if event == nil {
 		return nil
@@ -103,6 +111,13 @@ func toModelEvent(event *domain.Event) *EventModel {
 		datePtr = &d
 	}
 
+	// Serialize the recurrence rule to JSONB if present.
+	// The old 8 flat columns are gone from the schema.
+	var recurrenceRuleJSON JSONB
+	if event.RecurrenceRule != nil {
+		recurrenceRuleJSON = toJSONB(event.RecurrenceRule)
+	}
+
 	return &EventModel{
 		// Core Identity
 		ID:               event.ID,
@@ -126,22 +141,16 @@ func toModelEvent(event *domain.Event) *EventModel {
 		CreatedBy: event.CreatedBy,
 
 		// Schedule & Venue (derived)
-		StartDate:          event.StartDate,
-		EndDate:            event.EndDate,
-		Date:               datePtr,
-		Time:               event.Time,
-		Duration:           event.Duration,
-		IsMultiDay:         event.IsMultiDay,
-		IsRecurring:        event.IsRecurring,
+		StartDate:   event.StartDate,
+		EndDate:     event.EndDate,
+		Date:        datePtr,
+		Time:        event.Time,
+		Duration:    event.Duration,
+		IsMultiDay:  event.IsMultiDay,
+		IsRecurring: event.IsRecurring,
 
-		// Recurrence
-		RecurrencePatternID:   event.RecurrencePatternID,
-		RecurrenceInterval:    event.RecurrenceInterval,
-		RecurrenceEndsOn:      event.RecurrenceEndsOn,
-		RecurrenceOccurrences: event.RecurrenceOccurrences,
-		RecurrenceDaysOfWeek:  toJSONB(event.RecurrenceDaysOfWeek),
-		RecurrenceDayOfMonth:  event.RecurrenceDayOfMonth,
-		RecurrenceWeekOfMonth: event.RecurrenceWeekOfMonth,
+		// Recurrence — single JSONB column
+		RecurrenceRule: recurrenceRuleJSON,
 
 		// Venue
 		VenueName:          event.VenueName,
@@ -237,32 +246,6 @@ func toModelEvent(event *domain.Event) *EventModel {
 	}
 }
 
-func toDomainCategory(model *CategoryModel) *domain.Category {
-	if model == nil {
-		return nil
-	}
-
-	var deletedAt *time.Time
-	if model.DeletedAt.Valid {
-		deletedAt = &model.DeletedAt.Time
-	}
-
-	return &domain.Category{
-		ID:          model.ID,
-		Slug:        model.Slug,
-		Name:        model.Name,
-		DisplayName: model.DisplayName,
-		Description: model.Description,
-		Icon:        model.Icon,
-		Color:       model.Color,
-		SortOrder:   model.SortOrder,
-		IsActive:    model.IsActive,
-		CreatedAt:   model.CreatedAt,
-		UpdatedAt:   model.UpdatedAt,
-		DeletedAt:   deletedAt,
-	}
-}
-
 // toDomainEvent converts EventModel to domain.Event
 func toDomainEvent(model *EventModel) *domain.Event {
 	if model == nil {
@@ -284,11 +267,19 @@ func toDomainEvent(model *EventModel) *domain.Event {
 		restoredBy = model.RestoredBy
 	}
 
-	// Date is nullable in the DB; zero out when NULL so the domain
-	// sees a zero time.Time.
+	// Date is nullable in the DB; zero out when NULL.
 	var date time.Time
 	if model.Date != nil {
 		date = *model.Date
+	}
+
+	// Deserialize the recurrence rule JSONB if present.
+	var recurrenceRule *domain.RecurrenceRule
+	if len(model.RecurrenceRule) > 0 {
+		var rule domain.RecurrenceRule
+		if err := json.Unmarshal(model.RecurrenceRule, &rule); err == nil {
+			recurrenceRule = &rule
+		}
 	}
 
 	event := &domain.Event{
@@ -322,14 +313,8 @@ func toDomainEvent(model *EventModel) *domain.Event {
 		IsMultiDay:  model.IsMultiDay,
 		IsRecurring: model.IsRecurring,
 
-		// Recurrence
-		RecurrencePatternID:   model.RecurrencePatternID,
-		RecurrenceInterval:    model.RecurrenceInterval,
-		RecurrenceEndsOn:      model.RecurrenceEndsOn,
-		RecurrenceOccurrences: model.RecurrenceOccurrences,
-		RecurrenceDaysOfWeek:  fromJSONBToStringArray(model.RecurrenceDaysOfWeek),
-		RecurrenceDayOfMonth:  model.RecurrenceDayOfMonth,
-		RecurrenceWeekOfMonth: model.RecurrenceWeekOfMonth,
+		// Recurrence — single JSONB column, hydrated
+		RecurrenceRule: recurrenceRule,
 
 		// Venue
 		VenueName:          model.VenueName,
@@ -373,9 +358,6 @@ func toDomainEvent(model *EventModel) *domain.Event {
 		GroupDiscountPercentage:     model.GroupDiscountPercentage,
 		GroupMinAttendees:           model.GroupMinAttendees,
 
-
-
-		
 		// Media
 		ImageURL:     model.ImageURL,
 		ThumbnailURL: model.ThumbnailURL,
@@ -429,6 +411,33 @@ func toDomainEvent(model *EventModel) *domain.Event {
 
 	return event
 }
+
+func toDomainCategory(model *CategoryModel) *domain.Category {
+	if model == nil {
+		return nil
+	}
+
+	var deletedAt *time.Time
+	if model.DeletedAt.Valid {
+		deletedAt = &model.DeletedAt.Time
+	}
+
+	return &domain.Category{
+		ID:          model.ID,
+		Slug:        model.Slug,
+		Name:        model.Name,
+		DisplayName: model.DisplayName,
+		Description: model.Description,
+		Icon:        model.Icon,
+		Color:       model.Color,
+		SortOrder:   model.SortOrder,
+		IsActive:    model.IsActive,
+		CreatedAt:   model.CreatedAt,
+		UpdatedAt:   model.UpdatedAt,
+		DeletedAt:   deletedAt,
+	}
+}
+
 
 // ============================================================
 // USER INFO MAPPERS

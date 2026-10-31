@@ -80,14 +80,16 @@ type GeneratedTicket struct {
 	MaxPerPerson *int    `json:"max_per_person"`
 }
 
+// GeneratedRecurrence is the AI-facing recurrence DTO. Its field
+// names match the domain RecurrenceRule (frequency / end_date /
+// count) so the mapping from AI output → RecurrenceInput → domain
+// is a straight pass-through with no field translation.
 type GeneratedRecurrence struct {
-	Pattern     string   `json:"pattern"`
-	Interval    int      `json:"interval"`
-	DaysOfWeek  []string `json:"days_of_week"`
-	DayOfMonth  *int     `json:"day_of_month"`
-	WeekOfMonth *string  `json:"week_of_month"`
-	EndsOn      *string  `json:"ends_on"`
-	Occurrences *int     `json:"occurrences"`
+	Frequency  string   `json:"frequency"`
+	Interval   int      `json:"interval"`
+	DaysOfWeek []string `json:"days_of_week"`
+	EndDate    *string  `json:"end_date"`
+	Count      *int     `json:"count"`
 }
 
 type correctionContext struct {

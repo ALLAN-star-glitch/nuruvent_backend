@@ -223,15 +223,19 @@ type ScheduleRequest struct {
 	MaxAttendees *int   `json:"max_attendees,omitempty"`
 }
 
-// RecurrenceRequest represents recurrence configuration
+// Replace the existing RecurrenceRequest struct in
+// internal/modules/events/handler/dtos.go with:
+
+// RecurrenceRequest represents recurrence configuration.
+//
+// The shape matches the domain RecurrenceRule exactly, so the
+// mapping from HTTP → service → domain is a straight pass-through.
 type RecurrenceRequest struct {
-	Pattern     string   `json:"pattern" binding:"required,oneof=daily weekly monthly custom"`
-	Interval    int      `json:"interval,omitempty"`
-	DaysOfWeek  []string `json:"days_of_week,omitempty"`
-	DayOfMonth  *int     `json:"day_of_month,omitempty"`
-	WeekOfMonth string   `json:"week_of_month,omitempty"`
-	EndsOn      string   `json:"ends_on,omitempty"`
-	Occurrences *int     `json:"occurrences,omitempty"`
+	Frequency  string   `json:"frequency" binding:"required,oneof=daily weekly monthly"`
+	Interval   int      `json:"interval,omitempty"`
+	DaysOfWeek []string `json:"days_of_week,omitempty"`
+	EndDate    string   `json:"end_date,omitempty"`
+	Count      *int     `json:"count,omitempty"`
 }
 
 // TicketRequest represents a ticket type
@@ -510,15 +514,17 @@ type VenueDTO struct {
 	Coordinates map[string]float64 `json:"coordinates,omitempty"`
 }
 
-// RecurrenceDTO - Recurrence response
+// Replace the existing RecurrenceDTO struct in
+// internal/modules/events/handler/dtos.go with:
+
+// RecurrenceDTO is the API response shape for recurrence. It mirrors
+// the domain RecurrenceRule fields one-to-one.
 type RecurrenceDTO struct {
-	Pattern     string   `json:"pattern"`
-	Interval    int      `json:"interval"`
-	DaysOfWeek  []string `json:"days_of_week,omitempty"`
-	DayOfMonth  int      `json:"day_of_month,omitempty"`
-	WeekOfMonth string   `json:"week_of_month,omitempty"`
-	EndsOn      string   `json:"ends_on,omitempty"`
-	Occurrences int      `json:"occurrences,omitempty"`
+	Frequency  string   `json:"frequency"`
+	Interval   int      `json:"interval"`
+	DaysOfWeek []string `json:"days_of_week,omitempty"`
+	EndDate    string   `json:"end_date,omitempty"`
+	Count      int      `json:"count,omitempty"`
 }
 
 // OrganizerResponse - Public-facing organizer information

@@ -73,9 +73,6 @@ func (s *eventService) logCreateDraft(cmd CreateDraftCommand) {
 }
 
 // resolveAccountForTeam returns the account ID for a team.
-//
-// If the caller already supplied AccountID, that value is used. Otherwise,
-// the repository resolves it from the teams table.
 func (s *eventService) resolveAccountForTeam(ctx context.Context, teamID, providedAccountID string) (string, error) {
 	if providedAccountID != "" {
 		return providedAccountID, nil
@@ -93,10 +90,6 @@ func (s *eventService) resolveAccountForTeam(ctx context.Context, teamID, provid
 
 // validateDraftPermissions checks whether the caller may create events in
 // this account.
-//
-// POST-REVAMP: a single Casbin check against the account domain. Teams are
-// not authorization domains. Team visibility (if it matters for event
-// creation) is enforced separately by the service layer as data.
 func (s *eventService) validateDraftPermissions(ctx context.Context, cmd CreateDraftCommand) error {
 	accountDomain := domain.AccountDomain(cmd.AccountID)
 	if accountDomain == "" {
@@ -240,16 +233,8 @@ func (s *eventService) buildDraftEvent(
 		return nil, err
 	}
 
-	// Derive event-level fields from schedules. No-op when the draft
-	// has no schedules yet.
-	deriveEventFromSchedules(event)
-
-
-
-
-		// Create meetings on the host's video platform for every virtual
-	// session that doesn't already have a link. Best-effort: failures
-	// are logged and skipped. Manual links are respected.
+	// Create meetings on the host's video platform for every virtual
+	// session that doesn't already have a link.
 	if err := s.attachVideoMeetings(ctx, event, cmd.CreatedBy, ""); err != nil {
 		log.Printf("⚠️ video integration: %v", err)
 	}
@@ -258,22 +243,17 @@ func (s *eventService) buildDraftEvent(
 }
 
 // populateEventFields fills all non-schedule, non-derived fields.
-//
-// Event-level timing, venue, virtual/hybrid flags, and meeting links are
-// NOT set here — they are derived from schedules by
-// deriveEventFromSchedules. Client-provided values for those fields are
-// ignored.
 func (s *eventService) populateEventFields(ctx context.Context, event *domain.Event, cmd CreateDraftCommand) {
 	event.ShortDescription = cmd.ShortDescription
 	event.Tags = cmd.Tags
 	event.Language = cmd.Language
 	event.CategoryID = cmd.CategoryID
 
-	event.IsRecurring = cmd.IsRecurring
-
+	// Recurrence logic
 	if cmd.Recurrence != nil {
-		s.applyRecurrence(ctx, event, cmd.Recurrence)
+		event.RecurrenceRule = buildRecurrenceRule(cmd.Recurrence)
 	}
+	event.IsRecurring = (event.RecurrenceRule != nil)
 
 	// Ticket fields
 	event.IsFreeEvent = cmd.IsFree
@@ -310,20 +290,47 @@ func (s *eventService) populateEventFields(ctx context.Context, event *domain.Ev
 }
 
 // populateSchedules converts and sets schedules.
-//
-// Does NOT set event.StartDate — that is derived from the schedules by
-// deriveEventFromSchedules, which the caller invokes after this function.
 func (s *eventService) populateSchedules(ctx context.Context, event *domain.Event, schedules []ScheduleInput) error {
-	if len(schedules) == 0 {
+	if len(schedules) == 0 && event.RecurrenceRule == nil {
 		return nil
 	}
 
-	converted, err := s.convertSchedules(schedules)
-	if err != nil {
-		return err
+	// Handle recurrence expansion
+	if event.RecurrenceRule != nil && len(schedules) > 0 {
+		template, err := s.convertSchedules(schedules[:1])
+		if err != nil {
+			return err
+		}
+
+		baseSchedule := template[0]
+		dates, err := event.ExpandRecurrence(baseSchedule.StartDate)
+		if err != nil {
+			return fmt.Errorf("failed to expand recurrence: %w", err)
+		}
+
+		var generatedSchedules []domain.EventSchedule
+		for i, date := range dates {
+			clone := baseSchedule
+			clone.ID = ""
+			clone.StartDate = date
+			if baseSchedule.EndDate != nil {
+				duration := baseSchedule.EndDate.Sub(baseSchedule.StartDate)
+				newEnd := date.Add(duration)
+				clone.EndDate = &newEnd
+			}
+			clone.SessionNumber = i + 1
+			generatedSchedules = append(generatedSchedules, clone)
+		}
+		event.Schedules = generatedSchedules
+	} else if len(schedules) > 0 {
+		converted, err := s.convertSchedules(schedules)
+		if err != nil {
+			return err
+		}
+		event.Schedules = converted
 	}
-	event.Schedules = converted
-	deriveEventFromSchedules(event) 
+
+	deriveEventFromSchedules(event)
 	return nil
 }
 
@@ -353,9 +360,6 @@ func (s *eventService) setDraftStatusAndSave(ctx context.Context, event *domain.
 		return fmt.Errorf("failed to create draft: %w", err)
 	}
 
-		// Reload so DB-assigned IDs (schedules, tickets) land on the domain
-	// struct before we return. Without this, the API response has empty
-	// ticket IDs and no ticket_type objects.
 	if reloaded, reloadErr := s.repo.GetEventByID(ctx, event.ID); reloadErr == nil && reloaded != nil {
 		event.Schedules = reloaded.Schedules
 		event.Tickets = reloaded.Tickets

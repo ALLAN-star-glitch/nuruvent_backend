@@ -131,9 +131,6 @@ type Repository interface {
 
 	GetAllCategories(ctx context.Context) ([]*Category, error)
 
-	// Recurrence pattern lookups.
-	GetRecurrencePatternBySlug(ctx context.Context, slug string) (*RecurrencePattern, error)
-
 	AccountIDForTeam(ctx context.Context, teamID string) (string, error)
 
 
@@ -146,6 +143,16 @@ type Repository interface {
 	// The implementation must be safe for concurrent use — the counter is
 	// a hot field and registrations can arrive in parallel.
 	AdjustAttendeeCount(ctx context.Context, eventID string, delta int) error
+
+	// ListEventIDsWithUnprovisionedSchedules returns event IDs that have
+	// at least one virtual schedule with no video meeting provisioned,
+	// whose start_date falls within the given window (in days).
+	//
+	// Used by the daily sweep to catch events created far in advance.
+	ListEventIDsWithUnprovisionedSchedules(
+		ctx context.Context,
+		withinDays int,
+	) ([]string, error)
 
 
 

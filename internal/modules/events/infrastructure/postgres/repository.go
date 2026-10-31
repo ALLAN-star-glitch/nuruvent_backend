@@ -78,6 +78,7 @@ func (r *PostgresRepository) CreateEvent(ctx context.Context, event *domain.Even
 	return nil
 }
 
+
 func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*domain.Event, error) {
 	var model EventModel
 	err := r.db.WithContext(ctx).
@@ -100,15 +101,8 @@ func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*doma
 		return nil, err
 	}
 
-	// Hydrate recurrence pattern slug if recurring
-	if event.RecurrencePatternID != nil && *event.RecurrencePatternID != "" {
-		var pattern RecurrencePatternModel
-		if err := r.db.WithContext(ctx).
-			Where("id = ?", *event.RecurrencePatternID).
-			First(&pattern).Error; err == nil {
-			event.RecurrencePatternSlug = pattern.Slug
-		}
-	}
+	// Removed: the RecurrencePatternSlug hydration block. The new
+	// RecurrenceRule is fully self-contained (no pattern lookup).
 
 	return event, nil
 }
@@ -840,32 +834,6 @@ func (r *PostgresRepository) GetAllTicketTypes(ctx context.Context) ([]*domain.T
 	return out, nil
 }
 
-func (r *PostgresRepository) GetRecurrencePatternBySlug(ctx context.Context, slug string) (*domain.RecurrencePattern, error) {
-	if slug == "" {
-		return nil, errors.New("slug is required")
-	}
-
-	var model RecurrencePatternModel
-	err := r.db.WithContext(ctx).
-		Where("slug = ? AND deleted_at IS NULL", slug).
-		First(&model).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to get recurrence pattern: %w", err)
-	}
-
-	return &domain.RecurrencePattern{
-		ID:          model.ID,
-		Slug:        model.Slug,
-		Name:        model.Name,
-		DisplayName: model.DisplayName,
-		Description: model.Description,
-		IsActive:    model.IsActive,
-	}, nil
-}
-
 func (r *PostgresRepository) AccountIDForTeam(ctx context.Context, teamID string) (string, error) {
     var accountID string
     err := r.db.WithContext(ctx).
@@ -1026,4 +994,40 @@ func (r *PostgresRepository) ReorderEventSchedules(
         }
         return nil
     })
+}
+
+
+// ListEventIDsWithUnprovisionedSchedules finds events with at least
+// one virtual schedule that has no video meeting yet, and whose
+// start_date is within the given window (in days).
+//
+// Uses raw SQL because GORM's Table().Select().Scan() chain has
+// silently dropped DISTINCT results on this codebase before.
+func (r *PostgresRepository) ListEventIDsWithUnprovisionedSchedules(
+	ctx context.Context,
+	withinDays int,
+) ([]string, error) {
+	if withinDays <= 0 {
+		withinDays = 30
+	}
+
+	var ids []string
+	err := r.db.WithContext(ctx).
+		Raw(`
+			SELECT DISTINCT e.id
+			FROM events e
+			JOIN event_schedules s
+			  ON s.event_id = e.id
+			 AND s.deleted_at IS NULL
+			WHERE e.deleted_at IS NULL
+			  AND s.is_virtual = true
+			  AND s.platform != ''
+			  AND s.video_meeting_id IS NULL
+			  AND s.start_date <= NOW() + (INTERVAL '1 day' * ?)
+		`, withinDays).
+		Scan(&ids).Error
+	if err != nil {
+		return nil, fmt.Errorf("list unprovisioned events: %w", err)
+	}
+	return ids, nil
 }

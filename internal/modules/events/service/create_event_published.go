@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -79,9 +80,6 @@ func (s *eventService) logCreateEvent(cmd CreateEventCommand) {
 
 // validatePublishedEventPermissions checks whether the caller may create
 // published events in this account.
-//
-// POST-REVAMP: a single Casbin check against the account domain. Teams are
-// not authorization domains.
 func (s *eventService) validatePublishedEventPermissions(ctx context.Context, cmd CreateEventCommand) error {
 	accountDomain := domain.AccountDomain(cmd.AccountID)
 	if accountDomain == "" {
@@ -115,9 +113,12 @@ func (s *eventService) validatePublishedEventFields(cmd CreateEventCommand) erro
 	if cmd.EventTypeID == "" {
 		return domain.ErrInvalidEventType
 	}
-	if len(cmd.Schedules) == 0 {
+	
+	// Recurrence may replace schedules
+	if len(cmd.Schedules) == 0 && cmd.Recurrence == nil {
 		return domain.ErrEventScheduleRequired
 	}
+	
 	if len(cmd.Tickets) == 0 {
 		return domain.ErrEventTicketRequired
 	}
@@ -223,13 +224,8 @@ func (s *eventService) buildPublishedEvent(
 		return nil, err
 	}
 
-	// Derive event-level timing, venue, and virtual/hybrid flags from
-	// the schedules. Schedules are the source of truth.
-	deriveEventFromSchedules(event)
-
-		// Create meetings on the host's video platform for every virtual
-	// session that doesn't already have a link. Best-effort: failures
-	// are logged and skipped. Manual links are respected.
+	// Create meetings on the host's video platform for every virtual
+	// session that doesn't already have a link.
 	if err := s.attachVideoMeetings(ctx, event, cmd.CreatedBy, ""); err != nil {
 		log.Printf("⚠️ video integration: %v", err)
 	}
@@ -241,22 +237,17 @@ func (s *eventService) buildPublishedEvent(
 
 // populatePublishedEventFields fills all non-schedule, non-derived fields
 // for published events.
-//
-// Event-level timing, venue, virtual/hybrid flags, and meeting links are
-// NOT set here — they are derived from schedules by
-// deriveEventFromSchedules. Client-provided values for those fields are
-// ignored.
 func (s *eventService) populatePublishedEventFields(ctx context.Context, event *domain.Event, cmd CreateEventCommand) {
 	event.ShortDescription = cmd.ShortDescription
 	event.Tags = cmd.Tags
 	event.Language = cmd.Language
 	event.CategoryID = cmd.CategoryID
 
-	event.IsRecurring = cmd.IsRecurring
-
+	// Recurrence logic
 	if cmd.Recurrence != nil {
-		s.applyRecurrence(ctx, event, cmd.Recurrence)
+		event.RecurrenceRule = buildRecurrenceRule(cmd.Recurrence)
 	}
+	event.IsRecurring = (event.RecurrenceRule != nil)
 
 	// Ticket fields
 	event.IsFreeEvent = cmd.IsFree
@@ -294,19 +285,50 @@ func (s *eventService) populatePublishedEventFields(ctx context.Context, event *
 }
 
 // populateEventSchedules converts and sets schedules.
-//
-// Does NOT set event.StartDate — that is derived from the schedules by
-// deriveEventFromSchedules, which the caller invokes after this function.
 func (s *eventService) populateEventSchedules(ctx context.Context, event *domain.Event, schedules []ScheduleInput) error {
-	if len(schedules) == 0 {
+	if len(schedules) == 0 && event.RecurrenceRule == nil {
 		return nil
 	}
 
-	converted, err := s.convertSchedules(schedules)
-	if err != nil {
-		return err
+	// Handle recurrence expansion
+	if event.RecurrenceRule != nil && len(schedules) > 0 {
+		// Use the first schedule as the template
+		template, err := s.convertSchedules(schedules[:1])
+		if err != nil {
+			return err
+		}
+
+		baseSchedule := template[0]
+		dates, err := event.ExpandRecurrence(baseSchedule.StartDate)
+		if err != nil {
+			return fmt.Errorf("failed to expand recurrence: %w", err)
+		}
+
+		var generatedSchedules []domain.EventSchedule
+		for i, date := range dates {
+			clone := baseSchedule
+			clone.ID = "" // let DB assign
+			clone.StartDate = date
+			// We can't auto-calculate EndDate reliably without knowing duration,
+			// but if the template had an EndDate, we can offset it.
+			if baseSchedule.EndDate != nil {
+				duration := baseSchedule.EndDate.Sub(baseSchedule.StartDate)
+				newEnd := date.Add(duration)
+				clone.EndDate = &newEnd
+			}
+			clone.SessionNumber = i + 1 // auto-increment session number
+			generatedSchedules = append(generatedSchedules, clone)
+		}
+		event.Schedules = generatedSchedules
+	} else if len(schedules) > 0 {
+		// Manual schedules path
+		converted, err := s.convertSchedules(schedules)
+		if err != nil {
+			return err
+		}
+		event.Schedules = converted
 	}
-	event.Schedules = converted
+
 	deriveEventFromSchedules(event)
 	return nil
 }
@@ -343,7 +365,6 @@ func (s *eventService) setPublishedStatusAndSave(ctx context.Context, event *dom
 	}
 
 	// Reload so DB-assigned schedule IDs land on event.Schedules
-	// before we mirror them into attendance.
 	if reloaded, reloadErr := s.repo.GetEventByID(ctx, event.ID); reloadErr == nil && reloaded != nil {
 		event.Schedules = reloaded.Schedules
 		event.Tickets = reloaded.Tickets
@@ -351,10 +372,41 @@ func (s *eventService) setPublishedStatusAndSave(ctx context.Context, event *dom
 		log.Printf("⚠️ Could not reload event for attendance sync: %v", reloadErr)
 	}
 
-	// Mirror schedules into the attendance module. Best-effort:
-	// failures are logged inside the helper and do not fail the
-	// caller.
+	// Mirror schedules into the attendance module.
 	s.syncEventSchedulesToAttendance(ctx, event)
 
+	// Fire-and-forget: provision video meetings for schedules within
+	// the 30-day window. Failures are logged and swallowed — the
+	// daily sweep will catch any missed schedules.
+	s.enqueueVideoProvisioning(ctx, event.ID)
+
 	return nil
+}
+
+
+// enqueueVideoProvisioning enqueues a fire-and-forget task that
+// provisions video meetings for the event's schedules within the
+// rolling 30-day window.
+//
+// This does NOT block the HTTP response. If the queue is unreachable
+// or the enqueue fails, we log and move on. The daily sweep will
+// catch any schedule that the worker missed.
+func (s *eventService) enqueueVideoProvisioning(ctx context.Context, eventID string) {
+	if s.queue == nil {
+		log.Printf("⚠️ queue not configured; skipping video provisioning for event %s", eventID)
+		return
+	}
+
+	payload, err := json.Marshal(map[string]string{"event_id": eventID})
+	if err != nil {
+		log.Printf("⚠️ failed to marshal video provisioning payload for event %s: %v", eventID, err)
+		return
+	}
+
+	if err := s.queue.Enqueue(ctx, domain.TaskProvisionVideoMeetings, payload); err != nil {
+		log.Printf("⚠️ failed to enqueue video provisioning for event %s: %v", eventID, err)
+		return
+	}
+
+	log.Printf("[events] enqueued video provisioning event=%s", eventID)
 }

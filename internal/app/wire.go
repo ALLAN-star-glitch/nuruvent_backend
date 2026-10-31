@@ -324,6 +324,8 @@ func InitializeApp() (*AppDependencies, error) {
 
 		NewCertificateRenderQueueAdapter,
 
+		NewEventsQueueAdapter,
+
 
 
 		// ============================================================

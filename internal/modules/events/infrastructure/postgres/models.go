@@ -16,12 +16,6 @@ import (
 // JSONB stores a raw JSON payload as a byte slice. It handles any
 // JSON shape — objects, arrays, primitives, null — because the
 // serializer doesn't try to coerce the data into a Go map.
-//
-// This replaces an earlier `map[string]any` implementation that
-// silently dropped arrays and non-object values. json.Unmarshal
-// of `["a","b"]` into `map[string]any` fails, so the previous
-// Value() returned nil for any list-shaped payload — the DB
-// stored NULL for RecurrenceDaysOfWeek, Tags, InvitedEmails, etc.
 type JSONB []byte
 
 // Value implements driver.Valuer.
@@ -80,34 +74,32 @@ type EventModel struct {
 	CreatedBy string `gorm:"index"`
 
 	// ============================================================
-	// Schedule & Venue
+	// Schedule & Venue (derived — see service deriveEventFromSchedules)
+	// ============================================================
+	StartDate   time.Time  `gorm:"index"`
+	EndDate     *time.Time `gorm:"index"`
+	Date        *time.Time `gorm:"index"`
+	Time        string     `gorm:"type:varchar(8);default:''"`
+	Duration    int        `gorm:"default:0"`
+	IsMultiDay  bool
+	IsRecurring bool `gorm:"index"`
+
+	// ============================================================
+	// Recurrence
 	// ============================================================
 	//
-	// StartDate, EndDate, Date, Time, Duration, IsMultiDay, IsVirtual,
-	// IsHybrid, VirtualPlatform, VirtualPlatformURL, InPersonLocation,
-	// ZoomLink, MeetLink, and the Venue* fields are DERIVED from
-	// schedules. They remain in the schema as read-optimized caches for
-	// the discovery feed, event cards, sorting, and public pages — but
-	// the service writes them from the schedules and ignores anything
-	// the client sends.
-	StartDate          time.Time  `gorm:"index"`
-	EndDate            *time.Time `gorm:"index"`
-	Date               *time.Time `gorm:"index"`                       // date portion of StartDate
-	Time               string     `gorm:"type:varchar(8);default:''"`  // "HH:MM:SS" of first schedule
-	Duration           int        `gorm:"default:0"`                   // total minutes across schedules
-	IsMultiDay         bool
-	IsRecurring        bool `gorm:"index"`
+	// Stored as a single JSONB column. The domain RecurrenceRule
+	// struct is marshalled into this column on write and unmarshalled
+	// on read. The old 8 flat columns (recurrence_pattern_id,
+	// recurrence_interval, recurrence_ends_on, recurrence_occurrences,
+	// recurrence_days_of_week, recurrence_day_of_month,
+	// recurrence_week_of_month) are gone — they are dropped by
+	// migration.
+	RecurrenceRule JSONB `gorm:"type:jsonb;column:recurrence_rule"`
 
-	// Recurrence
-	RecurrencePatternID   *string `gorm:"index"`
-	RecurrenceInterval    int     `gorm:"default:1"`
-	RecurrenceEndsOn      *time.Time
-	RecurrenceOccurrences *int
-	RecurrenceDaysOfWeek  JSONB `gorm:"type:jsonb;default:'[]'"`
-	RecurrenceDayOfMonth  *int
-	RecurrenceWeekOfMonth *string
-
+	// ============================================================
 	// Venue (derived)
+	// ============================================================
 	VenueName          string
 	VenueAddress       string
 	VenueCity          string
@@ -124,7 +116,7 @@ type EventModel struct {
 	// ============================================================
 	// Ticketing & Capacity
 	// ============================================================
-	IsFree             bool       `gorm:"index"`
+	IsFree             bool `gorm:"index"`
 	Capacity           *int
 	CurrentAttendees   int
 	WaitlistEnabled    bool       `gorm:"index"`
@@ -147,7 +139,7 @@ type EventModel struct {
 	// ============================================================
 	// Monetization & Add-ons
 	// ============================================================
-	IsFeatured                  bool       `gorm:"default:false;index"`
+	IsFeatured                  bool `gorm:"default:false;index"`
 	FeaturedUntil               *time.Time `gorm:"index"`
 	CertificateEnabled          bool       `gorm:"index"`
 	CertificatePrice            float64
@@ -254,8 +246,9 @@ type EventScheduleModel struct {
 
 	ZoomLink string
 	MeetLink string
-    VideoMeetingID         *string `gorm:"type:uuid;column:video_meeting_id"`
-    VideoMeetingExternalID string  `gorm:"type:varchar(255);column:video_meeting_external_id"`
+
+	VideoMeetingID         *string `gorm:"type:uuid;column:video_meeting_id"`
+	VideoMeetingExternalID string  `gorm:"type:varchar(255);column:video_meeting_external_id"`
 
 	MaxAttendees *int
 	CreatedAt    time.Time
@@ -277,8 +270,8 @@ type EventTicketModel struct {
 	TicketTypeID      string         `gorm:"index;not null"`
 	Name              string         `gorm:"not null"`
 	Description       string
-	Price             float64        `gorm:"not null;default:0"`
-	Quantity          int            `gorm:"not null;default:0"`
+	Price             float64 `gorm:"not null;default:0"`
+	Quantity          int     `gorm:"not null;default:0"`
 	MaxPerPerson      *int
 	EarlyBirdDeadline *time.Time
 	GroupMinAttendees *int
@@ -307,9 +300,9 @@ type EventSpeakerModel struct {
 	Title       string
 	Bio         string
 	PhotoURL    string
-	SocialLinks JSONB          `gorm:"type:jsonb;default:'{}'"`
-	SortOrder   int            `gorm:"default:0"`
-	IsKeynote   bool           `gorm:"default:false"`
+	SocialLinks JSONB `gorm:"type:jsonb;default:'{}'"`
+	SortOrder   int   `gorm:"default:0"`
+	IsKeynote   bool  `gorm:"default:false"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
@@ -329,9 +322,9 @@ type EventMaterialModel struct {
 	MaterialTypeID string         `gorm:"index;not null"`
 	Title          string         `gorm:"not null"`
 	Description    string
-	URL            string         `gorm:"not null"`
-	IsPreEvent     bool           `gorm:"default:false"`
-	SortOrder      int            `gorm:"default:0"`
+	URL            string `gorm:"not null"`
+	IsPreEvent     bool   `gorm:"default:false"`
+	SortOrder      int    `gorm:"default:0"`
 	FileSize       *int64
 	MimeType       string
 	CreatedAt      time.Time
@@ -440,6 +433,11 @@ func (CategoryModel) TableName() string {
 // ============================================================
 // RECURRENCE PATTERN MODEL
 // ============================================================
+//
+// This table is kept for future use (e.g. named recurrence
+// templates the admin can configure), but the EventModel no
+// longer references it — recurrence data lives in
+// events.recurrence_rule (JSONB) as of the revamp.
 
 type RecurrencePatternModel struct {
 	ID          string `gorm:"primaryKey;default:gen_random_uuid()"`
@@ -456,7 +454,6 @@ type RecurrencePatternModel struct {
 func (RecurrencePatternModel) TableName() string {
 	return "recurrence_patterns"
 }
-
 
 // ============================================================
 // CERTIFICATE TYPE MODEL
