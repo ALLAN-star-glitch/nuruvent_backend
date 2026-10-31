@@ -1,3 +1,5 @@
+// internal/modules/registration/service/register.go
+
 package service
 
 import (
@@ -23,9 +25,9 @@ func (s *service) RegisterForEvent(
 	// A guest registration carries name/email/phone but no user_id.
 	// We create (or find) a lightweight user for them so every
 	// registration has a user_id — required by the Zoom SDK and the
-	// attendance pipeline. The domain enforces mutually exclusive
-	// identity (user_id OR guest details, never both), so we clear
-	// the guest fields after resolving.
+	// attendance pipeline. The guest fields are KEPT on the
+	// registration alongside the shadow user_id so we can still look
+	// them up by email (notifications, checkout, certificates).
 	// ------------------------------------------------------------
 	if cmd.UserID == "" && cmd.Guest != nil && cmd.Guest.Email != "" {
 		guestUserID, err := s.deps.Users.FindOrCreateGuestByEmail(
@@ -40,7 +42,8 @@ func (s *service) RegisterForEvent(
 		}
 
 		cmd.UserID = guestUserID
-		cmd.Guest = nil
+		// DO NOT clear cmd.Guest — we need the guest contact details
+		// to persist on the registration row.
 
 		log.Printf("[registration] STEP 0 OK: guest resolved to user=%s", cmd.UserID)
 	}
@@ -66,7 +69,7 @@ func (s *service) RegisterForEvent(
 	log.Printf("[registration] STEP 2 OK: registration is open")
 
 	// ------------------------------------------------------------
-	// 3. Duplicate check (for authenticated users)
+	// 3. Duplicate check (for authenticated users and resolved guests)
 	// ------------------------------------------------------------
 	if cmd.UserID != "" {
 		existing, err := s.deps.Registrations.FindActiveByUserAndEvent(ctx, cmd.UserID, cmd.EventID)
@@ -214,28 +217,11 @@ func (s *service) RegisterForEvent(
 
 	// ------------------------------------------------------------
 	// 9. Enqueue notifications (best-effort)
-	//
-	// RegistrationCreated fires unconditionally: the attendee gets a
-	// "we've received your registration" message.
-	//
-	// RegistrationConfirmed fires only when the registration is
-	// already confirmed at creation time (free events, zero-total
-	// registrations). Paid registrations transition to confirmed
-	// later, via ConfirmRegistration, which fires this itself.
-	//
-	// At this point the attendance sync has not run, so the payload
-	// carries no join links. For paid events that's fine — the links
-	// go out in the confirmation email sent by ConfirmRegistration.
-	// For free events, syncRegistrationToAttendance runs below and
-	// then a second notification fires with the links populated.
 	// ------------------------------------------------------------
 	if err := s.deps.Notifier.RegistrationCreated(ctx, reg); err != nil {
 		log.Printf("[registration] STEP 9 WARN: RegistrationCreated notifier failed: %v", err)
 	}
 	if reg.Status == registrationdomain.StatusConfirmed {
-		// Sync attendance so free events also get join links in the
-		// confirmation email. Best-effort — failures are logged and
-		// swallowed.
 		s.syncRegistrationToAttendance(ctx, eventReg)
 
 		if err := s.deps.Notifier.RegistrationConfirmed(ctx, registrationdomain.RegistrationConfirmedPayload{

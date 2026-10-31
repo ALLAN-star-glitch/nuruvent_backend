@@ -7,7 +7,6 @@ import (
 	"time"
 )
 
-
 // OrderKind discriminates between the two kinds of orders the payment
 // module handles.
 type OrderKind string
@@ -43,11 +42,12 @@ type Order struct {
 	RegistrationID string
 	CertificateCtx *CertificateContext 
 
-		// Certificate batch order (organizer-pays)
+	// Certificate batch order (organizer-pays)
 	BatchCtx           *BatchContext
 	BatchAttendeeCount int
 
-	// Identity: exactly one of UserID or GuestEmail is populated.
+	// Identity: populated with UserID (shadow or real) and GuestEmail
+	// if the attendee is a guest.
 	UserID     string
 	GuestEmail string
 
@@ -67,19 +67,6 @@ type Order struct {
 
 	// ------------------------------------------------------------
 	// Billing — frozen at order creation.
-	//
-	// BilledAccountID is the account that receives the net proceeds
-	// of any payment for this order. Resolved once from the event's
-	// ownership chain (registration → event → team → account) and
-	// never updated, so later changes to event ownership do not
-	// rewrite historical attribution.
-	//
-	// PlatformFeeRate is Nuruvent's cut, snapshotted at creation so
-	// historical reports are immune to later pricing changes.
-	//
-	// SettledAt and PayoutRef are written only by the payout workflow
-	// (manual today; automated later). They stay nil/empty until the
-	// organizer's net earnings have been disbursed.
 	// ------------------------------------------------------------
 	BilledAccountID string
 	PlatformFeeRate float64
@@ -111,12 +98,12 @@ func NewOrder(
 		return nil, fmt.Errorf("registration id is required")
 	}
 
-	// Identity: exactly one of user / guest.
+	// Identity: must have at least one identity source.
+	// Both may be set for shadow users (guests who get a lightweight
+	// user record for the attendance/Zoom pipeline, but whose contact
+	// email is still tracked on the order for notifications).
 	if userID == "" && guestEmail == "" {
 		return nil, ErrIdentityRequired
-	}
-	if userID != "" && guestEmail != "" {
-		return nil, fmt.Errorf("%w: both user and guest identity set", ErrIdentityRequired)
 	}
 
 	if currency == "" {
@@ -144,9 +131,6 @@ func NewOrder(
 	// Validate items and compute totals.
 	var subtotal, discount int64
 	for i, it := range items {
-		// Each item was already validated by NewOrderItem, but callers
-		// can construct an OrderItem literally. Re-validate here so the
-		// Order cannot be built from malformed items.
 		if err := validateItem(it); err != nil {
 			return nil, fmt.Errorf("item %d: %w", i, err)
 		}
@@ -179,13 +163,8 @@ func NewOrder(
 	}, nil
 }
 
-
-
 // NewCertificateOrder constructs a pending order for a certificate
 // purchase. Certificates are single-amount purchases — no items.
-//
-// billedAccountID and platformFeeRate are snapshotted here and never
-// change afterwards, matching the registration-order behavior.
 func NewCertificateOrder(
 	id string,
 	certCtx CertificateContext,
@@ -214,12 +193,9 @@ func NewCertificateOrder(
 		return nil, fmt.Errorf("certificate recipient email is required")
 	}
 
-	// Identity: exactly one of user / guest.
+	// Identity: must have at least one identity source.
 	if userID == "" && guestEmail == "" {
 		return nil, ErrIdentityRequired
-	}
-	if userID != "" && guestEmail != "" {
-		return nil, fmt.Errorf("%w: both user and guest identity set", ErrIdentityRequired)
 	}
 
 	if currency == "" {
@@ -262,13 +238,9 @@ func NewCertificateOrder(
 	}, nil
 }
 
-
 // NewCertificateBatchOrder constructs a pending order for a
 // certificate batch. The organizer pays; attendees receive
 // certificates free once the order is settled.
-//
-// Certificates are single-amount purchases at the order level (the
-// batch is one charge), so there are no OrderItems.
 func NewCertificateBatchOrder(
 	id string,
 	batchCtx BatchContext,
@@ -329,9 +301,7 @@ func NewCertificateBatchOrder(
 		CreatedAt:          now,
 		UpdatedAt:          now,
 		BilledAccountID:    billedAccountID,
-		// Certificate batch orders charge a flat 100% to Nuruvent.
-		// The organizer's share is zero — the amount is the fee.
-		PlatformFeeRate:    0,
+		PlatformFeeRate:    0, // 100% to Nuruvent
 	}, nil
 }
 
@@ -460,9 +430,11 @@ func (o *Order) IsFinal() bool {
 	return o.Status.IsFinal()
 }
 
-// IsGuest reports whether the order belongs to a guest (no user account).
+// IsGuest reports whether the order belongs to a guest (i.e., the
+// attendee had no real Nuruvent account at checkout time, even if a
+// shadow user record was created for them).
 func (o *Order) IsGuest() bool {
-	return o.UserID == ""
+	return o.GuestEmail != ""
 }
 
 // ItemCount returns the number of line items.
@@ -485,17 +457,12 @@ func (o *Order) TotalQuantity() int {
 
 // PlatformFee returns Nuruvent's cut of the order total, in minor
 // units.
-//
-//   - Registration orders: TotalAmount × PlatformFeeRate
-//   - Certificate batch orders: the full TotalAmount (organizer pays
-//     Nuruvent directly; the organizer's net is zero)
 func (o *Order) PlatformFee() int64 {
 	if o.Kind == OrderKindCertificateBatch {
 		return o.TotalAmount
 	}
 	return int64(float64(o.TotalAmount) * o.PlatformFeeRate)
 }
-
 
 // IsCertificateBatch reports whether this is an organizer-pays
 // certificate batch order.
@@ -504,10 +471,7 @@ func (o *Order) IsCertificateBatch() bool {
 }
 
 // NetToOrganizer returns the amount owed to the billed account before
-// payment-processing fees, in minor units. Processing fees are
-// recorded on the payment (they depend on the method chosen at
-// checkout) and are subtracted separately when computing the final
-// disbursement.
+// payment-processing fees, in minor units.
 func (o *Order) NetToOrganizer() int64 {
 	return o.TotalAmount - o.PlatformFee()
 }
@@ -522,9 +486,7 @@ func (o *Order) IsSettled() bool {
 // INTERNAL
 // ============================================================
 
-// validateItem re-checks an OrderItem's invariants. Callers can bypass
-// NewOrderItem by constructing the struct literally, so we validate
-// again when building the Order.
+// validateItem re-checks an OrderItem's invariants.
 func validateItem(it OrderItem) error {
 	if it.TicketTypeID == "" {
 		return fmt.Errorf("%w: ticket type id is required", ErrInvalidAmount)

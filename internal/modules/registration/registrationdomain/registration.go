@@ -12,14 +12,14 @@ import (
 type Registration struct {
 	ID                 string
 	RegistrationNumber string
-	UserID             string // empty when guest
-	GuestEmail         string // empty when user
+	UserID             string // populated for both real users and shadow guests
+	GuestEmail         string // populated when the attendee is a guest
 	GuestName          string
 	GuestPhone         string
 	Status             Status
 	Currency           string
-	Subtotal           int64 // ← ADD: minor units
-	DiscountTotal      int64 // ← ADD: minor units
+	Subtotal           int64 // minor units
+	DiscountTotal      int64 // minor units
 	TotalAmount        int64
 	CreatedAt          time.Time
 	UpdatedAt          time.Time
@@ -42,15 +42,20 @@ func NewRegistration(
 	requiresPayment bool,
 	now time.Time,
 ) (*Registration, error) {
+	// A registration must have at least one identity source.
 	if userID == "" && guestEmail == "" {
 		return nil, ErrIdentityRequired
 	}
-	if userID != "" && guestEmail != "" {
-		return nil, fmt.Errorf("%w: both user and guest identity set", ErrIdentityRequired)
-	}
+
+	// Guests must have a name.
 	if guestEmail != "" && guestName == "" {
 		return nil, fmt.Errorf("%w: guest name is required with guest email", ErrIdentityRequired)
 	}
+
+	// NOTE: Both userID and guestEmail MAY be set. This is the shadow-user
+	// pattern: guests get a lightweight users row for the attendance/Zoom
+	// pipeline, and we ALSO keep their contact details on the registration
+	// for email lookup, notifications, and certificate delivery.
 
 	status := StatusConfirmed
 	if requiresPayment {
@@ -66,8 +71,8 @@ func NewRegistration(
 		GuestPhone:         guestPhone,
 		Status:             status,
 		Currency:           pricing.Currency,
-		Subtotal:           pricing.Subtotal,      // ← SET
-		DiscountTotal:      pricing.DiscountTotal, // ← SET
+		Subtotal:           pricing.Subtotal,
+		DiscountTotal:      pricing.DiscountTotal,
 		TotalAmount:        pricing.Total,
 		CreatedAt:          now,
 		UpdatedAt:          now,
@@ -112,7 +117,6 @@ func HydrateRegistration(
 		CancellationReason: cancellationReason,
 	}
 }
-
 
 // Confirm transitions to confirmed. Idempotent when already confirmed.
 func (r *Registration) Confirm(now time.Time) error {
@@ -167,5 +171,7 @@ func (r *Registration) Refund(now time.Time) error {
 // IsActive reports whether the registration counts toward capacity.
 func (r *Registration) IsActive() bool { return r.Status.IsActive() }
 
-// IsGuest reports whether the registration is for a guest (no user account).
-func (r *Registration) IsGuest() bool { return r.UserID == "" }
+// IsGuest reports whether the registration was made by a guest (i.e.
+// the attendee did not have a real Nuruvent account at registration
+// time, even if a shadow user record was created for them).
+func (r *Registration) IsGuest() bool { return r.GuestEmail != "" }
