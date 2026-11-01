@@ -560,13 +560,15 @@ func NewCertificateRenderQueueAdapter(
 	return certificateadapters.NewRenderQueueAdapter(client)
 }
 
-// NewEventsQueueAdapter bridges the notification module's TaskQueue
-// port to the events module's local TaskQueue port.
+
+// NewEventsVideoQueueAdapter builds the dedicated Asynq-backed
+// queue adapter for events-module background tasks (video
+// provisioning, etc.).
 //
-// The events service uses this to enqueue background tasks like
-// video provisioning without importing the notification module.
-func NewEventsQueueAdapter(
-	q notificationDomain.TaskQueue,
+// Every task emitted through this adapter is routed to the isolated
+// "video" queue.
+func NewEventsVideoQueueAdapter(
+	client *asynq.Client,
 ) eventsDomain.TaskQueue {
-	return events.NewQueueAdapter(q)
+	return events.NewVideoQueueAdapter(client)
 }

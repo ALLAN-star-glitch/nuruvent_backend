@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
@@ -23,6 +24,10 @@ import (
 // reload after the write ensures schedule IDs are populated on the
 // domain struct before the sync runs — otherwise the sync would emit
 // sessions with empty provider_session_id.
+//
+// Video meetings are provisioned ASYNCHRONOUSLY after this method
+// returns. The worker is enqueued below and does the actual Zoom/Meet
+// API calls in the background.
 func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
 	log.Printf("📤 Publishing event: %s", id)
 
@@ -36,51 +41,42 @@ func (s *eventService) PublishEvent(ctx context.Context, id, publishedBy string)
 		return nil, err
 	}
 
-	// Retry video meeting creation for any virtual schedule that
-	// doesn't yet have a link. Covers drafts saved before the host
-	// connected their platform. attachVideoMeetings is idempotent —
-	// schedules that already have a VideoMeetingID or a manual link
-	// are skipped.
-	//
-	// The error is captured (not returned yet) so that if validation
-	// still fails, we can translate the underlying cause into a
-	// user-facing message that explains what to do next.
-	var meetingErr error
-	if err := s.attachVideoMeetings(ctx, event, publishedBy, ""); err != nil {
-		log.Printf("⚠️ video integration on publish: %v", err)
-		meetingErr = err
-	}
-
-	log.Printf("🔎 PUBLISH: meetingErr=%v (nil=%v)", meetingErr, meetingErr == nil)
-
 	if err := event.ValidateForPublish(); err != nil {
 		log.Printf("❌ Publish validation failed: %v", err)
-		log.Printf("🔎 PUBLISH: sending to translator, validationErr=%v meetingErr=%v",
-			err, meetingErr)
-		return nil, s.translatePublishError(err, meetingErr)
+		return nil, s.translatePublishError(err, nil)
 	}
 
 	event.EventStatusID = status.ID
+
+	// Set PublishedAt / LastPublishedAt so IsPublished() returns true.
+	// Without this, later UpdateEvent calls on this event can't detect
+	// the published state and skip the async provisioning enqueue.
+	now := time.Now()
+	if event.PublishedAt == nil {
+		event.PublishedAt = &now
+	}
+	event.LastPublishedAt = &now
+
 	if err := s.repo.UpdateEvent(ctx, event); err != nil {
 		log.Printf("❌ Failed to update event: %v", err)
 		return nil, fmt.Errorf("failed to publish event: %w", err)
 	}
 
 	// Reload the whole event so the returned struct reflects what's
-	// actually in the DB — status, type, category, schedules, and any
-	// DB-assigned IDs. Replacing only Schedules leaves the pre-write
-	// EventStatus on the struct, which is why the response can still
-	// report "draft" after a successful publish.
+	// actually in the DB.
 	if reloaded, reloadErr := s.repo.GetEventByID(ctx, id); reloadErr == nil && reloaded != nil {
 		*event = *reloaded
 	} else if reloadErr != nil {
 		log.Printf("⚠️ Could not reload event after publish: %v", reloadErr)
 	}
 
-	// Mirror schedules into the attendance module. Best-effort:
-	// failures are logged inside the helper and do not fail the
-	// caller.
+	// Mirror schedules into the attendance module. Best-effort.
 	s.syncEventSchedulesToAttendance(ctx, event)
+
+	// Fire-and-forget: provision video meetings for in-window
+	// schedules. The worker skips schedules that already have
+	// video_meeting_id, so this is idempotent.
+	s.enqueueVideoProvisioning(ctx, event.ID)
 
 	log.Printf("✅ Event published successfully: %s", id)
 	return event, nil
@@ -105,9 +101,6 @@ func (s *eventService) CancelEvent(ctx context.Context, id, cancelledBy string) 
 		return nil, fmt.Errorf("failed to cancel event: %w", err)
 	}
 
-	// Reload so the returned struct carries the DB-fresh status,
-	// type, and category. Without this, event.EventStatus stays as
-	// it was loaded, and the response shows the pre-cancel status.
 	if reloaded, reloadErr := s.repo.GetEventByID(ctx, id); reloadErr == nil && reloaded != nil {
 		*event = *reloaded
 	} else if reloadErr != nil {
@@ -139,8 +132,6 @@ func (s *eventService) CompleteEvent(ctx context.Context, id string) (*domain.Ev
 		return nil, fmt.Errorf("failed to complete event: %w", err)
 	}
 
-	// Reload so the returned struct carries the DB-fresh status,
-	// type, and category.
 	if reloaded, reloadErr := s.repo.GetEventByID(ctx, id); reloadErr == nil && reloaded != nil {
 		*event = *reloaded
 	} else if reloadErr != nil {
@@ -155,7 +146,6 @@ func (s *eventService) CompleteEvent(ctx context.Context, id string) (*domain.Ev
 // STATUS - Bulk
 // ============================================================
 
-// BulkPublishEvents publishes multiple events.
 func (s *eventService) BulkPublishEvents(ctx context.Context, ids []string, publishedBy string) (*BulkStatusResult, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
@@ -187,7 +177,6 @@ func (s *eventService) BulkPublishEvents(ctx context.Context, ids []string, publ
 	return result, nil
 }
 
-// BulkCancelEvents cancels multiple events.
 func (s *eventService) BulkCancelEvents(ctx context.Context, ids []string, cancelledBy string) (*BulkStatusResult, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
@@ -215,7 +204,6 @@ func (s *eventService) BulkCancelEvents(ctx context.Context, ids []string, cance
 	return result, nil
 }
 
-// BulkCompleteEvents completes multiple events.
 func (s *eventService) BulkCompleteEvents(ctx context.Context, ids []string) (*BulkStatusResult, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("at least one event ID is required")
@@ -244,13 +232,6 @@ func (s *eventService) BulkCompleteEvents(ctx context.Context, ids []string) (*B
 // PRIVATE HELPER FUNCTIONS
 // ============================================================
 
-// getEventAndCheckPublishPermission loads the event and verifies the user
-// may publish it.
-//
-// Resolution order:
-//   1. Unrestricted: account_admin has event:publish_all → allow.
-//   2. Own-only: trainer has event:publish_own AND owns this event → allow.
-//   3. Otherwise → deny.
 func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id, publishedBy string) (*domain.Event, error) {
 	if publishedBy == "" {
 		return nil, errors.New("published by is required")
@@ -273,7 +254,6 @@ func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id
 	log.Printf("🔍 PUBLISH CHECK: user=%s accountID=%s domain=%s event=%s",
 		publishedBy, accountID, accountDomain, event.ID)
 
-	// 1. Unrestricted publish rights.
 	canAll, err := s.permChecker.CanPublishAllEvents(ctx, publishedBy, accountDomain)
 	if err != nil {
 		return nil, fmt.Errorf("permission check failed: %w", err)
@@ -282,7 +262,6 @@ func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id
 		return event, nil
 	}
 
-	// 2. Own-only publish rights + ownership.
 	canOwn, err := s.permChecker.CanPublishOwnEvents(ctx, publishedBy, accountDomain)
 	if err != nil {
 		return nil, fmt.Errorf("permission check failed: %w", err)
@@ -296,7 +275,6 @@ func (s *eventService) getEventAndCheckPublishPermission(ctx context.Context, id
 	return nil, errors.New("insufficient permissions to publish this event")
 }
 
-// getEventStatusBySlug retrieves an event status by slug.
 func (s *eventService) getEventStatusBySlug(ctx context.Context, slug string) (*domain.EventStatus, error) {
 	status, err := s.repo.GetEventStatusBySlug(ctx, slug)
 	if err != nil {

@@ -752,6 +752,7 @@ func (r *PostgresRepository) GetAllCategories(ctx context.Context) ([]*domain.Ca
 	return categories, nil
 }
 
+
 // ============================================================
 // CHILD ENTITY SAVE/UPDATE HELPERS
 // ============================================================
@@ -760,9 +761,12 @@ func (r *PostgresRepository) saveSchedules(ctx context.Context, eventID string, 
 	if len(schedules) == 0 {
 		return nil
 	}
-	
 	models := toModelSchedules(eventID, schedules)
-	return r.db.WithContext(ctx).Create(&models).Error
+	log.Printf("[debug] saveSchedules: in=%d models=%d firstSessionNum=%d", 
+		len(schedules), len(models), models[0].SessionNumber)   // ← ADD
+	err := r.db.WithContext(ctx).Create(&models).Error
+	log.Printf("[debug] saveSchedules err=%v", err)             // ← ADD
+	return err
 }
 
 func (r *PostgresRepository) deleteSchedules(ctx context.Context, eventID string) error {

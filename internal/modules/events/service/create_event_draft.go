@@ -233,12 +233,6 @@ func (s *eventService) buildDraftEvent(
 		return nil, err
 	}
 
-	// Create meetings on the host's video platform for every virtual
-	// session that doesn't already have a link.
-	if err := s.attachVideoMeetings(ctx, event, cmd.CreatedBy, ""); err != nil {
-		log.Printf("⚠️ video integration: %v", err)
-	}
-
 	return event, nil
 }
 

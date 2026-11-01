@@ -175,7 +175,7 @@ func InitializeApp() (*AppDependencies, error) {
 	certificateServiceHolder := NewEventsCertificateServiceHolder()
 	certificateIssuer := NewEventsCertificateIssuerAdapter(certificateServiceHolder)
 	attendanceReader := NewEventsAttendanceReaderAdapter(service15)
-	domainTaskQueue := NewEventsQueueAdapter(taskQueue)
+	domainTaskQueue := NewEventsVideoQueueAdapter(asynqClient)
 	service17 := service8.NewService(repository2, domainPermissionChecker, userInfoProvider, domainMediaService, organizerProvider, serviceAIService, attendanceRegistrar, videoMeetingCreator, videoIdentityProvider, teamMembershipChecker, certificateIssuer, attendanceReader, domainTaskQueue)
 	authHandler := authhandler.NewAuthHandler(service12, configConfig)
 	accountHandler := handler.NewAccountHandler(service14)

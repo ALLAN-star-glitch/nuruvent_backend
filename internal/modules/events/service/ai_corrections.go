@@ -15,11 +15,12 @@ import (
 // CORRECTION ENGINE — v11.3
 // ============================================================
 //
-// v11.3 migrates the recurrence DTO from the old shape
-// (pattern/day_of_month/week_of_month/ends_on/occurrences) to the
-// new shape (frequency/end_date/count). Both the AI output contract
-// and the domain RecurrenceRule now agree on the same field names,
-// so the toggle echo, corrections, and downstream mapping all align.
+// v11.3 adds a post-AI shape guard: if the model returns SERIES
+// (multiple schedules, is_recurring=false) but those schedules
+// follow a clean weekly cadence, we treat it as RECURRING and
+// collapse to a single template schedule. This catches the case
+// where the AI ignores the shape rules and expands a recurring
+// event into explicit dates.
 
 func applyCorrections(d *GeneratedEventDraft, cctx correctionContext) ([]string, error) {
 	warnings := make([]string, 0)
@@ -177,6 +178,31 @@ func repairShape(d *GeneratedEventDraft, cctx correctionContext) ([]string, erro
 		return warnings, nil
 	}
 
+	// v11.3 GUARD: SERIES that looks like a RECURRING pattern.
+	//
+	// If the model returned multiple schedules but is_recurring=false,
+	// check whether every schedule falls on a fixed weekly cadence.
+	// When it does, the model almost certainly meant SHAPE B and
+	// expanded the recurrence into explicit dates. We derive the
+	// rule, collapse to 1, and mark it as recurring.
+	//
+	// We require >= 3 schedules so that a legitimate 2-session
+	// series is not misclassified.
+	if !d.IsRecurring && len(d.Schedules) >= 3 {
+		if derived := deriveRecurrenceFromSchedules(d.Schedules); derived != nil {
+			warnings = append(warnings, fmt.Sprintf(
+				"Detected a weekly cadence across %d explicit schedules; collapsed to 1 schedule + derived recurrence (%s on %s).",
+				len(d.Schedules),
+				derived.Frequency,
+				strings.Join(derived.DaysOfWeek, ", "),
+			))
+			d.IsRecurring = true
+			d.Recurrence = derived
+			d.Schedules = d.Schedules[:1]
+			return warnings, nil
+		}
+	}
+
 	// Stray recurrence block on a non-recurring event.
 	if !d.IsRecurring && d.Recurrence != nil {
 		warnings = append(warnings, "Dropped recurrence block on non-recurring event.")
@@ -184,6 +210,78 @@ func repairShape(d *GeneratedEventDraft, cctx correctionContext) ([]string, erro
 	}
 
 	return warnings, nil
+}
+
+// deriveRecurrenceFromSchedules inspects a list of schedules and
+// returns a RecurrenceRule if they follow a clean weekly cadence
+// (every gap between consecutive schedules is a whole number of
+// weeks). Returns nil if no clean pattern is found.
+//
+// Daily and monthly cadences are intentionally not derived here:
+// they're rarer in practice, harder to detect unambiguously from
+// a handful of dates, and a wrong guess is more damaging than
+// leaving the draft as a series.
+func deriveRecurrenceFromSchedules(schedules []GeneratedSchedule) *GeneratedRecurrence {
+	if len(schedules) < 3 {
+		return nil
+	}
+
+	dates := make([]time.Time, 0, len(schedules))
+	for _, s := range schedules {
+		t, err := time.Parse("2006-01-02", s.StartDate)
+		if err != nil {
+			return nil
+		}
+		dates = append(dates, t)
+	}
+
+	// Strictly increasing.
+	for i := 1; i < len(dates); i++ {
+		if !dates[i].After(dates[i-1]) {
+			return nil
+		}
+	}
+
+	// Every gap must be a whole number of weeks (multiple of 7 days).
+	minGapWeeks := 0
+	for i := 1; i < len(dates); i++ {
+		gapDays := int(dates[i].Sub(dates[i-1]).Hours() / 24)
+		if gapDays <= 0 || gapDays%7 != 0 {
+			return nil
+		}
+		gapWeeks := gapDays / 7
+		if minGapWeeks == 0 || gapWeeks < minGapWeeks {
+			minGapWeeks = gapWeeks
+		}
+	}
+	if minGapWeeks < 1 {
+		return nil
+	}
+
+	// Collect the set of weekdays that appear.
+	weekdaySet := make(map[time.Weekday]bool)
+	for _, d := range dates {
+		weekdaySet[d.Weekday()] = true
+	}
+	if len(weekdaySet) == 0 || len(weekdaySet) > 7 {
+		return nil
+	}
+
+	daysOfWeek := make([]string, 0, len(weekdaySet))
+	for wd := range weekdaySet {
+		if name := weekdayName(wd); name != "" {
+			daysOfWeek = append(daysOfWeek, name)
+		}
+	}
+	sort.Strings(daysOfWeek)
+
+	count := len(schedules)
+	return &GeneratedRecurrence{
+		Frequency:  "weekly",
+		Interval:   minGapWeeks,
+		DaysOfWeek: daysOfWeek,
+		Count:      &count,
+	}
 }
 
 // ============================================================
