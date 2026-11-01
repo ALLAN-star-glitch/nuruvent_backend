@@ -404,6 +404,8 @@ type ListEventsFilters struct {
 	// CategoryID filters events by their category.
 	CategoryID string
 
+	SearchQuery    string 
+
 	// IncludeDeleted controls whether soft-deleted events are included.
 	IncludeDeleted bool
 
@@ -431,40 +433,22 @@ type ListEventsFilters struct {
 
 // SearchFilters provides filtering for the SearchEvents method.
 type SearchFilters struct {
-	// Team filters search results by team (data filter).
-	Team domain.TeamFilter
+	Team           domain.TeamFilter
+	Account        domain.AccountFilter
+	TeamID         string
+	UserID         string
+	EventTypeID    string
+	CategoryID     string
 
-	// Account filters search results by account.
-	Account domain.AccountFilter
+	EventStatusID  string // ← ADD: filter by draft/published
+	SortBy         string // ← ADD: consistent with ListEvents
+	SortOrder      string // ← ADD: consistent with ListEvents
 
-	// TeamID filters search results by a specific team ID.
-	TeamID string
-
-	// UserID filters search results by creator.
-	UserID string
-
-	// EventTypeID filters search results by event type.
-	EventTypeID string
-
-	// CategoryID filters search results by category.
-	CategoryID string
-
-	// IncludeDeleted controls whether soft-deleted events are included in search.
 	IncludeDeleted bool
-
-	// OnlyDeleted controls whether ONLY soft-deleted events are returned in search.
-	OnlyDeleted bool
-
-	// Limit controls the maximum number of search results.
-	Limit int
-
-	// Offset controls pagination offset for search results.
-	Offset int
-
-	// Visibility filters search results by visibility level.
-	Visibility string
-
-	// IncludeCreator controls whether creator user info is populated.
+	OnlyDeleted    bool
+	Limit          int
+	Offset         int
+	Visibility     string
 	IncludeCreator bool
 }
 

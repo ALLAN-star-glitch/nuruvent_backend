@@ -197,14 +197,35 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 		return response.BadRequest(c, "Invalid query parameters", nil)
 	}
 
+	// Resolve pagination — accept either (limit/offset) or
+	// (page/page_size). Prefer limit/offset when both are set.
+	if req.PageSize > 0 || req.Page > 0 {
+		if req.Page < 1 {
+			req.Page = 1
+		}
+		if req.PageSize <= 0 {
+			req.PageSize = 20
+		}
+		if req.PageSize > 100 {
+			req.PageSize = 100
+		}
+		req.Limit = req.PageSize
+		req.Offset = (req.Page - 1) * req.PageSize
+	}
 	if req.Limit <= 0 {
 		req.Limit = 20
 	}
 	if req.Limit > 100 {
 		req.Limit = 100
 	}
+
+	// Sorting defaults — updated_at DESC is the safest default for a
+	// team-scoped events list, because every save (autosave, publish)
+	// bumps updated_at, so recently-touched drafts and events float to
+	// the top. The old default (start_date) pushed drafts with no date
+	// to the bottom of the list, hiding them behind pagination.
 	if req.SortBy == "" {
-		req.SortBy = "created_at"
+		req.SortBy = "updated_at"
 	}
 	if req.SortOrder == "" {
 		req.SortOrder = "desc"
@@ -222,6 +243,7 @@ func (h *EventHandler) ListEvents(c fiber.Ctx) error {
 		EventTypeID:    req.EventTypeID,
 		EventStatusID:  req.EventStatusID,
 		CategoryID:     req.CategoryID,
+		SearchQuery:    req.SearchQuery,
 		IncludeDeleted: req.IncludeDeleted,
 		OnlyDeleted:    req.OnlyDeleted,
 		IncludeCreator: req.IncludeCreator,
@@ -447,12 +469,31 @@ func (h *EventHandler) ListUserEvents(c fiber.Ctx) error {
 	tokenTeamID := handlerhelper.GetTeamID(c)
 	tokenTeamType := resolveTeamType(c)
 
+	// ⬇️ NEW: read sort/filter params the frontend actually sends
+	sortBy := handlerhelper.GetQueryString(c, "sort_by", "")
+	sortOrder := handlerhelper.GetQueryString(c, "sort_order", "")
+	if sortBy == "" {
+		sortBy = "updated_at"
+	}
+	if sortOrder == "" {
+		sortOrder = "desc"
+	}
+
 	filters := service.ListEventsFilters{
 		Limit:          limit,
 		Offset:         offset,
 		IncludeDeleted: includeDeleted,
 		OnlyDeleted:    onlyDeleted,
 		IncludeCreator: includeCreator,
+
+		// ⬇️ NEW
+		SortBy:        sortBy,
+		SortOrder:     sortOrder,
+		EventTypeID:   handlerhelper.GetQueryString(c, "event_type_id", ""),
+		EventStatusID: handlerhelper.GetQueryString(c, "event_status_id", ""),
+		CategoryID:    handlerhelper.GetQueryString(c, "category_id", ""),
+		SearchQuery:   handlerhelper.GetQueryString(c, "q", ""),
+		Visibility:    handlerhelper.GetQueryString(c, "visibility", ""),
 	}
 
 	isTeamScope := scope == "team" || overrideTeamID != "" || (scope == "" && tokenTeamID != "")
@@ -485,6 +526,7 @@ func (h *EventHandler) ListUserEvents(c fiber.Ctx) error {
 
 	ctx := handlerhelper.EnrichUserContext(c)
 
+	
 	events, total, err := h.svc.ListEvents(ctx, filters)
 	if err != nil {
 		return respondClassifiedError(c, "view these events", err)

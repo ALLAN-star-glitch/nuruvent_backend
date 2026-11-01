@@ -8,6 +8,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
@@ -78,8 +81,6 @@ func (s *eventService) logCreateEvent(cmd CreateEventCommand) {
 		cmd.Name, cmd.EventTypeID, cmd.TeamID, cmd.CreatedBy)
 }
 
-// validatePublishedEventPermissions checks whether the caller may create
-// published events in this account.
 func (s *eventService) validatePublishedEventPermissions(ctx context.Context, cmd CreateEventCommand) error {
 	accountDomain := domain.AccountDomain(cmd.AccountID)
 	if accountDomain == "" {
@@ -102,7 +103,6 @@ func (s *eventService) validatePublishedEventPermissions(ctx context.Context, cm
 	return nil
 }
 
-// validatePublishedEventFields validates required fields for published events.
 func (s *eventService) validatePublishedEventFields(cmd CreateEventCommand) error {
 	if cmd.Name == "" {
 		return domain.ErrInvalidEventName
@@ -114,7 +114,6 @@ func (s *eventService) validatePublishedEventFields(cmd CreateEventCommand) erro
 		return domain.ErrInvalidEventType
 	}
 
-	// Recurrence may replace schedules
 	if len(cmd.Schedules) == 0 && cmd.Recurrence == nil {
 		return domain.ErrEventScheduleRequired
 	}
@@ -128,7 +127,6 @@ func (s *eventService) validatePublishedEventFields(cmd CreateEventCommand) erro
 	return nil
 }
 
-// generateEventIdentifiersForPublished creates name, display name, and slug from user input.
 func (s *eventService) generateEventIdentifiersForPublished(ctx context.Context, rawInput string) (string, string, string) {
 	if rawInput == "" {
 		rawInput = "Untitled Event"
@@ -170,7 +168,6 @@ func (s *eventService) generateEventIdentifiersForPublished(ctx context.Context,
 	return displayName, name, uniqueSlug
 }
 
-// validateEventTypeForPublished validates that the event type exists.
 func (s *eventService) validateEventTypeForPublished(ctx context.Context, eventTypeID string) (string, error) {
 	log.Printf("🔍 Validating event type: %s", eventTypeID)
 	eventType, err := s.repo.GetEventTypeByID(ctx, eventTypeID)
@@ -189,8 +186,7 @@ func (s *eventService) validateEventTypeForPublished(ctx context.Context, eventT
 // buildPublishedEvent creates and populates the domain entity.
 //
 // NOTE: This function does NOT provision video meetings. Provisioning
-// happens asynchronously via the worker after the event is saved
-// (see setPublishedStatusAndSave → enqueueVideoProvisioning).
+// happens asynchronously via the worker after the event is saved.
 func (s *eventService) buildPublishedEvent(
 	ctx context.Context,
 	cmd CreateEventCommand,
@@ -217,7 +213,7 @@ func (s *eventService) buildPublishedEvent(
 	}
 
 	event.Slug = slug
-	event.AccountID = cmd.AccountID // set explicitly so ResolveAccountDomain works downstream
+	event.AccountID = cmd.AccountID
 
 	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s, TeamID=%s, AccountID=%s",
 		event.ID, event.Name, event.Slug, event.DisplayName, event.TeamID, event.AccountID)
@@ -228,34 +224,26 @@ func (s *eventService) buildPublishedEvent(
 		return nil, err
 	}
 
-	// Repair schedules if the recurrence rule hasn't been materialized
-	// yet (e.g. draft created before the recurrence fix).
 	if err := s.expandRecurrenceIfNeeded(event); err != nil {
 		log.Printf("⚠️ recurrence repair on publish: %v", err)
 	}
 
-	// Reconcile platform ↔ link consistency so the async worker sees
-	// a clean state.
 	normalizeSchedulePlatforms(event.Schedules)
 
 	return event, nil
 }
 
-// populatePublishedEventFields fills all non-schedule, non-derived fields
-// for published events.
 func (s *eventService) populatePublishedEventFields(ctx context.Context, event *domain.Event, cmd CreateEventCommand) {
 	event.ShortDescription = cmd.ShortDescription
 	event.Tags = cmd.Tags
 	event.Language = cmd.Language
 	event.CategoryID = cmd.CategoryID
 
-	// Recurrence logic
 	if cmd.Recurrence != nil {
 		event.RecurrenceRule = buildRecurrenceRule(cmd.Recurrence)
 	}
 	event.IsRecurring = (event.RecurrenceRule != nil)
 
-	// Ticket fields
 	event.IsFreeEvent = cmd.IsFree
 	event.Capacity = cmd.Capacity
 	event.WaitlistEnabled = cmd.Waitlist
@@ -270,7 +258,6 @@ func (s *eventService) populatePublishedEventFields(ctx context.Context, event *
 		}
 	}
 
-	// Access & Privacy
 	if cmd.Visibility != "" {
 		event.Visibility = cmd.Visibility
 	}
@@ -278,27 +265,22 @@ func (s *eventService) populatePublishedEventFields(ctx context.Context, event *
 	event.InviteOnly = cmd.InviteOnly
 	event.InvitedEmails = cmd.InvitedEmails
 
-	// Monetization
 	event.IsFeatured = cmd.IsFeatured
 	event.CertificateEnabled = cmd.CertificateEnabled
 	event.CertificatePrice = cmd.CertificatePrice
 	event.CertificateTemplateID = cmd.CertificateTemplateID
 
-	// SEO
 	if cmd.SEO != nil {
 		s.applySEO(event, cmd.SEO)
 	}
 }
 
-// populateEventSchedules converts and sets schedules.
 func (s *eventService) populateEventSchedules(ctx context.Context, event *domain.Event, schedules []ScheduleInput) error {
 	if len(schedules) == 0 && event.RecurrenceRule == nil {
 		return nil
 	}
 
-	// Handle recurrence expansion
 	if event.RecurrenceRule != nil && len(schedules) > 0 {
-		// Use the first schedule as the template
 		template, err := s.convertSchedules(schedules[:1])
 		if err != nil {
 			return err
@@ -313,22 +295,19 @@ func (s *eventService) populateEventSchedules(ctx context.Context, event *domain
 		var generatedSchedules []domain.EventSchedule
 		for i, date := range dates {
 			clone := baseSchedule
-			clone.ID = "" // let DB assign
+			clone.ID = ""
 			clone.StartDate = date
-			// We can't auto-calculate EndDate reliably without knowing duration,
-			// but if the template had an EndDate, we can offset it.
 			if baseSchedule.EndDate != nil {
 				duration := baseSchedule.EndDate.Sub(baseSchedule.StartDate)
 				newEnd := date.Add(duration)
 				clone.EndDate = &newEnd
 			}
-			clone.SessionNumber = i + 1 // auto-increment session number
-			clone.SessionName = expandSessionName(baseSchedule.SessionName, i+1) // NEW: rename per-session
+			clone.SessionNumber = i + 1
+			clone.SessionName = expandSessionName(baseSchedule.SessionName, i+1)
 			generatedSchedules = append(generatedSchedules, clone)
 		}
 		event.Schedules = generatedSchedules
 	} else if len(schedules) > 0 {
-		// Manual schedules path
 		converted, err := s.convertSchedules(schedules)
 		if err != nil {
 			return err
@@ -366,12 +345,11 @@ func (s *eventService) setPublishedStatusAndSave(ctx context.Context, event *dom
 	}
 
 	log.Printf("💾 Saving published event to database...")
-	if err := s.repo.CreateEvent(ctx, event); err != nil {
+	if err := s.createEventWithSlugRetry(ctx, event); err != nil {
 		log.Printf("❌ Failed to create event: %v", err)
-		return fmt.Errorf("failed to create event: %w", err)
+		return err
 	}
 
-	// Reload so DB-assigned schedule IDs land on event.Schedules
 	if reloaded, reloadErr := s.repo.GetEventByID(ctx, event.ID); reloadErr == nil && reloaded != nil {
 		event.Schedules = reloaded.Schedules
 		event.Tickets = reloaded.Tickets
@@ -379,24 +357,117 @@ func (s *eventService) setPublishedStatusAndSave(ctx context.Context, event *dom
 		log.Printf("⚠️ Could not reload event for attendance sync: %v", reloadErr)
 	}
 
-	// Mirror schedules into the attendance module.
 	s.syncEventSchedulesToAttendance(ctx, event)
-
-	// Fire-and-forget: provision video meetings for schedules within
-	// the 30-day window. Failures are logged and swallowed — the
-	// daily sweep will catch any missed schedules.
 	s.enqueueVideoProvisioning(ctx, event.ID)
 
 	return nil
 }
 
-// enqueueVideoProvisioning enqueues a fire-and-forget task that
-// provisions video meetings for the event's schedules within the
-// rolling 30-day window.
+// ============================================================
+// SLUG COLLISION RETRY
+// ============================================================
+
+// createEventWithSlugRetry attempts to persist the event. On unique-slug
+// collisions (concurrent create, or leftover from a failed prior attempt),
+// it bumps the slug (appends -1, -2, ...) and retries up to 5 times.
 //
-// This does NOT block the HTTP response. If the queue is unreachable
-// or the enqueue fails, we log and move on. The daily sweep will
-// catch any schedule that the worker missed.
+// This is the backend's safety net for races the frontend can't prevent.
+func (s *eventService) createEventWithSlugRetry(ctx context.Context, event *domain.Event) error {
+	const maxAttempts = 5
+	originalSlug := event.Slug
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		err := s.repo.CreateEvent(ctx, event)
+		if err == nil {
+			if attempt > 0 {
+				log.Printf(
+					"[events] slug collision recovered: original=%s final=%s attempts=%d",
+					originalSlug, event.Slug, attempt+1,
+				)
+			}
+			return nil
+		}
+
+		if !isSlugUniqueViolation(err) {
+			return fmt.Errorf("failed to create event: %w", err)
+		}
+
+		log.Printf(
+			"[events] slug collision on %s (attempt %d/%d); bumping and retrying",
+			event.Slug, attempt+1, maxAttempts,
+		)
+
+		bumped, bumpErr := s.nextAvailableSlug(ctx, originalSlug, attempt+1)
+		if bumpErr != nil {
+			return fmt.Errorf("failed to resolve slug collision: %w", bumpErr)
+		}
+		event.Slug = bumped
+	}
+
+	return fmt.Errorf(
+		"failed to create event after %d attempts (slug collision on %s)",
+		maxAttempts, originalSlug,
+	)
+}
+
+// nextAvailableSlug returns "<base>-<suffix>" for the first suffix >= start
+// that isn't taken by a live (non-soft-deleted) event.
+func (s *eventService) nextAvailableSlug(
+	ctx context.Context,
+	baseSlug string,
+	start int,
+) (string, error) {
+	clean := stripNumericSuffix(baseSlug)
+
+	for i := start; i < start+100; i++ {
+		candidate := fmt.Sprintf("%s-%d", clean, i)
+		existing, err := s.repo.GetEventBySlug(ctx, candidate)
+		if err != nil {
+			return "", fmt.Errorf("check slug %s: %w", candidate, err)
+		}
+		if existing == nil {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("no available slug in range for base %s", clean)
+}
+
+// isSlugUniqueViolation reports whether err is a Postgres 23505 on the
+// events_slug_unique constraint.
+func isSlugUniqueViolation(err error) bool {
+	if err == nil {
+		return false
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505" &&
+			(pgErr.ConstraintName == "events_slug_unique" ||
+				strings.Contains(pgErr.ConstraintName, "slug"))
+	}
+	return strings.Contains(err.Error(), "events_slug_unique") ||
+		(strings.Contains(err.Error(), "duplicate key") &&
+			strings.Contains(err.Error(), "slug"))
+}
+
+// stripNumericSuffix removes a trailing "-123" from a slug.
+func stripNumericSuffix(slug string) string {
+	idx := strings.LastIndex(slug, "-")
+	if idx < 0 || idx == len(slug)-1 {
+		return slug
+	}
+	suffix := slug[idx+1:]
+	for _, r := range suffix {
+		if r < '0' || r > '9' {
+			return slug
+		}
+	}
+	return slug[:idx]
+}
+
+// ============================================================
+// ENQUEUE
+// ============================================================
+
 func (s *eventService) enqueueVideoProvisioning(ctx context.Context, eventID string) {
 	if s.queue == nil {
 		log.Printf("⚠️ queue not configured; skipping video provisioning for event %s", eventID)

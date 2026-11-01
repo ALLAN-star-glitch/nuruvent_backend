@@ -85,8 +85,9 @@ func (s *eventService) GetEventBySlug(ctx context.Context, slug string) (*domain
 func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters) ([]*domain.Event, int64, error) {
 	userID := s.getUserIDFromContext(ctx)
 
-	log.Printf("🔍 SERVICE: IncludeDeleted=%v, OnlyDeleted=%v, IncludeCreator=%v",
-		filters.IncludeDeleted, filters.OnlyDeleted, filters.IncludeCreator)
+	log.Printf("🔍 SERVICE: IncludeDeleted=%v, OnlyDeleted=%v, IncludeCreator=%v, SearchQuery=%q, SortBy=%q %q",
+		filters.IncludeDeleted, filters.OnlyDeleted, filters.IncludeCreator,
+		filters.SearchQuery, filters.SortBy, filters.SortOrder)
 
 	if userID == "" {
 		filters.Visibility = string(domain.VisibilityPublic)
@@ -119,7 +120,6 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 				return nil, 0, fmt.Errorf("permission check failed: %w", err)
 			}
 
-
 			if !canReadAll {
 				canReadOwn, err := s.permChecker.CanReadOwnEvents(ctx, userID, accountDomain)
 				if err != nil {
@@ -137,7 +137,6 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 				// The account + team scope from the filter is the actual boundary.
 			}
 		}
-
 	}
 
 	// Normalize: prefer the string TeamID; fall back to the object's ID
@@ -155,6 +154,7 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 		EventTypeID:    filters.EventTypeID,
 		EventStatusID:  filters.EventStatusID,
 		CategoryID:     filters.CategoryID,
+		SearchQuery:    filters.SearchQuery, // ← WIRED: passed through to the repo's ILIKE filter
 		IncludeDeleted: filters.IncludeDeleted,
 		OnlyDeleted:    filters.OnlyDeleted,
 		Limit:          filters.Limit,
@@ -164,8 +164,9 @@ func (s *eventService) ListEvents(ctx context.Context, filters ListEventsFilters
 		Visibility:     domain.Visibility(filters.Visibility),
 	}
 
-	log.Printf("🔍 DOMAIN FILTERS: IncludeDeleted=%v, OnlyDeleted=%v, TeamID=%s",
-		domainFilters.IncludeDeleted, domainFilters.OnlyDeleted, domainFilters.TeamID)
+	log.Printf("🔍 DOMAIN FILTERS: IncludeDeleted=%v, OnlyDeleted=%v, TeamID=%s, SearchQuery=%q, SortBy=%q %q",
+		domainFilters.IncludeDeleted, domainFilters.OnlyDeleted, domainFilters.TeamID,
+		domainFilters.SearchQuery, domainFilters.SortBy, domainFilters.SortOrder)
 
 	events, total, err := s.repo.ListEvents(ctx, domainFilters)
 	if err != nil {
@@ -253,10 +254,6 @@ func (s *eventService) GetEventsByTeam(ctx context.Context, teamID string, page,
 }
 
 // GetUpcomingEvents retrieves upcoming events for a team.
-//
-// Visibility rules apply the same way as ListEvents: anonymous callers
-// only see public/unlisted events; authenticated callers additionally
-// see private events they own or are team members of.
 func (s *eventService) GetUpcomingEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error) {
 	limit = s.sanitizeLimit(limit, 10, 50)
 
@@ -266,15 +263,11 @@ func (s *eventService) GetUpcomingEvents(ctx context.Context, teamID string, lim
 	}
 
 	userID := s.getUserIDFromContext(ctx)
-
-	// Enforce visibility before enriching. Without this, private events
-	// leak into the public "upcoming" feed.
 	filtered := s.filterEventsByVisibility(ctx, userID, events, false)
 
 	for _, event := range filtered {
 		if organizer, err := s.getOrganizerInfo(ctx, event); err != nil {
 			log.Printf("⚠️ Failed to get organizer info for event %s: %v", event.ID, err)
-			// Leave Organizer nil; do NOT skip the rest of the iteration.
 		} else {
 			event.Organizer = organizer
 		}
@@ -288,8 +281,6 @@ func (s *eventService) GetUpcomingEvents(ctx context.Context, teamID string, lim
 }
 
 // GetPastEvents retrieves past events for a team.
-//
-// Visibility rules apply the same way as ListEvents.
 func (s *eventService) GetPastEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error) {
 	limit = s.sanitizeLimit(limit, 10, 50)
 
@@ -299,14 +290,11 @@ func (s *eventService) GetPastEvents(ctx context.Context, teamID string, limit i
 	}
 
 	userID := s.getUserIDFromContext(ctx)
-
-	// Enforce visibility before enriching.
 	filtered := s.filterEventsByVisibility(ctx, userID, events, false)
 
 	for _, event := range filtered {
 		if organizer, err := s.getOrganizerInfo(ctx, event); err != nil {
 			log.Printf("⚠️ Failed to get organizer info for event %s: %v", event.ID, err)
-			// Leave Organizer nil; do NOT skip the rest of the iteration.
 		} else {
 			event.Organizer = organizer
 		}
@@ -327,13 +315,11 @@ func (s *eventService) SearchEvents(ctx context.Context, query string, filters S
 
 	userID := s.getUserIDFromContext(ctx)
 
-	// Anonymous callers: force public-only, no creator info.
 	if userID == "" {
 		filters.Visibility = string(domain.VisibilityPublic)
 		filters.IncludeCreator = false
 	}
 
-	// Team- or account-scoped permission check.
 	if userID != "" {
 		teamID := filters.TeamID
 		if teamID == "" {
@@ -342,7 +328,6 @@ func (s *eventService) SearchEvents(ctx context.Context, query string, filters S
 
 		accountID := filters.Account.ID
 		if accountID == "" && teamID != "" {
-			// Resolve team's parent account via the repository
 			resolved, err := s.repo.AccountIDForTeam(ctx, teamID)
 			if err != nil {
 				return nil, 0, fmt.Errorf("failed to resolve account for team %s: %w", teamID, err)
@@ -400,7 +385,6 @@ func (s *eventService) SearchEvents(ctx context.Context, query string, filters S
 	for _, event := range filteredEvents {
 		if organizer, err := s.getOrganizerInfo(ctx, event); err != nil {
 			log.Printf("⚠️ Failed to get organizer info for event %s: %v", event.ID, err)
-			// Leave Organizer nil; do NOT skip the rest of the iteration.
 		} else {
 			event.Organizer = organizer
 		}
@@ -433,17 +417,10 @@ func (s *eventService) GetTicketTypes(ctx context.Context) ([]*domain.TicketType
 // PRIVATE HELPER FUNCTIONS
 // ============================================================
 
-// getUserIDFromContext extracts user ID from context (typed key).
 func (s *eventService) getUserIDFromContext(ctx context.Context) string {
 	return domain.GetUserID(ctx)
 }
 
-// accountIDFromFilters derives the target account ID from the filters.
-//
-// Preference order:
-//  1. filters.Account.ID
-//  2. resolve filters.Team.ID → account via repository
-//  3. filters.TeamID → account via repository
 func (s *eventService) accountIDFromFilters(ctx context.Context, filters ListEventsFilters) (string, error) {
 	if filters.Account.ID != "" {
 		return filters.Account.ID, nil
@@ -464,17 +441,6 @@ func (s *eventService) accountIDFromFilters(ctx context.Context, filters ListEve
 	return accountID, nil
 }
 
-// canViewEvent checks if a user can view an event.
-//
-// Rules:
-//   - Public events: everyone.
-//   - Unlisted events: everyone (link-only access).
-//   - Private events: only members of the team that owns the event.
-//   - Deleted events: the creator, or users with read_all on the account
-//     (handled separately by canViewDeletedEvent).
-//
-// The creator is not special-cased — they see their own private event
-// because they are, by construction, a member of the team.
 func (s *eventService) canViewEvent(
 	ctx context.Context,
 	userID string,
@@ -518,7 +484,6 @@ func (s *eventService) canViewEvent(
 	return isMember
 }
 
-// canViewDeletedEvent checks if a user can view a soft-deleted event.
 func (s *eventService) canViewDeletedEvent(ctx context.Context, userID string, event *domain.Event) bool {
 	if event.CreatedBy == userID {
 		return true
@@ -545,7 +510,6 @@ func (s *eventService) canViewDeletedEvent(ctx context.Context, userID string, e
 	return false
 }
 
-// filterEventsByVisibility filters events based on visibility permissions.
 func (s *eventService) filterEventsByVisibility(ctx context.Context, userID string, events []*domain.Event, showDeleted bool) []*domain.Event {
 	if len(events) == 0 {
 		return events
@@ -567,7 +531,6 @@ func (s *eventService) filterEventsByVisibility(ctx context.Context, userID stri
 	return filtered
 }
 
-// calculatePagination calculates limit and offset from page and pageSize.
 func (s *eventService) calculatePagination(page, pageSize int) (limit, offset int) {
 	if pageSize <= 0 {
 		pageSize = 20
@@ -581,7 +544,6 @@ func (s *eventService) calculatePagination(page, pageSize int) (limit, offset in
 	return pageSize, (page - 1) * pageSize
 }
 
-// sanitizeLimit sanitizes the limit parameter.
 func (s *eventService) sanitizeLimit(limit, defaultLimit, maxLimit int) int {
 	if limit <= 0 {
 		return defaultLimit
@@ -592,8 +554,6 @@ func (s *eventService) sanitizeLimit(limit, defaultLimit, maxLimit int) int {
 	return limit
 }
 
-// AdjustAttendeeCount atomically adjusts the event's attendee counter.
-// Positive delta = new registration; negative = cancellation.
 func (s *eventService) AdjustAttendeeCount(ctx context.Context, eventID string, delta int) error {
 	if delta == 0 {
 		return nil
@@ -610,7 +570,6 @@ func (s *eventService) ListEventIDsByTeam(
 		return []string{}, nil
 	}
 
-	// Resolve the team's parent account.
 	accountID, err := s.repo.AccountIDForTeam(ctx, teamID)
 	if err != nil {
 		return nil, fmt.Errorf("resolve team account: %w", err)
@@ -619,7 +578,6 @@ func (s *eventService) ListEventIDsByTeam(
 		return nil, domain.ErrForbidden
 	}
 
-	// Authorize the caller against that account.
 	accountDomain := domain.AccountDomain(accountID)
 	canReadAll, err := s.permChecker.CanReadAllEvents(ctx, userID, accountDomain)
 	if err != nil {
@@ -635,7 +593,6 @@ func (s *eventService) ListEventIDsByTeam(
 		}
 	}
 
-	// Authorized. Fetch the event IDs.
 	events, _, err := s.repo.ListEvents(ctx, domain.ListEventsFilters{
 		TeamID: teamID,
 		Limit:  1000,
@@ -656,8 +613,6 @@ func (s *eventService) ListEventIDsByTeam(
 	return ids, nil
 }
 
-// ResolveEventAccount returns the account UUID that owns the event's
-// team.
 func (s *eventService) ResolveEventAccount(
 	ctx context.Context,
 	eventID string,
@@ -666,8 +621,8 @@ func (s *eventService) ResolveEventAccount(
 		return "", domain.ErrEventNotFound
 	}
 
-	event, err := s.repo.GetEventByID(ctx, eventID) // Get event by id - expects an event or an error
-	if err != nil { 
+	event, err := s.repo.GetEventByID(ctx, eventID)
+	if err != nil {
 		return "", err
 	}
 	if event == nil {
