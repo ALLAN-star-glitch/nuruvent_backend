@@ -113,12 +113,12 @@ func (s *eventService) validatePublishedEventFields(cmd CreateEventCommand) erro
 	if cmd.EventTypeID == "" {
 		return domain.ErrInvalidEventType
 	}
-	
+
 	// Recurrence may replace schedules
 	if len(cmd.Schedules) == 0 && cmd.Recurrence == nil {
 		return domain.ErrEventScheduleRequired
 	}
-	
+
 	if len(cmd.Tickets) == 0 {
 		return domain.ErrEventTicketRequired
 	}
@@ -187,6 +187,10 @@ func (s *eventService) validateEventTypeForPublished(ctx context.Context, eventT
 }
 
 // buildPublishedEvent creates and populates the domain entity.
+//
+// NOTE: This function does NOT provision video meetings. Provisioning
+// happens asynchronously via the worker after the event is saved
+// (see setPublishedStatusAndSave → enqueueVideoProvisioning).
 func (s *eventService) buildPublishedEvent(
 	ctx context.Context,
 	cmd CreateEventCommand,
@@ -224,12 +228,14 @@ func (s *eventService) buildPublishedEvent(
 		return nil, err
 	}
 
-	// Create meetings on the host's video platform for every virtual
-	// session that doesn't already have a link.
-	if err := s.attachVideoMeetings(ctx, event, cmd.CreatedBy, ""); err != nil {
-		log.Printf("⚠️ video integration: %v", err)
+	// Repair schedules if the recurrence rule hasn't been materialized
+	// yet (e.g. draft created before the recurrence fix).
+	if err := s.expandRecurrenceIfNeeded(event); err != nil {
+		log.Printf("⚠️ recurrence repair on publish: %v", err)
 	}
 
+	// Reconcile platform ↔ link consistency so the async worker sees
+	// a clean state.
 	normalizeSchedulePlatforms(event.Schedules)
 
 	return event, nil
@@ -317,6 +323,7 @@ func (s *eventService) populateEventSchedules(ctx context.Context, event *domain
 				clone.EndDate = &newEnd
 			}
 			clone.SessionNumber = i + 1 // auto-increment session number
+			clone.SessionName = expandSessionName(baseSchedule.SessionName, i+1) // NEW: rename per-session
 			generatedSchedules = append(generatedSchedules, clone)
 		}
 		event.Schedules = generatedSchedules
@@ -382,7 +389,6 @@ func (s *eventService) setPublishedStatusAndSave(ctx context.Context, event *dom
 
 	return nil
 }
-
 
 // enqueueVideoProvisioning enqueues a fire-and-forget task that
 // provisions video meetings for the event's schedules within the

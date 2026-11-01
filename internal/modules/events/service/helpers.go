@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
@@ -646,4 +648,78 @@ func applyVenueFromSchedules(event *domain.Event, schedules []domain.EventSchedu
 		event.VenueName = s.Location
 		return
 	}
+}
+
+// expandRecurrenceIfNeeded materializes the recurrence rule into
+// concrete schedules. It is a no-op when:
+//   - the event has no recurrence rule
+//   - the event has no template schedule
+//   - the expansion produces no more dates than currently exist
+//
+// Existing schedule IDs are preserved positionally when the count
+// doesn't change; otherwise the whole slice is regenerated from the
+// template and all video meetings are cleared (they'll be re-created
+// by attachVideoMeetings).
+func (s *eventService) expandRecurrenceIfNeeded(event *domain.Event) error {
+	if event.RecurrenceRule == nil || len(event.Schedules) == 0 {
+		return nil
+	}
+
+	template := event.Schedules[0]
+	dates, err := event.ExpandRecurrence(template.StartDate)
+	if err != nil {
+		return fmt.Errorf("expand recurrence: %w", err)
+	}
+
+	// If the DB already has this many schedules, they're already
+	// expanded — do not regenerate (would orphan meetings).
+	if len(dates) <= len(event.Schedules) {
+		return nil
+	}
+
+	expanded := make([]domain.EventSchedule, len(dates))
+	for i, date := range dates {
+		clone := template
+		clone.ID = ""                     // new row
+		clone.StartDate = date
+		clone.SessionNumber = i + 1
+		clone.SessionName = expandSessionName(template.SessionName, i+1)
+		// Clear meeting state — will be re-provisioned for rows
+		// within the 30-day window by attachVideoMeetings.
+		clone.VideoMeetingID = nil
+		clone.VideoMeetingExternalID = ""
+		clone.MeetLink = ""
+		clone.ZoomLink = ""
+		if template.EndDate != nil {
+			dur := template.EndDate.Sub(template.StartDate)
+			newEnd := date.Add(dur)
+			clone.EndDate = &newEnd
+		}
+		expanded[i] = clone
+	}
+
+	event.Schedules = expanded
+	log.Printf("[recurrence] expanded %d → %d sessions", len(dates), len(expanded))
+	return nil
+}
+
+// expandSessionName returns the session name for occurrence n.
+//
+// If the template's name matches "Session N" or "Session N: <rest>",
+// the leading prefix is stripped and re-prefixed with the correct
+// number, so session 4 doesn't get labeled "Session 1".
+//
+// Any other name (e.g. the event name) is re-prefixed with the
+// correct session number for clarity in list views.
+var sessionNamePrefixRE = regexp.MustCompile(`(?i)^session\s*\d+\s*[:.\-]?\s*`)
+
+func expandSessionName(templateName string, n int) string {
+	name := strings.TrimSpace(templateName)
+	if loc := sessionNamePrefixRE.FindStringIndex(name); loc != nil {
+		name = strings.TrimSpace(name[loc[1]:])
+	}
+	if name == "" {
+		return fmt.Sprintf("Session %d", n)
+	}
+	return fmt.Sprintf("Session %d: %s", n, name)
 }

@@ -10,15 +10,17 @@ import (
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
 )
 
-const PromptVersion = "v11.1"
+const PromptVersion = "v11.2"
 
 // ============================================================
-// SYSTEM PROMPT — v11.1
+// SYSTEM PROMPT — v11.2
 // ============================================================
 //
-// v11 made the PROMPT the single source of truth for shape.
+// v11.2 raises the cadence rule to the very top of the prompt,
+// because the model was still classifying "N-session ... every X and Y"
+// prompts as SERIES when the rule was buried below examples.
 //
-// v11.1 removes platform names from the schedule location. Virtual
+// v11.1 removed platform names from the schedule location. Virtual
 // schedules use the label "Virtual". The platform (Google Meet,
 // Zoom, etc.) is decided downstream by the video integration and
 // is never named by the AI.
@@ -30,6 +32,49 @@ const PromptVersion = "v11.1"
 
 const systemPromptV11 = `You are an event generator for the Nuruvent events platform.
 Return ONLY valid JSON. No markdown, no explanations, no commentary.
+
+================================================================
+⚠️  THE ONE RULE YOU MUST NOT BREAK  ⚠️
+================================================================
+
+If the prompt contains a CADENCE WORD and a COUNT or END DATE,
+the shape is RECURRING (B). This is non-negotiable, regardless of
+how the prompt is phrased.
+
+CADENCE WORDS (any one of these is enough):
+  "every [weekday]", "every [N] [days/weeks/months]",
+  "weekly", "monthly", "daily", "bi-weekly",
+  "each [weekday]", "once a week", "twice a week",
+  "for N weeks", "for N months", "for N sessions",
+  "N-session", "N-week", "N-month"
+
+COUNT or END DATE (any one of these):
+  "for 4 sessions", "for 6 weeks", "4-session", "6-week",
+  "until [date]", "ending [date]", "through [date]"
+
+RECURRING means "interchangeable repetitions on a fixed rhythm".
+It does NOT mean "4 explicit dates." Even if the prompt names a
+start date, that start date is the FIRST OCCURRENCE, not a
+schedule list.
+
+Examples that MUST be RECURRING (SHAPE B):
+  ✗ "A 4-session bootcamp meeting every Mon and Wed"
+      → WRONG output: 4 schedules, is_recurring=false
+      → RIGHT output: 1 schedule + recurrence {weekly, [mon,wed], count:4}
+  ✗ "A 6-week Python class starting Nov 10"
+      → RIGHT: 1 schedule + recurrence {weekly, [nov-10-weekday], count:6}
+  ✗ "Weekly class every Tuesday for 6 weeks"
+      → RIGHT: 1 schedule + recurrence {weekly, [tuesday], count:6}
+
+SERIES (SHAPE C) requires DISTINCT CONTENT per session:
+  ✓ "A 3-day bootcamp: Day 1 Docker, Day 2 K8s, Day 3 CI/CD"
+      → RIGHT: 3 schedules (different topics)
+  ✓ "A workshop on Dec 5 and a networking mixer on Dec 6"
+      → RIGHT: 2 schedules (different content)
+
+The test: "Would deleting one session leave a valid event?"
+  YES → RECURRING (interchangeable)
+  NO  → SERIES (each session is a distinct part)
 
 ================================================================
 STEP 1 — DECIDE THE SHAPE
@@ -135,6 +180,19 @@ Example F: "A 6-week Python bootcamp starting November 10."
 → Output: 1 schedule + recurrence { frequency: "weekly", interval: 1, days_of_week: [weekday of Nov 10], count: 6 }
 → Do NOT output 6 explicit schedules.
 
+Example G: "A 4-session cybersecurity essentials bootcamp meeting every Monday and Wednesday evening from 7pm to 9pm, starting November 16, 2026."
+→ SHAPE B (RECURRING)
+→ Why: "4-session" (count) + "every Monday and Wednesday" (cadence)
+→ Output: 1 schedule + recurrence { frequency: "weekly", interval: 1, days_of_week: ["monday", "wednesday"], count: 4 }
+→ Do NOT output 4 explicit schedules. "4-session" is the COUNT, not the schedule list.
+→ Do NOT output 4 schedules even though a specific start date is given — that's the FIRST occurrence.
+
+Example H: "Sessions run every Monday and Thursday from January 2027 through December 2028."
+→ SHAPE B (RECURRING)
+→ Why: "every Monday and Thursday" (cadence) + "through December 2028" (end date)
+→ Output: 1 schedule + recurrence { frequency: "weekly", interval: 1, days_of_week: ["monday", "thursday"], end_date: "2028-12-31" }
+→ Do NOT output hundreds of schedules. The end_date drives expansion downstream.
+
 ================================================================
 THE ONE NON-NEGOTIABLE RULE
 ================================================================
@@ -194,6 +252,7 @@ Schedule:
   "session_number": number,
   "location":       string,
   "is_virtual":     boolean,
+  "platform":       "zoom" | "google_meet" | "",
   "max_attendees":  number | null
 }
 
@@ -240,6 +299,14 @@ SCHEDULES
   decided downstream.
 - is_virtual per schedule. A single series MAY mix virtual and
   in-person sessions.
+  - When the prompt names a video provider ("Google Meet", "Meet", "Zoom"),
+  set the "platform" field on the schedule to the matching slug:
+    "google_meet" for Google Meet / Meet
+    "zoom"        for Zoom
+  Never leave "platform" empty when a provider is explicitly named.
+  When the prompt does NOT name a provider:
+    - if is_virtual=true, default "platform" to "google_meet"
+    - if is_virtual=false, leave "platform" empty
 
 RECURRENCE (only when is_recurring = true)
 - frequency MUST be one of: daily, weekly, monthly.
@@ -257,6 +324,11 @@ RECURRENCE (only when is_recurring = true)
   says "for 6 weeks", count = 6. If it says "until December 15",
   end_date = that date.
 - When is_recurring = false, recurrence MUST be null.
+- Emit EXACTLY ONE of end_date or count — never both.
+  * "for 6 weeks" / "6-session" / "3 times" → count = N, end_date = null
+  * "until December 18" / "ending Nov 30" / "through March" → end_date = that
+    date, count = null
+  If both are implied, prefer count (the user sized the series).
 
 TICKETS
 - ticket_type_id MUST be one of the UUIDs in "Available ticket types".
@@ -361,8 +433,8 @@ func buildUserPrompt(req GenerateEventDraftRequest, pctx *promptContext) string 
 	} else {
 		b.WriteString("No explicit recurrence was supplied. Infer the shape from the prompt:\n")
 		b.WriteString("  - one date -> SHAPE A\n")
-		b.WriteString("  - cadence (\"every X\", \"weekly\", \"for N weeks\") -> SHAPE B\n")
-		b.WriteString("  - multiple specific dates -> SHAPE C\n\n")
+		b.WriteString("  - cadence (\"every X\", \"weekly\", \"for N weeks\", \"N-session\") -> SHAPE B\n")
+		b.WriteString("  - multiple specific dates with distinct content -> SHAPE C\n\n")
 	}
 
 	b.WriteString("Context:\n")
@@ -422,9 +494,9 @@ func buildFixPrompt(
 		b.WriteString(" and what attendees will take away. Flowing prose, not bullets.\n")
 	}
 	if strings.Contains(lower, "recurrence") || strings.Contains(lower, "weekday") {
-		b.WriteString("\nRe-read the SHAPE rules. Multiple specific dates are SHAPE C (series,")
-		b.WriteString(" is_recurring=false, multiple schedules). Cadence words are SHAPE B.")
-		b.WriteString(" Recurrence needs end_date or count.\n")
+		b.WriteString("\nRe-read the SHAPE rules. Cadence word + count/end date = SHAPE B")
+		b.WriteString(" (1 schedule + recurrence). Multiple specific dates with DISTINCT")
+		b.WriteString(" content per session = SHAPE C. Recurrence needs end_date or count.\n")
 	}
 	if strings.Contains(lower, "schedule") {
 		b.WriteString("\nRe-read the SHAPE decision. Honour the contract for the chosen shape.\n")

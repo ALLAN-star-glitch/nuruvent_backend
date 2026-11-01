@@ -68,6 +68,7 @@ type GeneratedSchedule struct {
 	SessionNumber int    `json:"session_number"`
 	Location      string `json:"location"`
 	IsVirtual     bool   `json:"is_virtual"`
+	Platform      string `json:"platform,omitempty"`   // ← ADD
 	MaxAttendees  *int   `json:"max_attendees"`
 }
 

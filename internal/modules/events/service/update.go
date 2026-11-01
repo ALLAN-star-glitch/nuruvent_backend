@@ -51,20 +51,28 @@ func (s *eventService) UpdateEvent(ctx context.Context, cmd UpdateEventCommand) 
 	// 5. Re-derive event-level fields from schedules only when the
 	//    caller supplied a schedules array. If cmd.Schedules is nil,
 	//    the existing derived values stay.
+	//
+	// Video meetings are NOT provisioned here. That happens in the
+	// async worker, enqueued below when the event is published and
+	// its schedules changed.
 	if cmd.Schedules != nil {
-		deriveEventFromSchedules(event)
-
-		// Create meetings for any newly-added virtual sessions.
-		// Existing sessions keep their VideoMeetingID and are skipped
-		// by attachVideoMeetings.
-		if err := s.attachVideoMeetings(ctx, event, cmd.UpdatedBy, ""); err != nil {
-			log.Printf("⚠️ video integration: %v", err)
+		if err := s.expandRecurrenceIfNeeded(event); err != nil {
+			return nil, fmt.Errorf("expand recurrence: %w", err)
 		}
+		deriveEventFromSchedules(event)
 	}
 
 	// 6. Save to database.
 	if err := s.saveUpdatedEvent(ctx, event); err != nil {
 		return nil, err
+	}
+
+	// 7. Fire-and-forget: if the event is published and schedules
+	//    may need provisioning, enqueue the worker. The worker
+	//    filters by platform/video_meeting_id/30-day window, so
+	//    this is idempotent.
+	if event.IsPublished() {
+		s.enqueueVideoProvisioning(ctx, event.ID)
 	}
 
 	log.Printf("✅ Event updated: %s by %s", event.ID, cmd.UpdatedBy)
@@ -269,24 +277,17 @@ func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.E
 			return fmt.Errorf("invalid schedules: %w", err)
 		}
 
-		// Merge incoming schedules with the existing ones so we don't
-		// lose fields the client never sends (platform, links, venue,
-		// internal video meeting ids, etc.).
 		event.Schedules = mergeSchedules(event.Schedules, incoming)
-
-		// Reconcile platform ↔ link consistency.
 		normalizeSchedulePlatforms(event.Schedules)
 	}
 
 	// Recurrence: IsRecurring is the master switch.
 	switch {
 	case cmd.IsRecurring != nil && !*cmd.IsRecurring:
-		// Explicitly off — clear the rule entirely.
 		event.RecurrenceRule = nil
 		event.IsRecurring = false
 
 	case cmd.IsRecurring != nil && *cmd.IsRecurring:
-		// Explicitly on — the recurrence block must be present.
 		if cmd.Recurrence == nil {
 			return errors.New("is_recurring is true but no recurrence block was provided")
 		}
@@ -294,10 +295,18 @@ func (s *eventService) applyScheduleUpdates(ctx context.Context, event *domain.E
 		event.IsRecurring = true
 
 	case cmd.Recurrence != nil:
-		// Recurrence block present but no explicit flag — treat as "on"
-		// so older clients that don't send is_recurring still work.
 		event.RecurrenceRule = buildRecurrenceRule(cmd.Recurrence)
 		event.IsRecurring = true
+	}
+
+	// If the rule was changed (or was already on) and the caller
+	// did NOT send schedules, materialize the rule from the existing
+	// template. When cmd.Schedules != nil, UpdateEvent step 5 handles
+	// expansion after deriving event fields — do not double-expand.
+	if cmd.Schedules == nil && event.RecurrenceRule != nil {
+		if err := s.expandRecurrenceIfNeeded(event); err != nil {
+			return fmt.Errorf("expand recurrence: %w", err)
+		}
 	}
 
 	return nil

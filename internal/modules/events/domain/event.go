@@ -426,6 +426,10 @@ func NewEvent(
 
 // ExpandRecurrence generates a slice of time.Time dates based on
 // the rule. It's a pure function — no I/O, fully unit-testable.
+//
+// Priority: when Count is set, it wins over EndDate. Emitting both
+// is a client mistake; we trust the count so we don't silently
+// truncate a series the user explicitly sized.
 func (e *Event) ExpandRecurrence(startDate time.Time) ([]time.Time, error) {
 	if e.RecurrenceRule == nil {
 		return []time.Time{startDate}, nil
@@ -443,13 +447,16 @@ func (e *Event) ExpandRecurrence(startDate time.Time) ([]time.Time, error) {
 	if rule.Count != nil {
 		maxCount = *rule.Count
 	}
+	hasEndDate := !rule.EndDate.IsZero()
+	// Count wins: only honor end_date when count is not set.
+	applyEndDate := hasEndDate && maxCount == 0
 
 	for {
 		// Stop conditions
-		if !rule.EndDate.IsZero() && current.After(rule.EndDate) {
+		if maxCount > 0 && count >= maxCount {
 			break
 		}
-		if maxCount > 0 && count >= maxCount {
+		if applyEndDate && current.After(rule.EndDate) {
 			break
 		}
 		if count > 1000 {
@@ -467,7 +474,7 @@ func (e *Event) ExpandRecurrence(startDate time.Time) ([]time.Time, error) {
 			for _, day := range rule.DaysOfWeek {
 				daysAhead := daysUntil(current.Weekday(), day)
 				occurrence := current.AddDate(0, 0, daysAhead)
-				if !rule.EndDate.IsZero() && occurrence.After(rule.EndDate) {
+				if applyEndDate && occurrence.After(rule.EndDate) {
 					continue
 				}
 				if maxCount > 0 && count >= maxCount {
