@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
@@ -41,6 +42,32 @@ func (r *PostgresRepository) getStatusIDByName(ctx context.Context, name string)
 	return model.ID, nil
 }
 
+// isAllowedSortField whitelists columns the client can sort by. This
+// prevents SQL injection via the sort_by query param.
+func isAllowedSortField(field string) bool {
+	switch field {
+	case "created_at", "updated_at", "start_date", "end_date",
+		"display_name", "name", "current_attendees", "capacity",
+		"event_status_id", "event_type_id", "visibility":
+		return true
+	}
+	return false
+}
+
+// resolveSortExpression returns a safe ORDER BY expression for the given
+// sort field. Falls back to updated_at when the field isn't whitelisted.
+func resolveSortExpression(field, order string) string {
+	sortField := "updated_at"
+	if field != "" && isAllowedSortField(field) {
+		sortField = field
+	}
+	sortOrder := "DESC"
+	if strings.EqualFold(order, "asc") {
+		sortOrder = "ASC"
+	}
+	return sortField + " " + sortOrder
+}
+
 // ============================================================
 // EVENT CRUD
 // ============================================================
@@ -48,20 +75,17 @@ func (r *PostgresRepository) getStatusIDByName(ctx context.Context, name string)
 func (r *PostgresRepository) CreateEvent(ctx context.Context, event *domain.Event) error {
 	model := toModelEvent(event)
 
-	// Debug logging
 	log.Printf("🔍 Creating event with model: %+v", model)
 	log.Printf("🔍 Schedules: %+v", event.Schedules)
 	log.Printf("🔍 Tickets: %+v", event.Tickets)
 	log.Printf("🔍 Speakers: %+v", event.Speakers)
 	log.Printf("🔍 Materials: %+v", event.Materials)
 
-	// Create the main event
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
 		log.Printf("❌ Failed to create event: %v", err)
 		return err
 	}
 
-	// Save child entities
 	if err := r.saveSchedules(ctx, event.ID, event.Schedules); err != nil {
 		return err
 	}
@@ -77,7 +101,6 @@ func (r *PostgresRepository) CreateEvent(ctx context.Context, event *domain.Even
 
 	return nil
 }
-
 
 func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*domain.Event, error) {
 	var model EventModel
@@ -96,20 +119,15 @@ func (r *PostgresRepository) GetEventByID(ctx context.Context, id string) (*doma
 		return nil, nil
 	}
 
-	// Load child entities
 	if err := r.loadChildEntities(ctx, event); err != nil {
 		return nil, err
 	}
-
-	// Removed: the RecurrencePatternSlug hydration block. The new
-	// RecurrenceRule is fully self-contained (no pattern lookup).
 
 	return event, nil
 }
 
 func (r *PostgresRepository) GetEventByIDIncludingDeleted(ctx context.Context, id string) (*domain.Event, error) {
 	var model EventModel
-	// Use Unscoped() to include soft-deleted records
 	err := r.db.WithContext(ctx).Unscoped().
 		Where("id = ?", id).
 		First(&model).Error
@@ -125,7 +143,6 @@ func (r *PostgresRepository) GetEventByIDIncludingDeleted(ctx context.Context, i
 		return nil, nil
 	}
 
-	// Load child entities
 	if err := r.loadChildEntities(ctx, event); err != nil {
 		return nil, err
 	}
@@ -158,7 +175,6 @@ func (r *PostgresRepository) GetEventBySlug(ctx context.Context, slug string) (*
 func (r *PostgresRepository) UpdateEvent(ctx context.Context, event *domain.Event) error {
 	model := toModelEvent(event)
 
-	// Update main event
 	result := r.db.WithContext(ctx).Unscoped().
 		Model(&EventModel{}).
 		Where("id = ?", event.ID).
@@ -170,8 +186,8 @@ func (r *PostgresRepository) UpdateEvent(ctx context.Context, event *domain.Even
 	}
 
 	if err := r.upsertSchedules(ctx, event.ID, event.Schedules); err != nil {
-    return err
-     }
+		return err
+	}
 
 	if err := r.deleteTickets(ctx, event.ID); err != nil {
 		return err
@@ -204,7 +220,6 @@ func (r *PostgresRepository) DeleteEvent(ctx context.Context, id string) error {
 }
 
 func (r *PostgresRepository) PermanentlyDeleteEvent(ctx context.Context, id string) error {
-	// Delete child entities first
 	if err := r.deleteSchedules(ctx, id); err != nil {
 		return err
 	}
@@ -231,45 +246,53 @@ func (r *PostgresRepository) RestoreEvent(ctx context.Context, id string) error 
 // QUERY OPERATIONS - TEAM AWARE
 // ============================================================
 
-// ListEvents returns a paginated list of events with flexible filtering
+// ListEvents returns a paginated list of events with flexible filtering.
+//
+// Filters applied (all optional):
+//   - Team / TeamID / Account       — scope
+//   - UserID                        — creator
+//   - EventTypeID, EventStatusID,
+//     CategoryID, Visibility        — scalar filters
+//   - SearchQuery                   — ILIKE against name, display_name,
+//                                     description, short_description
+//   - IncludeDeleted / OnlyDeleted  — soft-delete view
+//   - SortBy / SortOrder            — whitelisted column + direction
 func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.ListEventsFilters) ([]*domain.Event, int64, error) {
 	var models []EventModel
 	var total int64
 
-	log.Printf("🔍 REPOSITORY: IncludeDeleted=%v, OnlyDeleted=%v", filters.IncludeDeleted, filters.OnlyDeleted)
+	log.Printf("🔍 REPOSITORY: IncludeDeleted=%v, OnlyDeleted=%v, SearchQuery=%q, SortBy=%q %q",
+		filters.IncludeDeleted, filters.OnlyDeleted, filters.SearchQuery,
+		filters.SortBy, filters.SortOrder)
 
 	query := r.db.WithContext(ctx).Unscoped().Model(&EventModel{})
 
-	// Handle deleted filter logic
+	// Deleted filter
 	if filters.OnlyDeleted {
 		query = query.Where("deleted_at IS NOT NULL")
-		log.Printf("🔍 REPOSITORY: OnlyDeleted=true - adding deleted_at IS NOT NULL")
 	} else if !filters.IncludeDeleted {
 		query = query.Where("deleted_at IS NULL")
-		log.Printf("🔍 REPOSITORY: IncludeDeleted=false - adding deleted_at IS NULL")
 	}
 
-	// Team filtering - use TeamID directly (events belong to teams)
+	// Team filter
 	if filters.TeamID != "" {
 		query = query.Where("team_id = ?", filters.TeamID)
 	} else if filters.Team.ID != "" && filters.Team.Type != "" {
-		// For backward compatibility with TeamFilter
 		query = query.Where("team_id = ?", filters.Team.ID)
 	}
 
-	// Account filtering - all teams under an account
+	// Account filter
 	if filters.Account.ID != "" {
-		// Join with teams table to filter by account
 		query = query.Joins("JOIN teams ON teams.id = events.team_id").
 			Where("teams.account_id = ?", filters.Account.ID)
 	}
 
-	// User filter (creator)
+	// Creator
 	if filters.UserID != "" {
 		query = query.Where("created_by = ?", filters.UserID)
 	}
 
-	// Other filters
+	// Scalar filters
 	if filters.EventTypeID != "" {
 		query = query.Where("event_type_id = ?", filters.EventTypeID)
 	}
@@ -283,12 +306,21 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 		query = query.Where("visibility = ?", filters.Visibility)
 	}
 
-	// Count total
+	// Full-text search
+	if filters.SearchQuery != "" {
+		q := "%" + filters.SearchQuery + "%"
+		query = query.Where(
+			"name ILIKE ? OR display_name ILIKE ? OR description ILIKE ? OR short_description ILIKE ?",
+			q, q, q, q,
+		)
+	}
+
+	// Count
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// Apply pagination
+	// Pagination
 	if filters.Limit > 0 {
 		query = query.Limit(filters.Limit)
 	}
@@ -296,23 +328,13 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 		query = query.Offset(filters.Offset)
 	}
 
-	// Apply sorting
-	sortField := "start_date"
-	if filters.SortBy != "" {
-		sortField = filters.SortBy
-	}
-	sortOrder := "DESC"
-	if filters.SortOrder == "asc" {
-		sortOrder = "ASC"
-	}
-	query = query.Order(sortField + " " + sortOrder)
+	// Safe sort
+	query = query.Order(resolveSortExpression(filters.SortBy, filters.SortOrder))
 
-	err := query.Find(&models).Error
-	if err != nil {
+	if err := query.Find(&models).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// Convert to domain events
 	events := make([]*domain.Event, len(models))
 	for i, m := range models {
 		event := toDomainEvent(&m)
@@ -327,7 +349,7 @@ func (r *PostgresRepository) ListEvents(ctx context.Context, filters domain.List
 	return events, total, nil
 }
 
-// ListEventsByAccount returns all events across all teams under an account
+// ListEventsByAccount returns all events across all teams under an account.
 func (r *PostgresRepository) ListEventsByAccount(ctx context.Context, account domain.AccountFilter, filters domain.ListEventsFilters) ([]*domain.Event, int64, error) {
 	var models []EventModel
 	var total int64
@@ -336,19 +358,15 @@ func (r *PostgresRepository) ListEventsByAccount(ctx context.Context, account do
 		Joins("JOIN teams ON teams.id = events.team_id").
 		Where("teams.account_id = ?", account.ID)
 
-	// Handle deleted filter logic
 	if filters.OnlyDeleted {
 		query = query.Where("events.deleted_at IS NOT NULL")
 	} else if !filters.IncludeDeleted {
 		query = query.Where("events.deleted_at IS NULL")
 	}
 
-	// User filter (creator)
 	if filters.UserID != "" {
 		query = query.Where("events.created_by = ?", filters.UserID)
 	}
-
-	// Other filters
 	if filters.EventTypeID != "" {
 		query = query.Where("events.event_type_id = ?", filters.EventTypeID)
 	}
@@ -361,13 +379,18 @@ func (r *PostgresRepository) ListEventsByAccount(ctx context.Context, account do
 	if filters.Visibility != "" {
 		query = query.Where("events.visibility = ?", filters.Visibility)
 	}
+	if filters.SearchQuery != "" {
+		q := "%" + filters.SearchQuery + "%"
+		query = query.Where(
+			"events.name ILIKE ? OR events.display_name ILIKE ? OR events.description ILIKE ? OR events.short_description ILIKE ?",
+			q, q, q, q,
+		)
+	}
 
-	// Count total
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// Apply pagination
 	if filters.Limit > 0 {
 		query = query.Limit(filters.Limit)
 	}
@@ -375,23 +398,13 @@ func (r *PostgresRepository) ListEventsByAccount(ctx context.Context, account do
 		query = query.Offset(filters.Offset)
 	}
 
-	// Apply sorting
-	sortField := "events.start_date"
-	if filters.SortBy != "" {
-		sortField = "events." + filters.SortBy
-	}
-	sortOrder := "DESC"
-	if filters.SortOrder == "asc" {
-		sortOrder = "ASC"
-	}
-	query = query.Order(sortField + " " + sortOrder)
+	sortExpr := resolveSortExpression(filters.SortBy, filters.SortOrder)
+	query = query.Order("events." + sortExpr)
 
-	err := query.Find(&models).Error
-	if err != nil {
+	if err := query.Find(&models).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// Convert to domain events
 	events := make([]*domain.Event, len(models))
 	for i, m := range models {
 		event := toDomainEvent(&m)
@@ -406,13 +419,11 @@ func (r *PostgresRepository) ListEventsByAccount(ctx context.Context, account do
 	return events, total, nil
 }
 
-// ListEventsByTeam returns all events for a specific team
 func (r *PostgresRepository) ListEventsByTeam(ctx context.Context, teamID string, filters domain.ListEventsFilters) ([]*domain.Event, int64, error) {
 	filters.TeamID = teamID
 	return r.ListEvents(ctx, filters)
 }
 
-// GetUpcomingEvents returns upcoming events for a team
 func (r *PostgresRepository) GetUpcomingEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error) {
 	var models []EventModel
 
@@ -429,13 +440,11 @@ func (r *PostgresRepository) GetUpcomingEvents(ctx context.Context, teamID strin
 	if teamID != "" {
 		query = query.Where("team_id = ?", teamID)
 	}
-
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
 
-	err = query.Order("start_date ASC").Find(&models).Error
-	if err != nil {
+	if err := query.Order("start_date ASC").Find(&models).Error; err != nil {
 		log.Printf("❌ Query error: %v", err)
 		return nil, err
 	}
@@ -455,7 +464,6 @@ func (r *PostgresRepository) GetUpcomingEvents(ctx context.Context, teamID strin
 	return events, nil
 }
 
-// GetPastEvents returns past events for a team
 func (r *PostgresRepository) GetPastEvents(ctx context.Context, teamID string, limit int) ([]*domain.Event, error) {
 	var models []EventModel
 
@@ -472,13 +480,11 @@ func (r *PostgresRepository) GetPastEvents(ctx context.Context, teamID string, l
 	if teamID != "" {
 		query = query.Where("team_id = ?", teamID)
 	}
-
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
 
-	err = query.Order("start_date DESC").Find(&models).Error
-	if err != nil {
+	if err := query.Order("start_date DESC").Find(&models).Error; err != nil {
 		log.Printf("❌ Query error: %v", err)
 		return nil, err
 	}
@@ -498,48 +504,47 @@ func (r *PostgresRepository) GetPastEvents(ctx context.Context, teamID string, l
 	return events, nil
 }
 
-// SearchEvents performs a full-text search across event fields with team filtering
+// SearchEvents performs a full-text search across event fields.
+// Now honors EventStatusID, SortBy, SortOrder (matching ListEvents).
 func (r *PostgresRepository) SearchEvents(ctx context.Context, query string, filters domain.SearchFilters) ([]*domain.Event, int64, error) {
 	var models []EventModel
 	var total int64
 
 	dbQuery := r.db.WithContext(ctx).Unscoped().Model(&EventModel{})
 
-	// Handle deleted filter logic
 	if filters.OnlyDeleted {
 		dbQuery = dbQuery.Where("deleted_at IS NOT NULL")
 	} else if !filters.IncludeDeleted {
 		dbQuery = dbQuery.Where("deleted_at IS NULL")
 	}
 
-	// Team filtering
 	if filters.TeamID != "" {
 		dbQuery = dbQuery.Where("team_id = ?", filters.TeamID)
 	} else if filters.Team.ID != "" && filters.Team.Type != "" {
 		dbQuery = dbQuery.Where("team_id = ?", filters.Team.ID)
 	}
 
-	// Account filtering
 	if filters.Account.ID != "" {
 		dbQuery = dbQuery.Joins("JOIN teams ON teams.id = events.team_id").
 			Where("teams.account_id = ?", filters.Account.ID)
 	}
 
-	// Apply search query
 	if query != "" {
 		searchTerm := "%" + query + "%"
-		dbQuery = dbQuery.Where("name ILIKE ? OR display_name ILIKE ? OR description ILIKE ? OR short_description ILIKE ?",
-			searchTerm, searchTerm, searchTerm, searchTerm)
+		dbQuery = dbQuery.Where(
+			"name ILIKE ? OR display_name ILIKE ? OR description ILIKE ? OR short_description ILIKE ?",
+			searchTerm, searchTerm, searchTerm, searchTerm,
+		)
 	}
 
-	// User filter
 	if filters.UserID != "" {
 		dbQuery = dbQuery.Where("created_by = ?", filters.UserID)
 	}
-
-	// Other filters
 	if filters.EventTypeID != "" {
 		dbQuery = dbQuery.Where("event_type_id = ?", filters.EventTypeID)
+	}
+	if filters.EventStatusID != "" {
+		dbQuery = dbQuery.Where("event_status_id = ?", filters.EventStatusID)
 	}
 	if filters.CategoryID != "" {
 		dbQuery = dbQuery.Where("category_id = ?", filters.CategoryID)
@@ -548,12 +553,10 @@ func (r *PostgresRepository) SearchEvents(ctx context.Context, query string, fil
 		dbQuery = dbQuery.Where("visibility = ?", filters.Visibility)
 	}
 
-	// Count total
 	if err := dbQuery.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// Apply pagination
 	if filters.Limit > 0 {
 		dbQuery = dbQuery.Limit(filters.Limit)
 	}
@@ -561,13 +564,12 @@ func (r *PostgresRepository) SearchEvents(ctx context.Context, query string, fil
 		dbQuery = dbQuery.Offset(filters.Offset)
 	}
 
-	// Apply sorting
-	err := dbQuery.Order("start_date DESC").Find(&models).Error
-	if err != nil {
+	dbQuery = dbQuery.Order(resolveSortExpression(filters.SortBy, filters.SortOrder))
+
+	if err := dbQuery.Find(&models).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// Convert to domain events
 	events := make([]*domain.Event, len(models))
 	for i, m := range models {
 		event := toDomainEvent(&m)
@@ -584,8 +586,6 @@ func (r *PostgresRepository) SearchEvents(ctx context.Context, query string, fil
 // ============================================================
 // VALUE OBJECT QUERIES
 // ============================================================
-
-// --- Event Types ---
 
 func (r *PostgresRepository) GetEventTypeByID(ctx context.Context, id string) (*domain.EventType, error) {
 	var model EventTypeModel
@@ -626,8 +626,6 @@ func (r *PostgresRepository) GetAllEventTypes(ctx context.Context) ([]*domain.Ev
 	}
 	return types, nil
 }
-
-// --- Event Statuses ---
 
 func (r *PostgresRepository) GetEventStatusByID(ctx context.Context, id string) (*domain.EventStatus, error) {
 	var model EventStatusModel
@@ -674,7 +672,6 @@ func (r *PostgresRepository) GetAllEventStatuses(ctx context.Context) ([]*domain
 // ============================================================
 
 func (r *PostgresRepository) loadChildEntities(ctx context.Context, event *domain.Event) error {
-	// Load schedules
 	var scheduleModels []EventScheduleModel
 	if err := r.db.WithContext(ctx).
 		Where("event_id = ? AND deleted_at IS NULL", event.ID).
@@ -684,31 +681,27 @@ func (r *PostgresRepository) loadChildEntities(ctx context.Context, event *domai
 	}
 	event.Schedules = toDomainSchedules(scheduleModels)
 
-	// Load tickets
 	var ticketModels []EventTicketModel
 	if err := r.db.WithContext(ctx).
-		Preload("TicketType").                                   // ← ADD
+		Preload("TicketType").
 		Where("event_id = ? AND deleted_at IS NULL", event.ID).
 		Find(&ticketModels).Error; err != nil {
 		return err
 	}
 	event.Tickets = toDomainTickets(ticketModels)
 
-	// Load speakers
 	var speakerModels []EventSpeakerModel
 	if err := r.db.WithContext(ctx).Where("event_id = ? AND deleted_at IS NULL", event.ID).Find(&speakerModels).Error; err != nil {
 		return err
 	}
 	event.Speakers = toDomainSpeakers(speakerModels)
 
-	// Load materials
 	var materialModels []EventMaterialModel
 	if err := r.db.WithContext(ctx).Where("event_id = ? AND deleted_at IS NULL", event.ID).Find(&materialModels).Error; err != nil {
 		return err
 	}
 	event.Materials = toDomainMaterials(materialModels)
 
-	// Load EventType
 	if event.EventTypeID != "" {
 		var eventTypeModel EventTypeModel
 		if err := r.db.WithContext(ctx).Where("id = ?", event.EventTypeID).First(&eventTypeModel).Error; err == nil {
@@ -716,7 +709,6 @@ func (r *PostgresRepository) loadChildEntities(ctx context.Context, event *domai
 		}
 	}
 
-	// Load EventStatus
 	if event.EventStatusID != "" {
 		var eventStatusModel EventStatusModel
 		if err := r.db.WithContext(ctx).Where("id = ?", event.EventStatusID).First(&eventStatusModel).Error; err == nil {
@@ -724,7 +716,6 @@ func (r *PostgresRepository) loadChildEntities(ctx context.Context, event *domai
 		}
 	}
 
-	// Load Category
 	if event.CategoryID != nil && *event.CategoryID != "" {
 		var categoryModel CategoryModel
 		if err := r.db.WithContext(ctx).Where("id = ? AND deleted_at IS NULL", *event.CategoryID).First(&categoryModel).Error; err == nil {
@@ -752,7 +743,6 @@ func (r *PostgresRepository) GetAllCategories(ctx context.Context) ([]*domain.Ca
 	return categories, nil
 }
 
-
 // ============================================================
 // CHILD ENTITY SAVE/UPDATE HELPERS
 // ============================================================
@@ -762,10 +752,10 @@ func (r *PostgresRepository) saveSchedules(ctx context.Context, eventID string, 
 		return nil
 	}
 	models := toModelSchedules(eventID, schedules)
-	log.Printf("[debug] saveSchedules: in=%d models=%d firstSessionNum=%d", 
-		len(schedules), len(models), models[0].SessionNumber)   // ← ADD
+	log.Printf("[debug] saveSchedules: in=%d models=%d firstSessionNum=%d",
+		len(schedules), len(models), models[0].SessionNumber)
 	err := r.db.WithContext(ctx).Create(&models).Error
-	log.Printf("[debug] saveSchedules err=%v", err)             // ← ADD
+	log.Printf("[debug] saveSchedules err=%v", err)
 	return err
 }
 
@@ -809,7 +799,6 @@ func (r *PostgresRepository) deleteMaterials(ctx context.Context, eventID string
 	return r.db.WithContext(ctx).Where("event_id = ?", eventID).Delete(&EventMaterialModel{}).Error
 }
 
-
 func (r *PostgresRepository) GetAllTicketTypes(ctx context.Context) ([]*domain.TicketTypeRow, error) {
 	var models []TicketTypeModel
 
@@ -839,21 +828,18 @@ func (r *PostgresRepository) GetAllTicketTypes(ctx context.Context) ([]*domain.T
 }
 
 func (r *PostgresRepository) AccountIDForTeam(ctx context.Context, teamID string) (string, error) {
-    var accountID string
-    err := r.db.WithContext(ctx).
-        Table("teams").
-        Select("account_id").
-        Where("id = ? AND deleted_at IS NULL", teamID).
-        Scan(&accountID).Error
-    if err != nil {
-        return "", err
-    }
-    return accountID, nil
+	var accountID string
+	err := r.db.WithContext(ctx).
+		Table("teams").
+		Select("account_id").
+		Where("id = ? AND deleted_at IS NULL", teamID).
+		Scan(&accountID).Error
+	if err != nil {
+		return "", err
+	}
+	return accountID, nil
 }
 
-
-// AdjustAttendeeCount atomically increments or decrements the event's
-// current_attendees counter.
 func (r *PostgresRepository) AdjustAttendeeCount(ctx context.Context, eventID string, delta int) error {
 	res := r.db.WithContext(ctx).
 		Model(&EventModel{}).
@@ -869,18 +855,11 @@ func (r *PostgresRepository) AdjustAttendeeCount(ctx context.Context, eventID st
 	return nil
 }
 
-// upsertSchedules updates existing schedule rows in place and inserts
-// new ones. Rows present in the DB but absent from the incoming set are
-// soft-deleted.
-//
-// This preserves the schedule's UUID (and any external references like
-// video_meeting_id that ride along with it) across updates.
 func (r *PostgresRepository) upsertSchedules(
 	ctx context.Context,
 	eventID string,
 	schedules []domain.EventSchedule,
 ) error {
-	// 1. Collect existing schedule IDs for this event.
 	var existingIDs []string
 	if err := r.db.WithContext(ctx).
 		Model(&EventScheduleModel{}).
@@ -889,8 +868,6 @@ func (r *PostgresRepository) upsertSchedules(
 		return err
 	}
 
-	// 2. Track which incoming IDs we've seen, so we can drop any DB row
-	//    that's no longer part of the incoming set.
 	incoming := make(map[string]struct{}, len(schedules))
 	for _, s := range schedules {
 		if s.ID != "" {
@@ -898,7 +875,6 @@ func (r *PostgresRepository) upsertSchedules(
 		}
 	}
 
-	// 3. Soft-delete schedules that aren't in the incoming set.
 	toDelete := make([]string, 0)
 	for _, id := range existingIDs {
 		if _, ok := incoming[id]; !ok {
@@ -913,22 +889,16 @@ func (r *PostgresRepository) upsertSchedules(
 		}
 	}
 
-	// 4. Upsert each incoming schedule.
 	for i, s := range schedules {
 		model := toScheduleModel(eventID, s, i+1)
 
 		if s.ID == "" || !containsString(existingIDs, s.ID) {
-			// New row — insert.
 			if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
 				return err
 			}
 			continue
 		}
 
-		// Existing row — update in place. Preserve ID; do NOT touch
-		// video_meeting_id here, since the service already merged it
-		// into s.VideoMeetingID via mergeSchedules. The explicit
-		// update below carries whatever value the service decided.
 		if err := r.db.WithContext(ctx).
 			Model(&EventScheduleModel{}).
 			Where("id = ?", s.ID).
@@ -957,7 +927,6 @@ func (r *PostgresRepository) upsertSchedules(
 	return nil
 }
 
-// containsString reports whether needle is present in haystack.
 func containsString(haystack []string, needle string) bool {
 	for _, s := range haystack {
 		if s == needle {
@@ -967,46 +936,31 @@ func containsString(haystack []string, needle string) bool {
 	return false
 }
 
-// internal/modules/events/infrastructure/postgres/repository.go
-
-// ReorderEventSchedules assigns session_number = 1..N to the given IDs
-// in the order supplied, in a single transaction. IDs not in the list
-// are left untouched (they'll be picked up by mergeSchedules on the
-// next full update).
 func (r *PostgresRepository) ReorderEventSchedules(
-    ctx context.Context,
-    eventID string,
-    orderedIDs []string,
+	ctx context.Context,
+	eventID string,
+	orderedIDs []string,
 ) error {
-    if len(orderedIDs) == 0 {
-        return nil
-    }
-    return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-        // Two-phase renumber to avoid tripping the unique index while
-        // mid-update. Push everything to negative space first.
-        if err := tx.Model(&EventScheduleModel{}).
-            Where("event_id = ? AND id IN ?", eventID, orderedIDs).
-            Update("session_number", gorm.Expr("-session_number")).Error; err != nil {
-            return err
-        }
-        for i, id := range orderedIDs {
-            if err := tx.Model(&EventScheduleModel{}).
-                Where("event_id = ? AND id = ?", eventID, id).
-                Update("session_number", i+1).Error; err != nil {
-                return err
-            }
-        }
-        return nil
-    })
+	if len(orderedIDs) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&EventScheduleModel{}).
+			Where("event_id = ? AND id IN ?", eventID, orderedIDs).
+			Update("session_number", gorm.Expr("-session_number")).Error; err != nil {
+			return err
+		}
+		for i, id := range orderedIDs {
+			if err := tx.Model(&EventScheduleModel{}).
+				Where("event_id = ? AND id = ?", eventID, id).
+				Update("session_number", i+1).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
-
-// ListEventIDsWithUnprovisionedSchedules finds events with at least
-// one virtual schedule that has no video meeting yet, and whose
-// start_date is within the given window (in days).
-//
-// Uses raw SQL because GORM's Table().Select().Scan() chain has
-// silently dropped DISTINCT results on this codebase before.
 func (r *PostgresRepository) ListEventIDsWithUnprovisionedSchedules(
 	ctx context.Context,
 	withinDays int,

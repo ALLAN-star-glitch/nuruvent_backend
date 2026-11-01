@@ -10,7 +10,6 @@ import (
 // LIST OPTIONS
 // ============================================================
 
-// ListOptions controls what data is returned in list queries.
 type ListOptions struct {
 	IncludeCreator bool
 	IncludeDeleted bool
@@ -22,22 +21,8 @@ type ListOptions struct {
 // TEAM FILTER
 // ============================================================
 
-// TeamFilter identifies which team to filter events by.
-//
-// This is a DATA filter, not an authorization boundary. Authorization is
-// enforced by the service layer using the event's parent account domain.
-//
-// Post-revamp note: teams are not Casbin domains. Filtering by team ID
-// narrows the result set; it does not gate access.
 type TeamFilter struct {
-	// ID is the team identifier (UUID from teams table).
-	ID string
-
-	// Type filters by team type for organizational grouping.
-	// Valid values: "personal" or "institution".
-	// If empty, no type filter is applied.
-	//
-	// This field does NOT affect authorization.
+	ID   string
 	Type string
 }
 
@@ -45,18 +30,8 @@ type TeamFilter struct {
 // ACCOUNT FILTER
 // ============================================================
 
-// AccountFilter identifies which account to filter events by.
-//
-// Filtering by account returns all events across all teams belonging to
-// that account. This is the natural grouping for an account admin who
-// needs to see everything under their account.
 type AccountFilter struct {
-	// ID is the account identifier (UUID from accounts table).
-	ID string
-
-	// Type filters by account type for organizational grouping.
-	// Valid values: "personal" or "institution".
-	// If empty, no type filter is applied.
+	ID   string
 	Type string
 }
 
@@ -64,12 +39,6 @@ type AccountFilter struct {
 // REPOSITORY INTERFACE
 // ============================================================
 
-// Repository defines the data access interface for the events module.
-//
-// The repository does NOT perform authorization. It returns data that the
-// service layer then filters based on the caller's permissions. Authz
-// decisions belong to the service, enforced against the event's parent
-// account domain.
 type Repository interface {
 	// ============================================================
 	// EVENT CRUD OPERATIONS
@@ -87,26 +56,8 @@ type Repository interface {
 	// QUERY OPERATIONS
 	// ============================================================
 
-	// ListEvents returns a paginated list of events with flexible filtering.
-	//
-	// TeamFilter and AccountFilter narrow the result set by data scope.
-	// They do NOT enforce authorization — the caller (service layer) is
-	// responsible for checking that the authenticated user may see these
-	// events.
-	//
-	// Typical usage:
-	//   - Account-scoped listing (admin views all events in their account):
-	//       Account.ID = <account-uuid>
-	//   - Team-scoped listing (member views one team's events):
-	//       Team.ID = <team-uuid>
-	//   - Creator-scoped listing (user views events they created):
-	//       UserID = <user-uuid>
 	ListEvents(ctx context.Context, filters ListEventsFilters) ([]*Event, int64, error)
-
-	// ListEventsByAccount returns all events across all teams under an account.
 	ListEventsByAccount(ctx context.Context, account AccountFilter, filters ListEventsFilters) ([]*Event, int64, error)
-
-	// ListEventsByTeam returns all events for a specific team.
 	ListEventsByTeam(ctx context.Context, teamID string, filters ListEventsFilters) ([]*Event, int64, error)
 
 	GetUpcomingEvents(ctx context.Context, teamID string, limit int) ([]*Event, error)
@@ -126,37 +77,19 @@ type Repository interface {
 	GetAllEventStatuses(ctx context.Context) ([]*EventStatus, error)
 	GetAllTicketTypes(ctx context.Context) ([]*TicketTypeRow, error)
 
-	// GetEventByIDIncludingDeleted gets an event by ID including soft-deleted ones.
 	GetEventByIDIncludingDeleted(ctx context.Context, id string) (*Event, error)
 
 	GetAllCategories(ctx context.Context) ([]*Category, error)
 
 	AccountIDForTeam(ctx context.Context, teamID string) (string, error)
 
-
-
-	// AdjustAttendeeCount atomically adds delta to an event's
-	// current_attendees counter. delta may be negative (cancellation) or
-	// positive (new registration). Returns ErrEventNotFound if the event
-	// doesn't exist.
-	//
-	// The implementation must be safe for concurrent use — the counter is
-	// a hot field and registrations can arrive in parallel.
 	AdjustAttendeeCount(ctx context.Context, eventID string, delta int) error
 
-	// ListEventIDsWithUnprovisionedSchedules returns event IDs that have
-	// at least one virtual schedule with no video meeting provisioned,
-	// whose start_date falls within the given window (in days).
-	//
-	// Used by the daily sweep to catch events created far in advance.
 	ListEventIDsWithUnprovisionedSchedules(
 		ctx context.Context,
 		withinDays int,
 	) ([]string, error)
 
-
-
-	// internal/modules/events/domain/repository.go (interface)
 	ReorderEventSchedules(ctx context.Context, eventID string, orderedIDs []string) error
 }
 
@@ -165,6 +98,10 @@ type Repository interface {
 // ============================================================
 
 // ListEventsFilters provides comprehensive filtering for ListEvents.
+//
+// Every field maps to a WHERE / ORDER BY clause in the repository.
+// Zero values mean "no filter applied" — the repository skips the
+// corresponding clause.
 type ListEventsFilters struct {
 	// Team filters events by team (data filter, not authz).
 	Team TeamFilter
@@ -187,6 +124,13 @@ type ListEventsFilters struct {
 	// CategoryID filters events by their category.
 	CategoryID string
 
+	// SearchQuery is a free-text query matched with ILIKE against
+	// name, display_name, description, and short_description.
+	//
+	// Empty string means no text filter. The repository handles
+	// case-insensitive matching.
+	SearchQuery string
+
 	// IncludeDeleted controls whether soft-deleted events are included.
 	IncludeDeleted bool
 
@@ -202,10 +146,12 @@ type ListEventsFilters struct {
 	// Offset controls pagination offset.
 	Offset int
 
-	// SortBy specifies the field to sort by.
+	// SortBy specifies the field to sort by. The repository validates
+	// this against a whitelist — unknown fields fall back to updated_at.
 	SortBy string
 
-	// SortOrder specifies the sort direction.
+	// SortOrder specifies the sort direction ("asc" or "desc").
+	// Anything other than "asc" is treated as "desc".
 	SortOrder string
 
 	// Visibility filters events by their visibility level.
@@ -213,6 +159,10 @@ type ListEventsFilters struct {
 }
 
 // SearchFilters provides filtering for the SearchEvents method.
+//
+// SearchEvents handles a full-text query separately from ListEvents so
+// that callers can distinguish "browse" from "search". The individual
+// filter fields mirror ListEventsFilters.
 type SearchFilters struct {
 	Team           TeamFilter
 	Account        AccountFilter
@@ -220,9 +170,12 @@ type SearchFilters struct {
 	UserID         string
 	EventTypeID    string
 	CategoryID     string
+	EventStatusID  string // ← ADDED: filter by draft/published status
 	IncludeDeleted bool
 	OnlyDeleted    bool
 	Limit          int
 	Offset         int
+	SortBy         string // ← ADDED: consistent sort semantics with ListEvents
+	SortOrder      string // ← ADDED: consistent sort semantics with ListEvents
 	Visibility     Visibility
 }
