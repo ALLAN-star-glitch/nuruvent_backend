@@ -223,6 +223,13 @@ func buildAttendanceCommand(
 
 	provider, meetingID, providerURL := detectProvider(schedule)
 
+	// A schedule is a "manual link" if the host pasted a raw Zoom/Meet
+	// URL instead of Nuruvent auto-provisioning an internal meeting.
+	// For those, the join-token redirect must go straight to the
+	// external platform URL — not the /meeting/:code SDK page, which
+	// needs an internal video_meetings row to resolve.
+	isManualLink := schedule.VideoMeetingID == nil || *schedule.VideoMeetingID == ""
+
 	return domain.AttendanceUpsertSessionCommand{
 		ExternalType:         "event",
 		ExternalID:           event.ID,
@@ -231,6 +238,7 @@ func buildAttendanceCommand(
 		ScheduledStart:       start,
 		ScheduledEnd:         end,
 		Provider:             provider,
+		IsManualLink:         isManualLink, // ← ADD
 		ProviderMeetingID:    meetingID,
 		ProviderURL:          providerURL,
 		EventDisplayName:     event.DisplayName,

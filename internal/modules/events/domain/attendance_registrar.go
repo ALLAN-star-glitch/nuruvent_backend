@@ -47,6 +47,8 @@ type AttendanceUpsertSessionCommand struct {
 	// Provider is one of: "zoom", "google_meet", "in_person", "none".
 	Provider string
 
+	IsManualLink         bool 
+
 	// ProviderMeetingID is the extracted meeting ID. Empty for
 	// in-person and none.
 	ProviderMeetingID string

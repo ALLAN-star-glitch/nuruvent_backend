@@ -94,6 +94,7 @@ func (h *SessionHandler) RegisterAttendeeForExternal(c fiber.Ctx) error {
 }
 
 // UpsertSession handles POST /sessions.
+// UpsertSession handles POST /sessions.
 func (h *SessionHandler) UpsertSession(c fiber.Ctx) error {
 	var body UpsertSessionRequest
 	if err := c.Bind().Body(&body); err != nil {
@@ -111,6 +112,7 @@ func (h *SessionHandler) UpsertSession(c fiber.Ctx) error {
 		ScheduledStart:    body.ScheduledStart,
 		ScheduledEnd:      body.ScheduledEnd,
 		Provider:          provider,
+		IsManualLink:      body.IsManualLink, // ← ADD
 		ProviderMeetingID: body.ProviderMeetingID,
 		ProviderURL:       body.ProviderURL,
 	})
