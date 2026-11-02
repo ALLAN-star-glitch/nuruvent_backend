@@ -24,21 +24,25 @@
     </div>
 </div>
 
+<!-- Loop through multiple sessions -->
 {{range link_rows .links}}
-<div class="details-box">
+<div class="details-box" style="margin-bottom: 24px;"> <!-- Added spacing between boxes -->
     <div class="row">
         <span class="label">Session</span>
         <span class="value">{{.title}}</span>
     </div>
-    <div class="row">
-        <span class="label">Join Link</span>
-        <span class="value">
-            <a href="{{.url}}" style="color: #1A73E8; text-decoration: none; word-break: break-all;">
-                Join Session →
-            </a>
-        </span>
+    
+    <!-- Centered Button Container -->
+    <div style="margin-top: 20px; margin-bottom: 12px; text-align: center;">
+        <a href="{{.url}}" style="background-color: #1A73E8; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px; display: inline-block; font-family: Arial, sans-serif;">
+            Join Session
+        </a>
     </div>
-    <p class="text-small" style="margin-top: 8px; word-break: break-all;">{{.url}}</p>
+    
+    <!-- Fallback link (kept subtle so it doesn't crowd the design) -->
+    <p class="text-small" style="margin-top: 8px; word-break: break-all; text-align: center; color: #888888; font-size: 12px;">
+        <a href="{{.url}}" style="color: #888888; text-decoration: underline;">{{.url}}</a>
+    </p>
 </div>
 {{end}}
 
