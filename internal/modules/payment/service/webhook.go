@@ -67,6 +67,14 @@ func (s *service) HandleWebhook(
 	)
 
 	if err := s.deps.Webhooks.RecordIfNew(ctx, webhookEvent); err != nil {
+		// Duplicate delivery: Paystack retries because it did not
+		// receive our 200. The original webhook already drove the
+		// payment state machine to its final state, so this retry
+		// has nothing left to do. Return nil so Paystack stops
+		// retrying.
+		if errors.Is(err, paymentdomain.ErrDuplicateWebhook) {
+			return nil
+		}
 		return fmt.Errorf("record webhook: %w", err)
 	}
 
@@ -155,8 +163,14 @@ func (s *service) HandleWebhook(
 	if applyErr != nil {
 		// Idempotent replay: the payment is already in the target
 		// state (e.g. already succeeded). Treat as success and return
-		// 200 so IntaSend stops retrying.
-		if errors.Is(applyErr, paymentdomain.ErrInvalidStatusTransition) {
+		// 200 so Paystack stops retrying.
+		//
+		// ErrInvalidStatusTransition covers the state-machine case.
+		// ErrPaymentAlreadySucceeded is included defensively in case
+		// ConfirmPayment surfaces it directly rather than wrapping it
+		// as a transition error.
+		if errors.Is(applyErr, paymentdomain.ErrInvalidStatusTransition) ||
+			errors.Is(applyErr, paymentdomain.ErrPaymentAlreadySucceeded) {
 			webhookEvent.MarkProcessed(now)
 			_ = s.deps.Webhooks.Update(ctx, webhookEvent)
 			return nil

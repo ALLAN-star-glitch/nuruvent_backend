@@ -17,7 +17,6 @@ import (
 
 // CreateDraft creates a draft event.
 func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) (*domain.Event, error) {
-	// 1. Validate required fields
 	if cmd.TeamID == "" {
 		return nil, errors.New("team ID is required")
 	}
@@ -27,34 +26,28 @@ func (s *eventService) CreateDraft(ctx context.Context, cmd CreateDraftCommand) 
 
 	s.logCreateDraft(cmd)
 
-	// 2. Resolve the parent account (required for authz and event ownership)
 	accountID, err := s.resolveAccountForTeam(ctx, cmd.TeamID, cmd.AccountID)
 	if err != nil {
 		return nil, err
 	}
 	cmd.AccountID = accountID
 
-	// 3. Check permissions using the account domain
 	if err := s.validateDraftPermissions(ctx, cmd); err != nil {
 		return nil, err
 	}
 
-	// 4. Generate identifiers
 	displayName, name, slug := s.generateEventIdentifiers(ctx, cmd.Name)
 
-	// 5. Get or validate event type
 	eventTypeID, err := s.resolveEventType(ctx, cmd.EventTypeID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 6. Create and populate domain entity
 	event, err := s.buildDraftEvent(ctx, cmd, name, displayName, slug, eventTypeID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 7. Set status and save
 	if err := s.setDraftStatusAndSave(ctx, event); err != nil {
 		return nil, err
 	}
@@ -72,7 +65,6 @@ func (s *eventService) logCreateDraft(cmd CreateDraftCommand) {
 		cmd.Name, cmd.EventTypeID, cmd.TeamID, cmd.CreatedBy)
 }
 
-// resolveAccountForTeam returns the account ID for a team.
 func (s *eventService) resolveAccountForTeam(ctx context.Context, teamID, providedAccountID string) (string, error) {
 	if providedAccountID != "" {
 		return providedAccountID, nil
@@ -88,8 +80,6 @@ func (s *eventService) resolveAccountForTeam(ctx context.Context, teamID, provid
 	return accountID, nil
 }
 
-// validateDraftPermissions checks whether the caller may create events in
-// this account.
 func (s *eventService) validateDraftPermissions(ctx context.Context, cmd CreateDraftCommand) error {
 	accountDomain := domain.AccountDomain(cmd.AccountID)
 	if accountDomain == "" {
@@ -112,7 +102,6 @@ func (s *eventService) validateDraftPermissions(ctx context.Context, cmd CreateD
 	return nil
 }
 
-// generateEventIdentifiers creates name, display name, and slug from user input.
 func (s *eventService) generateEventIdentifiers(ctx context.Context, rawInput string) (string, string, string) {
 	if rawInput == "" {
 		rawInput = "Untitled Event"
@@ -154,7 +143,6 @@ func (s *eventService) generateEventIdentifiers(ctx context.Context, rawInput st
 	return displayName, name, uniqueSlug
 }
 
-// resolveEventType gets or validates event type.
 func (s *eventService) resolveEventType(ctx context.Context, eventTypeID string) (string, error) {
 	if eventTypeID == "" {
 		return s.getDefaultEventType(ctx)
@@ -162,7 +150,6 @@ func (s *eventService) resolveEventType(ctx context.Context, eventTypeID string)
 	return s.validateEventType(ctx, eventTypeID)
 }
 
-// getDefaultEventType returns the uncategorized event type ID.
 func (s *eventService) getDefaultEventType(ctx context.Context) (string, error) {
 	log.Printf("ℹ️ No event type provided - using default: %s", domain.EventTypeUncategorized.GetDisplayName())
 
@@ -179,7 +166,6 @@ func (s *eventService) getDefaultEventType(ctx context.Context) (string, error) 
 	return uncategorized.ID, nil
 }
 
-// validateEventType validates that the event type exists.
 func (s *eventService) validateEventType(ctx context.Context, eventTypeID string) (string, error) {
 	log.Printf("🔍 Validating event type: %s", eventTypeID)
 	eventType, err := s.repo.GetEventTypeByID(ctx, eventTypeID)
@@ -195,7 +181,6 @@ func (s *eventService) validateEventType(ctx context.Context, eventTypeID string
 	return eventType.ID, nil
 }
 
-// buildDraftEvent creates and populates the domain entity.
 func (s *eventService) buildDraftEvent(
 	ctx context.Context,
 	cmd CreateDraftCommand,
@@ -222,7 +207,7 @@ func (s *eventService) buildDraftEvent(
 	}
 
 	event.Slug = slug
-	event.AccountID = cmd.AccountID // set explicitly so ResolveAccountDomain works downstream
+	event.AccountID = cmd.AccountID
 
 	log.Printf("✅ Domain entity created: ID=%s, Name=%s, Slug=%s, DisplayName=%s, TeamID=%s, AccountID=%s",
 		event.ID, event.Name, event.Slug, event.DisplayName, event.TeamID, event.AccountID)
@@ -236,20 +221,17 @@ func (s *eventService) buildDraftEvent(
 	return event, nil
 }
 
-// populateEventFields fills all non-schedule, non-derived fields.
 func (s *eventService) populateEventFields(ctx context.Context, event *domain.Event, cmd CreateDraftCommand) {
 	event.ShortDescription = cmd.ShortDescription
 	event.Tags = cmd.Tags
 	event.Language = cmd.Language
 	event.CategoryID = cmd.CategoryID
 
-	// Recurrence logic
 	if cmd.Recurrence != nil {
 		event.RecurrenceRule = buildRecurrenceRule(cmd.Recurrence)
 	}
 	event.IsRecurring = (event.RecurrenceRule != nil)
 
-	// Ticket fields
 	event.IsFreeEvent = cmd.IsFree
 	event.Capacity = cmd.Capacity
 
@@ -263,7 +245,6 @@ func (s *eventService) populateEventFields(ctx context.Context, event *domain.Ev
 		}
 	}
 
-	// Access & Privacy
 	if cmd.Visibility != "" {
 		event.Visibility = cmd.Visibility
 	}
@@ -271,25 +252,27 @@ func (s *eventService) populateEventFields(ctx context.Context, event *domain.Ev
 	event.InviteOnly = cmd.InviteOnly
 	event.InvitedEmails = cmd.InvitedEmails
 
-	// Monetization
 	event.IsFeatured = cmd.IsFeatured
 	event.CertificateEnabled = cmd.CertificateEnabled
 	event.CertificatePrice = cmd.CertificatePrice
 	event.CertificateTemplateID = cmd.CertificateTemplateID
 
-	// SEO
 	if cmd.SEO != nil {
 		s.applySEO(event, cmd.SEO)
 	}
 }
 
 // populateSchedules converts and sets schedules.
+//
+// When the event is recurring, the first schedule is used as a template
+// and the recurrence rule is expanded into concrete sessions. The rule
+// is normalized and validated BEFORE expansion so callers get a clear
+// error message instead of "recurrence rule generated no dates".
 func (s *eventService) populateSchedules(ctx context.Context, event *domain.Event, schedules []ScheduleInput) error {
 	if len(schedules) == 0 && event.RecurrenceRule == nil {
 		return nil
 	}
 
-	// Handle recurrence expansion
 	if event.RecurrenceRule != nil && len(schedules) > 0 {
 		template, err := s.convertSchedules(schedules[:1])
 		if err != nil {
@@ -297,9 +280,26 @@ func (s *eventService) populateSchedules(ctx context.Context, event *domain.Even
 		}
 
 		baseSchedule := template[0]
+
+		// Normalize + validate BEFORE expanding.
+		if err := normalizeAndValidateRecurrenceRule(
+			event.RecurrenceRule,
+			baseSchedule.StartDate,
+		); err != nil {
+			return err
+		}
+
 		dates, err := event.ExpandRecurrence(baseSchedule.StartDate)
 		if err != nil {
 			return fmt.Errorf("failed to expand recurrence: %w", err)
+		}
+
+		if len(dates) == 0 {
+			return fmt.Errorf(
+				"recurrence produced no sessions between %s and %s; check days_of_week and end_date",
+				baseSchedule.StartDate.Format("2006-01-02"),
+				event.RecurrenceRule.EndDate.Format("2006-01-02"),
+			)
 		}
 
 		var generatedSchedules []domain.EventSchedule

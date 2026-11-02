@@ -46,6 +46,7 @@ type SessionModel struct {
 	DurationMinutes int       `gorm:"not null"`
 
 	Provider          string `gorm:"type:varchar(20);not null;index:idx_sessions_provider"`
+	IsManualLink      bool   `gorm:"column:is_manual_link"` 
 	ProviderMeetingID string `gorm:"type:varchar(255)"`
 	ProviderURL       string `gorm:"type:text"`
 

@@ -8,10 +8,6 @@ import (
 	attendance "github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/attendance/attendancedomain"
 )
 
-
-
-
-
 // UpsertSession creates a session, or updates the mutable fields of an
 // existing session.
 //
@@ -40,6 +36,7 @@ func (s *attendanceService) UpsertSession(
 			existing.ScheduledEnd = cmd.ScheduledEnd
 			existing.DurationMinutes = int(cmd.ScheduledEnd.Sub(cmd.ScheduledStart).Minutes())
 			existing.Provider = cmd.Provider
+			existing.IsManualLink = cmd.IsManualLink // <-- ADDED
 			existing.ProviderMeetingID = cmd.ProviderMeetingID
 			existing.ProviderURL = cmd.ProviderURL
 			existing.EventDisplayName = cmd.EventDisplayName
@@ -60,7 +57,7 @@ func (s *attendanceService) UpsertSession(
 			return fmt.Errorf("check existing session: %w", err)
 		}
 
-			newSession, err := attendance.NewSession(
+		newSession, err := attendance.NewSession(
 			s.deps.IDs.NewID(),
 			cmd.External,
 			cmd.ProviderSessionID,
@@ -68,6 +65,7 @@ func (s *attendanceService) UpsertSession(
 			cmd.ScheduledStart,
 			cmd.ScheduledEnd,
 			cmd.Provider,
+			cmd.IsManualLink, // <-- ADDED
 			cmd.ProviderMeetingID,
 			cmd.ProviderURL,
 			cmd.EventDisplayName,

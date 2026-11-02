@@ -159,6 +159,18 @@ func (s *attendanceService) buildJoinRedirect(session *attendance.Session) (stri
 		)
 	}
 
+	// ============================================================
+	// NEW FIX: Handle manually pasted links
+	// ============================================================
+	// If the host pasted a raw URL instead of using Nuruvent to
+	// auto-generate the meeting, we don't have an internal UUID
+	// to pass to the /meeting/:id SDK page.
+	// Redirect straight to the external Zoom/Meet URL instead.
+	if session.IsManualLink && session.ProviderURL != "" {
+		return session.ProviderURL, nil
+	}
+	// ============================================================
+
 	params := url.Values{}
 	params.Set("name", session.EventDisplayName)
 	params.Set("host", session.OrganizerDisplayName)
