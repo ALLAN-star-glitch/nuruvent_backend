@@ -141,4 +141,12 @@ func (r *EventRegistrable) StartDate() time.Time {
     return r.event.StartDate
 }
 
+// IsRegistrationEnabled reports whether the organizer has enabled
+// registration for this event. When false, the register endpoint
+// rejects any attempt and the frontend renders a direct join button
+// instead of the form.
+func (r *EventRegistrable) IsRegistrationEnabled() bool {
+	return r.event.RegistrationEnabled
+}
+
 var _ registrationdomain.Registrable = (*EventRegistrable)(nil)

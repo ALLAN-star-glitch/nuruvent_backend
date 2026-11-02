@@ -43,6 +43,12 @@ type Registrable interface {
 
     // StartDate returns the scheduled start of the underlying entity.
     StartDate() time.Time
+
+
+    // IsRegistrationEnabled reports whether the organizer has enabled
+    // registration. False means the event is public-link only — the
+    // frontend shows a direct join URL instead of a form.
+    IsRegistrationEnabled() bool
 }
 
 // RegistrableResolver locates a Registrable by type and ID. Implemented at

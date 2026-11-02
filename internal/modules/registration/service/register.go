@@ -58,6 +58,15 @@ func (s *service) RegisterForEvent(
 	}
 	log.Printf("[registration] STEP 1 OK: registrable resolved")
 
+		// ------------------------------------------------------------
+	// 1.5. Reject if the organizer disabled registration.
+	// ------------------------------------------------------------
+	if !registrable.IsRegistrationEnabled() {
+		log.Printf("[registration] STEP 1.5 FAIL: registration disabled for event=%s",
+			cmd.EventID)
+		return nil, registrationdomain.ErrRegistrationDisabled
+	}
+
 	// ------------------------------------------------------------
 	// 2. Validate registration is open
 	// ------------------------------------------------------------

@@ -210,6 +210,7 @@ type Event struct {
 	DeletedBy  *string
 	RestoredAt *time.Time
 	RestoredBy *string
+	RegistrationEnabled bool
 }
 
 // ============================================================
@@ -389,6 +390,7 @@ func NewEvent(
 		Language:      "en",
 		Version:       1,
 		IsActive:      true,
+		RegistrationEnabled: true,
 		CreatedAt:     now,
 		UpdatedAt:     now,
 		Tags:          []string{},

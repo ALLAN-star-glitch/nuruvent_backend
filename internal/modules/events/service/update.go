@@ -492,6 +492,12 @@ func (s *eventService) applyAccessUpdates(event *domain.Event, cmd UpdateEventCo
 	if cmd.InvitedEmails != nil {
 		event.InvitedEmails = cmd.InvitedEmails
 	}
+
+	// Registration is enabled by default. Only override when the
+	// caller explicitly provided a value.
+	if cmd.RegistrationEnabled != nil {
+		event.RegistrationEnabled = *cmd.RegistrationEnabled
+	}
 }
 
 // applyMonetizationUpdates applies monetization updates.
