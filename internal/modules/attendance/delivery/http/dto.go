@@ -25,6 +25,7 @@ type UpsertSessionRequest struct {
 	ScheduledStart    time.Time `json:"scheduled_start"`
 	ScheduledEnd      time.Time `json:"scheduled_end"`
 	Provider          string    `json:"provider"`
+	IsManualLink      bool      `json:"is_manual_link"` 
 	ProviderMeetingID string    `json:"provider_meeting_id,omitempty"`
 	ProviderURL       string    `json:"provider_url,omitempty"`
 }

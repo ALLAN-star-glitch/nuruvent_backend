@@ -44,6 +44,7 @@ func (a *AttendanceRegistrarAdapter) UpsertSession(
 		ScheduledStart:       cmd.ScheduledStart,
 		ScheduledEnd:         cmd.ScheduledEnd,
 		Provider:             provider,
+		IsManualLink:         cmd.IsManualLink,
 		ProviderMeetingID:    cmd.ProviderMeetingID,
 		ProviderURL:          cmd.ProviderURL,
 		EventDisplayName:     cmd.EventDisplayName,
@@ -54,7 +55,6 @@ func (a *AttendanceRegistrarAdapter) UpsertSession(
 	}
 	return nil
 }
-
 
 // RegisterHostAttendee forwards the host attendee registration to
 // the attendance service.
