@@ -39,11 +39,12 @@ func (r *SessionRepository) Update(ctx context.Context, s *attendance.Session) e
 			"scheduled_end":          s.ScheduledEnd,
 			"duration_minutes":       s.DurationMinutes,
 			"provider":               string(s.Provider),
+			"is_manual_link":         s.IsManualLink, // <-- ADDED
 			"provider_meeting_id":    s.ProviderMeetingID,
 			"provider_url":           s.ProviderURL,
 			"status":                 string(s.Status),
-			"event_display_name":     s.EventDisplayName,     // ← new
-			"organizer_display_name": s.OrganizerDisplayName, // ← new
+			"event_display_name":     s.EventDisplayName,
+			"organizer_display_name": s.OrganizerDisplayName,
 			"updated_at":             s.UpdatedAt,
 		})
 	if res.Error != nil {
@@ -54,6 +55,7 @@ func (r *SessionRepository) Update(ctx context.Context, s *attendance.Session) e
 	}
 	return nil
 }
+
 func (r *SessionRepository) FindByID(ctx context.Context, id string) (*attendance.Session, error) {
 	var m SessionModel
 	err := r.db.WithContext(ctx).Where("id = ?", id).First(&m).Error

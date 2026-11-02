@@ -145,14 +145,23 @@ func (s *eventService) convertMaterials(inputs []MaterialInput) ([]domain.EventM
 }
 
 // buildRecurrenceRule maps the service-layer DTO to the domain value object.
+//
+// Normalizes the input so downstream expanders don't have to defend
+// against interval=0, empty frequency, or end_date strings in
+// unexpected formats.
 func buildRecurrenceRule(input *RecurrenceInput) *domain.RecurrenceRule {
 	if input == nil {
 		return nil
 	}
 
+	interval := input.Interval
+	if interval <= 0 {
+		interval = 1
+	}
+
 	rule := &domain.RecurrenceRule{
-		Frequency:  input.Frequency,
-		Interval:   input.Interval,
+		Frequency:  strings.ToLower(strings.TrimSpace(input.Frequency)),
+		Interval:   interval,
 		DaysOfWeek: input.DaysOfWeek,
 		Count:      input.Count,
 	}
@@ -166,6 +175,65 @@ func buildRecurrenceRule(input *RecurrenceInput) *domain.RecurrenceRule {
 	}
 
 	return rule
+}
+
+// normalizeAndValidateRecurrenceRule fills in safe defaults and checks
+// that the rule will actually produce at least one date. Returns a
+// human-readable error if it won't.
+//
+// Call this BEFORE event.ExpandRecurrence so users get a clear message
+// instead of "recurrence rule generated no dates".
+func normalizeAndValidateRecurrenceRule(
+	rule *domain.RecurrenceRule,
+	startDate time.Time,
+) error {
+	if rule == nil {
+		return nil
+	}
+
+	// 1. Interval must be >= 1.
+	if rule.Interval < 1 {
+		rule.Interval = 1
+	}
+
+	// 2. Frequency must be one of the supported values.
+	switch rule.Frequency {
+	case "daily", "weekly", "monthly":
+		// ok
+	default:
+		return fmt.Errorf(
+			"unsupported recurrence frequency %q (must be daily, weekly, or monthly)",
+			rule.Frequency,
+		)
+	}
+
+	// 3. Weekly recurrences need at least one weekday. If the caller
+	//    didn't supply one, default to the weekday of the start date.
+	if rule.Frequency == "weekly" && len(rule.DaysOfWeek) == 0 {
+		rule.DaysOfWeek = []string{
+			strings.ToLower(startDate.Weekday().String()),
+		}
+	}
+
+	// 4. Must have a termination condition: end_date OR count > 0.
+	hasEndDate := !rule.EndDate.IsZero()
+	hasCount := rule.Count != nil && *rule.Count > 0
+	if !hasEndDate && !hasCount {
+		return fmt.Errorf(
+			"recurring event requires either end_date or count > 0",
+		)
+	}
+
+	// 5. end_date must not be before start_date.
+	if hasEndDate && rule.EndDate.Before(startDate) {
+		return fmt.Errorf(
+			"recurrence end_date (%s) is before start_date (%s)",
+			rule.EndDate.Format("2006-01-02"),
+			startDate.Format("2006-01-02"),
+		)
+	}
+
+	return nil
 }
 
 // applySEO applies SEO to an event.
@@ -211,7 +279,6 @@ func (s *eventService) validateUpdatePermission(ctx context.Context, event *doma
 	log.Printf("🔍 AUTHZ: event:update check user=%s domain=%s event=%s",
 		userID, accountDomain, event.ID)
 
-	// 1. Unrestricted update rights (account_admin).
 	canAll, err := s.permChecker.CanUpdateAllEvents(ctx, userID, accountDomain)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
@@ -220,7 +287,6 @@ func (s *eventService) validateUpdatePermission(ctx context.Context, event *doma
 		return nil
 	}
 
-	// 2. Own-only update rights (trainer) — verify ownership.
 	canOwn, err := s.permChecker.CanUpdateOwnEvents(ctx, userID, accountDomain)
 	if err != nil {
 		return fmt.Errorf("permission check failed: %w", err)
@@ -412,7 +478,6 @@ func deriveEventFromSchedules(event *domain.Event) {
 		return
 	}
 
-	// 1. Earliest start and latest end across all schedules.
 	earliestStart := firstScheduleStart(event.Schedules)
 	latestEnd := lastScheduleEnd(event.Schedules)
 
@@ -427,23 +492,16 @@ func deriveEventFromSchedules(event *domain.Event) {
 		event.EndDate = &latestEnd
 	}
 
-	// 2. Multi-day detection (does any SINGLE session span days?).
 	event.IsMultiDay = computeIsMultiDay(event.Schedules)
-
-	// 3. Duration = FIRST session's duration, in minutes.
-	//    For a series, the total duration is misleading on the card.
 	event.Duration = computeEventDurationMinutes(event.Schedules)
 
-	// 4. Virtual / hybrid / platform.
 	event.IsVirtual, event.IsHybrid = computeVirtualFlags(event.Schedules)
 	event.VirtualPlatform = computeVirtualPlatform(event.Schedules)
 	event.VirtualPlatformURL = virtualPlatformBaseURL(event.VirtualPlatform)
 
-	// 5. Mirror the first matching schedule's links for display convenience.
 	event.ZoomLink = firstNonEmptyLink(event.Schedules, "zoom")
 	event.MeetLink = firstNonEmptyLink(event.Schedules, "meet")
 
-	// 6. Venue from the first in-person schedule.
 	applyVenueFromSchedules(event, event.Schedules)
 }
 
@@ -451,7 +509,6 @@ func deriveEventFromSchedules(event *domain.Event) {
 // Internals
 // ------------------------------------------------------------
 
-// firstScheduleStart returns the earliest start datetime across schedules.
 func firstScheduleStart(schedules []domain.EventSchedule) time.Time {
 	var earliest time.Time
 	for _, s := range schedules {
@@ -466,7 +523,6 @@ func firstScheduleStart(schedules []domain.EventSchedule) time.Time {
 	return earliest
 }
 
-// lastScheduleEnd returns the latest end datetime across schedules.
 func lastScheduleEnd(schedules []domain.EventSchedule) time.Time {
 	var latest time.Time
 	for _, s := range schedules {
@@ -481,7 +537,6 @@ func lastScheduleEnd(schedules []domain.EventSchedule) time.Time {
 	return latest
 }
 
-// scheduleStartDateTime combines StartDate + StartTime in the schedule's tz.
 func scheduleStartDateTime(s domain.EventSchedule) time.Time {
 	if s.StartDate.IsZero() {
 		return time.Time{}
@@ -489,7 +544,6 @@ func scheduleStartDateTime(s domain.EventSchedule) time.Time {
 	return combineDateAndClock(s.StartDate, s.StartTime, s.Timezone)
 }
 
-// scheduleEndDateTime combines EndDate (or StartDate) + EndTime.
 func scheduleEndDateTime(s domain.EventSchedule) time.Time {
 	date := s.StartDate
 	if s.EndDate != nil && !s.EndDate.IsZero() {
@@ -501,8 +555,6 @@ func scheduleEndDateTime(s domain.EventSchedule) time.Time {
 	return combineDateAndClock(date, s.EndTime, s.Timezone)
 }
 
-// combineDateAndClock merges a date with an "HH:MM:SS" string in the
-// given IANA timezone.
 func combineDateAndClock(date time.Time, clock, tz string) time.Time {
 	loc := time.UTC
 	if tz != "" {
@@ -524,7 +576,6 @@ func combineDateAndClock(date time.Time, clock, tz string) time.Time {
 	)
 }
 
-// scheduleStartClock extracts the "HH:MM:SS" start of a schedule.
 func scheduleStartClock(s domain.EventSchedule) string {
 	if s.StartTime != "" {
 		return s.StartTime
@@ -532,12 +583,6 @@ func scheduleStartClock(s domain.EventSchedule) string {
 	return ""
 }
 
-// computeIsMultiDay reports whether ANY single schedule spans more
-// than one calendar day (i.e., crosses midnight within one session).
-//
-// A series of ten sessions on ten different dates is NOT multi-day —
-// each session is single-day. Multi-day means "one session starts on
-// day X and ends on day Y > X".
 func computeIsMultiDay(schedules []domain.EventSchedule) bool {
 	for _, s := range schedules {
 		if s.EndDate != nil && !s.EndDate.IsZero() &&
@@ -548,14 +593,6 @@ func computeIsMultiDay(schedules []domain.EventSchedule) bool {
 	return false
 }
 
-// computeEventDurationMinutes returns the wall-clock duration of the
-// first session, in minutes.
-//
-// For a single-session event, that's the obvious answer. For a
-// multi-session series, the FIRST session's duration is a better
-// summary than the sum across all sessions — the sum would render as
-// "20 hours" for ten 2-hour sessions, which is misleading on a
-// discovery card.
 func computeEventDurationMinutes(schedules []domain.EventSchedule) int {
 	if len(schedules) == 0 {
 		return 0
@@ -570,7 +607,6 @@ func computeEventDurationMinutes(schedules []domain.EventSchedule) int {
 	return int(end.Sub(start).Minutes())
 }
 
-// computeVirtualFlags returns (allVirtual, isHybrid).
 func computeVirtualFlags(schedules []domain.EventSchedule) (bool, bool) {
 	virtual, inPerson := 0, 0
 	for _, s := range schedules {
@@ -591,8 +627,6 @@ func computeVirtualFlags(schedules []domain.EventSchedule) (bool, bool) {
 	return false, false
 }
 
-// computeVirtualPlatform returns "zoom", "google_meet", or "" based on
-// the first link found in schedules.
 func computeVirtualPlatform(schedules []domain.EventSchedule) string {
 	for _, s := range schedules {
 		if s.ZoomLink != "" {
@@ -605,7 +639,6 @@ func computeVirtualPlatform(schedules []domain.EventSchedule) string {
 	return ""
 }
 
-// virtualPlatformBaseURL maps a platform slug to its public base URL.
 func virtualPlatformBaseURL(platform string) string {
 	switch platform {
 	case "zoom":
@@ -617,7 +650,6 @@ func virtualPlatformBaseURL(platform string) string {
 	}
 }
 
-// firstNonEmptyLink returns the first schedule's link of the given kind.
 func firstNonEmptyLink(schedules []domain.EventSchedule, kind string) string {
 	for _, s := range schedules {
 		switch kind {
@@ -634,8 +666,6 @@ func firstNonEmptyLink(schedules []domain.EventSchedule, kind string) string {
 	return ""
 }
 
-// applyVenueFromSchedules copies the first in-person schedule's location
-// into the event-level venue fields.
 func applyVenueFromSchedules(event *domain.Event, schedules []domain.EventSchedule) {
 	for _, s := range schedules {
 		if s.IsVirtual {
@@ -666,13 +696,20 @@ func (s *eventService) expandRecurrenceIfNeeded(event *domain.Event) error {
 	}
 
 	template := event.Schedules[0]
+
+	// Normalize + validate before expanding.
+	if err := normalizeAndValidateRecurrenceRule(
+		event.RecurrenceRule,
+		template.StartDate,
+	); err != nil {
+		return err
+	}
+
 	dates, err := event.ExpandRecurrence(template.StartDate)
 	if err != nil {
 		return fmt.Errorf("expand recurrence: %w", err)
 	}
 
-	// If the DB already has this many schedules, they're already
-	// expanded — do not regenerate (would orphan meetings).
 	if len(dates) <= len(event.Schedules) {
 		return nil
 	}
@@ -680,12 +717,10 @@ func (s *eventService) expandRecurrenceIfNeeded(event *domain.Event) error {
 	expanded := make([]domain.EventSchedule, len(dates))
 	for i, date := range dates {
 		clone := template
-		clone.ID = ""                     // new row
+		clone.ID = ""
 		clone.StartDate = date
 		clone.SessionNumber = i + 1
 		clone.SessionName = expandSessionName(template.SessionName, i+1)
-		// Clear meeting state — will be re-provisioned for rows
-		// within the 30-day window by attachVideoMeetings.
 		clone.VideoMeetingID = nil
 		clone.VideoMeetingExternalID = ""
 		clone.MeetLink = ""
@@ -704,13 +739,6 @@ func (s *eventService) expandRecurrenceIfNeeded(event *domain.Event) error {
 }
 
 // expandSessionName returns the session name for occurrence n.
-//
-// If the template's name matches "Session N" or "Session N: <rest>",
-// the leading prefix is stripped and re-prefixed with the correct
-// number, so session 4 doesn't get labeled "Session 1".
-//
-// Any other name (e.g. the event name) is re-prefixed with the
-// correct session number for clarity in list views.
 var sessionNamePrefixRE = regexp.MustCompile(`(?i)^session\s*\d+\s*[:.\-]?\s*`)
 
 func expandSessionName(templateName string, n int) string {

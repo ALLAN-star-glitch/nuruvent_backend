@@ -16,6 +16,7 @@ func TestDeriveSessionStatus_FullAttendance(t *testing.T) {
 		start.Add(60*time.Minute),
 		60,
 		ProviderZoom,
+		false, // <-- ADDED
 		"123",
 		"https://zoom.us/j/123",
 		SessionStatusEnded,
@@ -55,6 +56,7 @@ func TestDeriveSessionStatus_PartialAttendance(t *testing.T) {
 		start.Add(60*time.Minute),
 		60,
 		ProviderZoom,
+		false, // <-- ADDED
 		"123",
 		"https://zoom.us/j/123",
 		SessionStatusEnded,
@@ -94,6 +96,7 @@ func TestDeriveSessionStatus_NoShow(t *testing.T) {
 		start.Add(60*time.Minute),
 		60,
 		ProviderZoom,
+		false, // <-- ADDED
 		"123",
 		"https://zoom.us/j/123",
 		SessionStatusEnded,
@@ -124,6 +127,7 @@ func TestDeriveSessionStatus_Joined(t *testing.T) {
 		start.Add(60*time.Minute),
 		60,
 		ProviderZoom,
+		false, // <-- ADDED
 		"123",
 		"https://zoom.us/j/123",
 		SessionStatusLive,
@@ -161,6 +165,7 @@ func TestDeriveRollupStatus_SingleSessionFull(t *testing.T) {
 		start.Add(60*time.Minute),
 		60,
 		ProviderZoom,
+		false, // <-- ADDED
 		"123",
 		"https://zoom.us/j/123",
 		SessionStatusEnded,

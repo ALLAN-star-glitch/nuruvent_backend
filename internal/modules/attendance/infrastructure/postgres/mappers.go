@@ -15,7 +15,7 @@ func toAttendeeModel(a *attendance.Attendee) *AttendeeModel {
 		ExternalID:       a.External.ID,
 		DisplayName:      a.DisplayName,
 		Email:            a.Email,
-		Phone:            a.Phone,        // ← add
+		Phone:            a.Phone,
 		Username:         a.Username,
 		IsHost:           a.IsHost,
 		GoogleMeetUserID: a.GoogleMeetUserID,
@@ -30,7 +30,7 @@ func toAttendeeDomain(m *AttendeeModel) *attendance.Attendee {
 		attendance.ExternalRef{Type: m.ExternalType, ID: m.ExternalID},
 		m.DisplayName,
 		m.Email,
-		m.Phone,                          // ← add
+		m.Phone,
 		m.Username,
 		m.IsHost,
 		m.GoogleMeetUserID,
@@ -54,6 +54,7 @@ func toSessionModel(s *attendance.Session) *SessionModel {
 		ScheduledEnd:         s.ScheduledEnd,
 		DurationMinutes:      s.DurationMinutes,
 		Provider:             string(s.Provider),
+		IsManualLink:         s.IsManualLink, // <-- ADDED
 		ProviderMeetingID:    s.ProviderMeetingID,
 		ProviderURL:          s.ProviderURL,
 		Status:               string(s.Status),
@@ -74,11 +75,12 @@ func toSessionDomain(m *SessionModel) *attendance.Session {
 		m.ScheduledEnd,
 		m.DurationMinutes,
 		attendance.SessionProvider(m.Provider),
+		m.IsManualLink, // <-- ADDED
 		m.ProviderMeetingID,
 		m.ProviderURL,
 		attendance.SessionStatus(m.Status),
-		m.EventDisplayName,      // ← new
-		m.OrganizerDisplayName,  // ← new
+		m.EventDisplayName,
+		m.OrganizerDisplayName,
 		m.CreatedAt,
 		m.UpdatedAt,
 	)

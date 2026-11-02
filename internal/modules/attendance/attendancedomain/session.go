@@ -27,6 +27,7 @@ type Session struct {
 	ScheduledEnd      time.Time
 	DurationMinutes   int
 	Provider          SessionProvider
+	IsManualLink      bool // True if the host pasted a link instead of Nuruvent provisioning one
 	ProviderMeetingID string
 	ProviderURL       string
 	Status            SessionStatus
@@ -48,6 +49,7 @@ func NewSession(
 	title string,
 	start, end time.Time,
 	provider SessionProvider,
+	isManualLink bool,
 	meetingID, providerURL string,
 	eventDisplayName, organizerDisplayName string,
 	now time.Time,
@@ -74,7 +76,7 @@ func NewSession(
 	if provider == ProviderZoom && strings.TrimSpace(providerURL) == "" {
 		return nil, fmt.Errorf("%w: provider url required for zoom", ErrInvalidSession)
 	}
-		return &Session{
+	return &Session{
 		ID:                   id,
 		External:             external,
 		ProviderSessionID:    strings.TrimSpace(providerSessionID),
@@ -83,6 +85,7 @@ func NewSession(
 		ScheduledEnd:         end,
 		DurationMinutes:      int(end.Sub(start).Minutes()),
 		Provider:             provider,
+		IsManualLink:         isManualLink,
 		ProviderMeetingID:    strings.TrimSpace(meetingID),
 		ProviderURL:          strings.TrimSpace(providerURL),
 		Status:               SessionStatusScheduled,
@@ -102,6 +105,7 @@ func HydrateSession(
 	scheduledStart, scheduledEnd time.Time,
 	durationMinutes int,
 	provider SessionProvider,
+	isManualLink bool,
 	providerMeetingID, providerURL string,
 	status SessionStatus,
 	eventDisplayName, organizerDisplayName string,
@@ -116,6 +120,7 @@ func HydrateSession(
 		ScheduledEnd:         scheduledEnd,
 		DurationMinutes:      durationMinutes,
 		Provider:             provider,
+		IsManualLink:         isManualLink,
 		ProviderMeetingID:    providerMeetingID,
 		ProviderURL:          providerURL,
 		Status:               status,
