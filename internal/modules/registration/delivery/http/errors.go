@@ -63,9 +63,11 @@ func mapDomainError(c fiber.Ctx, err error) error {
 		return response.InternalError(c, "Unknown registration target", nil)
 	case errors.Is(err, registrationdomain.ErrAuthRequired):
 
-    return response.Unauthorized(c, "Authentication required to register for this event", nil)
+	case errors.Is(err, registrationdomain.ErrRegistrationDisabled):
+    return response.BadRequest(c, "Registration is disabled for this event", nil)
 
-
+	case errors.Is(err, registrationdomain.ErrAuthRequired):
+		return response.Unauthorized(c, "Authentication required to register for this event", nil)
 
 }
 

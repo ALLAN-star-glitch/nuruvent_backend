@@ -24,3 +24,5 @@ var (
 var ErrTeamAccessDenied = errors.New("you don't have access to this team's registrations")
 
 var ErrPermissionDenied = errors.New("permission denied")
+
+var ErrRegistrationDisabled = errors.New("registration is disabled for this event")

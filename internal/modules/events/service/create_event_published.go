@@ -265,6 +265,12 @@ func (s *eventService) populatePublishedEventFields(ctx context.Context, event *
 	event.InviteOnly = cmd.InviteOnly
 	event.InvitedEmails = cmd.InvitedEmails
 
+	// Registration is enabled by default. Only override when the
+	// caller explicitly provided a value.
+	if cmd.RegistrationEnabled != nil {
+		event.RegistrationEnabled = *cmd.RegistrationEnabled
+	}
+
 	event.IsFeatured = cmd.IsFeatured
 	event.CertificateEnabled = cmd.CertificateEnabled
 	event.CertificatePrice = cmd.CertificatePrice

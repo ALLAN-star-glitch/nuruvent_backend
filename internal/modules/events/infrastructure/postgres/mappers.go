@@ -235,6 +235,9 @@ func toModelEvent(event *domain.Event) *EventModel {
 		ScheduledPublishAt: event.ScheduledPublishAt,
 		LastPublishedAt:    event.LastPublishedAt,
 
+		// Registration
+		RegistrationEnabled: event.RegistrationEnabled,
+
 		// Audit
 		IsActive:   event.IsActive,
 		CreatedAt:  event.CreatedAt,
@@ -375,6 +378,10 @@ func toDomainEvent(model *EventModel) *domain.Event {
 		PublishedAt:        model.PublishedAt,
 		ScheduledPublishAt: model.ScheduledPublishAt,
 		LastPublishedAt:    model.LastPublishedAt,
+
+		// Registration
+		RegistrationEnabled: model.RegistrationEnabled,
+
 
 		// Audit
 		IsActive:   model.IsActive,

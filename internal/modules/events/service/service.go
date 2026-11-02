@@ -206,6 +206,7 @@ type CreateDraftCommand struct {
 	Password      *string
 	InviteOnly    bool
 	InvitedEmails []string
+	RegistrationEnabled *bool
 
 	IsFeatured            bool
 	CertificateEnabled    bool
@@ -263,6 +264,7 @@ type CreateEventCommand struct {
 	Password      *string
 	InviteOnly    bool
 	InvitedEmails []string
+	RegistrationEnabled *bool
 
 	IsFeatured            bool
 	CertificateEnabled    bool
@@ -322,6 +324,7 @@ type UpdateEventCommand struct {
 	Password      *string
 	InviteOnly    *bool
 	InvitedEmails []string
+	RegistrationEnabled *bool
 
 	IsFeatured            *bool
 	CertificateEnabled    *bool

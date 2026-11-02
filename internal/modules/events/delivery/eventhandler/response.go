@@ -63,6 +63,7 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 		IsPrivate:     event.Visibility == "private",
 		InviteOnly:    event.InviteOnly,
 		InvitedEmails: event.InvitedEmails,
+		RegistrationEnabled: event.RegistrationEnabled,
 
 				// Monetization
 		IsFeatured:         event.IsFeatured,

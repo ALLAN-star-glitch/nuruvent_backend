@@ -197,6 +197,10 @@ type EventModel struct {
 	// Audit Fields
 	// ============================================================
 	IsActive  bool           `gorm:"default:true;index"`
+		// ============================================================
+	// Registration
+	// ============================================================
+	RegistrationEnabled bool `gorm:"not null;default:true"` // <-- ADD
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	DeletedAt gorm.DeletedAt `gorm:"index"`

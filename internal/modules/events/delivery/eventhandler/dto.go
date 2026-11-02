@@ -6,7 +6,6 @@ package eventhandler
 // REQUEST DTOS
 // ============================================================
 
-
 // CreateDraftRequest - All fields optional for drafts (application/json)
 // NOTE: team_id is NOT in the request body - it's derived from the URL by the handler
 type CreateDraftRequest struct {
@@ -19,10 +18,6 @@ type CreateDraftRequest struct {
 	CategoryID       string   `json:"category_id"`
 	Tags             []string `json:"tags"`
 	Language         string   `json:"language"`
-
-
-	// ❌ REMOVED: OwnerType     string `json:"owner_type"`
-	// ❌ REMOVED: InstitutionID string `json:"institution_id"`
 
 	// Schedule
 	Schedules   []ScheduleRequest  `json:"schedules"`
@@ -49,17 +44,17 @@ type CreateDraftRequest struct {
 	Tickets  []TicketRequest `json:"tickets"`
 
 	// Access & Privacy
-	Visibility    string   `json:"visibility"` // "public", "private", "unlisted"
-	Password      string   `json:"password"`
-	InviteOnly    bool     `json:"invite_only"`
-	InvitedEmails []string `json:"invited_emails"`
+	Visibility          string   `json:"visibility"` // "public", "private", "unlisted"
+	Password            string   `json:"password"`
+	InviteOnly          bool     `json:"invite_only"`
+	InvitedEmails       []string `json:"invited_emails"`
+	RegistrationEnabled *bool    `json:"registration_enabled,omitempty"` // <-- ADDED
 
 	// Monetization
-	IsFeatured          bool    `json:"is_featured"`
-	CertificateEnabled  bool    `json:"certificate_enabled"`
-	
-	CertificatePrice    float64 `json:"certificate_price"`
-	CertificateTemplateID string `json:"certificate_template_id"`
+	IsFeatured            bool    `json:"is_featured"`
+	CertificateEnabled    bool    `json:"certificate_enabled"`
+	CertificatePrice      float64 `json:"certificate_price"`
+	CertificateTemplateID string  `json:"certificate_template_id"`
 
 	// Speakers
 	Speakers []SpeakerRequest `json:"speakers"`
@@ -83,9 +78,6 @@ type CreateEventRequest struct {
 	CategoryID       string   `json:"category_id"`
 	Tags             []string `json:"tags"`
 	Language         string   `json:"language"`
-
-	// ❌ REMOVED: OwnerType     string `json:"owner_type" binding:"required,oneof=personal institution"`
-	// ❌ REMOVED: InstitutionID string `json:"institution_id"`
 
 	// Schedule - Required
 	Schedules   []ScheduleRequest  `json:"schedules" binding:"required,min=1"`
@@ -113,16 +105,17 @@ type CreateEventRequest struct {
 	Tickets  []TicketRequest `json:"tickets" binding:"required,min=1"`
 
 	// Access & Privacy - Required
-	Visibility    string   `json:"visibility" binding:"required,oneof=public private unlisted"`
-	Password      string   `json:"password"`
-	InviteOnly    bool     `json:"invite_only"`
-	InvitedEmails []string `json:"invited_emails"`
+	Visibility          string   `json:"visibility" binding:"required,oneof=public private unlisted"`
+	Password            string   `json:"password"`
+	InviteOnly          bool     `json:"invite_only"`
+	InvitedEmails       []string `json:"invited_emails"`
+	RegistrationEnabled *bool    `json:"registration_enabled,omitempty"` // <-- ADDED
 
 	// Monetization
-	IsFeatured          bool    `json:"is_featured"`
-	CertificateEnabled  bool    `json:"certificate_enabled"`
-	CertificatePrice    float64 `json:"certificate_price"`
-	CertificateTemplateID string `json:"certificate_template_id"`
+	IsFeatured            bool    `json:"is_featured"`
+	CertificateEnabled    bool    `json:"certificate_enabled"`
+	CertificatePrice      float64 `json:"certificate_price"`
+	CertificateTemplateID string  `json:"certificate_template_id"`
 
 	// Speakers
 	Speakers []SpeakerRequest `json:"speakers"`
@@ -175,16 +168,17 @@ type UpdateEventRequest struct {
 	Tickets  []TicketRequest `json:"tickets,omitempty"`
 
 	// Access & Privacy
-	Visibility    *string  `json:"visibility,omitempty"`
-	Password      *string  `json:"password,omitempty"`
-	InviteOnly    *bool    `json:"invite_only,omitempty"`
-	InvitedEmails []string `json:"invited_emails,omitempty"`
+	Visibility          *string  `json:"visibility,omitempty"`
+	Password            *string  `json:"password,omitempty"`
+	InviteOnly          *bool    `json:"invite_only,omitempty"`
+	InvitedEmails       []string `json:"invited_emails,omitempty"`
+	RegistrationEnabled *bool    `json:"registration_enabled,omitempty"` // <-- ADDED
 
 	// Monetization
-	IsFeatured          *bool    `json:"is_featured,omitempty"`
-	CertificateEnabled  *bool    `json:"certificate_enabled,omitempty"`
-	CertificatePrice    *float64 `json:"certificate_price,omitempty"`
-	CertificateTemplateID *string `json:"certificate_template_id,omitempty"`
+	IsFeatured            *bool    `json:"is_featured,omitempty"`
+	CertificateEnabled    *bool    `json:"certificate_enabled,omitempty"`
+	CertificatePrice      *float64 `json:"certificate_price,omitempty"`
+	CertificateTemplateID *string  `json:"certificate_template_id,omitempty"`
 
 	// Speakers
 	Speakers []SpeakerRequest `json:"speakers,omitempty"`
@@ -223,9 +217,6 @@ type ScheduleRequest struct {
 	MaxAttendees *int   `json:"max_attendees,omitempty"`
 }
 
-// Replace the existing RecurrenceRequest struct in
-// internal/modules/events/handler/dtos.go with:
-
 // RecurrenceRequest represents recurrence configuration.
 //
 // The shape matches the domain RecurrenceRule exactly, so the
@@ -240,16 +231,16 @@ type RecurrenceRequest struct {
 
 // TicketRequest represents a ticket type
 type TicketRequest struct {
-	ID                 string   `json:"id,omitempty"`
-	TicketTypeID       string   `json:"ticket_type_id" binding:"required"`
-	Name               string   `json:"name,omitempty"`
-	Description        string   `json:"description,omitempty"`
-	Price              float64  `json:"price" binding:"min=0"`
-	Quantity           int      `json:"quantity" binding:"min=1"`
-	MaxPerPerson       *int     `json:"max_per_person,omitempty"`
-	EarlyBirdDeadline  string   `json:"early_bird_deadline,omitempty"`
-	GroupMinAttendees  *int     `json:"group_min_attendees,omitempty"`
-	GroupDiscount      *float64 `json:"group_discount,omitempty"`
+	ID                string   `json:"id,omitempty"`
+	TicketTypeID      string   `json:"ticket_type_id" binding:"required"`
+	Name              string   `json:"name,omitempty"`
+	Description       string   `json:"description,omitempty"`
+	Price             float64  `json:"price" binding:"min=0"`
+	Quantity          int      `json:"quantity" binding:"min=1"`
+	MaxPerPerson      *int     `json:"max_per_person,omitempty"`
+	EarlyBirdDeadline string   `json:"early_bird_deadline,omitempty"`
+	GroupMinAttendees *int     `json:"group_min_attendees,omitempty"`
+	GroupDiscount     *float64 `json:"group_discount,omitempty"`
 }
 
 // SpeakerRequest represents a speaker
@@ -277,27 +268,23 @@ type MaterialRequest struct {
 
 // SEORequest represents SEO metadata
 type SEORequest struct {
-	MetaTitle       string   `json:"meta_title,omitempty"`
-	MetaDescription string   `json:"meta_description,omitempty"`
-	MetaKeywords    []string `json:"meta_keywords,omitempty"`
-	CanonicalURL    string   `json:"canonical_url,omitempty"`
-	Robots          string   `json:"robots,omitempty"`
-	NoIndex         bool     `json:"noindex,omitempty"`
-	OGTitle         string   `json:"og_title,omitempty"`
-	OGDescription   string   `json:"og_description,omitempty"`
-	OGImageURL      string   `json:"og_image_url,omitempty"`
-	OGType          string   `json:"og_type,omitempty"`
-	TwitterCard     string   `json:"twitter_card,omitempty"`
-	TwitterTitle    string   `json:"twitter_title,omitempty"`
-	TwitterDescription string `json:"twitter_description,omitempty"`
-	TwitterImageURL string   `json:"twitter_image_url,omitempty"`
+	MetaTitle          string   `json:"meta_title,omitempty"`
+	MetaDescription    string   `json:"meta_description,omitempty"`
+	MetaKeywords       []string `json:"meta_keywords,omitempty"`
+	CanonicalURL       string   `json:"canonical_url,omitempty"`
+	Robots             string   `json:"robots,omitempty"`
+	NoIndex            bool     `json:"noindex,omitempty"`
+	OGTitle            string   `json:"og_title,omitempty"`
+	OGDescription      string   `json:"og_description,omitempty"`
+	OGImageURL         string   `json:"og_image_url,omitempty"`
+	OGType             string   `json:"og_type,omitempty"`
+	TwitterCard        string   `json:"twitter_card,omitempty"`
+	TwitterTitle       string   `json:"twitter_title,omitempty"`
+	TwitterDescription string   `json:"twitter_description,omitempty"`
+	TwitterImageURL    string   `json:"twitter_image_url,omitempty"`
 }
 
-//
-// This is the query-param shape for GET /events and GET /events/me.
-// Every field here maps directly to a backend filter — no client-side
-// transformation needed. The frontend sends only the params it needs;
-// empty values are ignored.
+// ListEventsRequest is the query-param shape for GET /events and GET /events/me.
 type ListEventsRequest struct {
 	// Team Filter (from query params)
 	TeamID   string `json:"team_id" query:"team_id"`
@@ -307,10 +294,10 @@ type ListEventsRequest struct {
 	EventTypeID   string `json:"event_type_id" query:"event_type_id"`
 	EventStatusID string `json:"event_status_id" query:"event_status_id"`
 	CategoryID    string `json:"category_id" query:"category_id"`
-	UserID        string `json:"user_id" query:"user_id"` // Filter by creator
+	UserID        string `json:"user_id" query:"user_id"`       // Filter by creator
 	Visibility    string `json:"visibility" query:"visibility"` // public, private, unlisted
 
-	// Search (full-text across name, display_name, description, short_description)
+	// Search
 	SearchQuery string `json:"q" query:"q"`
 
 	// Deletion Filters
@@ -319,8 +306,8 @@ type ListEventsRequest struct {
 	IncludeCreator bool `json:"include_creator" query:"include_creator"`
 
 	// Pagination
-	Limit  int `json:"limit" query:"limit"`
-	Offset int `json:"offset" query:"offset"`
+	Limit    int `json:"limit" query:"limit"`
+	Offset   int `json:"offset" query:"offset"`
 	Page     int `json:"page" query:"page"`
 	PageSize int `json:"page_size" query:"page_size"`
 
@@ -328,6 +315,7 @@ type ListEventsRequest struct {
 	SortBy    string `json:"sort_by" query:"sort_by"`
 	SortOrder string `json:"sort_order" query:"sort_order"` // asc, desc
 }
+
 // ============================================================
 // BULK REQUEST TYPES
 // ============================================================
@@ -369,7 +357,6 @@ type EventTypeDTO struct {
 	MinDuration         int    `json:"min_duration"`
 	MaxDuration         int    `json:"max_duration"`
 }
-
 
 // EventStatusDTO - Event status information
 type EventStatusDTO struct {
@@ -426,50 +413,39 @@ type CertificateTemplateDTO struct {
 }
 
 // ScheduleDTO is the wire format for one event schedule.
-//
-// VideoMeetingID and VideoMeetingExternalID are distinct:
-//
-//   - VideoMeetingID is the Nuruvent UUID (FK to video_meetings.id),
-//     used to address meeting-scoped endpoints like
-//     POST /video/meetings/:id/fetch-attendance.
-//
-//   - VideoMeetingExternalID is the platform-side code
-//     ("spaces/abc-defg-hij" for Google Meet, numeric ID for Zoom),
-//     matching video_meetings.external_id. It is the value join URLs
-//     are built from — never use VideoMeetingID for that.
 type ScheduleDTO struct {
-	ID             string  `json:"id"`
-	SessionName    string  `json:"session_name,omitempty"`
-	SessionNumber  int     `json:"session_number,omitempty"`
-	StartDate      string  `json:"start_date"`
-	EndDate        string  `json:"end_date,omitempty"`
-	StartTime      string  `json:"start_time"`
-	EndTime        string  `json:"end_time"`
-	Timezone       string  `json:"timezone"`
-	Location       string  `json:"location,omitempty"`
-	IsVirtual      bool    `json:"is_virtual"`
-	Platform       string  `json:"platform,omitempty"`
-	ZoomLink       string  `json:"zoom_link,omitempty"`
-	MeetLink       string  `json:"meet_link,omitempty"`
-	VideoMeetingID *string `json:"video_meeting_id,omitempty"`
-	VideoMeetingExternalID string `json:"video_meeting_external_id,omitempty"`
-	MaxAttendees   int     `json:"max_attendees,omitempty"`
+	ID                     string  `json:"id"`
+	SessionName            string  `json:"session_name,omitempty"`
+	SessionNumber          int     `json:"session_number,omitempty"`
+	StartDate              string  `json:"start_date"`
+	EndDate                string  `json:"end_date,omitempty"`
+	StartTime              string  `json:"start_time"`
+	EndTime                string  `json:"end_time"`
+	Timezone               string  `json:"timezone"`
+	Location               string  `json:"location,omitempty"`
+	IsVirtual              bool    `json:"is_virtual"`
+	Platform               string  `json:"platform,omitempty"`
+	ZoomLink               string  `json:"zoom_link,omitempty"`
+	MeetLink               string  `json:"meet_link,omitempty"`
+	VideoMeetingID         *string `json:"video_meeting_id,omitempty"`
+	VideoMeetingExternalID string  `json:"video_meeting_external_id,omitempty"`
+	MaxAttendees           int     `json:"max_attendees,omitempty"`
 }
 
 // TicketDTO - Ticket response
 type TicketDTO struct {
-	ID                 string          `json:"id"`
-	TicketType         *TicketTypeDTO  `json:"ticket_type,omitempty"`
-	Name               string          `json:"name"`
-	Description        string          `json:"description,omitempty"`
-	Price              float64         `json:"price"`
-	Quantity           int             `json:"quantity"`
-	MaxPerPerson       int             `json:"max_per_person,omitempty"`
-	EarlyBirdDeadline  string          `json:"early_bird_deadline,omitempty"`
-	GroupMinAttendees  int             `json:"group_min_attendees,omitempty"`
-	GroupDiscount      float64         `json:"group_discount,omitempty"`
-	SortOrder          int             `json:"sort_order"`
-	IsActive           bool            `json:"is_active"`
+	ID                string         `json:"id"`
+	TicketType        *TicketTypeDTO `json:"ticket_type,omitempty"`
+	Name              string         `json:"name"`
+	Description       string         `json:"description,omitempty"`
+	Price             float64        `json:"price"`
+	Quantity          int            `json:"quantity"`
+	MaxPerPerson      int            `json:"max_per_person,omitempty"`
+	EarlyBirdDeadline string         `json:"early_bird_deadline,omitempty"`
+	GroupMinAttendees int            `json:"group_min_attendees,omitempty"`
+	GroupDiscount     float64        `json:"group_discount,omitempty"`
+	SortOrder         int            `json:"sort_order"`
+	IsActive          bool           `json:"is_active"`
 }
 
 // SpeakerDTO - Speaker response
@@ -497,20 +473,20 @@ type MaterialDTO struct {
 
 // SEODTO - SEO response
 type SEODTO struct {
-	MetaTitle       string   `json:"meta_title,omitempty"`
-	MetaDescription string   `json:"meta_description,omitempty"`
-	MetaKeywords    []string `json:"meta_keywords,omitempty"`
-	CanonicalURL    string   `json:"canonical_url,omitempty"`
-	Robots          string   `json:"robots,omitempty"`
-	NoIndex         bool     `json:"noindex"`
-	OGTitle         string   `json:"og_title,omitempty"`
-	OGDescription   string   `json:"og_description,omitempty"`
-	OGImageURL      string   `json:"og_image_url,omitempty"`
-	OGType          string   `json:"og_type,omitempty"`
-	TwitterCard     string   `json:"twitter_card,omitempty"`
-	TwitterTitle    string   `json:"twitter_title,omitempty"`
-	TwitterDescription string `json:"twitter_description,omitempty"`
-	TwitterImageURL string   `json:"twitter_image_url,omitempty"`
+	MetaTitle          string   `json:"meta_title,omitempty"`
+	MetaDescription    string   `json:"meta_description,omitempty"`
+	MetaKeywords       []string `json:"meta_keywords,omitempty"`
+	CanonicalURL       string   `json:"canonical_url,omitempty"`
+	Robots             string   `json:"robots,omitempty"`
+	NoIndex            bool     `json:"noindex"`
+	OGTitle            string   `json:"og_title,omitempty"`
+	OGDescription      string   `json:"og_description,omitempty"`
+	OGImageURL         string   `json:"og_image_url,omitempty"`
+	OGType             string   `json:"og_type,omitempty"`
+	TwitterCard        string   `json:"twitter_card,omitempty"`
+	TwitterTitle       string   `json:"twitter_title,omitempty"`
+	TwitterDescription string   `json:"twitter_description,omitempty"`
+	TwitterImageURL    string   `json:"twitter_image_url,omitempty"`
 }
 
 // VenueDTO - Venue response
@@ -522,11 +498,7 @@ type VenueDTO struct {
 	Coordinates map[string]float64 `json:"coordinates,omitempty"`
 }
 
-// Replace the existing RecurrenceDTO struct in
-// internal/modules/events/handler/dtos.go with:
-
-// RecurrenceDTO is the API response shape for recurrence. It mirrors
-// the domain RecurrenceRule fields one-to-one.
+// RecurrenceDTO is the API response shape for recurrence.
 type RecurrenceDTO struct {
 	Frequency  string   `json:"frequency"`
 	Interval   int      `json:"interval"`
@@ -540,7 +512,7 @@ type OrganizerResponse struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
-	Type        string `json:"type"` // "institution" or "personal"
+	Type        string `json:"type"`
 	AvatarURL   string `json:"avatar_url,omitempty"`
 	Slug        string `json:"slug,omitempty"`
 }
@@ -555,37 +527,34 @@ type CreatorDTO struct {
 	Avatar      string `json:"avatar,omitempty"`
 }
 
-
-
 // EventResponse - Complete event response
 type EventResponse struct {
-	ID               string `json:"id"`
-	Slug             string `json:"slug"`
-	Name             string `json:"name"`
-	DisplayName      string `json:"display_name"`
-	Description      string `json:"description"`
-	ShortDescription string `json:"short_description,omitempty"`
+	ID               string   `json:"id"`
+	Slug             string   `json:"slug"`
+	Name             string   `json:"name"`
+	DisplayName      string   `json:"display_name"`
+	Description      string   `json:"description"`
+	ShortDescription string   `json:"short_description,omitempty"`
 	Tags             []string `json:"tags,omitempty"`
-	Language         string `json:"language"`
+	Language         string   `json:"language"`
 
 	// Relations
-	EventType   *EventTypeDTO        `json:"event_type,omitempty"`
-	EventStatus *EventStatusDTO      `json:"event_status,omitempty"`
-	Category    *CategoryDTO         `json:"category,omitempty"`
-	EventFormat *EventFormatDTO      `json:"event_format,omitempty"`
+	EventType           *EventTypeDTO           `json:"event_type,omitempty"`
+	EventStatus         *EventStatusDTO         `json:"event_status,omitempty"`
+	Category            *CategoryDTO            `json:"category,omitempty"`
+	EventFormat         *EventFormatDTO         `json:"event_format,omitempty"`
 	CertificateTemplate *CertificateTemplateDTO `json:"certificate_template,omitempty"`
 
 	// Ownership
-	TeamID string `json:"team_id"` // Team ID this event belongs to
-	
-	
+	TeamID string `json:"team_id"`
+
 	// Organizer (public-facing - always shown)
 	Organizer *OrganizerResponse `json:"organizer"`
-	
+
 	// Creator (internal - only for authorized users)
 	Creator *CreatorDTO `json:"creator,omitempty"`
 
-		// Schedule
+	// Schedule
 	StartDate   string         `json:"start_date,omitempty"`
 	EndDate     string         `json:"end_date,omitempty"`
 	Date        *string        `json:"date,omitempty"`
@@ -607,20 +576,21 @@ type EventResponse struct {
 	MeetLink           string    `json:"meet_link,omitempty"`
 
 	// Tickets
-	IsFree             bool         `json:"is_free"`
-	Capacity           int          `json:"capacity"`
-	CurrentAttendees   int          `json:"current_attendees"`
-	WaitlistEnabled    bool         `json:"waitlist_enabled"`
-	WaitlistCapacity   int          `json:"waitlist_capacity,omitempty"`
-	MinTicketsPerOrder int          `json:"min_tickets_per_order"`
-	MaxTicketsPerOrder int          `json:"max_tickets_per_order"`
-	Tickets            []TicketDTO  `json:"tickets,omitempty"`
+	IsFree             bool        `json:"is_free"`
+	Capacity           int         `json:"capacity"`
+	CurrentAttendees   int         `json:"current_attendees"`
+	WaitlistEnabled    bool        `json:"waitlist_enabled"`
+	WaitlistCapacity   int         `json:"waitlist_capacity,omitempty"`
+	MinTicketsPerOrder int         `json:"min_tickets_per_order"`
+	MaxTicketsPerOrder int         `json:"max_tickets_per_order"`
+	Tickets            []TicketDTO `json:"tickets,omitempty"`
 
 	// Access & Privacy
-	Visibility    string   `json:"visibility"`
-	IsPrivate     bool     `json:"is_private"`
-	InviteOnly    bool     `json:"invite_only"`
-	InvitedEmails []string `json:"invited_emails,omitempty"`
+	Visibility          string   `json:"visibility"`
+	IsPrivate           bool     `json:"is_private"`
+	InviteOnly          bool     `json:"invite_only"`
+	InvitedEmails       []string `json:"invited_emails,omitempty"`
+	RegistrationEnabled bool     `json:"registration_enabled"` // <-- ADDED
 
 	// Monetization
 	IsFeatured         bool    `json:"is_featured"`
@@ -655,9 +625,9 @@ type EventResponse struct {
 	LastPublishedAt    *string `json:"last_published_at,omitempty"`
 
 	// Audit
-	IsActive  bool   `json:"is_active"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	IsActive  bool    `json:"is_active"`
+	CreatedAt string  `json:"created_at"`
+	UpdatedAt string  `json:"updated_at"`
 	DeletedAt *string `json:"deleted_at,omitempty"`
 }
 
@@ -665,28 +635,24 @@ type EventResponse struct {
 // BULK RESPONSE TYPES
 // ============================================================
 
-// BulkDeleteResultResponse
 type BulkDeleteResultResponse struct {
 	DeletedCount int      `json:"deleted_count"`
 	FailedIDs    []string `json:"failed_ids,omitempty"`
 	Errors       []string `json:"errors,omitempty"`
 }
 
-// BulkRestoreResultResponse
 type BulkRestoreResultResponse struct {
 	RestoredCount int      `json:"restored_count"`
 	FailedIDs     []string `json:"failed_ids,omitempty"`
 	Errors        []string `json:"errors,omitempty"`
 }
 
-// BulkStatusResultResponse
 type BulkStatusResultResponse struct {
 	ProcessedCount int      `json:"processed_count"`
 	FailedIDs      []string `json:"failed_ids,omitempty"`
 	Errors         []string `json:"errors,omitempty"`
 }
 
-// BulkDuplicateResultResponse
 type BulkDuplicateResultResponse struct {
 	DuplicatedCount int `json:"duplicated_count"`
 	CreatedEvents   []struct {
@@ -709,8 +675,6 @@ type MediaInfoResponse struct {
 }
 
 // GenerateEventDraftRequest - AI draft generation request body.
-// Scope fields (created_by, team_id, team_type, account_id) are set by
-// the handler from the auth context, never from the body.
 type GenerateEventDraftRequest struct {
 	Prompt        string   `json:"prompt" binding:"required"`
 	EventTypeID   string   `json:"event_type_id" binding:"required"`
@@ -734,22 +698,9 @@ type ReorderSchedulesRequest struct {
 // ISSUE CERTIFICATES
 // ============================================================
 
-// IssueCertificatesRequest is the body for
-// POST /events/:id/certificates/issue.
-//
-// Mode controls recipient resolution:
-//
-//   - "add" (default) — every attendee with a qualifying attendance
-//     status receives a certificate, PLUS any recipients supplied
-//     here. Duplicates removed.
-//
-//   - "replace" — only the caller-supplied recipients receive a
-//     certificate. Attendance is not consulted.
 type IssueCertificatesRequest struct {
 	Mode string `json:"mode,omitempty"`
 
-	// Recipients is optional in "add" mode. Required in "replace"
-	// mode.
 	Recipients []IssueCertificateRecipientDTO `json:"recipients,omitempty,dive"`
 
 	TemplateID    string `json:"template_id,omitempty"`
@@ -757,23 +708,15 @@ type IssueCertificatesRequest struct {
 	EventDuration string `json:"event_duration,omitempty"`
 }
 
-// IssueCertificateRecipientDTO is one recipient in the request.
 type IssueCertificateRecipientDTO struct {
 	UserID      string `json:"user_id,omitempty"`
 	Name        string `json:"name,omitempty"`
 	Email       string `json:"email" binding:"omitempty,email"`
-	CompletedAt string `json:"completed_at,omitempty"` // RFC3339
+	CompletedAt string `json:"completed_at,omitempty"`
 }
 
-
-
-// IssueCertificatesResponse summarizes the batch initiation.
-//
-// Exactly one set of fields is populated based on Type:
-//   - "free" → Issued, Reused, Failed
-//   - "paid" → OrderID, AmountMinor, Currency
 type IssueCertificatesResponse struct {
-	Type string `json:"type"` // "free" | "paid"
+	Type string `json:"type"`
 
 	// Free path
 	Issued int      `json:"issued,omitempty"`
