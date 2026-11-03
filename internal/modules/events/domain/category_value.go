@@ -23,6 +23,9 @@ const (
 	CategoryScience    = types.CategoryScience
 	CategoryArts       = types.CategoryArts
 	CategorySports     = types.CategorySports
+	CategoryAcademic   = types.CategoryAcademic
+	CategoryCampus     = types.CategoryCampus
+	CategoryAlumni     = types.CategoryAlumni
 )
 
 // AllCategories re-exported from shared types
@@ -123,6 +126,36 @@ var categoryRegistry = map[types.Category]CategoryInfo{
 		Icon:        types.CategorySportsIcon,
 		Color:       types.CategorySportsColor,
 		SortOrder:   types.CategorySportsSortOrder,
+		IsActive:    true,
+	},
+	types.CategoryAcademic: {
+		Slug:        types.CategoryAcademicSlug,
+		Name:        types.CategoryAcademicName,
+		DisplayName: types.CategoryAcademicDisplayName,
+		Description: types.CategoryAcademicDescription,
+		Icon:        types.CategoryAcademicIcon,
+		Color:       types.CategoryAcademicColor,
+		SortOrder:   types.CategoryAcademicSortOrder,
+		IsActive:    true,
+	},
+	types.CategoryCampus: {
+		Slug:        types.CategoryCampusSlug,
+		Name:        types.CategoryCampusName,
+		DisplayName: types.CategoryCampusDisplayName,
+		Description: types.CategoryCampusDescription,
+		Icon:        types.CategoryCampusIcon,
+		Color:       types.CategoryCampusColor,
+		SortOrder:   types.CategoryCampusSortOrder,
+		IsActive:    true,
+	},
+	types.CategoryAlumni: {
+		Slug:        types.CategoryAlumniSlug,
+		Name:        types.CategoryAlumniName,
+		DisplayName: types.CategoryAlumniDisplayName,
+		Description: types.CategoryAlumniDescription,
+		Icon:        types.CategoryAlumniIcon,
+		Color:       types.CategoryAlumniColor,
+		SortOrder:   types.CategoryAlumniSortOrder,
 		IsActive:    true,
 	},
 }
