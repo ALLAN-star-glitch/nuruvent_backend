@@ -16,6 +16,9 @@ const (
 	CategoryScienceSlug    = "science"
 	CategoryArtsSlug       = "arts"
 	CategorySportsSlug     = "sports"
+	CategoryAcademicSlug   = "academic"
+	CategoryCampusSlug     = "campus-life"
+	CategoryAlumniSlug     = "alumni"
 )
 
 // CategoryName constants (with underscores) - Used for internal database lookups
@@ -28,6 +31,9 @@ const (
 	CategoryScienceName    = "category_science"
 	CategoryArtsName       = "category_arts"
 	CategorySportsName     = "category_sports"
+	CategoryAcademicName   = "category_academic"
+	CategoryCampusName     = "category_campus_life"
+	CategoryAlumniName     = "category_alumni"
 )
 
 // CategoryDisplayName constants - Used for UI display
@@ -40,6 +46,9 @@ const (
 	CategoryScienceDisplayName    = "Science"
 	CategoryArtsDisplayName       = "Arts & Culture"
 	CategorySportsDisplayName     = "Sports & Fitness"
+	CategoryAcademicDisplayName   = "Academic Milestones"
+	CategoryCampusDisplayName     = "Campus Life"
+	CategoryAlumniDisplayName     = "Alumni & Networking"
 )
 
 // CategoryDescription constants
@@ -52,6 +61,9 @@ const (
 	CategoryScienceDescription    = "Science and research events"
 	CategoryArtsDescription       = "Arts, culture and creative events"
 	CategorySportsDescription     = "Sports and fitness events"
+	CategoryAcademicDescription   = "Graduations, convocations, and academic awards"
+	CategoryCampusDescription     = "Student life, hackathons, orientations, and campus events"
+	CategoryAlumniDescription     = "Alumni reunions, networking mixers, and galas"
 )
 
 // CategoryIcon constants
@@ -64,6 +76,9 @@ const (
 	CategoryScienceIcon    = "flask"
 	CategoryArtsIcon       = "palette"
 	CategorySportsIcon     = "dumbbell"
+	CategoryAcademicIcon   = "award"
+	CategoryCampusIcon     = "users"
+	CategoryAlumniIcon     = "heart-handshake"
 )
 
 // CategoryColor constants
@@ -76,6 +91,9 @@ const (
 	CategoryScienceColor    = "#06B6D4" // Cyan
 	CategoryArtsColor       = "#EC4899" // Pink
 	CategorySportsColor     = "#F97316" // Orange
+	CategoryAcademicColor   = "#6366F1" // Indigo
+	CategoryCampusColor     = "#F43F5E" // Rose
+	CategoryAlumniColor     = "#8B5CF6" // Violet
 )
 
 // CategorySortOrder constants
@@ -88,6 +106,9 @@ const (
 	CategoryScienceSortOrder    = 6
 	CategoryArtsSortOrder       = 7
 	CategorySportsSortOrder     = 8
+	CategoryAcademicSortOrder   = 9
+	CategoryCampusSortOrder     = 10
+	CategoryAlumniSortOrder     = 11
 )
 
 // ============================================================
@@ -99,14 +120,17 @@ type Category string
 
 // Category constants - These are the NAMES (with underscores)
 const (
-	CategoryTechnology Category = CategoryTechnologyName // "category_technology"
-	CategoryBusiness   Category = CategoryBusinessName   // "category_business"
-	CategoryHealth     Category = CategoryHealthName     // "category_health"
-	CategoryEducation  Category = CategoryEducationName  // "category_education"
-	CategoryFinance    Category = CategoryFinanceName    // "category_finance"
-	CategoryScience    Category = CategoryScienceName    // "category_science"
-	CategoryArts       Category = CategoryArtsName       // "category_arts"
-	CategorySports     Category = CategorySportsName     // "category_sports"
+	CategoryTechnology Category = CategoryTechnologyName
+	CategoryBusiness   Category = CategoryBusinessName
+	CategoryHealth     Category = CategoryHealthName
+	CategoryEducation  Category = CategoryEducationName
+	CategoryFinance    Category = CategoryFinanceName
+	CategoryScience    Category = CategoryScienceName
+	CategoryArts       Category = CategoryArtsName
+	CategorySports     Category = CategorySportsName
+	CategoryAcademic   Category = CategoryAcademicName
+	CategoryCampus     Category = CategoryCampusName
+	CategoryAlumni     Category = CategoryAlumniName
 )
 
 // AllCategories lists all valid categories for validation
@@ -119,6 +143,9 @@ var AllCategories = []Category{
 	CategoryScience,
 	CategoryArts,
 	CategorySports,
+	CategoryAcademic,
+	CategoryCampus,
+	CategoryAlumni,
 }
 
 // ============================================================
@@ -168,6 +195,12 @@ func (c Category) GetSlug() string {
 		return CategoryArtsSlug
 	case CategorySports:
 		return CategorySportsSlug
+	case CategoryAcademic:
+		return CategoryAcademicSlug
+	case CategoryCampus:
+		return CategoryCampusSlug
+	case CategoryAlumni:
+		return CategoryAlumniSlug
 	default:
 		return string(c)
 	}
@@ -192,6 +225,12 @@ func (c Category) GetDisplayName() string {
 		return CategoryArtsDisplayName
 	case CategorySports:
 		return CategorySportsDisplayName
+	case CategoryAcademic:
+		return CategoryAcademicDisplayName
+	case CategoryCampus:
+		return CategoryCampusDisplayName
+	case CategoryAlumni:
+		return CategoryAlumniDisplayName
 	default:
 		return string(c)
 	}
@@ -216,6 +255,12 @@ func (c Category) GetDescription() string {
 		return CategoryArtsDescription
 	case CategorySports:
 		return CategorySportsDescription
+	case CategoryAcademic:
+		return CategoryAcademicDescription
+	case CategoryCampus:
+		return CategoryCampusDescription
+	case CategoryAlumni:
+		return CategoryAlumniDescription
 	default:
 		return ""
 	}
@@ -240,6 +285,12 @@ func (c Category) GetIcon() string {
 		return CategoryArtsIcon
 	case CategorySports:
 		return CategorySportsIcon
+	case CategoryAcademic:
+		return CategoryAcademicIcon
+	case CategoryCampus:
+		return CategoryCampusIcon
+	case CategoryAlumni:
+		return CategoryAlumniIcon
 	default:
 		return "folder"
 	}
@@ -264,6 +315,12 @@ func (c Category) GetColor() string {
 		return CategoryArtsColor
 	case CategorySports:
 		return CategorySportsColor
+	case CategoryAcademic:
+		return CategoryAcademicColor
+	case CategoryCampus:
+		return CategoryCampusColor
+	case CategoryAlumni:
+		return CategoryAlumniColor
 	default:
 		return "#6B7280"
 	}
@@ -288,6 +345,12 @@ func (c Category) GetSortOrder() int {
 		return CategoryArtsSortOrder
 	case CategorySports:
 		return CategorySportsSortOrder
+	case CategoryAcademic:
+		return CategoryAcademicSortOrder
+	case CategoryCampus:
+		return CategoryCampusSortOrder
+	case CategoryAlumni:
+		return CategoryAlumniSortOrder
 	default:
 		return 999
 	}
