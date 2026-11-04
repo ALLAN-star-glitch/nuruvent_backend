@@ -208,6 +208,7 @@ type AttendeeSummary struct {
 type ListEventAttendeesCommand struct {
 	UserID    string
 	EventID   string
+	SessionID string // <-- ADDED
 	Search    string
 	Statuses  []string
 	SortBy    string
@@ -223,6 +224,12 @@ type ListEventAttendeesResult struct {
 	PageSize  int
 }
 
+// SessionBreakdown is used to render the per-session status dots in the UI.
+type SessionBreakdown struct {
+	SessionID string
+	Status    attendance.AttendanceStatus
+}
+
 // EventAttendeeListItem is one row in the event attendee list.
 type EventAttendeeListItem struct {
 	AttendeeID           string
@@ -235,8 +242,9 @@ type EventAttendeeListItem struct {
 	TotalDurationSeconds int
 	RegisteredAt         time.Time
 	LastActivityAt       time.Time
-	IsHost               bool // ← add
+	IsHost               bool
 	Phone                string
+	SessionBreakdowns    []SessionBreakdown // <-- ADDED
 }
 
 type GetEventAttendeeDetailCommand struct {
@@ -256,7 +264,7 @@ type EventAttendeeDetail struct {
 	TotalDurationSeconds int
 	RegisteredAt         time.Time
 	LastActivityAt       time.Time
-	IsHost               bool // ← add
+	IsHost               bool
 	Phone                string
 	Sessions             []EventAttendeeSessionDetail
 }
@@ -280,8 +288,9 @@ type EventAttendeeSessionDetail struct {
 type ListAttendeesCommand struct {
 	UserID    string
 	EventID   string
-	TeamID    string // ← NEW
-	Scope     string // ← NEW: "team" | "personal" | ""
+	TeamID    string
+	Scope     string
+	SessionID string // <-- ADDED
 	Search    string
 	Statuses  []string
 	SortBy    string
@@ -312,8 +321,9 @@ type CrossEventAttendeeItem struct {
 	TotalDurationSeconds int64
 	RegisteredAt         time.Time
 	LastActivityAt       time.Time
-	IsHost               bool // ← add
+	IsHost               bool
 	Phone                string
+	SessionBreakdowns    []SessionBreakdown // <-- ADDED
 }
 
 // RegisterHostAttendeeCommand creates or updates an attendee row for

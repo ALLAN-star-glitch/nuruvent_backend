@@ -155,6 +155,15 @@ type Service interface {
 		cmd IssueCertificatesForEventCommand,
 	) (*domain.InitiateBatchIssuanceResult, error)
 
+
+	// SyncSchedulesToAttendance re-syncs the event's schedules to the
+    // attendance module. Called by the video provisioner after meetings
+    // are created, so the attendance sessions get the join URLs.
+    SyncSchedulesToAttendance(ctx context.Context, eventID string)
+
+
+	
+
 	
 
 

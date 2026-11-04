@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -119,11 +120,11 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 
 	// --- Base query ---
 	base := r.db.WithContext(ctx).
-    Table("attendee_rollup_statuses AS ars").
-    Joins("JOIN attendees a ON a.id = ars.attendee_id AND a.deleted_at IS NULL").
-    Where("ars.external_type = ? AND ars.external_id = ?",
-        "event", q.EventID).
-    Where("a.is_host = false")
+		Table("attendee_rollup_statuses AS ars").
+		Joins("JOIN attendees a ON a.id = ars.attendee_id AND a.deleted_at IS NULL").
+		Where("ars.external_type = ? AND ars.external_id = ?",
+			"event", q.EventID).
+		Where("a.is_host = false")
 
 	// --- Search filter ---
 	if s := strings.TrimSpace(q.Search); s != "" {
@@ -134,9 +135,21 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 		)
 	}
 
-	// --- Status filter ---
-	if len(q.Statuses) > 0 {
-		base = base.Where("ars.derived_status IN ?", q.Statuses)
+	// --- Session Filter & Status filter ---
+	if q.SessionID != "" {
+		// Filter by specific session
+		base = base.Joins(
+			"JOIN attendee_session_statuses ass ON ass.attendee_id = a.id AND ass.session_id = ?",
+			q.SessionID,
+		)
+		if len(q.Statuses) > 0 {
+			base = base.Where("ass.derived_status IN ?", q.Statuses)
+		}
+	} else {
+		// No session filter, use rollup status
+		if len(q.Statuses) > 0 {
+			base = base.Where("ars.derived_status IN ?", q.Statuses)
+		}
 	}
 
 	// --- Count (before ordering/limit) ---
@@ -162,6 +175,7 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 		LastDerivedAt        time.Time `gorm:"column:last_derived_at"`
 		RegisteredAt         time.Time `gorm:"column:registered_at"`
 		IsHost               bool      `gorm:"column:is_host"`
+		SessionBreakdownsRaw []byte    `gorm:"column:session_breakdowns_raw"`
 	}
 
 	var rows []row
@@ -178,7 +192,16 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 				"ars.total_duration_seconds, " +
 				"ars.last_derived_at, " +
 				"a.created_at AS registered_at, " +
-				"a.is_host",
+				"a.is_host, " +
+				`COALESCE((
+					SELECT json_agg(json_build_object(
+						'session_id', ass.session_id, 
+						'status', CASE WHEN ass.host_confirmed AND ass.confirmed_status IS NOT NULL THEN ass.confirmed_status ELSE ass.derived_status END
+					))
+					FROM attendee_session_statuses ass 
+					JOIN sessions s ON s.id = ass.session_id AND s.deleted_at IS NULL
+					WHERE ass.attendee_id = a.id AND s.external_type = 'event' AND s.external_id = ars.external_id
+				), '[]'::json) AS session_breakdowns_raw`,
 		).
 		Order(orderClause).
 		Limit(pageSize).
@@ -190,6 +213,22 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 
 	out := make([]*attendance.EventAttendeeRow, 0, len(rows))
 	for _, x := range rows {
+		var rawBreakdowns []struct {
+			SessionID string `json:"session_id"`
+			Status    string `json:"status"`
+		}
+		if len(x.SessionBreakdownsRaw) > 0 {
+			_ = json.Unmarshal(x.SessionBreakdownsRaw, &rawBreakdowns)
+		}
+
+		breakdowns := make([]attendance.SessionBreakdown, 0, len(rawBreakdowns))
+		for _, b := range rawBreakdowns {
+			breakdowns = append(breakdowns, attendance.SessionBreakdown{
+				SessionID: b.SessionID,
+				Status:    b.Status,
+			})
+		}
+
 		out = append(out, &attendance.EventAttendeeRow{
 			AttendeeID:           x.AttendeeID,
 			DisplayName:          x.DisplayName,
@@ -203,6 +242,7 @@ func (r *AttendeeRollupStatusRepository) ListEventAttendees(
 			LastDerivedAt:        x.LastDerivedAt,
 			RegisteredAt:         x.RegisteredAt,
 			IsHost:               x.IsHost,
+			SessionBreakdowns:    breakdowns,
 		})
 	}
 
@@ -321,25 +361,39 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 
 	// --- Base query ---
 	base := r.db.WithContext(ctx).
-    Table("attendee_rollup_statuses AS ars").
-    Joins("JOIN attendees a ON a.id = ars.attendee_id AND a.deleted_at IS NULL").
-    Joins("JOIN events e ON e.id = ars.external_id AND e.deleted_at IS NULL").
-    Where("ars.external_type = ?", "event").
-    Where("a.is_host = false").
-    Where(
-        "e.team_id IN (SELECT t.id FROM teams t WHERE t.account_id IN ? AND t.deleted_at IS NULL)",
-        q.AccountIDs,
-    )
+		Table("attendee_rollup_statuses AS ars").
+		Joins("JOIN attendees a ON a.id = ars.attendee_id AND a.deleted_at IS NULL").
+		Joins("JOIN events e ON e.id = ars.external_id AND e.deleted_at IS NULL").
+		Where("ars.external_type = ?", "event").
+		Where("a.is_host = false").
+		Where(
+			"e.team_id IN (SELECT t.id FROM teams t WHERE t.account_id IN ? AND t.deleted_at IS NULL)",
+			q.AccountIDs,
+		)
 
-	// --- Event filter ---
 	// --- Team filter (event IDs resolved by the service) ---
 	if len(q.EventIDs) > 0 {
 		base = base.Where("ars.external_id IN ?", q.EventIDs)
 	}
 
-		// --- Single-event filter (from the Event dropdown) ---
+	// --- Single-event filter (from the Event dropdown) ---
 	if q.EventID != "" {
 		base = base.Where("ars.external_id = ?", q.EventID)
+	}
+
+	// --- Session Filter & Status filter ---
+	if q.SessionID != "" {
+		base = base.Joins(
+			"JOIN attendee_session_statuses ass ON ass.attendee_id = a.id AND ass.session_id = ?",
+			q.SessionID,
+		)
+		if len(q.Statuses) > 0 {
+			base = base.Where("ass.derived_status IN ?", q.Statuses)
+		}
+	} else {
+		if len(q.Statuses) > 0 {
+			base = base.Where("ars.derived_status IN ?", q.Statuses)
+		}
 	}
 
 	// --- Search ---
@@ -349,11 +403,6 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 			"(LOWER(a.display_name) LIKE ? OR LOWER(a.email) LIKE ?)",
 			like, like,
 		)
-	}
-
-	// --- Status filter ---
-	if len(q.Statuses) > 0 {
-		base = base.Where("ars.derived_status IN ?", q.Statuses)
 	}
 
 	// --- Count ---
@@ -383,6 +432,7 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 		LastDerivedAt        time.Time `gorm:"column:last_derived_at"`
 		RegisteredAt         time.Time `gorm:"column:registered_at"`
 		IsHost               bool      `gorm:"column:is_host"`
+		SessionBreakdownsRaw []byte    `gorm:"column:session_breakdowns_raw"`
 	}
 
 	var rows []row
@@ -403,7 +453,16 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 				"ars.total_duration_seconds, " +
 				"ars.last_derived_at, " +
 				"a.created_at AS registered_at, " +
-				"a.is_host",
+				"a.is_host, " +
+				`COALESCE((
+					SELECT json_agg(json_build_object(
+						'session_id', ass.session_id, 
+						'status', CASE WHEN ass.host_confirmed AND ass.confirmed_status IS NOT NULL THEN ass.confirmed_status ELSE ass.derived_status END
+					))
+					FROM attendee_session_statuses ass 
+					JOIN sessions s ON s.id = ass.session_id AND s.deleted_at IS NULL
+					WHERE ass.attendee_id = a.id AND s.external_type = 'event' AND s.external_id = ars.external_id
+				), '[]'::json) AS session_breakdowns_raw`,
 		).
 		Order(orderClause).
 		Limit(pageSize).
@@ -415,6 +474,22 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 
 	out := make([]*attendance.CrossEventAttendeeRow, 0, len(rows))
 	for _, x := range rows {
+		var rawBreakdowns []struct {
+			SessionID string `json:"session_id"`
+			Status    string `json:"status"`
+		}
+		if len(x.SessionBreakdownsRaw) > 0 {
+			_ = json.Unmarshal(x.SessionBreakdownsRaw, &rawBreakdowns)
+		}
+
+		breakdowns := make([]attendance.SessionBreakdown, 0, len(rawBreakdowns))
+		for _, b := range rawBreakdowns {
+			breakdowns = append(breakdowns, attendance.SessionBreakdown{
+				SessionID: b.SessionID,
+				Status:    b.Status,
+			})
+		}
+
 		out = append(out, &attendance.CrossEventAttendeeRow{
 			AttendeeID:           x.AttendeeID,
 			DisplayName:          x.DisplayName,
@@ -432,6 +507,7 @@ func (r *AttendeeRollupStatusRepository) ListAttendees(
 			LastDerivedAt:        x.LastDerivedAt,
 			RegisteredAt:         x.RegisteredAt,
 			IsHost:               x.IsHost,
+			SessionBreakdowns:    breakdowns,
 		})
 	}
 
@@ -500,7 +576,6 @@ func maxInt(a, b int) int {
 	}
 	return b
 }
-
 
 // compile-time assertion
 var _ attendance.AttendeeRollupStatusRepository = (*AttendeeRollupStatusRepository)(nil)

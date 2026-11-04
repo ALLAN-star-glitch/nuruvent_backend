@@ -107,7 +107,16 @@ func RegisterRoutes(
 	r.Post("/sessions/:id/attendance/:attendeeID/override", authMiddleware, sessionCtx, authzMiddleware, h.Attendance.OverrideAttendance)
 	r.Post("/sessions/:id/attendance/bulk-confirm", authMiddleware, sessionCtx, authzMiddleware, h.Attendance.BulkConfirm)
 
+	
+
 	r.Get("/attendees/:id/summary", authMiddleware, authzMiddleware, h.Attendance.GetAttendeeSummary)
+
+	// Consumer-facing: lookup an attendance session by event schedule ID
+r.Get(
+	"/attendance/sessions/lookup",
+	authMiddleware,
+	h.Attendance.LookupSessionID,
+)
 
 	// ---- Event-facing ----
 	r.Get("/events/:eventId/summary", authMiddleware, authzMiddleware, h.Attendance.EventSummary)

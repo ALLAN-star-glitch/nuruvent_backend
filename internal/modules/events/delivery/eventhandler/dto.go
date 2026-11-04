@@ -415,6 +415,7 @@ type CertificateTemplateDTO struct {
 // ScheduleDTO is the wire format for one event schedule.
 type ScheduleDTO struct {
 	ID                     string  `json:"id"`
+	AttendanceSessionID    string `json:"attendance_session_id,omitempty"`
 	SessionName            string  `json:"session_name,omitempty"`
 	SessionNumber          int     `json:"session_number,omitempty"`
 	StartDate              string  `json:"start_date"`

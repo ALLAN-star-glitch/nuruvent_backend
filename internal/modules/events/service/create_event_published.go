@@ -363,7 +363,12 @@ func (s *eventService) setPublishedStatusAndSave(ctx context.Context, event *dom
 		log.Printf("⚠️ Could not reload event for attendance sync: %v", reloadErr)
 	}
 
-	s.syncEventSchedulesToAttendance(ctx, event)
+	// REMOVED: s.syncEventSchedulesToAttendance(ctx, event)
+	// The initial sync here ran BEFORE the video worker provisioned the
+	// meetings, resulting in sessions with provider="none" and empty
+	// meeting IDs. The worker now calls SyncSchedulesToAttendance after
+	// provisioning to ensure the sessions get the correct data.
+
 	s.enqueueVideoProvisioning(ctx, event.ID)
 
 	return nil

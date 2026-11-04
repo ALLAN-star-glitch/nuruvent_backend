@@ -536,3 +536,21 @@ func parseMeetCode(link string) string {
 	}
 	return m[1]
 }
+
+
+
+// SyncSchedulesToAttendance loads the event and re-syncs all schedules
+// to the attendance module. Called by the video provisioner after
+// meetings are created.
+func (s *eventService) SyncSchedulesToAttendance(ctx context.Context, eventID string) {
+    event, err := s.repo.GetEventByID(ctx, eventID)
+    if err != nil {
+        log.Printf("[events] sync reload FAIL event=%s err=%v", eventID, err)
+        return
+    }
+    if event == nil {
+        log.Printf("[events] sync reload SKIP event=%s reason=not-found", eventID)
+        return
+    }
+    s.syncEventSchedulesToAttendance(ctx, event)
+}

@@ -1,3 +1,5 @@
+// internal/modules/attendance/service/list_event_attendees.go
+
 package service
 
 import (
@@ -23,6 +25,7 @@ func (s *attendanceService) ListEventAttendees(
 
 	q := attendance.ListEventAttendeesQuery{
 		EventID:   cmd.EventID,
+		SessionID: cmd.SessionID, // <-- ADDED
 		Search:    cmd.Search,
 		Statuses:  cmd.Statuses,
 		SortBy:    cmd.SortBy,
@@ -51,11 +54,20 @@ func (s *attendanceService) ListEventAttendees(
 		PageSize:  res.PageSize,
 	}
 	for _, a := range res.Attendees {
+		// Map domain breakdowns to service breakdowns
+		breakdowns := make([]SessionBreakdown, 0, len(a.SessionBreakdowns))
+		for _, b := range a.SessionBreakdowns {
+			breakdowns = append(breakdowns, SessionBreakdown{
+				SessionID: b.SessionID,
+				Status:    attendance.AttendanceStatus(b.Status),
+			})
+		}
+
 		out.Attendees = append(out.Attendees, &EventAttendeeListItem{
 			AttendeeID:           a.AttendeeID,
 			DisplayName:          a.DisplayName,
 			Email:                a.Email,
-			Phone:                a.Phone, 
+			Phone:                a.Phone,
 			EffectiveStatus:      attendance.AttendanceStatus(a.DerivedStatus),
 			SessionsTotal:        a.SessionsTotal,
 			SessionsAttended:     a.SessionsAttended,
@@ -64,6 +76,7 @@ func (s *attendanceService) ListEventAttendees(
 			RegisteredAt:         a.RegisteredAt,
 			LastActivityAt:       a.LastDerivedAt,
 			IsHost:               a.IsHost,
+			SessionBreakdowns:    breakdowns, // <-- ADDED
 		})
 	}
 	return out, nil

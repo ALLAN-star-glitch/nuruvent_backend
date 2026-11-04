@@ -1,3 +1,5 @@
+// internal/modules/attendance/service/list_attendees.go
+
 package service
 
 import (
@@ -37,10 +39,9 @@ func (s *attendanceService) ListAttendees(
 	if err != nil {
 		return nil, fmt.Errorf("resolve accounts: %w", err)
 	}
-	
 
 	log.Printf("[ListAttendees] user=%s team=%s scope=%s accounts=%d eventsReader=%v",
-    cmd.UserID, cmd.TeamID, cmd.Scope, len(accountIDs), s.deps.EventsReader != nil)
+		cmd.UserID, cmd.TeamID, cmd.Scope, len(accountIDs), s.deps.EventsReader != nil)
 
 	// Empty accounts → empty page. Short-circuit before hitting the repo.
 	if len(accountIDs) == 0 {
@@ -69,6 +70,7 @@ func (s *attendanceService) ListAttendees(
 		AccountIDs: accountIDs,
 		EventIDs:   eventIDs,
 		EventID:    cmd.EventID,
+		SessionID:  cmd.SessionID, // <-- ADDED
 		Search:     cmd.Search,
 		Statuses:   cmd.Statuses,
 		SortBy:     cmd.SortBy,
@@ -97,6 +99,15 @@ func (s *attendanceService) ListAttendees(
 		PageSize:  res.PageSize,
 	}
 	for _, a := range res.Attendees {
+		// Map domain breakdowns to service breakdowns
+		breakdowns := make([]SessionBreakdown, 0, len(a.SessionBreakdowns))
+		for _, b := range a.SessionBreakdowns {
+			breakdowns = append(breakdowns, SessionBreakdown{
+				SessionID: b.SessionID,
+				Status:    attendance.AttendanceStatus(b.Status),
+			})
+		}
+
 		out.Attendees = append(out.Attendees, &CrossEventAttendeeItem{
 			AttendeeID:           a.AttendeeID,
 			DisplayName:          a.DisplayName,
@@ -114,6 +125,7 @@ func (s *attendanceService) ListAttendees(
 			RegisteredAt:         a.RegisteredAt,
 			LastActivityAt:       a.LastDerivedAt,
 			IsHost:               a.IsHost,
+			SessionBreakdowns:    breakdowns, // <-- ADDED
 		})
 	}
 	return out, nil
