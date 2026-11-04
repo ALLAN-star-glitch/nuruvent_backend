@@ -72,7 +72,7 @@ func main() {
 	fmt.Printf("  User ID:  %s\n", user.ID)
 	fmt.Printf("  Email:    %s\n", user.Email)
 	fmt.Printf("  Name:     %s\n", user.Name)
-	fmt.Println("\nCredentials for Zoom reviewer:")
+	fmt.Println("\nCredentials for reviewer:")
 	fmt.Printf("  Login URL: https://dashboard.nuruvent.com/signin\n")
 	fmt.Printf("  Email:     %s\n", *email)
 	fmt.Printf("  Password:  %s\n", *password)

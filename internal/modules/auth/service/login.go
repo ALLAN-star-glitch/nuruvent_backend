@@ -12,6 +12,21 @@ import (
 )
 
 // ============================================================
+// REVIEWER 2FA BYPASS
+// ============================================================
+
+// reviewerEmails lists marketplace reviewer test accounts that
+// must log in with email + password only, without 2FA. The empty
+// OTP returned for these accounts signals the handler to issue
+// tokens directly instead of requesting a 2FA code.
+//
+// Remove entries after the corresponding marketplace approval.
+var reviewerEmails = map[string]bool{
+	"zoom-review@nuruvent.com":    true, // Zoom Marketplace reviewer
+	"googlereviewer@nuruvent.com": true, // Google OAuth verification reviewer
+}
+
+// ============================================================
 // LOGIN METHODS
 // ============================================================
 
@@ -37,14 +52,14 @@ func (s *service) LoginUser(ctx context.Context, email, password, ipAddress, use
 	}
 
 	// ─────────────────────────────────────────────────────────────
-	// TEMP: Zoom Marketplace reviewer bypass.
-	// Skips 2FA for the reviewer test account so they can log in
+	// TEMP: Marketplace reviewer bypass.
+	// Skips 2FA for reviewer test accounts so they can log in
 	// with just email + password. The empty OTP signals the handler
 	// to issue tokens directly instead of requesting 2FA.
-	// Remove after Zoom approval.
+	// Remove after marketplace approvals.
 	// ─────────────────────────────────────────────────────────────
-	if user.Email == "zoom-review@nuruvent.com" {
-		log.Printf("⚠️  2FA bypass used for %s (Zoom reviewer)", user.Email)
+	if reviewerEmails[user.Email] {
+		log.Printf("⚠️  2FA bypass used for %s (reviewer)", user.Email)
 		return user, "", nil
 	}
 	// ─────────────────────────────────────────────────────────────
