@@ -4,13 +4,16 @@
 
 <div class="alert-success">
     <div class="message">Registration Confirmed</div>
+    {{if .links}}
     <div class="sub">Your session links are below</div>
+    {{else}}
+    <div class="sub">We'll email your join links closer to the date</div>
+    {{end}}
 </div>
 
 <p class="greeting">Hello <span class="name">{{.name}}</span>,</p>
 <p class="body-text">
     Your registration for <span class="highlight">{{.event_name}}</span> is confirmed.
-    Join your sessions using the links below.
 </p>
 
 <div class="details-box">
@@ -24,9 +27,10 @@
     </div>
 </div>
 
+{{if .links}}
 <!-- Loop through multiple sessions -->
 {{range link_rows .links}}
-<div class="details-box" style="margin-bottom: 24px;"> <!-- Added spacing between boxes -->
+<div class="details-box" style="margin-bottom: 24px;">
     <div class="row">
         <span class="label">Session</span>
         <span class="value">{{.title}}</span>
@@ -39,7 +43,7 @@
         </a>
     </div>
     
-    <!-- Fallback link (kept subtle so it doesn't crowd the design) -->
+    <!-- Fallback link -->
     <p class="text-small" style="margin-top: 8px; word-break: break-all; text-align: center; color: #888888; font-size: 12px;">
         <a href="{{.url}}" style="color: #888888; text-decoration: underline;">{{.url}}</a>
     </p>
@@ -50,5 +54,20 @@
     <p>Join through these links — not a shared meeting link — so your attendance is recorded automatically.</p>
 </div>
 
-<p class="body-text text-muted text-center">See you there!</p>
+{{else}}
+<!-- No links yet: Event is > 30 days away -->
+<div class="details-box" style="margin-bottom: 24px; background-color: #f8f9fa; border: 1px solid #e9ecef;">
+    <div style="text-align: center; padding: 10px;">
+        <p style="font-weight: 600; color: #202124; margin: 0 0 8px 0; font-size: 16px;">
+            What happens next?
+        </p>
+        <p style="color: #5F6368; margin: 0; font-size: 14px; line-height: 1.5;">
+            Because your event is still a while away, the video join link hasn't been created yet. 
+            <strong>We will email it to you about 30 days before the event starts.</strong>
+        </p>
+    </div>
+</div>
+{{end}}
+
+<p class="body-text text-muted text-center" style="margin-top: 32px;">See you there!</p>
 {{end}}
