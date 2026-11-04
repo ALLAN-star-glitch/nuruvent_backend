@@ -31,6 +31,8 @@ type SessionRepository interface {
 	FindEndedBefore(ctx context.Context, before time.Time) ([]*Session, error)
 
    UpdateStatus(ctx context.Context, sessionID string, status SessionStatus) error
+
+    FindByProviderSessionID(ctx context.Context, providerSessionID string) (*Session, error)
 }
 
 // JoinTokenRepository persists join tokens.
@@ -108,13 +110,13 @@ type UnitOfWork interface {
 
 
 
-
 // ============================================================
 // EVENT ATTENDEE QUERIES
 // ============================================================
 
 type ListEventAttendeesQuery struct {
 	EventID   string
+	SessionID string     // <-- ADDED: empty = "All Sessions", otherwise filter
 	Search    string     // matches display_name or email (ILIKE)
 	Statuses  []string   // filter on derived_status; empty = all
 	SortBy    string     // "name" | "registered_at" | "status" | "duration"
@@ -130,19 +132,24 @@ type ListEventAttendeesResult struct {
 	PageSize  int
 }
 
+
 // EventAttendeeRow is the read model for the attendee list and the
 // attendee detail endpoint.
 type EventAttendeeRow struct {
-	AttendeeID            string
-	DisplayName           string
-	Email                 string
-	DerivedStatus         string
-	SessionsTotal         int
-	SessionsAttended      int
-	SessionsConfirmed     int
-	TotalDurationSeconds  int
-	LastDerivedAt         time.Time
-	RegisteredAt          time.Time
-	IsHost                bool   // ← add
-	Phone  string
+	AttendeeID           string
+	DisplayName          string
+	Email                string
+	DerivedStatus        string
+	SessionsTotal        int
+	SessionsAttended     int
+	SessionsConfirmed    int
+	TotalDurationSeconds int
+	LastDerivedAt        time.Time
+	RegisteredAt         time.Time
+	IsHost               bool
+	Phone                string
+
+	// ADDED: Per-session breakdown for the UI table dots.
+	// Only populated when SessionID is empty (i.e., "All Sessions" view).
+	SessionBreakdowns    []SessionBreakdown
 }

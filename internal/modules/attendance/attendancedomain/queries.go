@@ -16,6 +16,7 @@ type ListAttendeesQuery struct {
 	AccountIDs []string  // caller's account scope (security boundary)
 	EventIDs   []string  // optional team filter (UX filter)
 	EventID    string
+	SessionID  string    // <-- ADDED: filter to a specific session (empty = all)
 	Search     string
 	Statuses   []string
 	SortBy     string
@@ -30,6 +31,13 @@ type ListAttendeesResult struct {
 	Total     int
 	Page      int
 	PageSize  int
+}
+
+// SessionBreakdown is a lightweight struct used to render the 
+// per-session status dots (e.g., 🟢 ⚪ 🟢) in the attendee list.
+type SessionBreakdown struct {
+	SessionID string
+	Status    string // Effective status (Derived or Host Confirmed)
 }
 
 // CrossEventAttendeeRow is the read model for one attendee's rollup
@@ -50,6 +58,10 @@ type CrossEventAttendeeRow struct {
 	TotalDurationSeconds int64
 	LastDerivedAt        time.Time
 	RegisteredAt         time.Time
-	IsHost               bool   // ← add
-	Phone  string
+	IsHost               bool   
+	Phone                string
+	
+	// ADDED: Per-session breakdown for the UI table dots.
+	// Only populated when SessionID is empty (i.e., "All Sessions" view).
+	SessionBreakdowns    []SessionBreakdown 
 }

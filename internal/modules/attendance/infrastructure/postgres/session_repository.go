@@ -184,6 +184,24 @@ func (r *SessionRepository) UpdateStatus(ctx context.Context, sessionID string, 
 		Error
 }
 
+
+func (r *SessionRepository) FindByProviderSessionID(
+    ctx context.Context,
+    providerSessionID string,
+) (*attendance.Session, error) {
+    var m SessionModel
+    err := r.db.WithContext(ctx).
+        Where("provider_session_id = ?", providerSessionID).
+        First(&m).Error
+    if errors.Is(err, gorm.ErrRecordNotFound) {
+        return nil, attendance.ErrSessionNotFound
+    }
+    if err != nil {
+        return nil, translateError(err, "find session by provider id", attendance.ErrSessionNotFound)
+    }
+    return toSessionDomain(&m), nil
+}
+
 // compile-time assertion — unused for now, will be replaced with the
 // service interface once we bind it.
 var _ = fmt.Sprintf

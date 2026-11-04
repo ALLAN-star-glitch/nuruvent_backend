@@ -200,9 +200,6 @@ func (h *AttendanceHandler) GetAttendeeSummary(c fiber.Ctx) error {
 //
 // Returns a per-session and total attendance summary for every
 // session under the event. Requires authentication.
-//
-// TODO: verify the caller has read access to the event. Currently
-// any authenticated user can request the summary by event UUID.
 func (h *AttendanceHandler) EventSummary(c fiber.Ctx) error {
 	userID := handlerhelper.GetUserIDOptional(c)
 	if userID == "" {
@@ -283,6 +280,7 @@ func (h *AttendanceHandler) ListEventAttendees(c fiber.Ctx) error {
 	res, err := h.svc.ListEventAttendees(c.Context(), service.ListEventAttendeesCommand{
 		UserID:    userID,
 		EventID:   eventID,
+		SessionID: c.Query("session_id"), // <-- ADDED
 		Search:    c.Query("search"),
 		Statuses:  statuses,
 		SortBy:    c.Query("sort_by", "name"),
@@ -332,8 +330,6 @@ func (h *AttendanceHandler) GetEventAttendeeDetail(c fiber.Ctx) error {
 	return response.Success(c, "Attendee retrieved successfully", toEventAttendeeDetailResponse(detail))
 }
 
-
-
 // ListAttendees handles GET /attendees.
 //
 // Cross-event attendee directory. Scoped to the caller's accounts.
@@ -357,8 +353,9 @@ func (h *AttendanceHandler) ListAttendees(c fiber.Ctx) error {
 	res, err := h.svc.ListAttendees(c.Context(), service.ListAttendeesCommand{
 		UserID:    userID,
 		EventID:   c.Query("event_id"),
-		TeamID:    c.Query("team_id"),   // ← NEW
-		Scope:     c.Query("scope"),      // ← NEW
+		TeamID:    c.Query("team_id"),
+		Scope:     c.Query("scope"),
+		SessionID: c.Query("session_id"), // <-- ADDED
 		Search:    c.Query("search"),
 		Statuses:  statuses,
 		SortBy:    c.Query("sort_by", "registered_at"),
@@ -383,6 +380,36 @@ func (h *AttendanceHandler) ListAttendees(c fiber.Ctx) error {
 	return response.Success(c, "Attendees retrieved successfully", out)
 }
 
+
+
+// LookupSessionID handles GET /attendance/sessions/lookup?provider_session_id=...
+//
+// Returns the attendance sessions.id for a given provider_session_id
+// (which is the event_schedules.id). Used by the frontend to map
+// event schedule IDs → attendance session IDs for filtering.
+func (h *AttendanceHandler) LookupSessionID(c fiber.Ctx) error {
+	providerSessionID := c.Query("provider_session_id")
+	if providerSessionID == "" {
+		return response.BadRequest(c, "provider_session_id is required", nil)
+	}
+
+	sessionID, err := h.svc.FindSessionIDByProviderSessionID(
+		c.Context(),
+		providerSessionID,
+	)
+	if err != nil {
+		return mapDomainError(c, err)
+	}
+
+	return response.Success(c, "Session lookup successful", fiber.Map{
+		"provider_session_id": providerSessionID,
+		"attendance_session_id": sessionID,
+	})
+}
+
+// ... (keep the DTOs at the bottom) ...
+
+
 // ---- DTOs ----
 
 type CrossEventAttendeesListResponse struct {
@@ -391,5 +418,3 @@ type CrossEventAttendeesListResponse struct {
 	Page      int                          `json:"page"`
 	PageSize  int                          `json:"page_size"`
 }
-
-

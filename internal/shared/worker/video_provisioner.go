@@ -75,6 +75,10 @@ func (p *VideoProvisioner) HandleProvisionVideoMeetings(
 // for the permission check. The worker has no authenticated user
 // context, but the event's owner is always authorized to manage
 // their own event's meetings.
+//
+// After provisioning succeeds, we re-sync the attendance module so
+// that the /me/session-links endpoint and tickets page get the
+// freshly created join URLs.
 func (p *VideoProvisioner) provisionForEvent(ctx context.Context, eventID string) error {
 	event, err := p.eventsService.GetEventByID(ctx, eventID)
 	if err != nil {
@@ -88,7 +92,16 @@ func (p *VideoProvisioner) provisionForEvent(ctx context.Context, eventID string
 	}
 
 	_, err = p.eventsService.CreateEventMeeting(ctx, eventID, event.CreatedBy, "")
-	return err
+	if err != nil {
+		return err
+	}
+
+	// NEW: Re-sync the attendance module with the newly created meetings.
+	// The event is now fully updated with meeting IDs and URLs, so the
+	// sessions table will get provider=google_meet and join_url populated.
+	p.eventsService.SyncSchedulesToAttendance(ctx, eventID)
+
+	return nil
 }
 
 // sweep finds all events with unprovisioned virtual schedules within
@@ -119,6 +132,7 @@ func (p *VideoProvisioner) sweep(ctx context.Context) error {
 	log.Printf("[video-provisioner] sweep DONE ok=%d failed=%d", succeeded, failed)
 	return nil
 }
+
 
 // Ensure the constant reference compiles even if we don't use it here.
 var _ = eventsDomain.TaskProvisionVideoMeetings

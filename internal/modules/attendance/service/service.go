@@ -220,6 +220,10 @@ RegisterAttendeeForExternal(
 ResolveSessionAccount(ctx context.Context, sessionID string) (string, error)
 
 
+
+FindSessionIDByProviderSessionID(ctx context.Context, providerSessionID string) (string, error)
+
+
 	// RegisterHostAttendee creates or updates the host's attendee row
 // for an event, and adds a status row for every session under it.
 //

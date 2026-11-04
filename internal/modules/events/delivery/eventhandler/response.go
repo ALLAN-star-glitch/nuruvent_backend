@@ -3,6 +3,7 @@
 package eventhandler
 
 import (
+	"context"
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/events/domain"
@@ -15,6 +16,34 @@ import (
 // NewEventResponseFromEvent converts a domain Event to EventResponse
 // This version does NOT include creator info - use NewEventResponseFromEventWithCreator for that
 func NewEventResponseFromEvent(event *domain.Event) EventResponse {
+	return NewEventResponseFromEventWithAttendance(context.Background(), event, nil)
+}
+
+// NewEventResponseFromEventWithCreator converts a domain Event to EventResponse with creator info
+func NewEventResponseFromEventWithCreator(event *domain.Event) EventResponse {
+	resp := NewEventResponseFromEventWithAttendance(context.Background(), event, nil)
+
+	if event.Creator != nil {
+		resp.Creator = &CreatorDTO{
+			ID:          event.Creator.ID,
+			Name:        event.Creator.Name,
+			DisplayName: event.Creator.DisplayName,
+			Email:       event.Creator.Email,
+			Phone:       event.Creator.Phone,
+		}
+	}
+
+	return resp
+}
+
+// NewEventResponseFromEventWithAttendance builds a response that also
+// includes the attendance_session_id on each schedule, by calling the
+// provided resolver. If resolver is nil, the field will be left empty.
+func NewEventResponseFromEventWithAttendance(
+	ctx context.Context,
+	event *domain.Event,
+	resolver func(ctx context.Context, eventScheduleID string) string,
+) EventResponse {
 	resp := EventResponse{
 		// Core Identity
 		ID:               event.ID,
@@ -35,8 +64,6 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 
 		// Organizer (public-facing - always shown)
 		Organizer: buildOrganizerResponse(event.Organizer),
-
-		// Creator is nil by default (will be set by WithCreator function)
 
 		// Schedule
 		IsMultiDay:  event.IsMultiDay,
@@ -59,16 +86,16 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 		MinTicketsPerOrder: event.MinTicketsPerOrder,
 
 		// Access & Privacy
-		Visibility:    event.Visibility,
-		IsPrivate:     event.Visibility == "private",
-		InviteOnly:    event.InviteOnly,
-		InvitedEmails: event.InvitedEmails,
+		Visibility:          event.Visibility,
+		IsPrivate:           event.Visibility == "private",
+		InviteOnly:          event.InviteOnly,
+		InvitedEmails:       event.InvitedEmails,
 		RegistrationEnabled: event.RegistrationEnabled,
 
-				// Monetization
-		IsFeatured:         event.IsFeatured,
-		CertificateEnabled: event.CertificateEnabled,
-		CertificatePrice:   event.CertificatePrice,
+		// Monetization
+		IsFeatured:            event.IsFeatured,
+		CertificateEnabled:    event.CertificateEnabled,
+		CertificatePrice:      event.CertificatePrice,
 		CertificateTemplateID: derefString(event.CertificateTemplateID),
 
 		// Media
@@ -151,29 +178,35 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 	if len(event.Schedules) > 0 {
 		schedules := make([]ScheduleDTO, len(event.Schedules))
 		for i, s := range event.Schedules {
+			attendanceSessionID := ""
+			if resolver != nil {
+				attendanceSessionID = resolver(ctx, s.ID)
+			}
+
 			schedule := ScheduleDTO{
-			ID:                     s.ID,
-			SessionName:            s.SessionName,
-			SessionNumber:          s.SessionNumber,
-			StartDate:              s.StartDate.Format("2006-01-02"),
-			StartTime:              s.StartTime,
-			EndTime:                s.EndTime,
-			Timezone:               s.Timezone,
-			Location:               s.Location,
-			IsVirtual:              s.IsVirtual,
-			Platform:               s.Platform,
-			ZoomLink:               s.ZoomLink,
-			MeetLink:               s.MeetLink,
-			VideoMeetingID:         s.VideoMeetingID,
-			VideoMeetingExternalID: s.VideoMeetingExternalID,
-		}
-		if s.EndDate != nil {
-			schedule.EndDate = s.EndDate.Format("2006-01-02")
-		}
-		if s.MaxAttendees != nil {
-			schedule.MaxAttendees = *s.MaxAttendees
-		}
-		schedules[i] = schedule
+				ID:                     s.ID,
+				AttendanceSessionID:    attendanceSessionID, // ← NEW
+				SessionName:            s.SessionName,
+				SessionNumber:          s.SessionNumber,
+				StartDate:              s.StartDate.Format("2006-01-02"),
+				StartTime:              s.StartTime,
+				EndTime:                s.EndTime,
+				Timezone:               s.Timezone,
+				Location:               s.Location,
+				IsVirtual:              s.IsVirtual,
+				Platform:               s.Platform,
+				ZoomLink:               s.ZoomLink,
+				MeetLink:               s.MeetLink,
+				VideoMeetingID:         s.VideoMeetingID,
+				VideoMeetingExternalID: s.VideoMeetingExternalID,
+			}
+			if s.EndDate != nil {
+				schedule.EndDate = s.EndDate.Format("2006-01-02")
+			}
+			if s.MaxAttendees != nil {
+				schedule.MaxAttendees = *s.MaxAttendees
+			}
+			schedules[i] = schedule
 		}
 		resp.Schedules = schedules
 	}
@@ -300,23 +333,6 @@ func NewEventResponseFromEvent(event *domain.Event) EventResponse {
 	if event.DeletedAt != nil {
 		deletedAt := event.DeletedAt.Format(time.RFC3339)
 		resp.DeletedAt = &deletedAt
-	}
-
-	return resp
-}
-
-// NewEventResponseFromEventWithCreator converts a domain Event to EventResponse with creator info
-func NewEventResponseFromEventWithCreator(event *domain.Event) EventResponse {
-	resp := NewEventResponseFromEvent(event)
-
-	if event.Creator != nil {
-		resp.Creator = &CreatorDTO{
-			ID:          event.Creator.ID,
-			Name:        event.Creator.Name,
-			DisplayName: event.Creator.DisplayName,
-			Email:       event.Creator.Email,
-			Phone:       event.Creator.Phone,
-		}
 	}
 
 	return resp

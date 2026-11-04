@@ -65,26 +65,43 @@ func (s *attendanceService) recomputeRollupTx(
 		return nil, fmt.Errorf("list sessions: %w", err)
 	}
 
-	statusMap := make(map[string]attendance.AttendanceStatus, len(sessions))
-	confirmedMap := make(map[string]bool, len(sessions))
+	// FIX: Deduplicate sessions by ID.
+	// The sessions table likely has duplicate rows (e.g., from repeated SWIP syncs),
+	// causing len(sessions) to return 518 instead of 74.
+	// Note: sessions is []*attendance.Session, so we use a map of pointers.
+	uniqueSessions := make(map[string]*attendance.Session)
+	for _, session := range sessions {
+		if _, exists := uniqueSessions[session.ID]; !exists {
+			uniqueSessions[session.ID] = session
+		}
+	}
+
+	statusMap := make(map[string]attendance.AttendanceStatus, len(uniqueSessions))
+	confirmedMap := make(map[string]bool, len(uniqueSessions))
 	var totalDuration int64
 
-	for _, session := range sessions {
-		st, err := repos.SessionStatuses.FindByAttendeeSession(ctx, attendeeID, session.ID)
+	for sessionID := range uniqueSessions {
+		st, err := repos.SessionStatuses.FindByAttendeeSession(ctx, attendeeID, sessionID)
 		if err != nil {
 			if errors.Is(err, attendance.ErrStatusNotFound) {
-				statusMap[session.ID] = attendance.StatusRegistered
+				statusMap[sessionID] = attendance.StatusRegistered
 				continue
 			}
 			return nil, fmt.Errorf("load status: %w", err)
 		}
-		statusMap[session.ID] = st.DerivedStatus
-		confirmedMap[session.ID] = st.HostConfirmed
+		statusMap[sessionID] = st.DerivedStatus
+		confirmedMap[sessionID] = st.HostConfirmed
 		totalDuration += st.TotalDurationSeconds
 	}
 
+	// Build a deduplicated slice of pointers
+	deduplicatedSessions := make([]*attendance.Session, 0, len(uniqueSessions))
+	for _, session := range uniqueSessions {
+		deduplicatedSessions = append(deduplicatedSessions, session)
+	}
+
 	derived, attended, confirmed := attendance.DeriveRollupStatus(
-		sessions, statusMap, confirmedMap, s.deps.DerivationPolicy, now,
+		deduplicatedSessions, statusMap, confirmedMap, s.deps.DerivationPolicy, now,
 	)
 
 	existing, err := repos.RollupStatuses.FindByAttendeeExternal(ctx, attendeeID, ref)
@@ -100,7 +117,8 @@ func (s *attendanceService) recomputeRollupTx(
 		existing = attendance.NewAttendeeRollupStatus(attendeeID, ref, now)
 	}
 
-	existing.Recompute(derived, len(sessions), attended, confirmed, totalDuration, now)
+	// Pass the deduplicated count
+	existing.Recompute(derived, len(deduplicatedSessions), attended, confirmed, totalDuration, now)
 	if err := repos.RollupStatuses.Upsert(ctx, existing); err != nil {
 		return nil, fmt.Errorf("upsert rollup: %w", err)
 	}

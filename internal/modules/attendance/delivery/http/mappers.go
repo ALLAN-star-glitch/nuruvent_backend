@@ -55,7 +55,7 @@ func toSessionStatusResponse(s *attendance.AttendeeSessionStatus) *SessionStatus
 		LastDerivedAt:        s.LastDerivedAt,
 		DisplayName:          s.DisplayName,
 		Email:                s.Email,
-		Phone:                s.Phone,          // ← add
+		Phone:                s.Phone,
 		IsHost:               s.IsHost,
 	}
 }
@@ -108,6 +108,14 @@ func toAttendeeSessionLinksResponse(
 // ============================================================
 
 func toEventAttendeeResponse(a *service.EventAttendeeListItem) EventAttendeeResponse {
+	breakdowns := make([]SessionBreakdownResponse, 0, len(a.SessionBreakdowns))
+	for _, b := range a.SessionBreakdowns {
+		breakdowns = append(breakdowns, SessionBreakdownResponse{
+			SessionID: b.SessionID,
+			Status:    string(b.Status),
+		})
+	}
+
 	return EventAttendeeResponse{
 		AttendeeID:           a.AttendeeID,
 		DisplayName:          a.DisplayName,
@@ -121,6 +129,7 @@ func toEventAttendeeResponse(a *service.EventAttendeeListItem) EventAttendeeResp
 		LastActivityAt:       a.LastActivityAt.Format(time.RFC3339),
 		IsHost:               a.IsHost,
 		Phone:                a.Phone,
+		SessionBreakdowns:    breakdowns,
 	}
 }
 
@@ -138,7 +147,7 @@ func toEventAttendeeDetailResponse(d *service.EventAttendeeDetail) EventAttendee
 			RegisteredAt:         d.RegisteredAt.Format(time.RFC3339),
 			LastActivityAt:       d.LastActivityAt.Format(time.RFC3339),
 			IsHost:               d.IsHost,
-			Phone: 			  d.Phone,
+			Phone:                d.Phone,
 		},
 		Sessions: make([]EventAttendeeSessionResponse, 0, len(d.Sessions)),
 	}
@@ -163,6 +172,14 @@ func toEventAttendeeDetailResponse(d *service.EventAttendeeDetail) EventAttendee
 // ============================================================
 
 func toCrossEventAttendeeResponse(a *service.CrossEventAttendeeItem) CrossEventAttendeeResponse {
+	breakdowns := make([]SessionBreakdownResponse, 0, len(a.SessionBreakdowns))
+	for _, b := range a.SessionBreakdowns {
+		breakdowns = append(breakdowns, SessionBreakdownResponse{
+			SessionID: b.SessionID,
+			Status:    string(b.Status),
+		})
+	}
+
 	return CrossEventAttendeeResponse{
 		AttendeeID:           a.AttendeeID,
 		DisplayName:          a.DisplayName,
@@ -180,5 +197,6 @@ func toCrossEventAttendeeResponse(a *service.CrossEventAttendeeItem) CrossEventA
 		LastActivityAt:       a.LastActivityAt.Format(time.RFC3339),
 		IsHost:               a.IsHost,
 		Phone:                a.Phone,
+		SessionBreakdowns:    breakdowns,
 	}
 }
