@@ -68,7 +68,8 @@ func (r *OrderRepository) Update(ctx context.Context, o *paymentdomain.Order) er
 // READ
 // ============================================================
 
-// FindByID returns an order by its ID, with items preloaded.
+// FindByID returns an order by its ID, with items preloaded and the
+// latest payment status attached.
 func (r *OrderRepository) FindByID(ctx context.Context, id string) (*paymentdomain.Order, error) {
 	var model OrderModel
 	err := r.db.WithContext(ctx).
@@ -82,7 +83,29 @@ func (r *OrderRepository) FindByID(ctx context.Context, id string) (*paymentdoma
 	if err != nil {
 		return nil, translateError(err, "find order")
 	}
-	return toOrderDomain(&model)
+
+	order, err := toOrderDomain(&model)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fetch the most recent payment for this order and attach its
+	// status to the order. This allows guests to poll GET /orders/:id
+	// (which allows optionalAuth) to discover the payment outcome
+	// without needing access to GET /payments/:id.
+	var latestPayment PaymentModel
+	err = r.db.WithContext(ctx).
+		Where("order_id = ?", id).
+		Order("created_at DESC").
+		First(&latestPayment).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, translateError(err, "find latest payment for order")
+	}
+	if err == nil {
+		order.PaymentStatus = paymentdomain.PaymentStatus(latestPayment.Status)
+	}
+
+	return order, nil
 }
 
 // FindActiveByRegistration returns the pending order for a registration,
@@ -141,7 +164,6 @@ func (r *OrderRepository) FindExpired(
 	}
 	return orders, nil
 }
-
 
 // FindActiveByCertificateContext returns the pending certificate order
 // for a completion, if any.

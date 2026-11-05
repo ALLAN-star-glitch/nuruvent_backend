@@ -72,6 +72,18 @@ type Order struct {
 	PlatformFeeRate float64
 	SettledAt       *time.Time
 	PayoutRef       string
+
+	// ------------------------------------------------------------
+	// Payment — populated on read.
+	// ------------------------------------------------------------
+	//
+	// This is not persisted on the order row. It is hydrated by the
+	// read-side repository from the latest payment attached to the
+	// order. Guests use this to poll GET /orders/:id instead of
+	// needing access to the protected GET /payments/:id endpoint.
+	//
+	// Empty string when no payment has been initiated yet.
+	PaymentStatus PaymentStatus
 }
 
 // NewOrder constructs an order from a set of items. Status is always

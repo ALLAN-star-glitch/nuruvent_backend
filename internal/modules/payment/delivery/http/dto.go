@@ -98,6 +98,13 @@ type OrderResponse struct {
 	DiscountTotal  int64               `json:"discount_total"` // minor units
 	TotalAmount    int64               `json:"total_amount"`   // minor units
 	Status         string              `json:"status"`
+	
+	// NEW: Latest payment status, hydrated on read.
+	// Allows guests to poll GET /orders/:id (optionalAuth) for
+	// payment outcomes without hitting the protected /payments/:id.
+	// Empty string when no payment has been initiated yet.
+	PaymentStatus  string              `json:"payment_status,omitempty"`
+
 	ExpiresAt      time.Time           `json:"expires_at"`
 	PaidAt         *time.Time          `json:"paid_at,omitempty"`
 	CancelledAt    *time.Time          `json:"cancelled_at,omitempty"`
