@@ -1,4 +1,4 @@
-
+// internal/modules/auth/authdomain/institution_type.go
 
 package authdomain
 
@@ -20,6 +20,13 @@ const (
 	InstitutionTypeAssociation = types.InstitutionTypeAssociation
 	InstitutionTypeSchool      = types.InstitutionTypeSchool
 	InstitutionTypeUniversity  = types.InstitutionTypeUniversity
+	InstitutionTypeCollege     = types.InstitutionTypeCollege      // NEW
+	InstitutionTypeHighSchool  = types.InstitutionTypeHighSchool   // NEW
+	InstitutionTypeNgo         = types.InstitutionTypeNgo
+	InstitutionTypeGovernment  = types.InstitutionTypeGovernment
+	InstitutionTypeReligious   = types.InstitutionTypeReligious
+	InstitutionTypeCommunity   = types.InstitutionTypeCommunity
+	InstitutionTypeOther       = types.InstitutionTypeOther
 )
 
 // AllInstitutionTypes re-exported from shared types
@@ -90,6 +97,83 @@ var institutionTypeRegistry = map[types.InstitutionType]InstitutionTypeInfo{
 		Icon:        types.InstitutionTypeUniversityIcon,
 		Color:       types.InstitutionTypeUniversityColor,
 		SortOrder:   types.InstitutionTypeUniversitySortOrder,
+		IsActive:    true,
+	},
+	// NEW: College
+	types.InstitutionTypeCollege: {
+		Slug:        types.InstitutionTypeCollegeSlug,
+		Name:        types.InstitutionTypeCollegeName,
+		DisplayName: types.InstitutionTypeCollegeDisplayName,
+		Description: types.InstitutionTypeCollegeDescription,
+		Icon:        types.InstitutionTypeCollegeIcon,
+		Color:       types.InstitutionTypeCollegeColor,
+		SortOrder:   types.InstitutionTypeCollegeSortOrder,
+		IsActive:    true,
+	},
+	// NEW: High School
+	types.InstitutionTypeHighSchool: {
+		Slug:        types.InstitutionTypeHighSchoolSlug,
+		Name:        types.InstitutionTypeHighSchoolName,
+		DisplayName: types.InstitutionTypeHighSchoolDisplayName,
+		Description: types.InstitutionTypeHighSchoolDescription,
+		Icon:        types.InstitutionTypeHighSchoolIcon,
+		Color:       types.InstitutionTypeHighSchoolColor,
+		SortOrder:   types.InstitutionTypeHighSchoolSortOrder,
+		IsActive:    true,
+	},
+	// NGO / Non-Profit
+	types.InstitutionTypeNgo: {
+		Slug:        types.InstitutionTypeNgoSlug,
+		Name:        types.InstitutionTypeNgoName,
+		DisplayName: types.InstitutionTypeNgoDisplayName,
+		Description: types.InstitutionTypeNgoDescription,
+		Icon:        types.InstitutionTypeNgoIcon,
+		Color:       types.InstitutionTypeNgoColor,
+		SortOrder:   types.InstitutionTypeNgoSortOrder,
+		IsActive:    true,
+	},
+	// Government Agency
+	types.InstitutionTypeGovernment: {
+		Slug:        types.InstitutionTypeGovernmentSlug,
+		Name:        types.InstitutionTypeGovernmentName,
+		DisplayName: types.InstitutionTypeGovernmentDisplayName,
+		Description: types.InstitutionTypeGovernmentDescription,
+		Icon:        types.InstitutionTypeGovernmentIcon,
+		Color:       types.InstitutionTypeGovernmentColor,
+		SortOrder:   types.InstitutionTypeGovernmentSortOrder,
+		IsActive:    true,
+	},
+	// Religious Organization
+	types.InstitutionTypeReligious: {
+		Slug:        types.InstitutionTypeReligiousSlug,
+		Name:        types.InstitutionTypeReligiousName,
+		DisplayName: types.InstitutionTypeReligiousDisplayName,
+		Description: types.InstitutionTypeReligiousDescription,
+		Icon:        types.InstitutionTypeReligiousIcon,
+		Color:       types.InstitutionTypeReligiousColor,
+		SortOrder:   types.InstitutionTypeReligiousSortOrder,
+		IsActive:    true,
+	},
+	// Community Organization
+	types.InstitutionTypeCommunity: {
+		Slug:        types.InstitutionTypeCommunitySlug,
+		Name:        types.InstitutionTypeCommunityName,
+		DisplayName: types.InstitutionTypeCommunityDisplayName,
+		Description: types.InstitutionTypeCommunityDescription,
+		Icon:        types.InstitutionTypeCommunityIcon,
+		Color:       types.InstitutionTypeCommunityColor,
+		SortOrder:   types.InstitutionTypeCommunitySortOrder,
+		IsActive:    true,
+	},
+	// Other
+	types.InstitutionTypeOther: {
+		Slug:        types.InstitutionTypeOtherSlug,
+		Name:        types.InstitutionTypeOtherName,
+		DisplayName: types.InstitutionTypeOtherDisplayName,
+		Description: types.InstitutionTypeOtherDescription,
+		Icon:        types.InstitutionTypeOtherIcon,
+		Color:       types.InstitutionTypeOtherColor,
+		SortOrder:   types.InstitutionTypeOtherSortOrder,
 		IsActive:    true,
 	},
 }

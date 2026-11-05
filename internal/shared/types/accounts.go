@@ -6,80 +6,62 @@ package types
 // ACCOUNT TYPE CONSTANTS
 // ============================================================
 
-// AccountType represents the type of account
 type AccountType string
 
-// Slug constants (with hyphens) - Used for URLs and API routes
 const (
 	AccountTypePersonalSlug    = "account-type-personal"
 	AccountTypeInstitutionSlug = "account-type-institution"
 	AccountTypeInvitedSlug     = "account-type-invited"
 )
 
-// Name constants (with underscores) - Used for internal database lookups
 const (
 	AccountTypePersonalName    = "account_type_personal"
 	AccountTypeInstitutionName = "account_type_institution"
 	AccountTypeInvitedName     = "account_type_invited"
 )
 
-// Display name constants - Used for UI display
 const (
 	AccountTypePersonalDisplayName    = "Personal Account"
 	AccountTypeInstitutionDisplayName = "Institution Account"
 	AccountTypeInvitedDisplayName     = "Invited Member"
 )
 
-// Description constants
 const (
-	AccountTypePersonalDescription    = "Individual person (trainer, coach, consultant, freelancer)"
+	AccountTypePersonalDescription    = "Individual person (trainer, coach, consultant, freelancer, organizer, learner)"
 	AccountTypeInstitutionDescription = "Organization, company, institute, or association"
 	AccountTypeInvitedDescription     = "User who joined via a team invitation"
 )
 
-// Icon constants
 const (
 	AccountTypePersonalIcon    = "user"
 	AccountTypeInstitutionIcon = "building"
 	AccountTypeInvitedIcon     = "mail"
 )
 
-// Color constants
 const (
-	AccountTypePersonalColor    = "#4F46E5" // Indigo
-	AccountTypeInstitutionColor = "#7C3AED" // Purple
-	AccountTypeInvitedColor     = "#6366F1" // Indigo (lighter)
+	AccountTypePersonalColor    = "#4F46E5"
+	AccountTypeInstitutionColor = "#7C3AED"
+	AccountTypeInvitedColor     = "#6366F1"
 )
 
-// Sort order constants
 const (
 	AccountTypePersonalSortOrder    = 1
 	AccountTypeInstitutionSortOrder = 2
 	AccountTypeInvitedSortOrder     = 3
 )
 
-// ============================================================
-// ACCOUNT TYPE DEFINITIONS
-// ============================================================
-
-// AccountType constants - These are the NAMES (with underscores)
 const (
-	AccountTypePersonal    AccountType = AccountTypePersonalName    // "account_type_personal"
-	AccountTypeInstitution AccountType = AccountTypeInstitutionName // "account_type_institution"
-	AccountTypeInvited     AccountType = AccountTypeInvitedName     // "account_type_invited"
+	AccountTypePersonal    AccountType = AccountTypePersonalName
+	AccountTypeInstitution AccountType = AccountTypeInstitutionName
+	AccountTypeInvited     AccountType = AccountTypeInvitedName
 )
 
-// AllAccountTypes lists all valid account types for validation
 var AllAccountTypes = []AccountType{
 	AccountTypePersonal,
 	AccountTypeInstitution,
 	AccountTypeInvited,
 }
 
-// SelfServiceAccountTypes lists the account types a client may choose
-// during self-service signup. Invited users are assigned their type by
-// the server (see RegisterWithInvitation) and must not be able to select
-// it, so AccountTypeInvited is intentionally excluded here.
 var SelfServiceAccountTypes = []AccountType{
 	AccountTypePersonal,
 	AccountTypeInstitution,
@@ -89,12 +71,8 @@ var SelfServiceAccountTypes = []AccountType{
 // BASIC METHODS - On AccountType
 // ============================================================
 
-// String returns the string representation (the name with underscores)
-func (a AccountType) String() string {
-	return string(a)
-}
+func (a AccountType) String() string { return string(a) }
 
-// IsValid checks if the account type is valid
 func (a AccountType) IsValid() bool {
 	for _, t := range AllAccountTypes {
 		if t == a {
@@ -104,24 +82,10 @@ func (a AccountType) IsValid() bool {
 	return false
 }
 
-// IsPersonal checks if the account type is personal
-func (a AccountType) IsPersonal() bool {
-	return a == AccountTypePersonal
-}
+func (a AccountType) IsPersonal() bool    { return a == AccountTypePersonal }
+func (a AccountType) IsInstitution() bool { return a == AccountTypeInstitution }
+func (a AccountType) IsInvited() bool     { return a == AccountTypeInvited }
 
-// IsInstitution checks if the account type is institution
-func (a AccountType) IsInstitution() bool {
-	return a == AccountTypeInstitution
-}
-
-// IsInvited checks if the account type is invited
-func (a AccountType) IsInvited() bool {
-	return a == AccountTypeInvited
-}
-
-// IsSelfService reports whether a client may choose this type during
-// self-service signup. Invited users are created server-side and cannot
-// pick their type via the public registration endpoint.
 func (a AccountType) IsSelfService() bool {
 	for _, t := range SelfServiceAccountTypes {
 		if t == a {
@@ -135,12 +99,8 @@ func (a AccountType) IsSelfService() bool {
 // GETTER METHODS - On AccountType
 // ============================================================
 
-// GetName returns the internal name (with underscores)
-func (a AccountType) GetName() string {
-	return string(a)
-}
+func (a AccountType) GetName() string { return string(a) }
 
-// GetSlug returns the slug (with hyphens) - For URLs and API routes
 func (a AccountType) GetSlug() string {
 	switch a {
 	case AccountTypePersonal:
@@ -154,7 +114,6 @@ func (a AccountType) GetSlug() string {
 	}
 }
 
-// GetDisplayName returns the user-facing display name - For UI
 func (a AccountType) GetDisplayName() string {
 	switch a {
 	case AccountTypePersonal:
@@ -168,7 +127,6 @@ func (a AccountType) GetDisplayName() string {
 	}
 }
 
-// GetDescription returns the description
 func (a AccountType) GetDescription() string {
 	switch a {
 	case AccountTypePersonal:
@@ -182,7 +140,6 @@ func (a AccountType) GetDescription() string {
 	}
 }
 
-// GetIcon returns the icon
 func (a AccountType) GetIcon() string {
 	switch a {
 	case AccountTypePersonal:
@@ -196,7 +153,6 @@ func (a AccountType) GetIcon() string {
 	}
 }
 
-// GetColor returns the color
 func (a AccountType) GetColor() string {
 	switch a {
 	case AccountTypePersonal:
@@ -210,7 +166,6 @@ func (a AccountType) GetColor() string {
 	}
 }
 
-// GetSortOrder returns the sort order
 func (a AccountType) GetSortOrder() int {
 	switch a {
 	case AccountTypePersonal:
@@ -228,8 +183,6 @@ func (a AccountType) GetSortOrder() int {
 // PARSE FUNCTIONS - For AccountType
 // ============================================================
 
-// ParseAccountType parses a string into an AccountType
-// Expects the name (with underscores), not the slug
 func ParseAccountType(name string) (AccountType, bool) {
 	t := AccountType(name)
 	if t.IsValid() {
@@ -238,7 +191,6 @@ func ParseAccountType(name string) (AccountType, bool) {
 	return "", false
 }
 
-// ParseAccountTypeWithDefault parses a string or returns a default
 func ParseAccountTypeWithDefault(name string, defaultType AccountType) AccountType {
 	if t, ok := ParseAccountType(name); ok {
 		return t
@@ -246,7 +198,6 @@ func ParseAccountTypeWithDefault(name string, defaultType AccountType) AccountTy
 	return defaultType
 }
 
-// ParseAccountTypeBySlug parses a slug string into an AccountType
 func ParseAccountTypeBySlug(slug string) (AccountType, bool) {
 	for _, t := range AllAccountTypes {
 		if t.GetSlug() == slug {
@@ -257,10 +208,9 @@ func ParseAccountTypeBySlug(slug string) (AccountType, bool) {
 }
 
 // ============================================================
-// HELPER FUNCTIONS - For getting lists of values
+// HELPER FUNCTIONS - For AccountType
 // ============================================================
 
-// AllAccountTypeNames returns all internal type names (with underscores)
 func AllAccountTypeNames() []string {
 	names := make([]string, 0, len(AllAccountTypes))
 	for _, t := range AllAccountTypes {
@@ -269,7 +219,6 @@ func AllAccountTypeNames() []string {
 	return names
 }
 
-// AllAccountTypeSlugs returns all type slugs (with hyphens)
 func AllAccountTypeSlugs() []string {
 	slugs := make([]string, 0, len(AllAccountTypes))
 	for _, t := range AllAccountTypes {
@@ -278,7 +227,6 @@ func AllAccountTypeSlugs() []string {
 	return slugs
 }
 
-// AllAccountTypeDisplayNames returns all display names
 func AllAccountTypeDisplayNames() []string {
 	names := make([]string, 0, len(AllAccountTypes))
 	for _, t := range AllAccountTypes {
@@ -287,8 +235,6 @@ func AllAccountTypeDisplayNames() []string {
 	return names
 }
 
-// SelfServiceAccountTypeNames returns the names of account types a client
-// may select during self-service signup. Invited is excluded.
 func SelfServiceAccountTypeNames() []string {
 	names := make([]string, 0, len(SelfServiceAccountTypes))
 	for _, t := range SelfServiceAccountTypes {
@@ -301,104 +247,160 @@ func SelfServiceAccountTypeNames() []string {
 // INSTITUTION TYPE CONSTANTS
 // ============================================================
 
-// InstitutionType represents the type of institution
 type InstitutionType string
 
-// Slug constants (with hyphens) - Used for URLs and API routes
+// Slug constants
 const (
 	InstitutionTypeCompanySlug     = "institution-type-company"
 	InstitutionTypeInstituteSlug   = "institution-type-institute"
 	InstitutionTypeAssociationSlug = "institution-type-association"
 	InstitutionTypeSchoolSlug      = "institution-type-school"
 	InstitutionTypeUniversitySlug  = "institution-type-university"
+	InstitutionTypeCollegeSlug     = "institution-type-college"      // NEW
+	InstitutionTypeHighSchoolSlug  = "institution-type-high-school"  // NEW
+	InstitutionTypeNgoSlug         = "institution-type-ngo"
+	InstitutionTypeGovernmentSlug  = "institution-type-government"
+	InstitutionTypeReligiousSlug   = "institution-type-religious"
+	InstitutionTypeCommunitySlug   = "institution-type-community"
+	InstitutionTypeOtherSlug       = "institution-type-other"
 )
 
-// Name constants (with underscores) - Used for internal database lookups
+// Name constants
 const (
 	InstitutionTypeCompanyName     = "institution_type_company"
 	InstitutionTypeInstituteName   = "institution_type_institute"
 	InstitutionTypeAssociationName = "institution_type_association"
 	InstitutionTypeSchoolName      = "institution_type_school"
 	InstitutionTypeUniversityName  = "institution_type_university"
+	InstitutionTypeCollegeName     = "institution_type_college"      // NEW
+	InstitutionTypeHighSchoolName  = "institution_type_high_school"  // NEW
+	InstitutionTypeNgoName         = "institution_type_ngo"
+	InstitutionTypeGovernmentName  = "institution_type_government"
+	InstitutionTypeReligiousName   = "institution_type_religious"
+	InstitutionTypeCommunityName   = "institution_type_community"
+	InstitutionTypeOtherName       = "institution_type_other"
 )
 
-// Display name constants - Used for UI display
+// Display names
 const (
 	InstitutionTypeCompanyDisplayName     = "Company"
 	InstitutionTypeInstituteDisplayName   = "Institute"
 	InstitutionTypeAssociationDisplayName = "Association"
 	InstitutionTypeSchoolDisplayName      = "School"
 	InstitutionTypeUniversityDisplayName  = "University"
+	InstitutionTypeCollegeDisplayName     = "College"        // NEW
+	InstitutionTypeHighSchoolDisplayName  = "High School"    // NEW
+	InstitutionTypeNgoDisplayName         = "NGO / Non-Profit"
+	InstitutionTypeGovernmentDisplayName  = "Government Agency"
+	InstitutionTypeReligiousDisplayName   = "Religious Organization"
+	InstitutionTypeCommunityDisplayName   = "Community Organization"
+	InstitutionTypeOtherDisplayName       = "Other"
 )
 
-// Description constants
+// Descriptions
 const (
 	InstitutionTypeCompanyDescription     = "Corporate organization"
 	InstitutionTypeInstituteDescription   = "Educational or research institute"
 	InstitutionTypeAssociationDescription = "Professional or trade association"
 	InstitutionTypeSchoolDescription      = "Primary or secondary educational institution"
 	InstitutionTypeUniversityDescription  = "Higher education institution"
+	InstitutionTypeCollegeDescription     = "Tertiary college or vocational institution"   // NEW
+	InstitutionTypeHighSchoolDescription  = "Secondary school (high school)"                // NEW
+	InstitutionTypeNgoDescription         = "Non-governmental or non-profit organization"
+	InstitutionTypeGovernmentDescription  = "Government ministry, department, or agency"
+	InstitutionTypeReligiousDescription   = "Church, mosque, or faith-based organization"
+	InstitutionTypeCommunityDescription   = "Community group, alumni network, or cooperative"
+	InstitutionTypeOtherDescription       = "Any other type of organization"
 )
 
-// Icon constants
+// Icons
 const (
 	InstitutionTypeCompanyIcon     = "building"
 	InstitutionTypeInstituteIcon   = "landmark"
 	InstitutionTypeAssociationIcon = "users"
 	InstitutionTypeSchoolIcon      = "school"
 	InstitutionTypeUniversityIcon  = "graduation-cap"
+	InstitutionTypeCollegeIcon     = "building-2"      // NEW
+	InstitutionTypeHighSchoolIcon  = "school"          // NEW
+	InstitutionTypeNgoIcon         = "heart-handshake"
+	InstitutionTypeGovernmentIcon  = "shield"
+	InstitutionTypeReligiousIcon   = "church"
+	InstitutionTypeCommunityIcon   = "users-round"
+	InstitutionTypeOtherIcon       = "circle-help"
 )
 
-// Color constants
+// Colors
 const (
 	InstitutionTypeCompanyColor     = "#7C3AED" // Purple
 	InstitutionTypeInstituteColor   = "#4F46E5" // Indigo
 	InstitutionTypeAssociationColor = "#0EA5E9" // Sky Blue
 	InstitutionTypeSchoolColor      = "#F59E0B" // Amber
 	InstitutionTypeUniversityColor  = "#10B981" // Emerald
+	InstitutionTypeCollegeColor     = "#F472B6" // Pink       // NEW
+	InstitutionTypeHighSchoolColor  = "#FB923C" // Orange     // NEW
+	InstitutionTypeNgoColor         = "#EC4899" // Pink
+	InstitutionTypeGovernmentColor  = "#64748B" // Slate
+	InstitutionTypeReligiousColor   = "#A855F7" // Violet
+	InstitutionTypeCommunityColor   = "#14B8A6" // Teal
+	InstitutionTypeOtherColor       = "#6B7280" // Gray
 )
 
-// Sort order constants
+// Sort orders
 const (
 	InstitutionTypeCompanySortOrder     = 1
 	InstitutionTypeInstituteSortOrder   = 2
 	InstitutionTypeAssociationSortOrder = 3
 	InstitutionTypeSchoolSortOrder      = 4
 	InstitutionTypeUniversitySortOrder  = 5
+	InstitutionTypeCollegeSortOrder     = 6  // NEW
+	InstitutionTypeHighSchoolSortOrder  = 7  // NEW
+	InstitutionTypeNgoSortOrder         = 8  // shifted
+	InstitutionTypeGovernmentSortOrder  = 9  // shifted
+	InstitutionTypeReligiousSortOrder   = 10 // shifted
+	InstitutionTypeCommunitySortOrder   = 11 // shifted
+	InstitutionTypeOtherSortOrder       = 12 // shifted
 )
 
 // ============================================================
 // INSTITUTION TYPE DEFINITIONS
 // ============================================================
 
-// InstitutionType constants - These are the NAMES (with underscores)
 const (
-	InstitutionTypeCompany     InstitutionType = InstitutionTypeCompanyName     // "institution_type_company"
-	InstitutionTypeInstitute   InstitutionType = InstitutionTypeInstituteName   // "institution_type_institute"
-	InstitutionTypeAssociation InstitutionType = InstitutionTypeAssociationName // "institution_type_association"
-	InstitutionTypeSchool      InstitutionType = InstitutionTypeSchoolName      // "institution_type_school"
-	InstitutionTypeUniversity  InstitutionType = InstitutionTypeUniversityName  // "institution_type_university"
+	InstitutionTypeCompany     InstitutionType = InstitutionTypeCompanyName
+	InstitutionTypeInstitute   InstitutionType = InstitutionTypeInstituteName
+	InstitutionTypeAssociation InstitutionType = InstitutionTypeAssociationName
+	InstitutionTypeSchool      InstitutionType = InstitutionTypeSchoolName
+	InstitutionTypeUniversity  InstitutionType = InstitutionTypeUniversityName
+	InstitutionTypeCollege     InstitutionType = InstitutionTypeCollegeName    // NEW
+	InstitutionTypeHighSchool  InstitutionType = InstitutionTypeHighSchoolName // NEW
+	InstitutionTypeNgo         InstitutionType = InstitutionTypeNgoName
+	InstitutionTypeGovernment  InstitutionType = InstitutionTypeGovernmentName
+	InstitutionTypeReligious   InstitutionType = InstitutionTypeReligiousName
+	InstitutionTypeCommunity   InstitutionType = InstitutionTypeCommunityName
+	InstitutionTypeOther       InstitutionType = InstitutionTypeOtherName
 )
 
-// AllInstitutionTypes lists all valid institution types for validation
 var AllInstitutionTypes = []InstitutionType{
 	InstitutionTypeCompany,
 	InstitutionTypeInstitute,
 	InstitutionTypeAssociation,
 	InstitutionTypeSchool,
 	InstitutionTypeUniversity,
+	InstitutionTypeCollege,    // NEW
+	InstitutionTypeHighSchool, // NEW
+	InstitutionTypeNgo,
+	InstitutionTypeGovernment,
+	InstitutionTypeReligious,
+	InstitutionTypeCommunity,
+	InstitutionTypeOther,
 }
 
 // ============================================================
 // BASIC METHODS - On InstitutionType
 // ============================================================
 
-// String returns the string representation (the name with underscores)
-func (i InstitutionType) String() string {
-	return string(i)
-}
+func (i InstitutionType) String() string { return string(i) }
 
-// IsValid checks if the institution type is valid
 func (i InstitutionType) IsValid() bool {
 	for _, t := range AllInstitutionTypes {
 		if t == i {
@@ -412,12 +414,8 @@ func (i InstitutionType) IsValid() bool {
 // GETTER METHODS - On InstitutionType
 // ============================================================
 
-// GetName returns the internal name (with underscores)
-func (i InstitutionType) GetName() string {
-	return string(i)
-}
+func (i InstitutionType) GetName() string { return string(i) }
 
-// GetSlug returns the slug (with hyphens) - For URLs and API routes
 func (i InstitutionType) GetSlug() string {
 	switch i {
 	case InstitutionTypeCompany:
@@ -430,12 +428,25 @@ func (i InstitutionType) GetSlug() string {
 		return InstitutionTypeSchoolSlug
 	case InstitutionTypeUniversity:
 		return InstitutionTypeUniversitySlug
+	case InstitutionTypeCollege:
+		return InstitutionTypeCollegeSlug
+	case InstitutionTypeHighSchool:
+		return InstitutionTypeHighSchoolSlug
+	case InstitutionTypeNgo:
+		return InstitutionTypeNgoSlug
+	case InstitutionTypeGovernment:
+		return InstitutionTypeGovernmentSlug
+	case InstitutionTypeReligious:
+		return InstitutionTypeReligiousSlug
+	case InstitutionTypeCommunity:
+		return InstitutionTypeCommunitySlug
+	case InstitutionTypeOther:
+		return InstitutionTypeOtherSlug
 	default:
 		return string(i)
 	}
 }
 
-// GetDisplayName returns the user-facing display name - For UI
 func (i InstitutionType) GetDisplayName() string {
 	switch i {
 	case InstitutionTypeCompany:
@@ -448,12 +459,25 @@ func (i InstitutionType) GetDisplayName() string {
 		return InstitutionTypeSchoolDisplayName
 	case InstitutionTypeUniversity:
 		return InstitutionTypeUniversityDisplayName
+	case InstitutionTypeCollege:
+		return InstitutionTypeCollegeDisplayName
+	case InstitutionTypeHighSchool:
+		return InstitutionTypeHighSchoolDisplayName
+	case InstitutionTypeNgo:
+		return InstitutionTypeNgoDisplayName
+	case InstitutionTypeGovernment:
+		return InstitutionTypeGovernmentDisplayName
+	case InstitutionTypeReligious:
+		return InstitutionTypeReligiousDisplayName
+	case InstitutionTypeCommunity:
+		return InstitutionTypeCommunityDisplayName
+	case InstitutionTypeOther:
+		return InstitutionTypeOtherDisplayName
 	default:
 		return string(i)
 	}
 }
 
-// GetDescription returns the description
 func (i InstitutionType) GetDescription() string {
 	switch i {
 	case InstitutionTypeCompany:
@@ -466,12 +490,25 @@ func (i InstitutionType) GetDescription() string {
 		return InstitutionTypeSchoolDescription
 	case InstitutionTypeUniversity:
 		return InstitutionTypeUniversityDescription
+	case InstitutionTypeCollege:
+		return InstitutionTypeCollegeDescription
+	case InstitutionTypeHighSchool:
+		return InstitutionTypeHighSchoolDescription
+	case InstitutionTypeNgo:
+		return InstitutionTypeNgoDescription
+	case InstitutionTypeGovernment:
+		return InstitutionTypeGovernmentDescription
+	case InstitutionTypeReligious:
+		return InstitutionTypeReligiousDescription
+	case InstitutionTypeCommunity:
+		return InstitutionTypeCommunityDescription
+	case InstitutionTypeOther:
+		return InstitutionTypeOtherDescription
 	default:
 		return ""
 	}
 }
 
-// GetIcon returns the icon
 func (i InstitutionType) GetIcon() string {
 	switch i {
 	case InstitutionTypeCompany:
@@ -484,12 +521,25 @@ func (i InstitutionType) GetIcon() string {
 		return InstitutionTypeSchoolIcon
 	case InstitutionTypeUniversity:
 		return InstitutionTypeUniversityIcon
+	case InstitutionTypeCollege:
+		return InstitutionTypeCollegeIcon
+	case InstitutionTypeHighSchool:
+		return InstitutionTypeHighSchoolIcon
+	case InstitutionTypeNgo:
+		return InstitutionTypeNgoIcon
+	case InstitutionTypeGovernment:
+		return InstitutionTypeGovernmentIcon
+	case InstitutionTypeReligious:
+		return InstitutionTypeReligiousIcon
+	case InstitutionTypeCommunity:
+		return InstitutionTypeCommunityIcon
+	case InstitutionTypeOther:
+		return InstitutionTypeOtherIcon
 	default:
 		return "building"
 	}
 }
 
-// GetColor returns the color
 func (i InstitutionType) GetColor() string {
 	switch i {
 	case InstitutionTypeCompany:
@@ -502,12 +552,25 @@ func (i InstitutionType) GetColor() string {
 		return InstitutionTypeSchoolColor
 	case InstitutionTypeUniversity:
 		return InstitutionTypeUniversityColor
+	case InstitutionTypeCollege:
+		return InstitutionTypeCollegeColor
+	case InstitutionTypeHighSchool:
+		return InstitutionTypeHighSchoolColor
+	case InstitutionTypeNgo:
+		return InstitutionTypeNgoColor
+	case InstitutionTypeGovernment:
+		return InstitutionTypeGovernmentColor
+	case InstitutionTypeReligious:
+		return InstitutionTypeReligiousColor
+	case InstitutionTypeCommunity:
+		return InstitutionTypeCommunityColor
+	case InstitutionTypeOther:
+		return InstitutionTypeOtherColor
 	default:
 		return "#6B7280"
 	}
 }
 
-// GetSortOrder returns the sort order
 func (i InstitutionType) GetSortOrder() int {
 	switch i {
 	case InstitutionTypeCompany:
@@ -520,6 +583,20 @@ func (i InstitutionType) GetSortOrder() int {
 		return InstitutionTypeSchoolSortOrder
 	case InstitutionTypeUniversity:
 		return InstitutionTypeUniversitySortOrder
+	case InstitutionTypeCollege:
+		return InstitutionTypeCollegeSortOrder
+	case InstitutionTypeHighSchool:
+		return InstitutionTypeHighSchoolSortOrder
+	case InstitutionTypeNgo:
+		return InstitutionTypeNgoSortOrder
+	case InstitutionTypeGovernment:
+		return InstitutionTypeGovernmentSortOrder
+	case InstitutionTypeReligious:
+		return InstitutionTypeReligiousSortOrder
+	case InstitutionTypeCommunity:
+		return InstitutionTypeCommunitySortOrder
+	case InstitutionTypeOther:
+		return InstitutionTypeOtherSortOrder
 	default:
 		return 999
 	}
@@ -529,8 +606,6 @@ func (i InstitutionType) GetSortOrder() int {
 // PARSE FUNCTIONS - For InstitutionType
 // ============================================================
 
-// ParseInstitutionType parses a string into an InstitutionType
-// Expects the name (with underscores), not the slug
 func ParseInstitutionType(name string) (InstitutionType, bool) {
 	t := InstitutionType(name)
 	if t.IsValid() {
@@ -539,7 +614,6 @@ func ParseInstitutionType(name string) (InstitutionType, bool) {
 	return "", false
 }
 
-// ParseInstitutionTypeWithDefault parses a string or returns a default
 func ParseInstitutionTypeWithDefault(name string, defaultType InstitutionType) InstitutionType {
 	if t, ok := ParseInstitutionType(name); ok {
 		return t
@@ -547,7 +621,6 @@ func ParseInstitutionTypeWithDefault(name string, defaultType InstitutionType) I
 	return defaultType
 }
 
-// ParseInstitutionTypeBySlug parses a slug string into an InstitutionType
 func ParseInstitutionTypeBySlug(slug string) (InstitutionType, bool) {
 	for _, t := range AllInstitutionTypes {
 		if t.GetSlug() == slug {
@@ -558,10 +631,9 @@ func ParseInstitutionTypeBySlug(slug string) (InstitutionType, bool) {
 }
 
 // ============================================================
-// HELPER FUNCTIONS - For getting lists of values
+// HELPER FUNCTIONS - For InstitutionType
 // ============================================================
 
-// AllInstitutionTypeNames returns all internal type names (with underscores)
 func AllInstitutionTypeNames() []string {
 	names := make([]string, 0, len(AllInstitutionTypes))
 	for _, t := range AllInstitutionTypes {
@@ -570,7 +642,6 @@ func AllInstitutionTypeNames() []string {
 	return names
 }
 
-// AllInstitutionTypeSlugs returns all type slugs (with hyphens)
 func AllInstitutionTypeSlugs() []string {
 	slugs := make([]string, 0, len(AllInstitutionTypes))
 	for _, t := range AllInstitutionTypes {
@@ -579,7 +650,6 @@ func AllInstitutionTypeSlugs() []string {
 	return slugs
 }
 
-// AllInstitutionTypeDisplayNames returns all display names
 func AllInstitutionTypeDisplayNames() []string {
 	names := make([]string, 0, len(AllInstitutionTypes))
 	for _, t := range AllInstitutionTypes {
@@ -592,95 +662,106 @@ func AllInstitutionTypeDisplayNames() []string {
 // PROFESSIONAL TYPE CONSTANTS
 // ============================================================
 
-// ProfessionalType represents the type of professional
 type ProfessionalType string
 
-// Slug constants (with hyphens) - Used for URLs and API routes
+// Slug constants
 const (
 	ProfessionalTypeTrainerSlug    = "professional-type-trainer"
 	ProfessionalTypeCoachSlug      = "professional-type-coach"
 	ProfessionalTypeConsultantSlug = "professional-type-consultant"
 	ProfessionalTypeFreelancerSlug = "professional-type-freelancer"
+	ProfessionalTypeOrganizerSlug  = "professional-type-organizer"
+	ProfessionalTypeLearnerSlug    = "professional-type-learner"
 )
 
-// Name constants (with underscores) - Used for internal database lookups
+// Name constants
 const (
 	ProfessionalTypeTrainerName    = "professional_type_trainer"
 	ProfessionalTypeCoachName      = "professional_type_coach"
 	ProfessionalTypeConsultantName = "professional_type_consultant"
 	ProfessionalTypeFreelancerName = "professional_type_freelancer"
+	ProfessionalTypeOrganizerName  = "professional_type_organizer"
+	ProfessionalTypeLearnerName    = "professional_type_learner"
 )
 
-// Display name constants - Used for UI display
+// Display names
 const (
 	ProfessionalTypeTrainerDisplayName    = "Trainer"
 	ProfessionalTypeCoachDisplayName      = "Coach"
 	ProfessionalTypeConsultantDisplayName = "Consultant"
 	ProfessionalTypeFreelancerDisplayName = "Freelancer"
+	ProfessionalTypeOrganizerDisplayName  = "Organizer"
+	ProfessionalTypeLearnerDisplayName    = "Learner"
 )
 
-// Description constants
+// Descriptions
 const (
 	ProfessionalTypeTrainerDescription    = "Professional trainer who conducts training sessions"
 	ProfessionalTypeCoachDescription      = "Professional coach providing guidance and mentorship"
 	ProfessionalTypeConsultantDescription = "Professional consultant providing expert advice"
 	ProfessionalTypeFreelancerDescription = "Independent professional offering services"
+	ProfessionalTypeOrganizerDescription  = "Student union, independent tutor, or alumni group hosting events"
+	ProfessionalTypeLearnerDescription    = "Student or professional attending events to learn"
 )
 
-// Icon constants
+// Icons
 const (
 	ProfessionalTypeTrainerIcon    = "graduation-cap"
 	ProfessionalTypeCoachIcon      = "user-tie"
 	ProfessionalTypeConsultantIcon = "briefcase"
 	ProfessionalTypeFreelancerIcon = "laptop"
+	ProfessionalTypeOrganizerIcon  = "users"
+	ProfessionalTypeLearnerIcon    = "book-open"
 )
 
-// Color constants
+// Colors
 const (
-	ProfessionalTypeTrainerColor    = "#4F46E5" // Indigo
-	ProfessionalTypeCoachColor      = "#7C3AED" // Purple
-	ProfessionalTypeConsultantColor = "#0EA5E9" // Sky Blue
-	ProfessionalTypeFreelancerColor = "#F59E0B" // Amber
+	ProfessionalTypeTrainerColor    = "#4F46E5"
+	ProfessionalTypeCoachColor      = "#7C3AED"
+	ProfessionalTypeConsultantColor = "#0EA5E9"
+	ProfessionalTypeFreelancerColor = "#F59E0B"
+	ProfessionalTypeOrganizerColor  = "#14B8A6"
+	ProfessionalTypeLearnerColor    = "#10B981"
 )
 
-// Sort order constants
+// Sort orders
 const (
 	ProfessionalTypeTrainerSortOrder    = 1
 	ProfessionalTypeCoachSortOrder      = 2
 	ProfessionalTypeConsultantSortOrder = 3
 	ProfessionalTypeFreelancerSortOrder = 4
+	ProfessionalTypeOrganizerSortOrder  = 5
+	ProfessionalTypeLearnerSortOrder    = 6
 )
 
 // ============================================================
 // PROFESSIONAL TYPE DEFINITIONS
 // ============================================================
 
-// ProfessionalType constants - These are the NAMES (with underscores)
 const (
-	ProfessionalTypeTrainer    ProfessionalType = ProfessionalTypeTrainerName    // "professional_type_trainer"
-	ProfessionalTypeCoach      ProfessionalType = ProfessionalTypeCoachName      // "professional_type_coach"
-	ProfessionalTypeConsultant ProfessionalType = ProfessionalTypeConsultantName // "professional_type_consultant"
-	ProfessionalTypeFreelancer ProfessionalType = ProfessionalTypeFreelancerName // "professional_type_freelancer"
+	ProfessionalTypeTrainer    ProfessionalType = ProfessionalTypeTrainerName
+	ProfessionalTypeCoach      ProfessionalType = ProfessionalTypeCoachName
+	ProfessionalTypeConsultant ProfessionalType = ProfessionalTypeConsultantName
+	ProfessionalTypeFreelancer ProfessionalType = ProfessionalTypeFreelancerName
+	ProfessionalTypeOrganizer  ProfessionalType = ProfessionalTypeOrganizerName
+	ProfessionalTypeLearner    ProfessionalType = ProfessionalTypeLearnerName
 )
 
-// AllProfessionalTypes lists all valid professional types for validation
 var AllProfessionalTypes = []ProfessionalType{
 	ProfessionalTypeTrainer,
 	ProfessionalTypeCoach,
 	ProfessionalTypeConsultant,
 	ProfessionalTypeFreelancer,
+	ProfessionalTypeOrganizer,
+	ProfessionalTypeLearner,
 }
 
 // ============================================================
 // BASIC METHODS - On ProfessionalType
 // ============================================================
 
-// String returns the string representation (the name with underscores)
-func (p ProfessionalType) String() string {
-	return string(p)
-}
+func (p ProfessionalType) String() string { return string(p) }
 
-// IsValid checks if the professional type is valid
 func (p ProfessionalType) IsValid() bool {
 	for _, t := range AllProfessionalTypes {
 		if t == p {
@@ -694,12 +775,8 @@ func (p ProfessionalType) IsValid() bool {
 // GETTER METHODS - On ProfessionalType
 // ============================================================
 
-// GetName returns the internal name (with underscores)
-func (p ProfessionalType) GetName() string {
-	return string(p)
-}
+func (p ProfessionalType) GetName() string { return string(p) }
 
-// GetSlug returns the slug (with hyphens) - For URLs and API routes
 func (p ProfessionalType) GetSlug() string {
 	switch p {
 	case ProfessionalTypeTrainer:
@@ -710,12 +787,15 @@ func (p ProfessionalType) GetSlug() string {
 		return ProfessionalTypeConsultantSlug
 	case ProfessionalTypeFreelancer:
 		return ProfessionalTypeFreelancerSlug
+	case ProfessionalTypeOrganizer:
+		return ProfessionalTypeOrganizerSlug
+	case ProfessionalTypeLearner:
+		return ProfessionalTypeLearnerSlug
 	default:
 		return string(p)
 	}
 }
 
-// GetDisplayName returns the user-facing display name - For UI
 func (p ProfessionalType) GetDisplayName() string {
 	switch p {
 	case ProfessionalTypeTrainer:
@@ -726,12 +806,15 @@ func (p ProfessionalType) GetDisplayName() string {
 		return ProfessionalTypeConsultantDisplayName
 	case ProfessionalTypeFreelancer:
 		return ProfessionalTypeFreelancerDisplayName
+	case ProfessionalTypeOrganizer:
+		return ProfessionalTypeOrganizerDisplayName
+	case ProfessionalTypeLearner:
+		return ProfessionalTypeLearnerDisplayName
 	default:
 		return string(p)
 	}
 }
 
-// GetDescription returns the description
 func (p ProfessionalType) GetDescription() string {
 	switch p {
 	case ProfessionalTypeTrainer:
@@ -742,12 +825,15 @@ func (p ProfessionalType) GetDescription() string {
 		return ProfessionalTypeConsultantDescription
 	case ProfessionalTypeFreelancer:
 		return ProfessionalTypeFreelancerDescription
+	case ProfessionalTypeOrganizer:
+		return ProfessionalTypeOrganizerDescription
+	case ProfessionalTypeLearner:
+		return ProfessionalTypeLearnerDescription
 	default:
 		return ""
 	}
 }
 
-// GetIcon returns the icon
 func (p ProfessionalType) GetIcon() string {
 	switch p {
 	case ProfessionalTypeTrainer:
@@ -758,12 +844,15 @@ func (p ProfessionalType) GetIcon() string {
 		return ProfessionalTypeConsultantIcon
 	case ProfessionalTypeFreelancer:
 		return ProfessionalTypeFreelancerIcon
+	case ProfessionalTypeOrganizer:
+		return ProfessionalTypeOrganizerIcon
+	case ProfessionalTypeLearner:
+		return ProfessionalTypeLearnerIcon
 	default:
 		return "user"
 	}
 }
 
-// GetColor returns the color
 func (p ProfessionalType) GetColor() string {
 	switch p {
 	case ProfessionalTypeTrainer:
@@ -774,12 +863,15 @@ func (p ProfessionalType) GetColor() string {
 		return ProfessionalTypeConsultantColor
 	case ProfessionalTypeFreelancer:
 		return ProfessionalTypeFreelancerColor
+	case ProfessionalTypeOrganizer:
+		return ProfessionalTypeOrganizerColor
+	case ProfessionalTypeLearner:
+		return ProfessionalTypeLearnerColor
 	default:
 		return "#6B7280"
 	}
 }
 
-// GetSortOrder returns the sort order
 func (p ProfessionalType) GetSortOrder() int {
 	switch p {
 	case ProfessionalTypeTrainer:
@@ -790,17 +882,20 @@ func (p ProfessionalType) GetSortOrder() int {
 		return ProfessionalTypeConsultantSortOrder
 	case ProfessionalTypeFreelancer:
 		return ProfessionalTypeFreelancerSortOrder
+	case ProfessionalTypeOrganizer:
+		return ProfessionalTypeOrganizerSortOrder
+	case ProfessionalTypeLearner:
+		return ProfessionalTypeLearnerSortOrder
 	default:
 		return 999
 	}
 }
 
-// CanHost returns whether this professional type can host events
 func (p ProfessionalType) CanHost() bool {
 	switch p {
-	case ProfessionalTypeTrainer, ProfessionalTypeCoach, ProfessionalTypeConsultant:
+	case ProfessionalTypeTrainer, ProfessionalTypeCoach, ProfessionalTypeConsultant, ProfessionalTypeOrganizer:
 		return true
-	case ProfessionalTypeFreelancer:
+	case ProfessionalTypeFreelancer, ProfessionalTypeLearner:
 		return false
 	default:
 		return false
@@ -811,8 +906,6 @@ func (p ProfessionalType) CanHost() bool {
 // PARSE FUNCTIONS - For ProfessionalType
 // ============================================================
 
-// ParseProfessionalType parses a string into a ProfessionalType
-// Expects the name (with underscores), not the slug
 func ParseProfessionalType(name string) (ProfessionalType, bool) {
 	t := ProfessionalType(name)
 	if t.IsValid() {
@@ -821,7 +914,6 @@ func ParseProfessionalType(name string) (ProfessionalType, bool) {
 	return "", false
 }
 
-// ParseProfessionalTypeWithDefault parses a string or returns a default
 func ParseProfessionalTypeWithDefault(name string, defaultType ProfessionalType) ProfessionalType {
 	if t, ok := ParseProfessionalType(name); ok {
 		return t
@@ -829,7 +921,6 @@ func ParseProfessionalTypeWithDefault(name string, defaultType ProfessionalType)
 	return defaultType
 }
 
-// ParseProfessionalTypeBySlug parses a slug string into a ProfessionalType
 func ParseProfessionalTypeBySlug(slug string) (ProfessionalType, bool) {
 	for _, t := range AllProfessionalTypes {
 		if t.GetSlug() == slug {
@@ -840,10 +931,9 @@ func ParseProfessionalTypeBySlug(slug string) (ProfessionalType, bool) {
 }
 
 // ============================================================
-// HELPER FUNCTIONS - For getting lists of values
+// HELPER FUNCTIONS - For ProfessionalType
 // ============================================================
 
-// AllProfessionalTypeNames returns all internal type names (with underscores)
 func AllProfessionalTypeNames() []string {
 	names := make([]string, 0, len(AllProfessionalTypes))
 	for _, t := range AllProfessionalTypes {
@@ -852,7 +942,6 @@ func AllProfessionalTypeNames() []string {
 	return names
 }
 
-// AllProfessionalTypeSlugs returns all type slugs (with hyphens)
 func AllProfessionalTypeSlugs() []string {
 	slugs := make([]string, 0, len(AllProfessionalTypes))
 	for _, t := range AllProfessionalTypes {
@@ -861,7 +950,6 @@ func AllProfessionalTypeSlugs() []string {
 	return slugs
 }
 
-// AllProfessionalTypeDisplayNames returns all display names
 func AllProfessionalTypeDisplayNames() []string {
 	names := make([]string, 0, len(AllProfessionalTypes))
 	for _, t := range AllProfessionalTypes {
@@ -870,7 +958,6 @@ func AllProfessionalTypeDisplayNames() []string {
 	return names
 }
 
-// HostProfessionalTypes returns only professional types that can host events
 func HostProfessionalTypes() []ProfessionalType {
 	types := make([]ProfessionalType, 0)
 	for _, t := range AllProfessionalTypes {

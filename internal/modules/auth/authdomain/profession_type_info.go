@@ -1,4 +1,4 @@
-
+// internal/modules/auth/authdomain/professional_type.go
 
 package authdomain
 
@@ -19,6 +19,8 @@ const (
 	ProfessionalTypeCoach      = types.ProfessionalTypeCoach
 	ProfessionalTypeConsultant = types.ProfessionalTypeConsultant
 	ProfessionalTypeFreelancer = types.ProfessionalTypeFreelancer
+	ProfessionalTypeOrganizer  = types.ProfessionalTypeOrganizer // NEW
+	ProfessionalTypeLearner    = types.ProfessionalTypeLearner   // NEW
 )
 
 // AllProfessionalTypes re-exported from shared types
@@ -83,6 +85,30 @@ var professionalTypeRegistry = map[types.ProfessionalType]ProfessionalTypeInfo{
 		Icon:        types.ProfessionalTypeFreelancerIcon,
 		Color:       types.ProfessionalTypeFreelancerColor,
 		SortOrder:   types.ProfessionalTypeFreelancerSortOrder,
+		CanHost:     false,
+		IsActive:    true,
+	},
+	// NEW: Organizer (student unions, independent tutors, alumni groups)
+	types.ProfessionalTypeOrganizer: {
+		Slug:        types.ProfessionalTypeOrganizerSlug,
+		Name:        types.ProfessionalTypeOrganizerName,
+		DisplayName: types.ProfessionalTypeOrganizerDisplayName,
+		Description: types.ProfessionalTypeOrganizerDescription,
+		Icon:        types.ProfessionalTypeOrganizerIcon,
+		Color:       types.ProfessionalTypeOrganizerColor,
+		SortOrder:   types.ProfessionalTypeOrganizerSortOrder,
+		CanHost:     true,
+		IsActive:    true,
+	},
+	// NEW: Learner (students, professionals attending events)
+	types.ProfessionalTypeLearner: {
+		Slug:        types.ProfessionalTypeLearnerSlug,
+		Name:        types.ProfessionalTypeLearnerName,
+		DisplayName: types.ProfessionalTypeLearnerDisplayName,
+		Description: types.ProfessionalTypeLearnerDescription,
+		Icon:        types.ProfessionalTypeLearnerIcon,
+		Color:       types.ProfessionalTypeLearnerColor,
+		SortOrder:   types.ProfessionalTypeLearnerSortOrder,
 		CanHost:     false,
 		IsActive:    true,
 	},
