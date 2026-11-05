@@ -59,6 +59,7 @@ func toOrderResponse(o *paymentdomain.Order) OrderResponse {
 		DiscountTotal:      o.DiscountTotal,
 		TotalAmount:        o.TotalAmount,
 		Status:             string(o.Status),
+		PaymentStatus:      string(o.PaymentStatus), // <-- NEW
 		ExpiresAt:          o.ExpiresAt,
 		PaidAt:             o.PaidAt,
 		CancelledAt:        o.CancelledAt,
