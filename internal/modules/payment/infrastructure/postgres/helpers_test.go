@@ -26,6 +26,13 @@ const TestBilledAccountID = "00000000-0000-0000-0000-000000000001"
 // fixture. Matches the config default (4.5%).
 const TestPlatformFeeRate = 0.045
 
+// TestProcessingFeeRate is the M-Pesa processing fee rate (1.5%),
+// matching the Paystack production rate. Tests that exercise payout
+// math can opt in via the WithProcessingFeeRate option; the default
+// fixture keeps it at 0 so it mirrors the create_order flow (where
+// the method isn't known yet at construction time).
+const TestProcessingFeeRate = 0.015
+
 // errRollbackForTest is a sentinel used to trigger rollback of the
 // per-test transaction. Every test that uses withTx rolls back so no
 // state leaks between tests.
@@ -54,6 +61,10 @@ func withTx(t *testing.T, db *gorm.DB, fn func(tx *gorm.DB)) {
 // BilledAccountID is set to TestBilledAccountID so the FK constraint
 // on orders.billed_account_id resolves against the seeded account in
 // testmain_test.go.
+//
+// ProcessingFeeRate defaults to 0 (matching the create_order flow,
+// where the payment method isn't known yet). Tests that exercise
+// NetToOrganizer math can set it via the WithProcessingFeeRate option.
 func newOrderFixture(t *testing.T, opts ...func(*paymentdomain.Order)) *paymentdomain.Order {
 	t.Helper()
 
@@ -77,8 +88,9 @@ func newOrderFixture(t *testing.T, opts ...func(*paymentdomain.Order)) *paymentd
 		items,
 		30*time.Minute,
 		now,
-		TestBilledAccountID,   // ← new
-		TestPlatformFeeRate,   // ← new
+		TestBilledAccountID,   // billedAccountID
+		TestPlatformFeeRate,   // platformFeeRate
+		0,                     // processingFeeRate — set later via SetProcessingFeeRate
 	)
 	require.NoError(t, err)
 
@@ -86,6 +98,18 @@ func newOrderFixture(t *testing.T, opts ...func(*paymentdomain.Order)) *paymentd
 		opt(o)
 	}
 	return o
+}
+
+// WithProcessingFeeRate sets the processing fee rate on an order
+// fixture. Useful for tests that assert on NetToOrganizer or
+// ProcessingFeeAmount without having to drive the order through
+// initiate / webhook.
+func WithProcessingFeeRate(rate float64) func(*paymentdomain.Order) {
+	return func(o *paymentdomain.Order) {
+		if err := o.SetProcessingFeeRate(rate); err != nil {
+			panic("WithProcessingFeeRate: " + err.Error())
+		}
+	}
 }
 
 // newPaymentFixture builds a valid Payment for tests.

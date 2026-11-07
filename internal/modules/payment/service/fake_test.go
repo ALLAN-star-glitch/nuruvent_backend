@@ -23,7 +23,7 @@ type fakeOrderRepository struct {
 	findActiveByRegistrationFunc       func(ctx context.Context, regID string) (*paymentdomain.Order, error)
 	findActiveByCertificateContextFunc func(ctx context.Context, contextType, contextID, recipientEmail string) (*paymentdomain.Order, error)
 	findExpiredFunc                    func(ctx context.Context, before time.Time, limit int) ([]*paymentdomain.Order, error)
-	findActiveByBatchEventFunc func(ctx context.Context, eventID string) (*paymentdomain.Order, error)
+	findActiveByBatchEventFunc         func(ctx context.Context, eventID string) (*paymentdomain.Order, error)
 
 	mu      sync.Mutex
 	created []*paymentdomain.Order
@@ -79,6 +79,16 @@ func (f *fakeOrderRepository) FindExpired(ctx context.Context, before time.Time,
 		return f.findExpiredFunc(ctx, before, limit)
 	}
 	return nil, nil
+}
+
+func (f *fakeOrderRepository) FindActiveByBatchEvent(
+	ctx context.Context,
+	eventID string,
+) (*paymentdomain.Order, error) {
+	if f.findActiveByBatchEventFunc != nil {
+		return f.findActiveByBatchEventFunc(ctx, eventID)
+	}
+	return nil, paymentdomain.ErrOrderNotFound
 }
 
 // ============================================================
@@ -276,16 +286,6 @@ func (f *fakeWebhookEventRepository) FindByID(ctx context.Context, id string) (*
 
 func (f *fakeWebhookEventRepository) FindUnprocessed(ctx context.Context, limit int) ([]*paymentdomain.WebhookEvent, error) {
 	return nil, nil
-}
-
-func (f *fakeOrderRepository) FindActiveByBatchEvent(
-	ctx context.Context,
-	eventID string,
-) (*paymentdomain.Order, error) {
-	if f.findActiveByBatchEventFunc != nil {
-		return f.findActiveByBatchEventFunc(ctx, eventID)
-	}
-	return nil, paymentdomain.ErrOrderNotFound
 }
 
 // ============================================================
@@ -555,13 +555,20 @@ func newTestService(t *testing.T, customize func(*Dependencies)) (Service, *Depe
 	return New(*deps), deps
 }
 
+// testConfig returns a config with the production fee rates so tests
+// exercise the same numbers as production.
+//
+// Current rates (Paystack, Nov 2026):
+//   - M-Pesa / Airtel Money: 1.5%
+//   - Local cards:           2.9%
+//   - International cards:   3.8%
 func testConfig() *config.Config {
 	return &config.Config{
 		PaymentBilling: config.PaymentBillingConfig{
 			PlatformFeeRate:            0.045,
-			ProcessingFeeRateMpesa:     0.035,
-			ProcessingFeeRateCardLocal: 0.035,
-			ProcessingFeeRateCardIntl:  0.045,
+			ProcessingFeeRateMpesa:     0.015,
+			ProcessingFeeRateCardLocal: 0.029,
+			ProcessingFeeRateCardIntl:  0.038,
 		},
 	}
 }
@@ -594,6 +601,7 @@ func newPendingOrder(t *testing.T) *paymentdomain.Order {
 		now,
 		"acct-1", // billedAccountID
 		0.045,    // platformFeeRate
+		0,        // processingFeeRate — set later by initiate / webhook
 	)
 	if err != nil {
 		t.Fatalf("newPendingOrder: %v", err)

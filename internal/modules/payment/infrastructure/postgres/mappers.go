@@ -11,11 +11,6 @@ import (
 // ============================================================
 
 // toOrderDomain converts an OrderModel to a domain Order.
-// ============================================================
-// ORDER
-// ============================================================
-
-// toOrderDomain converts an OrderModel to a domain Order.
 func toOrderDomain(m *OrderModel) (*paymentdomain.Order, error) {
 	items, err := toOrderItemsDomain(m.Items)
 	if err != nil {
@@ -64,6 +59,7 @@ func toOrderDomain(m *OrderModel) (*paymentdomain.Order, error) {
 		m.CancelledAt,
 		m.BilledAccountID,
 		m.PlatformFeeRate,
+		m.ProcessingFeeRate,
 		m.SettledAt,
 		derefString(m.PayoutRef),
 	), nil
@@ -99,10 +95,11 @@ func toOrderModel(o *paymentdomain.Order) *OrderModel {
 		CreatedAt:          o.CreatedAt,
 		UpdatedAt:          o.UpdatedAt,
 
-		BilledAccountID: o.BilledAccountID,
-		PlatformFeeRate: o.PlatformFeeRate,
-		SettledAt:       o.SettledAt,
-		PayoutRef:       nullableString(o.PayoutRef),
+		BilledAccountID:   o.BilledAccountID,
+		PlatformFeeRate:   o.PlatformFeeRate,
+		ProcessingFeeRate: o.ProcessingFeeRate,
+		SettledAt:         o.SettledAt,
+		PayoutRef:         nullableString(o.PayoutRef),
 	}
 
 	if len(o.Items) > 0 {
@@ -111,8 +108,6 @@ func toOrderModel(o *paymentdomain.Order) *OrderModel {
 
 	return model
 }
-
-
 
 // ============================================================
 // ORDER ITEM
@@ -171,28 +166,25 @@ func toPaymentDomain(m *PaymentModel) (*paymentdomain.Payment, error) {
 	}
 
 	return paymentdomain.HydratePayment(
-    m.ID,
-    m.OrderID,
-    m.Provider,
-    method,
-    m.Amount,
-    m.Currency,
-    status,
-    m.IdempotencyKey,
-    derefString(m.ProviderReference),
-    derefString(m.FailureReason),     // 👈 10th: failureReason
-    m.RedirectURL,                    // 👈 11th: redirectURL
-    m.InitiatedAt,
-    m.CompletedAt,
-    m.FailedAt,
-    m.ExpiresAt,
-    m.CreatedAt,
-    m.UpdatedAt,
-), nil
+		m.ID,
+		m.OrderID,
+		m.Provider,
+		method,
+		m.Amount,
+		m.Currency,
+		status,
+		m.IdempotencyKey,
+		derefString(m.ProviderReference),
+		derefString(m.FailureReason),
+		m.RedirectURL,
+		m.InitiatedAt,
+		m.CompletedAt,
+		m.FailedAt,
+		m.ExpiresAt,
+		m.CreatedAt,
+		m.UpdatedAt,
+	), nil
 }
-
-
-
 
 func toPaymentModel(p *paymentdomain.Payment) *PaymentModel {
 	return &PaymentModel{
@@ -205,7 +197,7 @@ func toPaymentModel(p *paymentdomain.Payment) *PaymentModel {
 		Status:            string(p.Status),
 		IdempotencyKey:    p.IdempotencyKey,
 		ProviderReference: nullableString(p.ProviderReference),
-		RedirectURL: p.RedirectURL,
+		RedirectURL:       p.RedirectURL,
 		FailureReason:     nullableString(p.FailureReason),
 		InitiatedAt:       p.InitiatedAt,
 		ExpiresAt:         p.ExpiresAt,
@@ -213,7 +205,6 @@ func toPaymentModel(p *paymentdomain.Payment) *PaymentModel {
 		FailedAt:          p.FailedAt,
 		CreatedAt:         p.CreatedAt,
 		UpdatedAt:         p.UpdatedAt,
-
 	}
 }
 

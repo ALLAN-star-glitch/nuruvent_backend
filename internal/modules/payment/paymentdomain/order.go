@@ -38,9 +38,9 @@ func (k OrderKind) String() string { return string(k) }
 // Lifecycle: see OrderStatus.
 type Order struct {
 	ID             string
-	Kind           OrderKind 
+	Kind           OrderKind
 	RegistrationID string
-	CertificateCtx *CertificateContext 
+	CertificateCtx *CertificateContext
 
 	// Certificate batch order (organizer-pays)
 	BatchCtx           *BatchContext
@@ -58,11 +58,11 @@ type Order struct {
 	DiscountTotal int64
 	TotalAmount   int64
 
-	Status     OrderStatus
-	ExpiresAt  time.Time
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	PaidAt     *time.Time
+	Status      OrderStatus
+	ExpiresAt   time.Time
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	PaidAt      *time.Time
 	CancelledAt *time.Time
 
 	// ------------------------------------------------------------
@@ -70,8 +70,19 @@ type Order struct {
 	// ------------------------------------------------------------
 	BilledAccountID string
 	PlatformFeeRate float64
-	SettledAt       *time.Time
-	PayoutRef       string
+
+	// ProcessingFeeRate snapshots the payment provider's cut at the
+	// moment the payment method is known (M-Pesa 1.5%, local card 2.9%,
+	// intl card 3.8%). Zero for certificate-batch orders (100% to
+	// Nuruvent) and for orders whose payment method has not yet been
+	// resolved at hydration time.
+	//
+	// Set once via SetProcessingFeeRate; never changes afterwards for
+	// the same order.
+	ProcessingFeeRate float64
+
+	SettledAt *time.Time
+	PayoutRef string
 
 	// ------------------------------------------------------------
 	// Payment — populated on read.
@@ -89,8 +100,12 @@ type Order struct {
 // NewOrder constructs an order from a set of items. Status is always
 // OrderStatusPending; the caller sets ExpiresAt via ttl.
 //
-// billedAccountID and platformFeeRate are snapshotted onto the order
-// here and never change afterwards.
+// billedAccountID, platformFeeRate, and processingFeeRate are
+// snapshotted onto the order here and never change afterwards.
+//
+// processingFeeRate may be 0 if the payment method is not yet known;
+// the caller (initiate / webhook) will set it later via
+// SetProcessingFeeRate.
 func NewOrder(
 	id string,
 	registrationID string,
@@ -102,6 +117,7 @@ func NewOrder(
 	now time.Time,
 	billedAccountID string,
 	platformFeeRate float64,
+	processingFeeRate float64,
 ) (*Order, error) {
 	if id == "" {
 		return nil, fmt.Errorf("order id is required")
@@ -139,6 +155,12 @@ func NewOrder(
 			platformFeeRate,
 		)
 	}
+	if processingFeeRate < 0 || processingFeeRate > 1 {
+		return nil, fmt.Errorf(
+			"processing fee rate must be in [0, 1], got %v",
+			processingFeeRate,
+		)
+	}
 
 	// Validate items and compute totals.
 	var subtotal, discount int64
@@ -156,22 +178,23 @@ func NewOrder(
 	}
 
 	return &Order{
-		ID:              id,
-		Kind:            OrderKindRegistration,
-		RegistrationID:  registrationID,
-		UserID:          userID,
-		GuestEmail:      guestEmail,
-		Currency:        currency,
-		Items:           items,
-		Subtotal:        subtotal,
-		DiscountTotal:   discount,
-		TotalAmount:     total,
-		Status:          OrderStatusPending,
-		ExpiresAt:       now.Add(ttl),
-		CreatedAt:       now,
-		UpdatedAt:       now,
-		BilledAccountID: billedAccountID,
-		PlatformFeeRate: platformFeeRate,
+		ID:                id,
+		Kind:              OrderKindRegistration,
+		RegistrationID:    registrationID,
+		UserID:            userID,
+		GuestEmail:        guestEmail,
+		Currency:          currency,
+		Items:             items,
+		Subtotal:          subtotal,
+		DiscountTotal:     discount,
+		TotalAmount:       total,
+		Status:            OrderStatusPending,
+		ExpiresAt:         now.Add(ttl),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		BilledAccountID:   billedAccountID,
+		PlatformFeeRate:   platformFeeRate,
+		ProcessingFeeRate: processingFeeRate,
 	}, nil
 }
 
@@ -188,6 +211,7 @@ func NewCertificateOrder(
 	now time.Time,
 	billedAccountID string,
 	platformFeeRate float64,
+	processingFeeRate float64,
 ) (*Order, error) {
 	if id == "" {
 		return nil, fmt.Errorf("order id is required")
@@ -228,31 +252,42 @@ func NewCertificateOrder(
 			platformFeeRate,
 		)
 	}
+	if processingFeeRate < 0 || processingFeeRate > 1 {
+		return nil, fmt.Errorf(
+			"processing fee rate must be in [0, 1], got %v",
+			processingFeeRate,
+		)
+	}
 
 	return &Order{
-		ID:              id,
-		Kind:            OrderKindCertificate,
-		RegistrationID:  "",
-		CertificateCtx:  &certCtx,
-		UserID:          userID,
-		GuestEmail:      guestEmail,
-		Currency:        currency,
-		Items:           nil, // certificate orders have no items
-		Subtotal:        amountMinor,
-		DiscountTotal:   0,
-		TotalAmount:     amountMinor,
-		Status:          OrderStatusPending,
-		ExpiresAt:       now.Add(ttl),
-		CreatedAt:       now,
-		UpdatedAt:       now,
-		BilledAccountID: billedAccountID,
-		PlatformFeeRate: platformFeeRate,
+		ID:                id,
+		Kind:              OrderKindCertificate,
+		RegistrationID:    "",
+		CertificateCtx:    &certCtx,
+		UserID:            userID,
+		GuestEmail:        guestEmail,
+		Currency:          currency,
+		Items:             nil, // certificate orders have no items
+		Subtotal:          amountMinor,
+		DiscountTotal:     0,
+		TotalAmount:       amountMinor,
+		Status:            OrderStatusPending,
+		ExpiresAt:         now.Add(ttl),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+		BilledAccountID:   billedAccountID,
+		PlatformFeeRate:   platformFeeRate,
+		ProcessingFeeRate: processingFeeRate,
 	}, nil
 }
 
 // NewCertificateBatchOrder constructs a pending order for a
 // certificate batch. The organizer pays; attendees receive
 // certificates free once the order is settled.
+//
+// Batch orders are 100% Nuruvent — no processing fee is applied
+// because the batch is purchased via the organizer's own billing
+// arrangement, not routed through Paystack per attendee.
 func NewCertificateBatchOrder(
 	id string,
 	batchCtx BatchContext,
@@ -314,6 +349,7 @@ func NewCertificateBatchOrder(
 		UpdatedAt:          now,
 		BilledAccountID:    billedAccountID,
 		PlatformFeeRate:    0, // 100% to Nuruvent
+		ProcessingFeeRate:  0, // batch orders skip processing fee entirely
 	}, nil
 }
 
@@ -321,8 +357,8 @@ func HydrateOrder(
 	id string,
 	kind OrderKind,
 	certCtx *CertificateContext,
-	batchCtx *BatchContext,          // NEW
-	batchAttendeeCount int,          // NEW
+	batchCtx *BatchContext,
+	batchAttendeeCount int,
 	registrationID, userID, guestEmail, currency string,
 	items []OrderItem,
 	subtotal, discountTotal, totalAmount int64,
@@ -331,6 +367,7 @@ func HydrateOrder(
 	paidAt, cancelledAt *time.Time,
 	billedAccountID string,
 	platformFeeRate float64,
+	processingFeeRate float64,
 	settledAt *time.Time,
 	payoutRef string,
 ) *Order {
@@ -356,6 +393,7 @@ func HydrateOrder(
 		CancelledAt:        cancelledAt,
 		BilledAccountID:    billedAccountID,
 		PlatformFeeRate:    platformFeeRate,
+		ProcessingFeeRate:  processingFeeRate,
 		SettledAt:          settledAt,
 		PayoutRef:          payoutRef,
 	}
@@ -476,16 +514,68 @@ func (o *Order) PlatformFee() int64 {
 	return int64(float64(o.TotalAmount) * o.PlatformFeeRate)
 }
 
+// ProcessingFeeAmount returns the payment provider's cut (M-Pesa,
+// card, etc.) of the order total, in minor units.
+//
+// Truncates toward zero, matching PlatformFee. Certificate-batch
+// orders are 100% to Nuruvent and carry no processing fee.
+//
+// A ProcessingFeeRate of 0 is valid and common — it means the method
+// has not yet been resolved (order created but payment not initiated),
+// or that the order kind does not carry a processing fee (batch).
+func (o *Order) ProcessingFeeAmount() int64 {
+	if o.Kind == OrderKindCertificateBatch {
+		return 0
+	}
+	if o.ProcessingFeeRate <= 0 {
+		return 0
+	}
+	return int64(float64(o.TotalAmount) * o.ProcessingFeeRate)
+}
+
+// SetProcessingFeeRate snapshots the processing fee rate onto the
+// order. Called once the payment method is resolved (at initiate time
+// or in the webhook handler). The rate never changes after the first
+// successful call.
+//
+// Pass rate = 0 to explicitly record "no processing fee" (e.g. batch
+// orders or a free order); passing a negative or >1 value is a
+// programming error.
+func (o *Order) SetProcessingFeeRate(rate float64) error {
+	if o.Kind == OrderKindCertificateBatch {
+		// Batch orders are 100% to Nuruvent. Ignore attempts to set a
+		// processing rate on them to keep the invariant simple.
+		return nil
+	}
+	if rate < 0 || rate > 1 {
+		return fmt.Errorf(
+			"processing fee rate must be in [0, 1], got %v",
+			rate,
+		)
+	}
+	o.ProcessingFeeRate = rate
+	o.UpdatedAt = time.Now()
+	return nil
+}
+
 // IsCertificateBatch reports whether this is an organizer-pays
 // certificate batch order.
 func (o *Order) IsCertificateBatch() bool {
 	return o.Kind == OrderKindCertificateBatch
 }
 
-// NetToOrganizer returns the amount owed to the billed account before
-// payment-processing fees, in minor units.
+// NetToOrganizer returns the amount owed to the billed account after
+// both the platform fee and the payment-processing fee are deducted,
+// in minor units. Never negative.
+//
+// On a KES 1,000 M-Pesa ticket with 4.5% platform fee and 1.5%
+// processing fee, this returns 940 (minor units: 94000).
 func (o *Order) NetToOrganizer() int64 {
-	return o.TotalAmount - o.PlatformFee()
+	net := o.TotalAmount - o.PlatformFee() - o.ProcessingFeeAmount()
+	if net < 0 {
+		return 0
+	}
+	return net
 }
 
 // IsSettled reports whether the organizer's net earnings for this

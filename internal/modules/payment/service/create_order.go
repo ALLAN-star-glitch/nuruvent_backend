@@ -31,6 +31,9 @@ const DefaultOrderTTL = 30 * time.Minute
 //        registration. If one exists, return it (idempotent).
 //     b. Build the Order entity from the pricing snapshot, with the
 //        billed account and platform fee rate snapshotted onto it.
+//        The processing fee rate is left at 0 here — it is unknown
+//        until the payment method is chosen, and will be snapshotted
+//        later via SetProcessingFeeRate at initiate / webhook time.
 //     c. Persist it.
 //  4. Return it.
 //
@@ -150,6 +153,7 @@ func (s *service) CreateOrder(
 			now,
 			billedAccountID,
 			s.deps.Config.PaymentBilling.PlatformFeeRate,
+			0, // processingFeeRate — unknown until the payment method is chosen
 		)
 		if err != nil {
 			return err

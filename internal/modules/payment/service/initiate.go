@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/modules/payment/paymentdomain"
+	"github.com/ALLAN-star-glitch/nuruvent-backend/internal/shared/config"
 )
 
 // InitiatePayment creates a Payment for the given order and calls the
@@ -20,6 +21,9 @@ import (
 //     (order_id, idempotency_key), return it.
 //  3. Resolve the provider. Fails before any state change if the
 //     provider is not available.
+//  3b. Resolve the processing fee rate for the chosen payment method
+//      and snapshot it onto the order. Fails before any state change
+//      if the rate is out of range.
 //  4. Build the Payment in pending state with the provider's name.
 //  5. Persist the payment.
 //  6. Call provider.Initiate.
@@ -71,9 +75,6 @@ func (s *service) InitiatePayment(
 	// ------------------------------------------------------------
 	// 2b. Pending payment check — only one live payment per order
 	// ------------------------------------------------------------
-	// If a fresh pending payment already exists for this order, return
-	// it. This prevents double-charges when a client retries with a
-	// different idempotency key or switches providers.
 	existingPending, err := s.deps.Payments.FindPendingByOrder(ctx, order.ID)
 	if err == nil && existingPending != nil {
 		if existingPending.IsExpired(now) {
@@ -93,6 +94,27 @@ func (s *service) InitiatePayment(
 	provider, err := s.deps.Providers.ByMethod(cmd.Method)
 	if err != nil {
 		return nil, err
+	}
+
+	// ------------------------------------------------------------
+	// 3b. Snapshot the processing fee rate for this method onto the
+	//     order, then persist. This is the one point where the
+	//     processing fee becomes concrete.
+	//
+	//     NOTE: PaymentMethod only distinguishes mpesa vs card. Card
+	//     orders are charged the international rate (3.8%) as a
+	//     conservative default until the webhook reports the card
+	//     origin; a refund-difference step can refine this later.
+	// ------------------------------------------------------------
+	processingFeeRate, err := processingFeeRateForMethod(s.deps.Config.PaymentBilling, cmd.Method)
+	if err != nil {
+		return nil, fmt.Errorf("resolve processing fee rate: %w", err)
+	}
+	if err := order.SetProcessingFeeRate(processingFeeRate); err != nil {
+		return nil, fmt.Errorf("set processing fee rate: %w", err)
+	}
+	if err := s.deps.Orders.Update(ctx, order); err != nil {
+		return nil, fmt.Errorf("persist order processing fee rate: %w", err)
 	}
 
 	// ------------------------------------------------------------
@@ -150,10 +172,6 @@ func (s *service) InitiatePayment(
 	// ------------------------------------------------------------
 	// 7. Update the payment with the provider's metadata
 	// ------------------------------------------------------------
-	// The payment STAYS pending. We only stash references and URLs
-	// returned by the provider for tracing and for the client to
-	// resume the checkout flow. The status transition to succeeded
-	// happens exclusively in ConfirmPayment (webhook-driven).
 	if result.ProviderReference != "" {
 		payment.ProviderReference = result.ProviderReference
 	}
@@ -164,9 +182,6 @@ func (s *service) InitiatePayment(
 		payment.AccessCode = result.AccessCode
 	}
 
-	// Defensive: if a provider claims immediate success (pre-authorized
-	// charges), do NOT mark succeeded here — the webhook is still
-	// authoritative and will call ConfirmPayment. Log for visibility.
 	if result.Status == paymentdomain.PaymentStatusSucceeded {
 		fmt.Printf("[InitiatePayment] provider %s reported immediate success for payment %s; awaiting webhook confirmation\n",
 			provider.Name(), payment.ID)
@@ -184,4 +199,52 @@ func (s *service) InitiatePayment(
 	_ = s.deps.Notifier.PaymentInitiated(ctx, payment, order)
 
 	return payment, nil
+}
+
+// ============================================================
+// PROCESSING FEE RATE RESOLUTION
+// ============================================================
+
+// processingFeeRateForMethod maps a payment method to the
+// corresponding processing fee rate from config.
+//
+// Returns an error for unknown methods rather than defaulting silently,
+// so a misconfigured provider surfaces as a startup failure instead of
+// a wrong payout later.
+//
+// NOTE ON CARD RATE
+// -----------------
+// The domain only distinguishes PaymentMethodMpesa vs
+// PaymentMethodCard. The config carries two card rates (local 2.9%,
+// international 3.8%), but the local/international distinction is not
+// available at this layer — PaymentMethod doesn't carry it, and
+// InitiateCommand doesn't either.
+//
+// We charge the international rate (3.8%) on all cards as a
+// conservative default. This ensures Nuruvent never under-recovers
+// processing cost. When the webhook reports card origin, a follow-up
+// step can refund the 0.9% difference to the host for local cards.
+// See the "card origin refinement" TODO in webhook.go / ConfirmPayment.
+//
+// Batch certificate orders are unaffected — SetProcessingFeeRate
+// no-ops on that kind.
+func processingFeeRateForMethod(
+	billing config.PaymentBillingConfig,
+	method paymentdomain.PaymentMethod,
+) (float64, error) {
+	switch method {
+	case paymentdomain.PaymentMethodMpesa:
+		// M-Pesa rate. Airtel is not a separate method in the current
+		// enum — if/when it is added, route it through the same rate
+		// (or add a config field for it) at that point.
+		return billing.ProcessingFeeRateMpesa, nil
+
+	case paymentdomain.PaymentMethodCard:
+		// Conservative: charge the international rate on all cards
+		// until origin is resolved. See NOTE above.
+		return billing.ProcessingFeeRateCardIntl, nil
+
+	default:
+		return 0, fmt.Errorf("unknown payment method %q", method)
+	}
 }

@@ -269,9 +269,9 @@ func Load() *Config {
 		},
 		PaymentBilling: PaymentBillingConfig{
 			PlatformFeeRate:            getEnvFloat("PAYMENT_PLATFORM_FEE_RATE", 0.045),
-			ProcessingFeeRateMpesa:     getEnvFloat("PAYMENT_PROCESSING_FEE_RATE_MPESA", 0.035),
-			ProcessingFeeRateCardLocal: getEnvFloat("PAYMENT_PROCESSING_FEE_RATE_CARD_LOCAL", 0.035),
-			ProcessingFeeRateCardIntl:  getEnvFloat("PAYMENT_PROCESSING_FEE_RATE_CARD_INTL", 0.045),
+			ProcessingFeeRateMpesa:     getEnvFloat("PAYMENT_PROCESSING_FEE_RATE_MPESA", 0.015),     // was 0.035
+			ProcessingFeeRateCardLocal: getEnvFloat("PAYMENT_PROCESSING_FEE_RATE_CARD_LOCAL", 0.029), // was 0.035
+			ProcessingFeeRateCardIntl:  getEnvFloat("PAYMENT_PROCESSING_FEE_RATE_CARD_INTL", 0.038),  // was 0.045
 		},
 		Zoom: ZoomConfig{
 			SecretToken: getEnv("ZOOM_SECRET_TOKEN", ""),
