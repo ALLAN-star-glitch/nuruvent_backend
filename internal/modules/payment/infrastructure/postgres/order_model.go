@@ -25,15 +25,15 @@ type OrderModel struct {
 	PaidAt      *time.Time
 	CancelledAt *time.Time
 
-	BilledAccountID string     `gorm:"column:billed_account_id;type:uuid;not null;index"`
-	PlatformFeeRate float64    `gorm:"column:platform_fee_rate;type:numeric(5,4);not null;default:0.0450"`
-	SettledAt       *time.Time `gorm:"column:settled_at"`
-	PayoutRef       *string    `gorm:"column:payout_ref;type:varchar(255)"`
+	BilledAccountID   string     `gorm:"column:billed_account_id;type:uuid;not null;index"`
+	PlatformFeeRate   float64    `gorm:"column:platform_fee_rate;type:numeric(5,4);not null;default:0.0450"`
+	ProcessingFeeRate float64    `gorm:"column:processing_fee_rate;type:numeric(5,4);not null;default:0"`
+	SettledAt         *time.Time `gorm:"column:settled_at"`
+	PayoutRef         *string    `gorm:"column:payout_ref;type:varchar(255)"`
 
-	CertificateContext JSONB `gorm:"type:jsonb"` // ← NEW
+	CertificateContext JSONB `gorm:"type:jsonb"`
 
-
-		// Batch order context (organizer-pays certificates).
+	// Batch order context (organizer-pays certificates).
 	BatchContext       JSONB `gorm:"type:jsonb"`
 	BatchAttendeeCount int   `gorm:"not null;default:0"`
 

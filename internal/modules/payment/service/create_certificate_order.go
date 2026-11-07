@@ -20,6 +20,10 @@ import (
 // Ownership: the caller must supply either ActorID (the buyer's user
 // ID) or GuestEmail (matching the recipient's email). Enforced here
 // because there is no registration to cross-check against.
+//
+// The processing fee rate is left at 0 here — it is unknown until the
+// payment method is chosen, and will be snapshotted later via
+// SetProcessingFeeRate at initiate / webhook time.
 func (s *service) CreateCertificateOrder(
 	ctx context.Context,
 	cmd CreateCertificateOrderCommand,
@@ -99,6 +103,7 @@ func (s *service) CreateCertificateOrder(
 			now,
 			cmd.AccountID,
 			s.deps.Config.PaymentBilling.PlatformFeeRate,
+			0, // processingFeeRate — unknown until the payment method is chosen
 		)
 		if err != nil {
 			return err

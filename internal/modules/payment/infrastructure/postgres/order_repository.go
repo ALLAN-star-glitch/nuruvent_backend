@@ -40,19 +40,32 @@ func (r *OrderRepository) Create(ctx context.Context, o *paymentdomain.Order) er
 // Update updates an order's scalar fields. Items are immutable once
 // created — if items need to change, cancel the order and create a
 // new one.
+//
+// Billing fields that change during the order's life:
+//   - processing_fee_rate: snapshotted at initiate time once the
+//     payment method is known (starts at 0, becomes 0.015 for M-Pesa
+//     or 0.038 for card).
+//
+// Billing fields that are genuinely immutable after creation:
+//   - platform_fee_rate, billed_account_id (set in NewOrder)
+//   - subtotal, discount_total, total_amount, currency (pricing
+//     snapshot from the registration)
+//   - registration_id, user_id, guest_email (identity)
+//   - expires_at, created_at (lifecycle)
+//
+// Settlement fields (settled_at, payout_ref) are written by the admin
+// payout flow — add them here if that flow goes through Update rather
+// than a dedicated Settle method.
 func (r *OrderRepository) Update(ctx context.Context, o *paymentdomain.Order) error {
 	res := r.db.WithContext(ctx).
 		Model(&OrderModel{}).
 		Where("id = ?", o.ID).
 		Updates(map[string]any{
-			"status":        string(o.Status),
-			"paid_at":       o.PaidAt,
-			"cancelled_at":  o.CancelledAt,
-			"updated_at":    o.UpdatedAt,
-			// immutable fields intentionally not updated:
-			//   registration_id, user_id, guest_email, currency,
-			//   subtotal, discount_total, total_amount, expires_at,
-			//   created_at
+			"status":              string(o.Status),
+			"paid_at":             o.PaidAt,
+			"cancelled_at":        o.CancelledAt,
+			"processing_fee_rate": o.ProcessingFeeRate, // ← new: set at initiate
+			"updated_at":          o.UpdatedAt,
 		})
 
 	if res.Error != nil {
